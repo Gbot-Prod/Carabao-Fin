@@ -1,0 +1,143 @@
+/* Colors */
+:root {
+  --primary-color: #079135fa;
+  --text-primary: #000000;
+  --text-secondary: #e6e3e3fa;
+  --bg-light: #f8f8f8;
+  --bg-white: #fff;
+  --border-color: #eee;
+}
+
+.container {
+  min-height: 100vh;
+  background-color: var(--bg-light);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.headerContainer {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  width: 80%;
+  border-radius: 30px;
+  padding-top: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Navigation */
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 20px 20px 0 0;
+  padding: 1rem 18rem;
+  background-color: var(--primary-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.navLeft {
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  margin: 0;
+  font-size: 3rem;
+  font-weight: bold;
+  color: var(--text-secondary);
+}
+
+.navRight {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  border: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.user,
+.track,
+.cart {
+  font-size: 1.2rem;
+  color: var(--text-primary);
+}
+
+/* Address bar */
+.addressBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 18rem;
+  background-color: var(--bg-white);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.addressIcon {
+  font-size: 1.2rem;
+}
+
+.addressLocation {
+  color: var(--text-primary);
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem 18rem;
+  background-color: var(--bg-white);
+  border-radius: 0 0 20px 20px;
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.tab,
+.tabActive {
+  padding: 0.75rem 1rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s;
+}
+
+.tabActive {
+  border-bottom-color: var(--primary-color);
+  font-weight: 600;
+}
+
+.tab:hover {
+  background-color: var(--bg-light);
+}
+
+@media screen and (max-width: 768px) {
+  .nav {
+    padding: 1rem;
+  }
+
+  .addressBar {
+    padding: 1rem;
+    font-size: 0.8rem;
+  }
+
+  .tabs {
+    padding: 1rem;
+  }
+  
+}
