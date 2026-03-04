@@ -15,8 +15,9 @@ function Track() {
     mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_API_KEY || '';
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current as HTMLElement,
-      center: [-51.5995, 31.9842],
-      zoom: 11
+      center: [121.05, 14.53],
+      zoom: 11,
+      projection: 'globe'
     });
 
     return () => {
@@ -28,18 +29,22 @@ function Track() {
     <div className={styles.container}>
       <div className={styles.trackingContainer}>
         <h1>Track Your Order</h1>
+
         <div className={styles.mapSection}>
           <div className={styles.mapBoxContainer} ref={mapContainerRef}></div>
         </div>
+
         <div className={styles.detailsSection}>
           <h1></h1>
         </div>
       </div>
+
       <div className={styles.ordersContainer}>
         <ul className={styles.orderList}>
           <li>Order 1</li>
         </ul>
       </div>
+
     </div>
   );
 }

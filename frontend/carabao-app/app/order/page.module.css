@@ -7,16 +7,16 @@
 }
 
 .farmGrid {
-  width: 80%;
+  width: 100%;
+  max-width: 1200px;
   display: grid;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   grid-auto-rows: 1fr;
   gap: 1.5rem;
 }
 
 @media screen and (max-width: 768px) {
   .farmGrid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
 }
