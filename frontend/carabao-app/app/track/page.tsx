@@ -1,7 +1,6 @@
 "use client";
 
 import styles from './page.module.css';
-import Header from '../../components/header/header';
 
 import { useRef, useEffect, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
