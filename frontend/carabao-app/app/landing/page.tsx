@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
+import { SignIn } from '@clerk/nextjs';
 
 function Landing() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
@@ -65,6 +66,9 @@ function Landing() {
   };
 
   return (
+    <SignIn routing="hash" />
+
+    /*
     <div className={styles.container}>
       <h1>Welcome to Carabao</h1>
       <p>Your one-stop solution for farm-to-table delivery.</p>
@@ -138,6 +142,7 @@ function Landing() {
         </form>
       </div>
     </div>
+    */
   );
 }
 

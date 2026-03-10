@@ -1,29 +1,116 @@
 .container {
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  min-height: 100%;
+  padding: 24px;
 }
 
 .trackingContainer {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+}
+
+.mapSection {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 6%;
-  background-color: antiquewhite;
+  gap: 16px;
 }
 
 .mapBoxContainer {
-  width: 400px;
-  height: 400px;
-  margin-top: 20px;
-
-  position: relative;
+  width: 100%;
+  height: 420px;
+  border: 1px solid #d8e0d8;
+  border-radius: 16px;
   overflow: hidden;
-  border-color: black;
-  border: 8px;
-  border-radius: 5%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.detailsSection {
+  background-color: #ffffff;
+  border: 1px solid #e7e7e7;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+}
+
+.sectionTitle {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1b1b1b;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detailItem {
+  background-color: #f7faf7;
+  border: 1px solid #e2ece2;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.detailLabel {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #5d6b5d;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.detailValue {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1c2c1c;
+}
+
+.ordersSection {
+  background-color: #ffffff;
+  border: 1px solid #e7e7e7;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+  max-height: 620px;
+  overflow: auto;
+}
+
+.orderList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (max-width: 980px) {
+  .trackingContainer {
+    grid-template-columns: 1fr;
+  }
+
+  .ordersSection {
+    max-height: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 14px;
+  }
+
+  .mapBoxContainer {
+    height: 320px;
+  }
+
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
 }

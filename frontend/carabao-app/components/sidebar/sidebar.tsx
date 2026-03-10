@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import "./sidebar.css";
 import Logo from "@/public/images/icons/carabaoLogo.png";
+import { SignOutButton } from "@clerk/nextjs";
+
 
 const navItems = [
   {
@@ -119,7 +121,7 @@ export default function Sidebar() {
             <polyline points="16 17 21 12 16 7" />
             <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
-          <span>Sign Out</span>
+          <span ><SignOutButton/></span>
         </Link>
       </div>
     </aside>

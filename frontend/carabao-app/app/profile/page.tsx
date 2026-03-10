@@ -1,4 +1,6 @@
 import styles from './page.module.css';
+import { ClerkProvider, Show, SignInButton, UserButton } from '@clerk/nextjs'
+
 
 export default function Profile() {
   return (
@@ -8,6 +10,7 @@ export default function Profile() {
         
         {/* Profile Section */}
         <section className={styles.profileSection}>
+          <UserButton/>
           <div className={styles.profileHeader}>
             <img src="/images/others/kobe.avif" alt="Profile" className={styles.profileImage} />
             <div className={styles.profileInfo}>
