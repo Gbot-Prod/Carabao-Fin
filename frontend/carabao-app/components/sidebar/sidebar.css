@@ -113,6 +113,15 @@
   color: #ef4444;
 }
 
+.sidebar__logout-button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
 /* App shell layout (used in layout.tsx) */
 .app-shell {
   display: flex;

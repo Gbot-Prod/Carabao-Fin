@@ -60,17 +60,6 @@ const navItems = [
     ),
   },
   {
-    href: "/landing",
-    label: "Landing",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-        <polyline points="16 17 21 12 16 7" />
-        <line x1="21" y1="12" x2="9" y2="12" />
-      </svg>
-    ),
-  },
-  {
     href: "/test",
     label: "Test",
     icon: (
@@ -89,7 +78,7 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
-        <img src={Logo.src} alt="Carabao Logo" className="sidebar__brand-icon"/>
+        <img src={Logo.src} alt="Carabao Logo" className="sidebar__brand-icon" />
         <span className="sidebarBrandName">Carabao</span>
       </div>
 
@@ -103,7 +92,7 @@ export default function Sidebar() {
                 <Link
                   href={item.href}
                   className={`sidebar__nav-link${isActive ? " sidebar__nav-link--active" : ""}`}
-                  >
+                >
                   <span className="sidebar__nav-icon">{item.icon}</span>
                   <span className="sidebar__nav-label">{item.label}</span>
                 </Link>
@@ -114,14 +103,16 @@ export default function Sidebar() {
       </nav>
 
       <div className="sidebar__footer">
-        <Link href="/landing" className="sidebar__logout">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-          <span ><SignOutButton/></span>
-        </Link>
+        <SignOutButton redirectUrl="/landing">
+          <button type="button" className="sidebar__logout sidebar__logout-button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span>Sign out</span>
+          </button>
+        </SignOutButton>
       </div>
     </aside>
   );

@@ -66,7 +66,9 @@ function Landing() {
   };
 
   return (
-    <SignIn routing="hash" />
+    <div className={styles.container}>
+      <SignIn routing="hash" />
+    </div>
 
     /*
     <div className={styles.container}>

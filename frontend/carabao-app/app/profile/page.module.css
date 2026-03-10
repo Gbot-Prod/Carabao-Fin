@@ -1,19 +1,57 @@
+.container {
+  width: 100%;
+  min-height: 100vh;
+  padding: 32px;
+  background: linear-gradient(180deg, #f7fcf8 0%, #ecf6ef 100%);
+  position: relative;
+}
+
 .main {
   display: flex;
   flex-direction: row;
-
   gap: 20px;
+  width: 100%;
+  align-items: stretch;
 }
 
 .profileSection {
-  flex: 3;
+  flex: 0 0 30%;
+  min-width: 260px;
 
   background-color: #fff;
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  width: 100%;
-  max-width: 600px;
+}
+
+.profileHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.profileInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.email {
+  margin: 0;
+  color: #647067;
+}
+
+.editBtn {
+  width: fit-content;
+  border: 1px solid #31925d;
+  background-color: transparent;
+  color: #1f6d44;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .profileImage {
@@ -24,21 +62,30 @@
 }
 
 .settingsSection {
-  flex: 7;
+  flex: 1 1 70%;
 
   background-color: #fff;
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  width: 100%;
-  max-width: 600px;
+}
 
+.settingsTitle {
+  margin-top: 0;
+  margin-bottom: 18px;
 }
 
 .settingsList {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 12px;
+}
+
+.settingCard {
+  border: 1px solid #d7e7da;
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: #fcfffd;
 }
 
 .settingItem {
@@ -46,14 +93,57 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.settingItem:hover {
+  background-color: #f2faf4;
+}
+
+.settingLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chevron {
+  transition: transform 0.2s ease;
+  font-size: 16px;
+  color: #3a4a3d;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.settingDetails {
+  border-top: 1px solid #e8f1ea;
+  padding: 12px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background-color: #f9fcf9;
+}
+
+.placeholderDetail {
+  padding: 10px;
+  border: 1px dashed #c4dbc8;
+  border-radius: 8px;
+  color: #4b594d;
+  font-size: 14px;
 }
 
 .applyAsMerchantButton {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-
-  margin: 60px;
+  position: fixed;
+  right: 32px;
+  bottom: 32px;
 
   background-color: #31925d;
 
@@ -64,14 +154,28 @@
   box-shadow: rgb(124, 124, 124) 0px 2px 4px;
   transition: 400ms;
 
-  cursor:pointer;
+  cursor: pointer;
 }
 
 .applyAsMerchantButton:hover {
-  color:#31925d;
+  color: #31925d;
   background-color: #fff;
-
 }
 
+@media (max-width: 960px) {
+  .main {
+    flex-direction: column;
+  }
 
+  .profileSection,
+  .settingsSection {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
 
+  .applyAsMerchantButton {
+    position: static;
+    margin-top: 24px;
+  }
+
+}
