@@ -1,20 +1,13 @@
-.container {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background-color: rgb(236, 236, 236);
-}
-
 .main {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto auto;
-  margin: 20px;
+  display: flex;
+  flex-direction: row;
+
   gap: 20px;
 }
 
 .profileSection {
+  flex: 3;
+
   background-color: #fff;
   padding: 20px;
   border-radius: 8px;
@@ -31,6 +24,8 @@
 }
 
 .settingsSection {
+  flex: 7;
+
   background-color: #fff;
   padding: 20px;
   border-radius: 8px;
@@ -53,21 +48,30 @@
   align-items: center;
 }
 
-.ordersSection {
-  background-color: #fff;
-  padding: 20px;
+.applyAsMerchantButton {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+
+  margin: 60px;
+
+  background-color: #31925d;
+
+  color: #fff;
+  padding: 10px 20px;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  width: 100%;
-  max-width: 600px;
+
+  box-shadow: rgb(124, 124, 124) 0px 2px 4px;
+  transition: 400ms;
+
+  cursor:pointer;
 }
 
-.logoutSection {
+.applyAsMerchantButton:hover {
+  color:#31925d;
   background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  width: 100%;
-  max-width: 600px;
-  margin-top: 20px;
+
 }
+
+
+

@@ -107,7 +107,6 @@ export default function Sidebar() {
                   <span className="sidebar__nav-icon">{item.icon}</span>
                   <span className="sidebar__nav-label">{item.label}</span>
                 </Link>
-                
               </li>
             );
           })}
