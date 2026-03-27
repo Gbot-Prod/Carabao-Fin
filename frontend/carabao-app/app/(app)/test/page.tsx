@@ -1,5 +1,5 @@
 import styles from './page.module.css';
-import ErrorAlert from '../../components/errorTick/errorTick';
+import ErrorAlert from '../../../components/errorTick/errorTick';
 
 function History() {
 
