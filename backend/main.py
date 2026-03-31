@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine
+from backend.app.core.database import SessionLocal, engine
 from app.models.models import Base
 from app.api.routes.router import router  # import your router
 
@@ -16,3 +16,10 @@ app.add_middleware(
 
 Base.metadata.create_all(bind=engine)  # DB init stays here
 app.include_router(router)             # register all routes
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

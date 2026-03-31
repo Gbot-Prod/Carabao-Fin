@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
-from app.api.dependencies import get_db
-from app.schemas.user import UserBase, UserResponse
+from backend.app.api.dependencies import get_db
 from app.schemas.merchant import MerchantPageBase, MerchantResponse
 from app.services.merchant_service import create_merchant
 from app.services.email import send_email
