@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
 
 export default function OnboardingPage() {
-  const { user } = useUser();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -20,29 +18,6 @@ export default function OnboardingPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    // Store onboarding data in Clerk's publicMetadata via your backend,
-    // or just use unsafeMetadata directly from the client:
-    await user?.update({
-      unsafeMetadata: {
-        onboardingComplete: true,
-        phoneNumber: formData.phoneNumber,
-        address: {
-          street: formData.streetAddress,
-          city: formData.city,
-          province: formData.province,
-          zipCode: formData.zipCode,
-        },
-      },
-    });
-
-    setIsLoading(false);
-    router.push("/order");
-  };
-
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8f8f8" }}>
       <div style={{ background: "white", borderRadius: 16, padding: "2rem", width: "100%", maxWidth: 480, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
@@ -52,7 +27,7 @@ export default function OnboardingPage() {
           We need a few details to get your orders going.
         </p>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <form onSubmit={() => {}} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
             <label style={{ fontSize: 12, color: "#666", display: "block", marginBottom: 4 }}>Phone number</label>
             <input

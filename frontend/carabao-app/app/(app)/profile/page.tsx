@@ -2,8 +2,6 @@
 
 import { useState } from 'react';
 import styles from './page.module.css';
-import { UserButton } from '@clerk/nextjs'
-
 function goToMerchantSignup() {
   window.location.href = '/merchantSignup';
 }
@@ -71,7 +69,6 @@ export default function Profile() {
       <main className={styles.main}>
         {/* Profile Section */}
         <section className={styles.profileSection}>
-          <UserButton showName={true}/>
           <div className={styles.profileHeader}>
             <img src="/images/others/kobe.avif" alt="Profile" className={styles.profileImage} />
             <div className={styles.profileInfo}>

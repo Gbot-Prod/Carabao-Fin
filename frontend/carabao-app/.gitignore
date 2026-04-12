@@ -1,3 +1,13 @@
 
+# Local secrets and generated output
+.env
+.env.local
+.env.*.local
+.next/
+node_modules/
+*.log
+.DS_Store
+.vscode/
+
 # clerk configuration (can include secrets)
 /.clerk/

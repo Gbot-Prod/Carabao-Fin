@@ -10,7 +10,6 @@ class MerchantPageBase(BaseModel):
     rating: float
 
 
-
 class MerchantResponse(MerchantPageBase):
     id: int
     class Config:
