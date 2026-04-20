@@ -1,5 +1,5 @@
 from sqlalchemy import Boolean, Column, Integer, String, ForeignKey
-from backend.app.core.database import Base
+from app.core.database import Base
 
 class Merchant(Base):
   __tablename__ = "merchants"

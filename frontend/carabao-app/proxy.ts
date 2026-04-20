@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
+  const useMockSession = process.env.MOCK_AUTH_SESSION === "true";
+
   // Get session cookie
   const session = request.cookies.get("better-auth.session_token")?.value;
 
@@ -12,21 +14,15 @@ export async function middleware(request: NextRequest) {
     currentPath.startsWith(route)
   );
 
-  // Public routes (no auth required)
-  const publicRoutes = ["/landing", "/merchantSignup", "/onboarding", "/login", "/signup"];
-  const isPublicRoute = publicRoutes.some((route) =>
-    currentPath.startsWith(route)
-  );
-
-  // If accessing a protected route without session, redirect to login
-  if (isProtectedRoute && !session) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  // If accessing a protected route without session, redirect to auth
+  if (isProtectedRoute && !session && !useMockSession) {
+    return NextResponse.redirect(new URL("/auth", request.url));
   }
 
   // If accessing a public auth route while authenticated, optionally redirect to app
   if (
-    (currentPath === "/login" || currentPath === "/signup") &&
-    session
+    currentPath === "/auth" &&
+    (session || useMockSession)
   ) {
     return NextResponse.redirect(new URL("/app", request.url));
   }

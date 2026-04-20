@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.models.models import Merchant
+from app.models.merchant import Merchant
 from app.schemas.merchant import MerchantPageBase
 
 

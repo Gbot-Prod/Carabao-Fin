@@ -1,0 +1,195 @@
+.page {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: 2rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  margin-bottom: 0.25rem;
+}
+
+.header p {
+  color: #5b5b5b;
+  margin-bottom: 1.5rem;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 1.25rem;
+}
+
+.itemsCard,
+.summaryCard {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e9e9e9;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+.itemsCard {
+  padding: 1.25rem;
+}
+
+.itemList {
+  list-style: none;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.itemRow {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 0.75rem;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  padding: 0.9rem;
+  background: #fcfcfc;
+}
+
+.farm {
+  color: #079135fa;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.itemMeta h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.priceLine {
+  color: #666;
+  margin-top: 0.4rem;
+}
+
+.itemActions {
+  display: grid;
+  justify-items: end;
+  gap: 0.5rem;
+}
+
+.qtyControl {
+  display: inline-flex;
+  border: 1px solid #d9d9d9;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.qtyControl button,
+.qtyControl span {
+  width: 36px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qtyControl button {
+  background: #fff;
+  font-weight: 700;
+}
+
+.qtyControl span {
+  background: #f2f2f2;
+  font-weight: 600;
+}
+
+.lineTotal {
+  font-weight: 700;
+}
+
+.removeButton {
+  background: transparent;
+  color: #ba2f2f;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.summaryCard {
+  padding: 1.25rem;
+  align-self: start;
+  position: sticky;
+  top: 1.25rem;
+}
+
+.summaryCard h2 {
+  margin-bottom: 1rem;
+}
+
+.summaryLine,
+.summaryLineGrand {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.65rem;
+}
+
+.summaryLineGrand {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed #dedede;
+  font-size: 1.05rem;
+}
+
+.summaryActions {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.primaryButton {
+  background: #079135fa;
+  color: #ffffff;
+}
+
+.secondaryButton {
+  border: 1px solid #d7d7d7;
+  background: #ffffff;
+}
+
+.emptyState {
+  min-height: 300px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 0.65rem;
+  padding: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryCard {
+    position: static;
+  }
+
+  .itemRow {
+    grid-template-columns: 1fr;
+  }
+
+  .itemActions {
+    justify-items: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 1rem;
+  }
+}

@@ -14,11 +14,8 @@ export function UserMenu() {
   if (!user) {
     return (
       <div className="flex gap-4">
-        <Link href="/login" className="text-sm text-blue-600 hover:text-blue-700">
-          Login
-        </Link>
-        <Link href="/signup" className="text-sm text-blue-600 hover:text-blue-700">
-          Sign up
+        <Link href="/auth" className="text-sm text-blue-600 hover:text-blue-700">
+          Auth
         </Link>
       </div>
     );

@@ -1,5 +1,5 @@
 from sqlalchemy import Boolean, Column, Integer, String, ForeignKey
-from backend.app.core.database import Base
+from app.core.database import Base
 
 class Produce(Base):
   __tablename__ = "produces"

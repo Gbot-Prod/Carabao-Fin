@@ -2,8 +2,22 @@
 
 import { useEffect, useState } from "react";
 
+type AuthSession = {
+  token: string;
+  user: {
+    id: string;
+    email: string;
+    name?: string | null;
+  };
+  backendAuthenticated?: boolean;
+};
+
+type SessionResponse = {
+  session: AuthSession | null;
+};
+
 export function useAuth() {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -12,7 +26,7 @@ export function useAuth() {
       try {
         const response = await fetch("/api/auth/get-session");
         if (response.ok) {
-          const data = await response.json();
+          const data: SessionResponse = await response.json();
           setSession(data.session);
         }
       } catch (err) {
@@ -30,6 +44,7 @@ export function useAuth() {
     user: session?.user,
     isLoading,
     isAuthenticated: !!session,
+    isBackendAuthenticated: !!session?.backendAuthenticated,
     error,
   };
 }

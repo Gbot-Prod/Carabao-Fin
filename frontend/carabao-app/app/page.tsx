@@ -1,5 +1,6 @@
-import { redirect } from "next/dist/client/components/navigation";
+import { redirect } from "next/navigation";
 
-export default function HomePage() {
-  redirect('/order');
+export default function Home() {
+  redirect("/order");
 }
+

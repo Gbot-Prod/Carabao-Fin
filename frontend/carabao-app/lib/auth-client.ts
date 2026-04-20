@@ -1,5 +1,18 @@
-// Client-side auth helpers using direct HTTP calls
-const BASE_URL = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth`;
+// Client-side auth helpers call same-origin Next.js auth routes.
+const BASE_URL = "/api/auth";
+
+const syncBackendSession = async () => {
+  const response = await fetch("/api/auth", {
+    method: "POST",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to sync backend session");
+  }
+
+  return response.json();
+};
 
 export const signIn = {
   email: async (credentials: { email: string; password: string }) => {
@@ -14,12 +27,14 @@ export const signIn = {
       throw new Error("Login failed");
     }
 
-    return response.json();
+    const data = await response.json();
+    await syncBackendSession();
+    return data;
   },
 };
 
 export const signUp = {
-  email: async (data: {
+  email: async (userData: {
     email: string;
     password: string;
     name: string;
@@ -28,14 +43,16 @@ export const signUp = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify(data),
+      body: JSON.stringify(userData),
     });
 
     if (!response.ok) {
       throw new Error("Signup failed");
     }
 
-    return response.json();
+    const data = await response.json();
+    await syncBackendSession();
+    return data;
   },
 };
 
@@ -48,6 +65,11 @@ export const signOut = async () => {
   if (!response.ok) {
     throw new Error("Logout failed");
   }
+
+  await fetch("/api/auth/backend-token", {
+    method: "DELETE",
+    credentials: "include",
+  });
 
   return response.json();
 };

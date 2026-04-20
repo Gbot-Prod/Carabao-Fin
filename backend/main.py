@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.core.database import SessionLocal, engine
-from app.models.models import Base
+from app.core.database import SessionLocal, engine
+from app.core.database import Base
+from app.models import merchant, produce, user  # noqa: F401
 from app.api.routes.router import router  # import your router
 
 app = FastAPI()

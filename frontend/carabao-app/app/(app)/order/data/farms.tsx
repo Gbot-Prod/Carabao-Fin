@@ -36,7 +36,7 @@ export const farms: Farm[] = [
   },
 
   {
-    name: 'placeholder',
+    name: 'pepe',
     rating: 0,
     reviews: 'placeholder',
     time: 'placeholder',
@@ -44,7 +44,7 @@ export const farms: Farm[] = [
     category: 'placeholder',
     deliveryFee: 0,
     promo: 'placeholder',
-    image: ''
+    image: '/images/farms/fil.jpg'
   },
   
   {

@@ -1,27 +1,42 @@
+import { auth } from "@/lib/auth";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
   try {
-    // Check if session cookie exists
-    const sessionToken = req.cookies.get("better-auth.session_token")?.value;
+    const useMockSession = process.env.MOCK_AUTH_SESSION === "true";
 
-    if (!sessionToken) {
+    if (useMockSession) {
+      return NextResponse.json({
+        session: {
+          token: "mock-session-token",
+          user: {
+            id: "mock_user_id",
+            email: "mock.user@carabao.local",
+            name: "Mock User",
+          },
+        },
+      });
+    }
+
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session) {
       return NextResponse.json({ session: null });
     }
 
-    // Verify session by calling BetterAuth endpoints
-    // For now, just return that session exists
+    const backendToken = req.cookies.get("backend_access_token")?.value;
+
     return NextResponse.json({
       session: {
-        token: sessionToken,
+        token: session.session.token,
         user: {
-          id: "user_id",
-          email: "user@example.com",
-          name: "User",
+          id: session.user.id,
+          email: session.user.email,
+          name: session.user.name,
         },
+        backendAuthenticated: !!backendToken,
       },
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ session: null });
   }
 }

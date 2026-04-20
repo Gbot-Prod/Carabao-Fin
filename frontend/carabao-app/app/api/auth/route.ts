@@ -1,11 +1,29 @@
-// This file is for any custom auth API endpoints
-// For example, syncing with your FastAPI backend
-
 import { auth } from "@/lib/auth";
 import { type NextRequest, NextResponse } from "next/server";
 
-// Example: Verify token with backend
+const rawApiUrl =
+  process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || "";
+const apiBaseUrl = rawApiUrl
+  ? rawApiUrl.startsWith("http")
+    ? rawApiUrl
+    : `https://${rawApiUrl}`
+  : "";
+
 export async function POST(req: NextRequest) {
+  const useMockSession = process.env.MOCK_AUTH_SESSION === "true";
+
+  if (useMockSession) {
+    const mockResponse = NextResponse.json({ ok: true, mock: true });
+    mockResponse.cookies.set("backend_access_token", "mock-backend-token", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60,
+    });
+    return mockResponse;
+  }
+
   const session = await auth.api.getSession({
     headers: req.headers,
   });
@@ -14,25 +32,64 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Optional: Sync session with your FastAPI backend
+  const sharedSecret = process.env.AUTH_SYNC_SHARED_SECRET;
+  if (!sharedSecret) {
+    return NextResponse.json(
+      { error: "AUTH_SYNC_SHARED_SECRET is not configured" },
+      { status: 500 }
+    );
+  }
+
+  const [firstName, ...restNames] = (session.user.name || "").trim().split(" ");
+  const lastName = restNames.join(" ");
+
+  if (!apiBaseUrl) {
+    return NextResponse.json(
+      {
+        error:
+          "API base URL is not configured. Set NEXT_PUBLIC_API_URL or NEXT_PUBLIC_FASTAPI_URL.",
+      },
+      { status: 500 }
+    );
+  }
+
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/auth/verify`,
+    `${apiBaseUrl}/auth/sync`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${session.session.token}`,
+        "X-Internal-Auth-Sync-Secret": sharedSecret,
       },
-      body: JSON.stringify({ userId: session.user.id }),
+      body: JSON.stringify({
+        provider_user_id: session.user.id,
+        email: session.user.email,
+        first_name: firstName || null,
+        last_name: lastName || null,
+      }),
     }
   ).catch(() => null);
 
   if (!response?.ok) {
     return NextResponse.json(
-      { error: "Backend verification failed" },
-      { status: 401 }
+      { error: "Backend auth sync failed" },
+      { status: response?.status || 401 }
     );
   }
 
-  return NextResponse.json({ authenticated: true });
+  const data = (await response.json()) as {
+    access_token: string;
+    expires_in?: number;
+  };
+
+  const result = NextResponse.json({ ok: true });
+  result.cookies.set("backend_access_token", data.access_token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: data.expires_in ?? 60 * 60,
+  });
+
+  return result;
 }
