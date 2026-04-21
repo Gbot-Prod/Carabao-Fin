@@ -21,10 +21,7 @@ const navItems = [
     href: "/order",
     label: "Order",
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 6.5V4a1 1 0 0 1 1-1h0"/><path d="M17 11.5A5 5 0 0 0 12 6.5A5 5 0 0 0 7 11.5C7 15.5 9.5 18 12 19.5C14.5 18 17 15.5 17 11.5Z"/>
-    
-      </svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7 C10.8 7 9.6 7.8 8.4 9.2 C6.8 11 6 13.8 6 15.5 C6 18 8.8 20.5 12 20.5 C15.2 20.5 18 18 18 15.5 C18 13.8 17.2 11 15.6 9.2 C14.4 7.8 13.2 7 12 7 C12.2 6.2 12.8 5.6 14 5.2 C14.8 4.9 15.8 5 16.6 5.8 C17.2 6.6 16.8 7.4 15.8 7.8 C14.6 8.2 13.2 7.6 12.8 7.2 Z"/></svg>
     ),
   },
   {

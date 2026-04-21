@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
+import { fetchMyCart, replaceMyCart } from "@/util/api";
 
 type CartItem = {
   id: string;
@@ -42,6 +43,55 @@ const initialItems: CartItem[] = [
 
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>(initialItems);
+  const [isHydrating, setIsHydrating] = useState(true);
+  const hasSyncedRef = useRef(false);
+
+  useEffect(() => {
+    const loadCart = async () => {
+      try {
+        const cart = await fetchMyCart();
+        if (Array.isArray(cart.items)) {
+          setItems(
+            cart.items.map((item) => ({
+              id: String(item.id),
+              farm: item.farm,
+              produce: item.produce,
+              unit: item.unit,
+              quantity: Number(item.quantity) || 0,
+              price: Number(item.price) || 0,
+            })),
+          );
+        }
+      } catch {
+        // Keep local defaults when backend is unavailable.
+      } finally {
+        setIsHydrating(false);
+      }
+    };
+
+    void loadCart();
+  }, []);
+
+  useEffect(() => {
+    if (isHydrating) {
+      return;
+    }
+
+    if (!hasSyncedRef.current) {
+      hasSyncedRef.current = true;
+      return;
+    }
+
+    const persistCart = async () => {
+      try {
+        await replaceMyCart(items);
+      } catch {
+        // Keep UI responsive even when save fails.
+      }
+    };
+
+    void persistCart();
+  }, [items, isHydrating]);
 
   const itemTotal = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity * item.price, 0),

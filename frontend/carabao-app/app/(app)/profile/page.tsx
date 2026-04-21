@@ -1,10 +1,16 @@
 'use client'
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import styles from './page.module.css';
+import { fetchMyProfile } from '@/util/api';
 function goToMerchantSignup() {
   window.location.href = '/merchantSignup';
 }
+
+type ProfileInfo = {
+  fullName: string;
+  email: string;
+};
 
 type SettingsCategory = {
   id: 'addresses' | 'payment' | 'notifications' | 'preferences';
@@ -58,6 +64,27 @@ const settingsCategories: SettingsCategory[] = [
 
 export default function Profile() {
   const [openCategoryId, setOpenCategoryId] = useState<SettingsCategory['id'] | null>('addresses');
+  const [profile, setProfile] = useState<ProfileInfo>({
+    fullName: 'Kobe De la Cruz',
+    email: 'lastmamba@gmail.com',
+  });
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const data = await fetchMyProfile();
+        const fullName = [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
+        setProfile({
+          fullName: fullName || 'Carabao User',
+          email: data.email,
+        });
+      } catch {
+        // Keep fallback profile details when backend is unavailable.
+      }
+    };
+
+    void loadProfile();
+  }, []);
 
   const toggleCategory = (categoryId: SettingsCategory['id']) => {
     setOpenCategoryId((currentId) => (currentId === categoryId ? null : categoryId));
@@ -72,8 +99,8 @@ export default function Profile() {
           <div className={styles.profileHeader}>
             <img src="/images/others/kobe.avif" alt="Profile" className={styles.profileImage} />
             <div className={styles.profileInfo}>
-              <h2>Kobe De la Cruz</h2>
-              <p className={styles.email}>lastmamba@gmail.com</p>
+              <h2>{profile.fullName}</h2>
+              <p className={styles.email}>{profile.email}</p>
               <button className={styles.editBtn}>Edit Profile</button>
             </div>
           </div>

@@ -20,4 +20,80 @@ apiClient.interceptors.response.use(
   }
 );
 
+export type Merchant = {
+  id: number;
+  user_id: number;
+  merchant_name: string;
+  location: string | null;
+  contact_number: string;
+  operating_hours: string | null;
+  delivery_price: number | null;
+  delivery_time: number | null;
+  rating: number | null;
+};
+
+export type MerchantCreatePayload = {
+  merchant_name: string;
+  location?: string | null;
+  contact_number: string;
+  operating_hours?: string | null;
+  delivery_price?: number | null;
+  delivery_time?: number | null;
+  rating?: number | null;
+};
+
+export type CartItem = {
+  id: string;
+  farm: string;
+  produce: string;
+  unit: string;
+  quantity: number;
+  price: number;
+};
+
+export type Cart = {
+  id: number;
+  user_id: number;
+  items: CartItem[];
+  total_items: number;
+  total_price: number;
+};
+
+export type UserProfile = {
+  id: number;
+  external_auth_id: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  phone_number: string | null;
+  created_at: string | null;
+};
+
+export const fetchMerchants = async (): Promise<Merchant[]> => {
+  const response = await apiClient.get<Merchant[]>('/merchants');
+  return response.data;
+};
+
+export const createMyMerchant = async (
+  payload: MerchantCreatePayload,
+): Promise<Merchant> => {
+  const response = await apiClient.post<Merchant>('/merchants/me', payload);
+  return response.data;
+};
+
+export const fetchMyCart = async (): Promise<Cart> => {
+  const response = await apiClient.get<Cart>('/carts/me');
+  return response.data;
+};
+
+export const replaceMyCart = async (items: CartItem[]): Promise<Cart> => {
+  const response = await apiClient.put<Cart>('/carts/me', { items });
+  return response.data;
+};
+
+export const fetchMyProfile = async (): Promise<UserProfile> => {
+  const response = await apiClient.get<UserProfile>('/users/me');
+  return response.data;
+};
+
 export default apiClient;

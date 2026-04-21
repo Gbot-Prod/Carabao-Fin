@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import styles from "./page.module.css";
+import { createMyMerchant } from "@/util/api";
 
 type MerchantForm = {
   merchant_name: string;
@@ -27,6 +28,7 @@ export default function MerchantLanding() {
   const [form, setForm] = useState<MerchantForm>(initialForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({
@@ -38,13 +40,24 @@ export default function MerchantLanding() {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSuccess("");
+    setError("");
     setIsSubmitting(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 350));
+      await createMyMerchant({
+        merchant_name: form.merchant_name,
+        location: form.location,
+        contact_number: form.contact_number,
+        operating_hours: form.operating_hours,
+        delivery_price: form.delivery_price ? Number(form.delivery_price) : null,
+        delivery_time: form.delivery_time ? Number(form.delivery_time) : null,
+        rating: form.rating ? Number(form.rating) : null,
+      });
 
-      setSuccess("Form is ready. API integration will be added later.");
+      setSuccess("Merchant profile created successfully.");
       setForm(initialForm);
+    } catch {
+      setError("Unable to create merchant profile. Please ensure you are logged in.");
     } finally {
       setIsSubmitting(false);
     }
@@ -57,6 +70,7 @@ export default function MerchantLanding() {
         <p className={styles.subtitle}>Create your merchant profile to start selling.</p>
 
         {success && <p className={styles.success}>{success}</p>}
+        {error && <p className={styles.error}>{error}</p>}
 
         <form className={styles.form} onSubmit={handleSubmit}>
           <label className={styles.field}>
