@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
@@ -12,3 +13,6 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     created_at = Column(String, index=True, nullable=True)
     phone_number = Column(String, unique=True, index=True, nullable=True)
+
+    merchant = relationship("Merchant", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    cart = relationship("Cart", back_populates="user", uselist=False, cascade="all, delete-orphan")

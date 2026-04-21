@@ -3,10 +3,11 @@ import { type NextRequest, NextResponse } from "next/server";
 
 const rawApiUrl =
   process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || "";
-const apiBaseUrl = rawApiUrl
-  ? rawApiUrl.startsWith("http")
-    ? rawApiUrl
-    : `https://${rawApiUrl}`
+const normalizedApiUrl = rawApiUrl.trim().replace(/^"|"$/g, "");
+const apiBaseUrl = normalizedApiUrl
+  ? normalizedApiUrl.startsWith("http")
+    ? normalizedApiUrl
+    : `https://${normalizedApiUrl}`
   : "";
 
 export async function POST(req: NextRequest) {

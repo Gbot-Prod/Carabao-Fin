@@ -24,6 +24,18 @@ if (!postgresUrl) {
   );
 }
 
+if (process.env.NODE_ENV !== "production") {
+  try {
+    const parsedUrl = new URL(postgresUrl);
+    const databaseName = parsedUrl.pathname.replace(/^\//, "") || "(none)";
+    console.info(
+      `[auth] Better Auth DB target host=${parsedUrl.hostname} db=${databaseName}`
+    );
+  } catch {
+    console.info("[auth] Better Auth DB target could not be parsed");
+  }
+}
+
 const pool = new Pool({
   connectionString: postgresUrl,
   ssl: postgresUrl.includes("render.com")

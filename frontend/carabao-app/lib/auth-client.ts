@@ -1,33 +1,49 @@
-// Client-side auth helpers call same-origin Next.js auth routes.
-const BASE_URL = "/api/auth";
+import { createAuthClient } from "better-auth/react";
+
+const authClient = createAuthClient();
 
 const syncBackendSession = async () => {
-  const response = await fetch("/api/auth", {
-    method: "POST",
-    credentials: "include",
-  });
+  try {
+    const response = await fetch("/api/auth", {
+      method: "POST",
+      credentials: "include",
+    });
 
-  if (!response.ok) {
-    throw new Error("Failed to sync backend session");
+    if (!response.ok) {
+      console.warn(
+        `Backend session sync skipped: /api/auth returned ${response.status}`
+      );
+      return null;
+    }
+
+    return response.json();
+  } catch (error) {
+    console.warn("Backend session sync skipped: /api/auth request failed", error);
+    return null;
+  }
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (!error || typeof error !== "object") {
+    return fallback;
   }
 
-  return response.json();
+  const maybeError = error as {
+    message?: string;
+    statusText?: string;
+  };
+
+  return maybeError.message || maybeError.statusText || fallback;
 };
 
 export const signIn = {
   email: async (credentials: { email: string; password: string }) => {
-    const response = await fetch(`${BASE_URL}/sign-in/email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(credentials),
-    });
+    const { data, error } = await authClient.signIn.email(credentials);
 
-    if (!response.ok) {
-      throw new Error("Login failed");
+    if (error || !data) {
+      throw new Error(getErrorMessage(error, "Login failed"));
     }
 
-    const data = await response.json();
     await syncBackendSession();
     return data;
   },
@@ -39,31 +55,22 @@ export const signUp = {
     password: string;
     name: string;
   }) => {
-    const response = await fetch(`${BASE_URL}/sign-up/email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(userData),
-    });
+    const { data, error } = await authClient.signUp.email(userData);
 
-    if (!response.ok) {
-      throw new Error("Signup failed");
+    if (error || !data) {
+      throw new Error(getErrorMessage(error, "Signup failed"));
     }
 
-    const data = await response.json();
     await syncBackendSession();
     return data;
   },
 };
 
 export const signOut = async () => {
-  const response = await fetch(`${BASE_URL}/sign-out`, {
-    method: "POST",
-    credentials: "include",
-  });
+  const { data, error } = await authClient.signOut();
 
-  if (!response.ok) {
-    throw new Error("Logout failed");
+  if (error || !data) {
+    throw new Error(getErrorMessage(error, "Logout failed"));
   }
 
   await fetch("/api/auth/backend-token", {
@@ -71,5 +78,5 @@ export const signOut = async () => {
     credentials: "include",
   });
 
-  return response.json();
+  return data;
 };

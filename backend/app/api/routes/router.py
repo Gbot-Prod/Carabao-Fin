@@ -37,7 +37,10 @@ async def send_email_route():
 
 @router.post("/merchant/", response_model=MerchantResponse)
 async def create_merchant_route(merchant: MerchantPageBase, db: Session = Depends(get_db)):
-    return create_merchant(db, merchant)
+    try:
+        return create_merchant(db, merchant)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/auth/sync")

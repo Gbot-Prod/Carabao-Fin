@@ -7,7 +7,7 @@ export async function proxy(request: NextRequest) {
   const session = request.cookies.get("better-auth.session_token")?.value;
 
   // Protected routes that require authentication
-  const protectedRoutes = ["/app", "/profile", "/merchant", "/order", "/history"];
+  const protectedRoutes = ["/profile", "/merchant", "/order", "/history"];
   const currentPath = request.nextUrl.pathname;
 
   const isProtectedRoute = protectedRoutes.some((route) =>
@@ -19,12 +19,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/auth", request.url));
   }
 
-  // If accessing a public auth route while authenticated, optionally redirect to app
+  // If accessing auth while authenticated, redirect to the main app entry route.
   if (
     currentPath === "/auth" &&
     (session || useMockSession)
   ) {
-    return NextResponse.redirect(new URL("/app", request.url));
+    return NextResponse.redirect(new URL("/order", request.url));
   }
 
   return NextResponse.next();

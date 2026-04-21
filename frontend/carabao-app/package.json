@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "auth:migrate": "node scripts/better-auth-migrate.mjs",
+    "auth:migrate:apply": "node scripts/better-auth-migrate.mjs --apply"
   },
   "dependencies": {
     "axios": "^1.13.6",
@@ -20,6 +22,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
