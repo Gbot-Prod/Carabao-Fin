@@ -1,6 +1,17 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const rawApiBaseUrl =
+  process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || 'http://localhost:8000';
+
+const API_BASE_URL = rawApiBaseUrl.startsWith('http')
+  ? rawApiBaseUrl
+  : `https://${rawApiBaseUrl}`;
+
+function readBackendToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)backend_access_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 // Create axios instance with auth header
 export const apiClient = axios.create({
@@ -8,17 +19,38 @@ export const apiClient = axios.create({
   withCredentials: true,
 });
 
-// Add interceptor to handle 401 responses
+// Attach the backend JWT as a Bearer token on every request.
+// The cookie lives on the Next.js origin so the browser won't send it to the
+// FastAPI origin automatically — we read it ourselves and forward it.
+apiClient.interceptors.request.use((config) => {
+  const token = readBackendToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Handle 401 responses
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid - redirect to login
-      window.location.href = '/auth';
-    }
+    // Avoid hard redirects here; route protection is already handled by middleware
+    // and forced navigation on 401 can create reload loops.
     return Promise.reject(error);
   }
 );
+
+export type Produce = {
+  id: number;
+  merchant_id: number;
+  name: string | null;
+  description: string | null;
+  contact_number: string | null;
+  operating_hours: string | null;
+  delivery_time: number | null;
+  delivery_price: number | null;
+  rating: number | null;
+};
 
 export type Merchant = {
   id: number;
@@ -30,6 +62,7 @@ export type Merchant = {
   delivery_price: number | null;
   delivery_time: number | null;
   rating: number | null;
+  produces: Produce[];
 };
 
 export type MerchantCreatePayload = {
@@ -66,11 +99,81 @@ export type UserProfile = {
   last_name: string | null;
   email: string;
   phone_number: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  postal_code: string | null;
   created_at: string | null;
+  merchant: {
+    id: number;
+    merchant_name: string;
+  } | null;
+  cart: {
+    id: number;
+    total_items: number;
+    total_price: number;
+  } | null;
+};
+
+export type UserProfileUpdatePayload = {
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string;
+  phone_number?: string | null;
+  address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  postal_code?: string | null;
+};
+
+export type OrderHistoryItem = {
+  id: number;
+  order_id: number;
+  merchant: string;
+  merchant_id?: number | null;
+  merchant_page_slug?: string | null;
+  total_amount: number;
+  order_date: string;
+  status: string;
+  items: CartItem[];
+};
+
+export type CurrentOrderItem = {
+  id: number;
+  order_id: number;
+  merchant: string;
+  merchant_id?: number | null;
+  merchant_page_slug?: string | null;
+  shipped: boolean;
+  date_bought: string;
+  time_of_arrival: string | null;
+  delivery_fee: number;
+  image: string | null;
+  status: string;
+};
+
+export type PlaceOrderPayload = {
+  delivery_date?: string | null;
+  delivery_time?: string | null;
+  payment_method?: string | null;
+  notes?: string | null;
+  service_fee?: number;
+  image?: string | null;
+};
+
+export type PlaceOrderResponse = {
+  order_id: number;
+  order_reference: string;
+  status: string;
 };
 
 export const fetchMerchants = async (): Promise<Merchant[]> => {
   const response = await apiClient.get<Merchant[]>('/merchants');
+  return response.data;
+};
+
+export const fetchMerchantById = async (merchantId: number): Promise<Merchant> => {
+  const response = await apiClient.get<Merchant>(`/merchants/${merchantId}`);
   return response.data;
 };
 
@@ -93,6 +196,47 @@ export const replaceMyCart = async (items: CartItem[]): Promise<Cart> => {
 
 export const fetchMyProfile = async (): Promise<UserProfile> => {
   const response = await apiClient.get<UserProfile>('/users/me');
+  return response.data;
+};
+
+export const updateMyProfile = async (
+  payload: UserProfileUpdatePayload,
+): Promise<UserProfile> => {
+  const response = await apiClient.patch<UserProfile>('/users/me', payload);
+  return response.data;
+};
+
+export const fetchOrderHistory = async (): Promise<OrderHistoryItem[]> => {
+  const response = await apiClient.get<OrderHistoryItem[]>('/orders/me/history');
+  return response.data;
+};
+
+export const fetchCurrentOrders = async (): Promise<CurrentOrderItem[]> => {
+  const response = await apiClient.get<CurrentOrderItem[]>('/orders/me/current');
+  return response.data;
+};
+
+export const placeOrderFromCart = async (
+  payload: PlaceOrderPayload,
+): Promise<PlaceOrderResponse> => {
+  const response = await apiClient.post<PlaceOrderResponse>('/orders/me/place', payload);
+  return response.data;
+};
+
+export type TrackingPosition = { lat: number; lng: number };
+
+export type TrackingData = {
+  order_id: number;
+  origin: TrackingPosition;
+  destination: TrackingPosition;
+  current_position: TrackingPosition;
+  waypoints: TrackingPosition[];
+  progress: number;
+  eta_minutes: number;
+};
+
+export const fetchDummyTracking = async (orderId: number): Promise<TrackingData> => {
+  const response = await apiClient.get<TrackingData>(`/tracking/${orderId}`);
   return response.data;
 };
 

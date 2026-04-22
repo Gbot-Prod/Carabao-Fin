@@ -24,7 +24,7 @@ export function LogoutButton() {
     <button
       onClick={handleLogout}
       disabled={isLoading}
-      className="logout-button"
+      className="logout-button m-3 p-2 rounded text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {isLoading ? "Logging out..." : "Logout"}
     </button>

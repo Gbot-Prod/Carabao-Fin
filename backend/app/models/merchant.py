@@ -6,7 +6,7 @@ class Merchant(Base):
     __tablename__ = "merchants"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("backend_users.id"), nullable=False, unique=True, index=True)
     merchant_name = Column(String, nullable=False, index=True)
     location = Column(String, nullable=True, index=True)
     contact_number = Column(String, unique=True, index=True)
@@ -17,3 +17,6 @@ class Merchant(Base):
 
     user = relationship("User", back_populates="merchant")
     shop_page = relationship("ShopPage", back_populates="merchant", uselist=False, cascade="all, delete-orphan")
+    produces = relationship("Produce", back_populates="merchant", cascade="all, delete-orphan")
+    orders = relationship("Order", back_populates="merchant")
+    current_orders = relationship("CurrentOrder", back_populates="merchant")

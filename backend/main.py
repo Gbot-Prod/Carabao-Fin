@@ -2,14 +2,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import SessionLocal, engine
 from app.core.database import Base
-from app.models import cart, merchant, produce, shopPage, user  # noqa: F401
+from app.models import cart, current_orders, merchant, order, order_history, produce, shopPage, user  # noqa: F401
 from app.api.routes.router import router  # import your router
 
 app = FastAPI()
 
+import os as _os
+
+_raw_origins = _os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+_allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # your Next.js URL
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

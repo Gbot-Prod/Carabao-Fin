@@ -1,6 +1,8 @@
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel
+
+from app.schemas.produce import ProduceResponse
 
 
 class MerchantBase(BaseModel):
@@ -42,6 +44,7 @@ class MerchantResponse(MerchantBase):
     id: int
     user_id: int
     shop_page: Optional[MerchantShopPageInfo] = None
+    produces: List[ProduceResponse] = []
 
     class Config:
         from_attributes = True

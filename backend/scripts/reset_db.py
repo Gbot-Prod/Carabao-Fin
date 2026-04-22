@@ -13,7 +13,7 @@ if str(BACKEND_ROOT) not in sys.path:
 
 
 # Ensure all models are registered in metadata before create_all.
-from app.models import cart, merchant, produce, shopPage, user  # noqa: F401
+from app.models import cart, current_orders, merchant, order, order_history, produce, shopPage, user  # noqa: F401
 from app.core.database import Base
 
 

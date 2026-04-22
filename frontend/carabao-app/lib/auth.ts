@@ -38,7 +38,7 @@ if (process.env.NODE_ENV !== "production") {
 
 const pool = new Pool({
   connectionString: postgresUrl,
-  ssl: postgresUrl.includes("render.com")
+  ssl: postgresUrl.includes("railway.com")
     ? { rejectUnauthorized: false }
     : undefined,
 });

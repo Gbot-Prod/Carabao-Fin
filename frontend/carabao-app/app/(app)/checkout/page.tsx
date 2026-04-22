@@ -1,37 +1,68 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
-
-type CheckoutItem = {
-  id: string;
-  name: string;
-  quantity: number;
-  price: number;
-};
-
-const checkoutItems: CheckoutItem[] = [
-  { id: "it-1", name: "Organic Eggplant", quantity: 3, price: 85 },
-  { id: "it-2", name: "Heirloom Tomato", quantity: 2, price: 120 },
-  { id: "it-3", name: "Fresh Okra", quantity: 1, price: 70 },
-];
+import { fetchMyCart, placeOrderFromCart, type CartItem } from "@/util/api";
 
 export default function CheckoutPage() {
+  const router = useRouter();
+  const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
+  const [isLoadingCart, setIsLoadingCart] = useState(true);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deliveryTime, setDeliveryTime] = useState("08:00-10:00");
   const [paymentMethod, setPaymentMethod] = useState("cash-on-delivery");
   const [notes, setNotes] = useState("");
 
+  useEffect(() => {
+    const loadCart = async () => {
+      try {
+        const cart = await fetchMyCart();
+        setCheckoutItems(Array.isArray(cart.items) ? cart.items : []);
+      } catch {
+        setCheckoutItems([]);
+      } finally {
+        setIsLoadingCart(false);
+      }
+    };
+
+    void loadCart();
+  }, []);
+
   const subtotal = useMemo(
     () =>
       checkoutItems.reduce((sum, item) => sum + item.quantity * item.price, 0),
-    [],
+    [checkoutItems],
   );
   const serviceFee = 40;
   const grandTotal = subtotal + serviceFee;
 
-  const orderId = `CB-${new Date().getFullYear()}-2219`;
+  const handlePlaceOrder = async () => {
+    if (checkoutItems.length === 0 || isPlacingOrder) {
+      return;
+    }
+
+    setIsPlacingOrder(true);
+    setError(null);
+
+    try {
+      const result = await placeOrderFromCart({
+        delivery_date: deliveryDate || null,
+        delivery_time: deliveryTime,
+        payment_method: paymentMethod,
+        notes: notes || null,
+        service_fee: serviceFee,
+      });
+      router.push(`/confirmation?orderId=${encodeURIComponent(result.order_reference)}`);
+    } catch {
+      setError("Unable to place order right now. Please try again.");
+    } finally {
+      setIsPlacingOrder(false);
+    }
+  };
 
   return (
     <div className={styles.page}>
@@ -128,16 +159,22 @@ export default function CheckoutPage() {
 
         <aside className={styles.summaryCard}>
           <h2>Order Summary</h2>
-          <ul className={styles.itemList}>
-            {checkoutItems.map((item) => (
-              <li key={item.id}>
-                <span>
-                  {item.quantity} x {item.name}
-                </span>
-                <strong>PHP {(item.quantity * item.price).toFixed(2)}</strong>
-              </li>
-            ))}
-          </ul>
+          {isLoadingCart ? (
+            <p>Loading cart items...</p>
+          ) : checkoutItems.length === 0 ? (
+            <p>Your cart is empty. Add items before checkout.</p>
+          ) : (
+            <ul className={styles.itemList}>
+              {checkoutItems.map((item) => (
+                <li key={item.id}>
+                  <span>
+                    {item.quantity} x {item.produce}
+                  </span>
+                  <strong>PHP {(item.quantity * item.price).toFixed(2)}</strong>
+                </li>
+              ))}
+            </ul>
+          )}
 
           <div className={styles.totals}>
             <p>
@@ -154,12 +191,16 @@ export default function CheckoutPage() {
             </p>
           </div>
 
-          <Link
-            href={`/confirmation?orderId=${orderId}`}
+          {error && <p className={styles.errorMessage}>{error}</p>}
+
+          <button
+            type="button"
             className={styles.primaryButton}
+            onClick={() => void handlePlaceOrder()}
+            disabled={checkoutItems.length === 0 || isLoadingCart || isPlacingOrder}
           >
-            Place Order
-          </Link>
+            {isPlacingOrder ? "Placing Order..." : "Place Order"}
+          </button>
           <Link href="/cart" className={styles.secondaryButton}>
             Back to Cart
           </Link>

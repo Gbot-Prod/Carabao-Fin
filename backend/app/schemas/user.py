@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 
 from pydantic import BaseModel, EmailStr
 
@@ -9,7 +10,11 @@ class UserBase(BaseModel):
     last_name: Optional[str] = None
     email: EmailStr
     phone_number: Optional[str] = None
-    created_at: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    postal_code: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 
 class UserCreate(UserBase):
@@ -22,7 +27,11 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone_number: Optional[str] = None
-    created_at: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    postal_code: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 
 class UserMerchantInfo(BaseModel):

@@ -1,22 +1,238 @@
 .container {
   width: 100%;
+  display: grid;
+  gap: 1rem;
 }
 
-.section {
-  margin-bottom: 2rem;
+.hero {
+  background: linear-gradient(130deg, #f0fff1 0%, #dff5e6 52%, #ccefd8 100%);
+  border: 1px solid #c5e8d0;
+  border-radius: 20px;
+  padding: 1.4rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.heroEyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #2d7f47;
+  margin: 0 0 0.45rem;
+}
+
+.heroTitle {
+  margin: 0;
+  font-size: clamp(1.45rem, 2.4vw, 2.2rem);
+  color: #11492a;
+}
+
+.heroSubtitle {
+  margin: 0.65rem 0 0;
+  color: #2b5435;
+  max-width: 62ch;
+}
+
+.heroActions {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: end;
+}
+
+.cartLink {
+  background-color: #0a8b3a;
+  color: #fff;
+  border-radius: 12px;
+  padding: 0.65rem 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.merchantCount {
+  display: inline-block;
+  border: 1px solid #a5d8b6;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #235634;
+}
+
+.feedback {
+  margin: 0;
+  color: #145733;
+  font-weight: 500;
+  border-radius: 12px;
+  border: 1px solid #b8e4c7;
+  background-color: #effcf2;
+  padding: 0.75rem 0.9rem;
+}
+
+.controlsRow {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.searchWrap {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.searchLabel {
+  font-size: 0.82rem;
+  color: #266239;
+  font-weight: 600;
+}
+
+.searchInput {
+  width: 100%;
+  max-width: 560px;
+  border: 1px solid #cddfd4;
+  border-radius: 12px;
+  padding: 0.72rem 0.82rem;
+  font-size: 0.95rem;
+  background-color: #ffffff;
 }
 
 .farmGrid {
   width: 100%;
-  max-width: 1200px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  grid-auto-rows: 1fr;
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.farmCard {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #d9e7dd;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(4, 53, 21, 0.08);
+}
+
+.cardImage {
+  min-height: 136px;
+  background-size: cover;
+  background-position: center;
+  padding: 0.7rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.badge {
+  background-color: rgba(255, 255, 255, 0.96);
+  color: #145b33;
+  font-weight: 700;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  padding: 0.22rem 0.55rem;
+}
+
+.categoryChip {
+  background-color: rgba(17, 73, 42, 0.88);
+  color: #dff8e7;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  padding: 0.26rem 0.55rem;
+}
+
+.cardContent {
+  padding: 0.85rem 0.85rem 1rem;
+}
+
+.cardContent h3 {
+  margin: 0;
+  font-size: 1.03rem;
+}
+
+.cardMeta {
+  margin-top: 0.3rem;
+  color: #4e6155;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.83rem;
+}
+
+.deliveryText {
+  margin-top: 0.5rem;
+  color: #225638;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.promoText {
+  margin-top: 0.28rem;
+  color: #5b675f;
+  font-size: 0.86rem;
+}
+
+.cardActions {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.viewStoreButton,
+.addToCartButton {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 10px;
+  min-height: 40px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.viewStoreButton {
+  border: 1px solid #84c19f;
+  color: #146236;
+  background-color: #f6fffa;
+}
+
+.addToCartButton {
+  border: 1px solid transparent;
+  color: #ffffff;
+  background-color: #0a8b3a;
+}
+
+.addToCartButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.emptyState {
+  border-radius: 16px;
+  border: 1px solid #d7e7dc;
+  background-color: #ffffff;
+  padding: 1.25rem;
+}
+
+.emptyState h2 {
+  margin-bottom: 0.45rem;
+  color: #1d4f2f;
+  font-size: 1.1rem;
+}
+
+.emptyState p {
+  color: #5a655f;
 }
 
 @media screen and (max-width: 768px) {
-  .farmGrid {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  .hero {
+    flex-direction: column;
+  }
+
+  .heroActions {
+    justify-items: start;
+  }
+
+  .cardActions {
+    grid-template-columns: 1fr;
   }
 }

@@ -8,9 +8,11 @@ import styles from './farmCard.module.css';
 interface FarmCardProps {
   farm: Farm;
   onClick?: () => void;
+  onAddToCart?: () => void;
+  isAdding?: boolean;
 }
 
-export default function FarmCard({ farm, onClick }: FarmCardProps) {
+export default function FarmCard({ farm, onClick, onAddToCart, isAdding = false }: FarmCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
@@ -61,6 +63,18 @@ export default function FarmCard({ farm, onClick }: FarmCardProps) {
             <span className={styles.promo}>{farm.promo}</span>
           )}
         </div>
+
+        <button
+          type="button"
+          className={styles.addToCartButton}
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddToCart?.();
+          }}
+          disabled={isAdding}
+        >
+          {isAdding ? 'Adding...' : 'Add to Cart'}
+        </button>
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   if (useMockSession) {
     const mockResponse = NextResponse.json({ ok: true, mock: true });
     mockResponse.cookies.set("backend_access_token", "mock-backend-token", {
-      httpOnly: true,
+      httpOnly: false,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       path: "/",
@@ -84,8 +84,12 @@ export async function POST(req: NextRequest) {
   };
 
   const result = NextResponse.json({ ok: true });
+  // httpOnly: false so the browser-side apiClient can read this cookie and
+  // attach it as an Authorization header when calling FastAPI directly.
+  // FastAPI is on a different origin (port) so the browser never sends cookies
+  // across that boundary automatically — we have to forward the token ourselves.
   result.cookies.set("backend_access_token", data.access_token, {
-    httpOnly: true,
+    httpOnly: false,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",

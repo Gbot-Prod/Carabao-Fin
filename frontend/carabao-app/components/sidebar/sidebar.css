@@ -39,13 +39,15 @@
 /* Nav */
 .sidebar__nav {
   flex: 1;
+  margin: 10px;
+  gap: 20px;
 }
 
 .sidebar__nav-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
 /* Nav link */

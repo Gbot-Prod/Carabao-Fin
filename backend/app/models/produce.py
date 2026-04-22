@@ -1,14 +1,18 @@
-from sqlalchemy import Boolean, Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 class Produce(Base):
-  __tablename__ = "produces"
+    __tablename__ = "produces"
 
-  id = Column(Integer, primary_key=True, index=True)
-  name = Column(String, index=True)
-  description = Column(String, index=True)
-  contact_number = Column(String, unique=True, index=True)
-  operating_hours = Column(String, index=True)
-  delivery_time = Column(Integer, index=True)
-  delivery_price = Column(Integer, index=True)
-  rating = Column(Integer, index=True)
+    id = Column(Integer, primary_key=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    name = Column(String, nullable=False, index=True)
+    description = Column(String, nullable=True)
+    category = Column(String, nullable=True, index=True)
+    price = Column(Integer, nullable=False, default=0)
+    unit = Column(String, nullable=False, default="kg")
+    stock_quantity = Column(Integer, nullable=False, default=0)
+    image_url = Column(String, nullable=True)
+
+    merchant = relationship("Merchant", back_populates="produces")

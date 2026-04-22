@@ -4,24 +4,15 @@ import Link from "next/link";
 import "./sidebar.css";
 import Logo from "@/public/images/icons/carabaoLogo.png";
 import { LogoutButton } from "../LogoutButton";
+import { useAuth } from "@/hooks/useAuth";
 
 
 const navItems = [
   {
-    href: "/",
-    label: "Home",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" />
-        <polyline points="9 21 9 12 15 12 15 21" />
-      </svg>
-    ),
-  },
-  {
     href: "/order",
     label: "Order",
     icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7 C10.8 7 9.6 7.8 8.4 9.2 C6.8 11 6 13.8 6 15.5 C6 18 8.8 20.5 12 20.5 C15.2 20.5 18 18 18 15.5 C18 13.8 17.2 11 15.6 9.2 C14.4 7.8 13.2 7 12 7 C12.2 6.2 12.8 5.6 14 5.2 C14.8 4.9 15.8 5 16.6 5.8 C17.2 6.6 16.8 7.4 15.8 7.8 C14.6 8.2 13.2 7.6 12.8 7.2 Z"/></svg>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 7 C10.8 7 9.6 7.8 8.4 9.2 C6.8 11 6 13.8 6 15.5 C6 18 8.8 20.5 12 20.5 C15.2 20.5 18 18 18 15.5 C18 13.8 17.2 11 15.6 9.2 C14.4 7.8 13.2 7 12 7 C12.2 6.2 12.8 5.6 14 5.2 C14.8 4.9 15.8 5 16.6 5.8 C17.2 6.6 16.8 7.4 15.8 7.8 C14.6 8.2 13.2 7.6 12.8 7.2 Z"/></svg>
     ),
   },
   {
@@ -64,23 +55,12 @@ const navItems = [
         <circle cx="12" cy="7" r="4" />
       </svg>
     ),
-  },
-  {
-    href: "/test",
-    label: "Test",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-        <polyline points="16 17 21 12 16 7" />
-        <line x1="21" y1="12" x2="9" y2="12" />
-      </svg>
-    ),
-  },
-
+  }
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { isAuthenticated, isLoading } = useAuth();
 
   return (
     <aside className="sidebar">
@@ -110,7 +90,11 @@ export default function Sidebar() {
       </nav>
 
       <div className="sidebar__footer">
-        <LogoutButton />
+        {!isLoading && (
+          isAuthenticated
+            ? <LogoutButton />
+            : <Link href="/auth" className="sidebar__nav-link m-3">Sign In</Link>
+        )}
       </div>
     </aside>
   );

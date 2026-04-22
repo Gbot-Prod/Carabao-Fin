@@ -146,13 +146,26 @@
 }
 
 .primaryButton {
+  border: none;
   background: #079135fa;
   color: #ffffff;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .secondaryButton {
   border: 1px solid #d9d9d9;
   background: #ffffff;
+}
+
+.errorMessage {
+  margin-top: 0.75rem;
+  color: #ba2f2f;
+  font-weight: 600;
 }
 
 @media (max-width: 980px) {

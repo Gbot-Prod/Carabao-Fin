@@ -14,35 +14,8 @@ type CartItem = {
   price: number;
 };
 
-const initialItems: CartItem[] = [
-  {
-    id: "it-1",
-    farm: "Green Valley Farm",
-    produce: "Organic Eggplant",
-    unit: "kg",
-    quantity: 3,
-    price: 85,
-  },
-  {
-    id: "it-2",
-    farm: "Highland Harvest",
-    produce: "Heirloom Tomato",
-    unit: "kg",
-    quantity: 2,
-    price: 120,
-  },
-  {
-    id: "it-3",
-    farm: "Riverside Growers",
-    produce: "Fresh Okra",
-    unit: "kg",
-    quantity: 1,
-    price: 70,
-  },
-];
-
 export default function CartPage() {
-  const [items, setItems] = useState<CartItem[]>(initialItems);
+  const [items, setItems] = useState<CartItem[]>([]);
   const [isHydrating, setIsHydrating] = useState(true);
   const hasSyncedRef = useRef(false);
 
