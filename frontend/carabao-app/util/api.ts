@@ -75,6 +75,26 @@ export type MerchantCreatePayload = {
   rating?: number | null;
 };
 
+export type MerchantOnboardingPayload = {
+  merchant_name: string;
+  legal_business_name: string;
+  business_type: string;
+  tin?: string | null;
+  registration_type?: string | null;
+  registration_number?: string | null;
+  contact_email: string;
+  contact_number: string;
+  address_line: string;
+  city: string;
+  province: string;
+  region?: string | null;
+  postal_code?: string | null;
+  price_range_min: number;
+  price_range_max: number;
+  available_days: string[];
+  rsbsa_number?: string | null;
+};
+
 export type CartItem = {
   id: string;
   farm: string;
@@ -181,6 +201,18 @@ export const createMyMerchant = async (
   payload: MerchantCreatePayload,
 ): Promise<Merchant> => {
   const response = await apiClient.post<Merchant>('/merchants/me', payload);
+  return response.data;
+};
+
+export const submitMyMerchantOnboarding = async (
+  payload: MerchantOnboardingPayload,
+  rsbsaFile: File,
+): Promise<Merchant> => {
+  const formData = new FormData();
+  formData.append('payload', JSON.stringify(payload));
+  formData.append('rsbsa_file', rsbsaFile);
+
+  const response = await apiClient.post<Merchant>('/merchant-onboarding/me', formData);
   return response.data;
 };
 

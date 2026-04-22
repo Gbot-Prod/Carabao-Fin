@@ -109,7 +109,7 @@ export default function Profile() {
   // Derived display values
   const fullName = profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() || 'Carabao User' : null;
   const addressLine = profile ? [profile.address, profile.city, profile.country, profile.postal_code].filter(Boolean).join(', ') : null;
-  const merchantHref = profile?.merchant?.id ? `/merchant/${profile.merchant.id}` : '/merchantSignup';
+  const merchantHref = profile?.merchant?.id ? `/merchant/${profile.merchant.id}` : '/merchantOnboarding';
   const merchantLabel = profile?.merchant?.id ? 'View Merchant Page' : 'Apply as Merchant';
 
   return (

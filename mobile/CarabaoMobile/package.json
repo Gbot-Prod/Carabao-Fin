@@ -1,6 +1,6 @@
 {
   "name": "carabaomobile",
-  "main": "./App.tsx",
+  "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",

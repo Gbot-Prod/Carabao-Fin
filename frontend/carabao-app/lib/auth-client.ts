@@ -55,15 +55,31 @@ export const signUp = {
     password: string;
     name: string;
   }) => {
-    const { data, error } = await authClient.signUp.email(userData);
+    const { data, error } = await authClient.signUp.email({
+      ...userData,
+      callbackURL: "/email-verified",
+    });
 
     if (error || !data) {
       throw new Error(getErrorMessage(error, "Signup failed"));
     }
 
-    await syncBackendSession();
+    // Backend sync happens in /email-verified after the user verifies their email.
     return data;
   },
+};
+
+export const resendVerificationEmail = async (email: string) => {
+  const { data, error } = await authClient.sendVerificationEmail({
+    email,
+    callbackURL: "/email-verified",
+  });
+
+  if (error) {
+    throw new Error(getErrorMessage(error, "Could not resend verification email"));
+  }
+
+  return data;
 };
 
 export const signOut = async () => {

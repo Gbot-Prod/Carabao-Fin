@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth } from "@/public/auth";
 import { type NextRequest, NextResponse } from "next/server";
 
 const rawApiUrl =
@@ -9,6 +9,22 @@ const apiBaseUrl = normalizedApiUrl
     ? normalizedApiUrl
     : `https://${normalizedApiUrl}`
   : "";
+
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 3,
+  baseDelayMs = 500
+): Promise<Response | null> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const res = await fetch(url, options).catch(() => null);
+    if (res?.ok) return res;
+    if (attempt < retries - 1) {
+      await new Promise((r) => setTimeout(r, baseDelayMs * (attempt + 1)));
+    }
+  }
+  return null;
+}
 
 export async function POST(req: NextRequest) {
   const useMockSession = process.env.MOCK_AUTH_SESSION === "true";
@@ -54,7 +70,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const response = await fetch(
+  const response = await fetchWithRetry(
     `${apiBaseUrl}/auth/sync`,
     {
       method: "POST",
@@ -69,12 +85,12 @@ export async function POST(req: NextRequest) {
         last_name: lastName || null,
       }),
     }
-  ).catch(() => null);
+  );
 
   if (!response?.ok) {
     return NextResponse.json(
       { error: "Backend auth sync failed" },
-      { status: response?.status || 401 }
+      { status: response?.status || 503 }
     );
   }
 

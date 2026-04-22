@@ -1,1 +1,1 @@
-"""Database models package."""
+"""Service-layer package."""

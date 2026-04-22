@@ -4,13 +4,8 @@ import {
   View, Text, StyleSheet, SafeAreaView,
   TouchableOpacity, Animated, ScrollView,
 } from 'react-native';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
-import { RootStackParamList } from '../types';
-
-type ConfRoute = RouteProp<RootStackParamList, 'Confirmation'>;
-type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const STEPS = [
   { icon: '✅', label: 'Merchant confirms stock' },
@@ -19,9 +14,8 @@ const STEPS = [
 ];
 
 export default function ConfirmationScreen() {
-  const route = useRoute<ConfRoute>();
-  const navigation = useNavigation<Nav>();
-  const { orderId } = route.params;
+  const router = useRouter();
+  const { orderId } = useLocalSearchParams<{ orderId?: string }>();
 
   const scale = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -98,7 +92,7 @@ export default function ConfirmationScreen() {
           <View style={styles.actions}>
             <TouchableOpacity
               style={styles.primaryBtn}
-              onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Track' })}
+              onPress={() => router.push('/(tabs)/track')}
             >
               <Text style={styles.primaryBtnText}>📍  Track Order</Text>
             </TouchableOpacity>
@@ -106,13 +100,13 @@ export default function ConfirmationScreen() {
             <View style={styles.secondaryRow}>
               <TouchableOpacity
                 style={styles.secondaryBtn}
-                onPress={() => (navigation as any).navigate('MainTabs', { screen: 'History' })}
+                onPress={() => router.push('/(tabs)/history')}
               >
                 <Text style={styles.secondaryBtnText}>View History</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.secondaryBtn}
-                onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Order' })}
+                onPress={() => router.push('/(tabs)/order')}
               >
                 <Text style={styles.secondaryBtnText}>Place Another</Text>
               </TouchableOpacity>

@@ -43,6 +43,9 @@ const pool = new Pool({
     : undefined,
 });
 
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || "";
+const apiBaseUrl = rawApiUrl.trim().replace(/^"|"$/g, "");
+
 export const auth = betterAuth({
   database: pool,
   baseURL:
@@ -53,6 +56,39 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET || "your-secret-key",
   emailAndPassword: {
     enabled: true,
+    requireEmailVerification: true,
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      if (!apiBaseUrl) {
+        console.info(`[email-verify] No API URL configured. Verification link for ${user.email}: ${url}`);
+        return;
+      }
+
+      const sharedSecret = process.env.AUTH_SYNC_SHARED_SECRET;
+      if (!sharedSecret) {
+        console.error("[email-verify] AUTH_SYNC_SHARED_SECRET is not set");
+        return;
+      }
+
+      const res = await fetch(`${apiBaseUrl}/email/send-verification`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Internal-Auth-Sync-Secret": sharedSecret,
+        },
+        body: JSON.stringify({ to: user.email, verification_url: url }),
+      }).catch((err) => {
+        console.error("[email-verify] Failed to reach backend email service", err);
+        return null;
+      });
+
+      if (!res?.ok) {
+        console.error(`[email-verify] Backend returned ${res?.status} for ${user.email}`);
+      }
+    },
   },
   socialProviders: {
     google: {

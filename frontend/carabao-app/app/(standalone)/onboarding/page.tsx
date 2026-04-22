@@ -63,7 +63,7 @@ export default function OnboardingPage() {
         country: formData.province.trim() || null,
         postal_code: formData.zipCode.trim() || null,
       });
-      router.push("/profile");
+      router.push("/order");
     } catch {
       setSaveError("Could not save your profile. Please check your connection and try again.");
     } finally {
@@ -161,8 +161,8 @@ export default function OnboardingPage() {
         </form>
 
         <div style={{ marginTop: 20, textAlign: "center" }}>
-          <Link href="/profile" style={{ fontSize: 13, color: "#5c6a5e", textDecoration: "underline" }}>
-            Skip for now → go to profile
+          <Link href="/order" style={{ fontSize: 13, color: "#5c6a5e", textDecoration: "underline" }}>
+            Skip for now → go to app
           </Link>
         </div>
       </div>

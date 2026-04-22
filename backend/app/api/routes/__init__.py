@@ -1,1 +1,1 @@
-"""Database models package."""
+"""API route modules package."""

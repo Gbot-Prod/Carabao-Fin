@@ -8,6 +8,7 @@ import mapboxgl from 'mapbox-gl';
 import OrderCard from './components/orderCard';
 import { orders as fallbackOrders, type Order } from './data/orders';
 import { fetchCurrentOrders, fetchDummyTracking, type TrackingData } from '@/util/api';
+import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
 
 type TrackOrder = Order & {
   id: number;
@@ -35,6 +36,7 @@ function Track() {
   const driverMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const destinationMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const routeRef = useRef<RouteGeoJSON | null>(null);
   const [tracking, setTracking] = useState<TrackingData | null>(null);
   const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>(
     fallbackOrders.map((order, index) => ({
@@ -71,19 +73,36 @@ function Track() {
     }
   }, [currentOrders.length, selectedOrderIndex]);
 
-  // Poll dummy tracking endpoint every 3 seconds for the selected order
-  const placeMarkers = useCallback((data: TrackingData, map: mapboxgl.Map) => {
-    const { current_position, origin, destination } = data;
+  const drawRouteLayer = useCallback((map: mapboxgl.Map, route: RouteGeoJSON) => {
+    if (map.getSource('driver-route')) {
+      (map.getSource('driver-route') as mapboxgl.GeoJSONSource).setData(route);
+    } else {
+      map.addSource('driver-route', { type: 'geojson', data: route });
+      map.addLayer({
+        id: 'driver-route-line',
+        type: 'line',
+        source: 'driver-route',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#22c55e', 'line-width': 4, 'line-opacity': 0.85 },
+      });
+    }
+  }, []);
 
+  const placeMarkers = useCallback((
+    map: mapboxgl.Map,
+    driverLngLat: [number, number],
+    origin: TrackingData['origin'],
+    destination: TrackingData['destination'],
+  ) => {
     if (!driverMarkerRef.current) {
       const el = document.createElement('div');
       el.style.cssText = 'background:#22c55e;width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)';
       driverMarkerRef.current = new mapboxgl.Marker({ element: el })
-        .setLngLat([current_position.lng, current_position.lat])
+        .setLngLat(driverLngLat)
         .setPopup(new mapboxgl.Popup({ offset: 20 }).setText('Driver'))
         .addTo(map);
     } else {
-      driverMarkerRef.current.setLngLat([current_position.lng, current_position.lat]);
+      driverMarkerRef.current.setLngLat(driverLngLat);
     }
 
     if (!originMarkerRef.current) {
@@ -96,30 +115,48 @@ function Track() {
     if (!destinationMarkerRef.current) {
       destinationMarkerRef.current = new mapboxgl.Marker({ color: '#ef4444' })
         .setLngLat([destination.lng, destination.lat])
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setText('Your Location (Destination)'))
+        .setPopup(new mapboxgl.Popup({ offset: 25 }).setText('Your Location'))
         .addTo(map);
     }
   }, []);
 
-  const updateMarkers = useCallback((data: TrackingData) => {
-    const map = mapRef.current;
-    if (!map) return;
-    if (map.loaded()) {
-      placeMarkers(data, map);
-    } else {
-      map.once('load', () => placeMarkers(data, map));
+  const updateTracking = useCallback(async (data: TrackingData, map: mapboxgl.Map) => {
+    // Fetch road route once per order selection
+    if (!routeRef.current) {
+      const token = process.env.NEXT_PUBLIC_MAPBOX_API_KEY ?? '';
+      const route = await fetchRouteGeoJSON(data.origin, data.destination, token);
+      if (route) {
+        routeRef.current = route;
+        if (map.loaded()) {
+          drawRouteLayer(map, route);
+        } else {
+          map.once('load', () => drawRouteLayer(map, route));
+        }
+      }
     }
-  }, [placeMarkers]);
+
+    // Compute driver position — road-snapped if route is available, raw otherwise
+    const driverLngLat: [number, number] = routeRef.current
+      ? getPositionAlongRoute(routeRef.current, data.progress)
+      : [data.current_position.lng, data.current_position.lat];
+
+    if (map.loaded()) {
+      placeMarkers(map, driverLngLat, data.origin, data.destination);
+    } else {
+      map.once('load', () => placeMarkers(map, driverLngLat, data.origin, data.destination));
+    }
+  }, [drawRouteLayer, placeMarkers]);
 
   useEffect(() => {
     const orderId = selectedOrder?.orderId;
     if (!orderId) return;
 
     const poll = async () => {
+      const map = mapRef.current;
       try {
         const data = await fetchDummyTracking(orderId);
         setTracking(data);
-        updateMarkers(data);
+        if (map) await updateTracking(data, map);
       } catch (err) {
         console.error('[tracking] fetch failed:', err);
       }
@@ -130,6 +167,10 @@ function Track() {
 
     return () => {
       clearInterval(intervalId);
+      const map = mapRef.current;
+      if (map?.getLayer('driver-route-line')) map.removeLayer('driver-route-line');
+      if (map?.getSource('driver-route')) map.removeSource('driver-route');
+      routeRef.current = null;
       driverMarkerRef.current?.remove();
       driverMarkerRef.current = null;
       originMarkerRef.current?.remove();
@@ -138,7 +179,7 @@ function Track() {
       destinationMarkerRef.current = null;
       setTracking(null);
     };
-  }, [selectedOrder?.orderId, updateMarkers]);
+  }, [selectedOrder?.orderId, updateTracking]);
 
   const formattedDeliveryFee = new Intl.NumberFormat('en-PH', {
     style: 'currency',

@@ -44,14 +44,14 @@ export default function SignupPage() {
           password: formData.password,
           name: `${formData.firstname} ${formData.lastName}`.trim(),
         });
+        router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
       } else {
         await signIn.email({
           email: formData.email,
           password: formData.password,
         });
+        router.push("/order");
       }
-
-      router.push("/order");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Authentication failed. Please try again.";
       setError(message);

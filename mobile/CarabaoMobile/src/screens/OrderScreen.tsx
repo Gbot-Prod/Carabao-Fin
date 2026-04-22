@@ -4,20 +4,16 @@ import {
   View, Text, FlatList, TextInput, StyleSheet,
   TouchableOpacity, ScrollView, SafeAreaView,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useRouter } from 'expo-router';
 import FarmCard from '../components/FarmCard';
 import { mockFarms } from '../lib/mockData';
 import { useCart } from '../lib/CartContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
-import { RootStackParamList } from '../types';
-
-type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const CATEGORIES = ['All', 'Fruits', 'Vegetables', 'Dairy', 'Strawberries', 'Mixed Produce', 'Seafood & Produce'];
 
 export default function OrderScreen() {
-  const navigation = useNavigation<Nav>();
+  const router = useRouter();
   const { itemCount } = useCart();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
@@ -41,7 +37,7 @@ export default function OrderScreen() {
         </View>
         <TouchableOpacity
           style={styles.cartBtn}
-          onPress={() => navigation.navigate('MainTabs')}
+          onPress={() => router.push('/(tabs)/cart')}
         >
           <Text style={styles.cartIcon}>🛒</Text>
           {itemCount > 0 && (
@@ -101,7 +97,12 @@ export default function OrderScreen() {
           <View style={styles.cardWrapper}>
             <FarmCard
               farm={item}
-              onPress={() => navigation.navigate('Merchant', { farmId: item.id, farmName: item.name })}
+              onPress={() =>
+                router.push({
+                  pathname: '/merchant',
+                  params: { farmId: item.id, farmName: item.name },
+                })
+              }
             />
           </View>
         )}

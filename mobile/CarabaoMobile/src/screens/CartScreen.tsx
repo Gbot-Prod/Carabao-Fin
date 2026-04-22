@@ -4,17 +4,13 @@ import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, SafeAreaView, Image, Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useRouter } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
-import { RootStackParamList } from '../types';
 import { StatRow, Divider, Button, EmptyState } from '../components/UI';
 
-type Nav = NativeStackNavigationProp<RootStackParamList>;
-
 export default function CartScreen() {
-  const navigation = useNavigation<Nav>();
+  const router = useRouter();
   const { items, updateQuantity, removeItem, total, itemCount, clearCart } = useCart();
 
   const serviceFee = total > 0 ? 40 : 0;
@@ -22,7 +18,7 @@ export default function CartScreen() {
 
   const handleCheckout = () => {
     if (items.length === 0) return;
-    navigation.navigate('Checkout');
+    router.push('/checkout');
   };
 
   const handleRemove = (id: string, name: string) => {
@@ -49,7 +45,7 @@ export default function CartScreen() {
           action={
             <TouchableOpacity
               style={styles.browseBtn}
-              onPress={() => (navigation as any).navigate('Order')}
+              onPress={() => router.push('/(tabs)/order')}
             >
               <Text style={styles.browseBtnText}>Browse Farms</Text>
             </TouchableOpacity>

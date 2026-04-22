@@ -4,14 +4,10 @@ import {
   View, Text, TextInput, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useRouter } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Button, Divider, StatRow } from '../components/UI';
-import { RootStackParamList } from '../types';
-
-type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const PAYMENT_METHODS = [
   { id: 'cod', label: 'Cash on Delivery', icon: '💵' },
@@ -24,7 +20,7 @@ const TIME_WINDOWS = [
 ];
 
 export default function CheckoutScreen() {
-  const navigation = useNavigation<Nav>();
+  const router = useRouter();
   const { items, total, clearCart } = useCart();
   const [payment, setPayment] = useState('cod');
   const [timeWindow, setTimeWindow] = useState(TIME_WINDOWS[0]);
@@ -42,7 +38,7 @@ export default function CheckoutScreen() {
     setLoading(false);
     clearCart();
     const orderId = `CB-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000 + 1000)}`;
-    navigation.replace('Confirmation', { orderId });
+    router.replace({ pathname: '/confirmation', params: { orderId } });
   };
 
   return (
@@ -50,10 +46,11 @@ export default function CheckoutScreen() {
       {/* Nav bar */}
       <View style={styles.navBar}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.navTitle}>Checkout</Text>
-        <View style={{ width: 30 }} />
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.navTitle}>Checkout</Text>
+          <View style={{ width: 30 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

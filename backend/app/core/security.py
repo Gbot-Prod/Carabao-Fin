@@ -16,13 +16,19 @@ def _get_jwt_secret() -> str:
     return secret
 
 
-def create_access_token(subject: str, expires_minutes: int = 60) -> str:
+def create_access_token(
+    subject: str,
+    expires_minutes: int = 60,
+    extra_claims: Optional[dict[str, Any]] = None,
+) -> str:
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "sub": subject,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=expires_minutes)).timestamp()),
     }
+    if extra_claims:
+        payload.update(extra_claims)
     return jwt.encode(payload, _get_jwt_secret(), algorithm="HS256")
 
 

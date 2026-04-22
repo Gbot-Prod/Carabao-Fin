@@ -11,6 +11,8 @@
     "auth:migrate:apply": "node scripts/better-auth-migrate.mjs --apply"
   },
   "dependencies": {
+    "@turf/along": "^7.3.5",
+    "@turf/length": "^7.3.5",
     "axios": "^1.13.6",
     "better-auth": "^1.6.5",
     "mapbox-gl": "^3.19.0",

@@ -5,12 +5,8 @@ import {
   StyleSheet, SafeAreaView, Alert, Switch, Image,
 } from 'react-native';
 import { useAuth } from '../lib/AuthContext';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
-import { RootStackParamList } from '../types';
-
-type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 interface SettingItemProps {
   icon: string;
@@ -49,7 +45,7 @@ function SectionHeader({ title }: { title: string }) {
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
-  const navigation = useNavigation<Nav>();
+  const router = useRouter();
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [promoEnabled, setPromoEnabled] = useState(false);
 
@@ -73,7 +69,7 @@ export default function ProfileScreen() {
   };
 
   const handleMerchant = () => {
-    navigation.navigate('Onboarding');
+    router.push('/onboarding');
   };
 
   return (
@@ -114,9 +110,9 @@ export default function ProfileScreen() {
           {/* Account */}
           <SectionHeader title="Account" />
           <View style={styles.settingsGroup}>
-            <SettingItem icon="📍" label="Saved Addresses" value="1 address saved" onPress={() => {}} />
-            <SettingItem icon="💳" label="Payment Methods" value="No cards saved" onPress={() => {}} />
-            <SettingItem icon="🧾" label="Order History" onPress={() => (navigation as any).navigate('MainTabs', { screen: 'History' })} />
+            <SettingItem icon="📍" label="Saved Addresses" value="1 address saved" onPress={() => { }} />
+            <SettingItem icon="💳" label="Payment Methods" value="No cards saved" onPress={() => { }} />
+            <SettingItem icon="🧾" label="Order History" onPress={() => router.push('/(tabs)/history')} />
           </View>
 
           {/* Notifications */}
@@ -151,16 +147,16 @@ export default function ProfileScreen() {
           {/* Preferences */}
           <SectionHeader title="Preferences" />
           <View style={styles.settingsGroup}>
-            <SettingItem icon="🌐" label="Language" value="English" onPress={() => {}} />
-            <SettingItem icon="☀️" label="Theme" value="Light" onPress={() => {}} />
+            <SettingItem icon="🌐" label="Language" value="English" onPress={() => { }} />
+            <SettingItem icon="☀️" label="Theme" value="Light" onPress={() => { }} />
           </View>
 
           {/* Support */}
           <SectionHeader title="Support" />
           <View style={styles.settingsGroup}>
-            <SettingItem icon="❓" label="Help Center" onPress={() => {}} />
-            <SettingItem icon="📄" label="Terms & Privacy" onPress={() => {}} />
-            <SettingItem icon="⭐" label="Rate the App" onPress={() => {}} />
+            <SettingItem icon="❓" label="Help Center" onPress={() => { }} />
+            <SettingItem icon="📄" label="Terms & Privacy" onPress={() => { }} />
+            <SettingItem icon="⭐" label="Rate the App" onPress={() => { }} />
           </View>
 
           {/* Sign out */}

@@ -1,1 +1,1 @@
-"""Database models package."""
+"""Core application utilities package."""

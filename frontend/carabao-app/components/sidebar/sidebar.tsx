@@ -5,7 +5,9 @@ import "./sidebar.css";
 import Logo from "@/public/images/icons/carabaoLogo.png";
 import { LogoutButton } from "../LogoutButton";
 import { useAuth } from "@/hooks/useAuth";
+import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
 
+const PROTECTED = new Set(["/track", "/history", "/profile", "/checkout", "/confirmation"]);
 
 const navItems = [
   {
@@ -61,6 +63,7 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useAuth();
+  const { showPrompt } = useAuthPrompt();
 
   return (
     <aside className="sidebar">
@@ -74,11 +77,15 @@ export default function Sidebar() {
           {navItems.map((item) => {
             const isActive =
               item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const isProtectedItem = PROTECTED.has(item.href);
+            const blocked = isProtectedItem && !isLoading && !isAuthenticated;
+
             return (
               <li key={item.href}>
                 <Link
-                  href={item.href}
+                  href={blocked ? "/order" : item.href}
                   className={`sidebar__nav-link${isActive ? " sidebar__nav-link--active" : ""}`}
+                  onClick={blocked ? (e) => { e.preventDefault(); showPrompt(); } : undefined}
                 >
                   <span className="sidebar__nav-icon">{item.icon}</span>
                   <span className="sidebar__nav-label">{item.label}</span>
@@ -99,4 +106,3 @@ export default function Sidebar() {
     </aside>
   );
 }
-

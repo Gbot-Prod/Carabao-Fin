@@ -5,6 +5,7 @@ import {
   StyleSheet, SafeAreaView, Alert, FlatList,
 } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 import { mockFarms, mockProducts } from '../lib/mockData';
 import { useCart } from '../lib/CartContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
@@ -13,6 +14,7 @@ import { RootStackParamList } from '../types';
 type MerchantRoute = RouteProp<RootStackParamList, 'Merchant'>;
 
 export default function MerchantScreen() {
+  const router = useRouter();
   const route = useRoute<MerchantRoute>();
   const navigation = useNavigation();
   const { addItem, itemCount } = useCart();
@@ -145,7 +147,7 @@ export default function MerchantScreen() {
           <Text style={styles.ctaCount}>{itemCount} item{itemCount > 1 ? 's' : ''} in cart</Text>
           <TouchableOpacity
             style={styles.ctaBtn}
-            onPress={() => (navigation as any).navigate('MainTabs', { screen: 'Cart' })}
+            onPress={() => router.push('/(tabs)/cart')}
           >
             <Text style={styles.ctaBtnText}>View Cart →</Text>
           </TouchableOpacity>
