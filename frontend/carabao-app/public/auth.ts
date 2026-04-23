@@ -44,7 +44,12 @@ const pool = new Pool({
 });
 
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || "";
-const apiBaseUrl = rawApiUrl.trim().replace(/^"|"$/g, "");
+const normalizedApiUrl = rawApiUrl.trim().replace(/^"|"$/g, "");
+const apiBaseUrl = normalizedApiUrl
+  ? normalizedApiUrl.startsWith("http")
+    ? normalizedApiUrl
+    : `https://${normalizedApiUrl}`
+  : "";
 
 export const auth = betterAuth({
   database: pool,

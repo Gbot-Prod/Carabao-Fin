@@ -19,7 +19,6 @@
   justify-content: center;
   gap: 0.625rem;
   padding: 0.5rem 0.75rem 2rem;
-
   background-color: rgba(47, 145, 27, 0.9);
 }
 
@@ -39,15 +38,100 @@
 /* Nav */
 .sidebar__nav {
   flex: 1;
-  margin: 10px;
-  gap: 20px;
+  padding: 0.75rem 0;
+  overflow-y: auto;
 }
 
+/* Section accordion */
+.sidebar__section {
+  margin-bottom: 0.125rem;
+}
+
+.sidebar__section--divided {
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.sidebar__section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.65rem 0.875rem;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  transition: background-color 0.15s ease;
+  text-align: left;
+}
+
+.sidebar__section-header:hover {
+  background-color: #f3f4f6;
+}
+
+.sidebar__section-title {
+  flex: 1;
+}
+
+/* Section icon badges */
+.sidebar__section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.sidebar__section-icon--shops {
+  background-color: #dcfce7;
+  color: #16a34a;
+}
+
+.sidebar__section-icon--profile {
+  background-color: #e0e7ff;
+  color: #4f46e5;
+}
+
+.sidebar__chevron {
+  flex-shrink: 0;
+  color: #9ca3af;
+  transition: transform 0.2s ease;
+}
+
+.sidebar__chevron--open {
+  transform: rotate(180deg);
+}
+
+/* Collapse animation via CSS grid */
+.sidebar__section-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease;
+}
+
+.sidebar__section-body--open {
+  grid-template-rows: 1fr;
+}
+
+.sidebar__section-inner {
+  overflow: hidden;
+  padding-bottom: 0.25rem;
+}
+
+/* Nav list */
 .sidebar__nav-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.125rem;
 }
 
 /* Nav link */
@@ -89,6 +173,52 @@
 /* Label */
 .sidebar__nav-label {
   white-space: nowrap;
+}
+
+/* Filter chips */
+.sidebar__filters {
+  padding: 0.5rem 0.875rem 0.25rem;
+}
+
+.sidebar__filters-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 0.5rem;
+}
+
+.sidebar__filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.sidebar__filter-chip {
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.sidebar__filter-chip:hover {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+  color: var(--color-text-dark);
+}
+
+.sidebar__filter-chip--active {
+  background-color: #e6f7ee;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 /* Footer / sign-out */

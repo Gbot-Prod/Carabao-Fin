@@ -31,6 +31,8 @@ class AuthSyncResponse(BaseModel):
     ok: bool
     user_id: int
     email: EmailStr
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     access_token: str
     token_type: str = "bearer"
     expires_in: int = 3600
@@ -93,6 +95,8 @@ async def sync_auth(
         ok=True,
         user_id=user.id,
         email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
         access_token=access_token,
     )
 
@@ -159,6 +163,8 @@ async def mobile_sign_up(
         ok=True,
         user_id=user.id,
         email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
         access_token=access_token,
         expires_in=60 * 60 * 24 * 7,
     )
@@ -201,6 +207,8 @@ async def mobile_sign_in(
         ok=True,
         user_id=user.id,
         email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
         access_token=access_token,
         expires_in=60 * 60 * 24 * 7,
     )
