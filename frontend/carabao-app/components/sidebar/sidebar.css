@@ -215,6 +215,15 @@
   color: var(--color-text-dark);
 }
 
+.sidebar__filter-group {
+  margin-top: 0.75rem;
+}
+
+.sidebar__filter-chip--price {
+  min-width: 2.5rem;
+  justify-content: center;
+}
+
 .sidebar__filter-chip--active {
   background-color: #e6f7ee;
   border-color: var(--color-primary);

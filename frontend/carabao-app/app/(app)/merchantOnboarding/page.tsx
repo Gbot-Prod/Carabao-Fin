@@ -250,12 +250,12 @@ export default function MerchantOnboardingPage() {
                 </select>
               </div>
               <div className={styles.field}>
-                <label className={styles.label}>TIN (optional)</label>
+                <label className={styles.label}>TIN </label>
                 <input className={styles.input} value={form.tin ?? ""} onChange={setField("tin")} placeholder="123-456-789-000" />
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Registration type (optional)</label>
+                <label className={styles.label}>Registration type </label>
                 <select className={styles.select} value={form.registration_type ?? ""} onChange={setField("registration_type")}>
                   <option value="DTI">DTI</option>
                   <option value="SEC">SEC</option>
@@ -345,7 +345,7 @@ export default function MerchantOnboardingPage() {
 
               <div className={styles.grid}>
                 <div className={styles.field}>
-                  <label className={styles.label}>RSBSA number (optional)</label>
+                  <label className={styles.label}>RSBSA number</label>
                   <input className={styles.input} value={form.rsbsa_number ?? ""} onChange={setField("rsbsa_number")} placeholder="RSBSA-XXXX-XXXX" />
                 </div>
 

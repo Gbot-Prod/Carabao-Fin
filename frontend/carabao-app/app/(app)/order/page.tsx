@@ -1,10 +1,9 @@
 "use client";
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import styles from './page.module.css';
-import { farms } from './data/farms';
 import { fetchMerchants, fetchMyCart, replaceMyCart, type CartItem } from '@/util/api';
 
 type FarmView = {
@@ -35,15 +34,10 @@ const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]
   image: '/images/farms/dole.jpg',
 });
 
-const farmFallbackData: FarmView[] = farms.map((farm) => ({
-  merchantId: null,
-  deliveryTimeDays: null,
-  ...farm,
-}));
 
-export default function Order() {
+function OrderContent() {
   const searchParams = useSearchParams();
-  const [farmList, setFarmList] = useState<FarmView[]>(farmFallbackData);
+  const [farmList, setFarmList] = useState<FarmView[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isAddingByFarm, setIsAddingByFarm] = useState<Record<string, boolean>>({});
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -237,5 +231,13 @@ export default function Order() {
         </section>
       )}
     </div>
+  );
+}
+
+export default function Order() {
+  return (
+    <Suspense>
+      <OrderContent />
+    </Suspense>
   );
 }
