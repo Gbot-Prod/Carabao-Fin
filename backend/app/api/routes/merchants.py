@@ -1,12 +1,17 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.merchant import Merchant
+from app.models.order import Order
 from app.models.produce import Produce
 from app.models.shopPage import ShopPage
 from app.models.user import User
 from app.schemas.merchant import MerchantBase, MerchantPageBase, MerchantResponse, MerchantUpdate
+from app.schemas.merchant_performance import MerchantPerformanceResponse
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
 from app.services.merchant_service import create_merchant
@@ -65,6 +70,88 @@ async def update_my_merchant(
     db.commit()
     db.refresh(merchant)
     return merchant
+
+
+@router.get("/merchants/me/performance", response_model=MerchantPerformanceResponse)
+async def get_my_merchant_performance(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+    active_statuses = {"pending", "processing", "shipped", "out_for_delivery"}
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(days=30)
+
+    total_products = (
+        db.query(func.count(Produce.id)).filter(Produce.merchant_id == merchant.id).scalar() or 0
+    )
+
+    total_orders = (
+        db.query(func.count(Order.id)).filter(Order.merchant_id == merchant.id).scalar() or 0
+    )
+    active_orders = (
+        db.query(func.count(Order.id))
+        .filter(Order.merchant_id == merchant.id, Order.status.in_(active_statuses))
+        .scalar()
+        or 0
+    )
+    delivered_orders = (
+        db.query(func.count(Order.id))
+        .filter(Order.merchant_id == merchant.id, Order.status == "delivered")
+        .scalar()
+        or 0
+    )
+    cancelled_orders = (
+        db.query(func.count(Order.id))
+        .filter(Order.merchant_id == merchant.id, Order.status == "cancelled")
+        .scalar()
+        or 0
+    )
+
+    total_revenue = (
+        db.query(func.coalesce(func.sum(Order.total_price), 0))
+        .filter(Order.merchant_id == merchant.id, Order.status != "cancelled")
+        .scalar()
+        or 0
+    )
+    last_order_at = (
+        db.query(func.max(Order.ordered_at)).filter(Order.merchant_id == merchant.id).scalar()
+    )
+
+    last_30_days_orders = (
+        db.query(func.count(Order.id))
+        .filter(Order.merchant_id == merchant.id, Order.ordered_at >= window_start)
+        .scalar()
+        or 0
+    )
+    last_30_days_revenue = (
+        db.query(func.coalesce(func.sum(Order.total_price), 0))
+        .filter(
+            Order.merchant_id == merchant.id,
+            Order.ordered_at >= window_start,
+            Order.status != "cancelled",
+        )
+        .scalar()
+        or 0
+    )
+
+    return MerchantPerformanceResponse(
+        merchant_id=merchant.id,
+        merchant_name=merchant.merchant_name,
+        rating=merchant.rating,
+        total_products=int(total_products),
+        total_orders=int(total_orders),
+        active_orders=int(active_orders),
+        delivered_orders=int(delivered_orders),
+        cancelled_orders=int(cancelled_orders),
+        total_revenue=int(total_revenue),
+        last_order_at=last_order_at,
+        last_30_days_orders=int(last_30_days_orders),
+        last_30_days_revenue=int(last_30_days_revenue),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -201,4 +288,3 @@ async def update_my_shoppage(
     db.commit()
     db.refresh(shop_page)
     return shop_page
-

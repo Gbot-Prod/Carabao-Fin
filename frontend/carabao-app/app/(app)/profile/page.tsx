@@ -198,6 +198,15 @@ export default function Profile() {
               );
             })}
           </div>
+
+          {profile?.merchant?.id && (
+            <div className={styles.merchantTools}>
+              <h4 className={styles.merchantToolsTitle}>Merchant</h4>
+              <Link className={styles.merchantToolsButton} href="/merchantDashboard">
+                Merchant Dashboard
+              </Link>
+            </div>
+          )}
         </section>
       </main>
 

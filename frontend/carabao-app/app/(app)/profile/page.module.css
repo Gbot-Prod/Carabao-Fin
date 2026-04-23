@@ -201,6 +201,41 @@
   gap: 10px;
 }
 
+.merchantTools {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #e8f1ea;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.merchantToolsTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #173d25;
+}
+
+.merchantToolsButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #31925d;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid rgba(49, 146, 93, 0.45);
+  box-shadow: 0 8px 18px rgba(49, 146, 93, 0.18);
+}
+
+.merchantToolsButton:hover {
+  background: #277a4e;
+}
+
 .settingCard {
   border: 1px solid #d7e7da;
   border-radius: 10px;

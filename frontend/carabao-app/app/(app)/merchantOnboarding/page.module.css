@@ -1,6 +1,6 @@
 .page {
-  min-height: calc(100vh - 24px);
-  padding: 22px 18px 28px;
+  min-height: 100vh;
+  padding: clamp(16px, 3vw, 28px) clamp(14px, 3vw, 22px) clamp(22px, 4vw, 34px);
   display: flex;
   justify-content: center;
   background: radial-gradient(1200px 600px at 15% 10%, rgba(49, 146, 93, 0.14) 0%, transparent 55%),
@@ -9,6 +9,9 @@
 }
 
 .card {
+  --pad-x: clamp(14px, 3vw, 22px);
+  --pad-y: clamp(16px, 3vw, 22px);
+
   width: 100%;
   max-width: 920px;
   background: #ffffff;
@@ -23,7 +26,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 22px 22px 10px;
+  padding: var(--pad-y) var(--pad-x) 12px;
   border-bottom: 1px solid rgba(23, 61, 37, 0.08);
   background: linear-gradient(180deg, rgba(49, 146, 93, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
 }
@@ -62,7 +65,7 @@
 }
 
 .stepper {
-  padding: 14px 22px 6px;
+  padding: 12px var(--pad-x) 8px;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 10px;
@@ -122,7 +125,7 @@
 }
 
 .body {
-  padding: 18px 22px 18px;
+  padding: 18px var(--pad-x) 18px;
 }
 
 .grid {
@@ -240,7 +243,7 @@
 }
 
 .footer {
-  padding: 14px 22px 18px;
+  padding: 14px var(--pad-x) 18px;
   display: flex;
   justify-content: space-between;
   gap: 10px;
@@ -327,4 +330,3 @@
     grid-template-columns: 1fr;
   }
 }
-

@@ -12,19 +12,16 @@ router = APIRouter()
 # Dummy tracking route (testing only)
 # ---------------------------------------------------------------------------
 
-# Simulated delivery route: Bulacan farm → Quezon City → Makati (Manila area)
+# Simulated delivery route: Padre Paredes St, Sampaloc → Carlos P. Garcia Ave, Taguig
 _DUMMY_WAYPOINTS = [
-    (14.7942, 120.8788),  # Bulacan (origin/farm)
-    (14.7500, 120.9200),
-    (14.7000, 120.9800),
-    (14.6700, 121.0200),
-    (14.6400, 121.0500),
-    (14.6200, 121.0500),
-    (14.5800, 121.0400),
-    (14.5500, 121.0200),
-    (14.5300, 121.0100),
-    (14.5100, 121.0000),
-    (14.4900, 121.0100),  # Makati (destination)
+    (14.60485, 120.988162),  # Padre Paredes St, Sampaloc, Manila (origin)
+    (14.5950, 120.9900),     # España Blvd / Lacson Ave area
+    (14.5820, 120.9840),     # Quiapo / Quezon Blvd
+    (14.5710, 120.9800),     # Ermita / Taft Ave
+    (14.5570, 120.9900),     # Pasay / EDSA
+    (14.5460, 121.0000),     # Magallanes area
+    (14.5350, 121.0200),     # C5 / Ususan
+    (14.529286, 121.037934), # Carlos P. Garcia Ave, Taguig (destination)
 ]
 
 _CYCLE_SECONDS = 120  # full route completes in 2 minutes for testing

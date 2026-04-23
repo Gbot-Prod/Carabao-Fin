@@ -1,0 +1,209 @@
+.page {
+  min-height: 100vh;
+  padding: clamp(16px, 3vw, 28px);
+  display: flex;
+  justify-content: center;
+  background: radial-gradient(1200px 600px at 15% 10%, rgba(49, 146, 93, 0.14) 0%, transparent 55%),
+    radial-gradient(900px 500px at 85% 15%, rgba(29, 78, 216, 0.10) 0%, transparent 60%),
+    linear-gradient(180deg, #f7fcf8 0%, #ecf6ef 100%);
+}
+
+.card {
+  width: 100%;
+  max-width: 980px;
+  background: #ffffff;
+  border: 1px solid rgba(23, 61, 37, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.10);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: clamp(16px, 3vw, 22px);
+  border-bottom: 1px solid rgba(23, 61, 37, 0.08);
+  background: linear-gradient(180deg, rgba(49, 146, 93, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 850;
+  color: #173d25;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: #5c6a5e;
+  max-width: 64ch;
+}
+
+.headerActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.errorBox {
+  margin: 14px clamp(16px, 3vw, 22px) 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(185, 28, 28, 0.10);
+  border: 1px solid rgba(185, 28, 28, 0.20);
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.kpiGrid {
+  padding: 18px clamp(16px, 3vw, 22px) 4px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kpiCard {
+  border: 1px solid rgba(23, 61, 37, 0.10);
+  border-radius: 14px;
+  padding: 14px;
+  background: linear-gradient(180deg, #fbfefb 0%, #f4fbf6 100%);
+  min-height: 76px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kpiLabel {
+  font-size: 11px;
+  font-weight: 900;
+  color: #5c6a5e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kpiValue {
+  font-size: 16px;
+  font-weight: 900;
+  color: #173d25;
+  line-height: 1.1;
+}
+
+.splitRow {
+  padding: 12px clamp(16px, 3vw, 22px) 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.panel {
+  border-radius: 14px;
+  border: 1px solid rgba(23, 61, 37, 0.10);
+  background: rgba(49, 146, 93, 0.03);
+  padding: 14px;
+}
+
+.panelTitle {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 850;
+  color: #173d25;
+}
+
+.panelGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.panelStat {
+  border-radius: 12px;
+  border: 1px solid rgba(23, 61, 37, 0.10);
+  background: #ffffff;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.panelLabel {
+  font-size: 11px;
+  font-weight: 850;
+  color: #5c6a5e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.panelValue {
+  font-size: 15px;
+  font-weight: 900;
+  color: #173d25;
+}
+
+.footer {
+  padding: 14px clamp(16px, 3vw, 22px) 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-top: 1px solid rgba(23, 61, 37, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(49, 146, 93, 0.05) 100%);
+}
+
+.actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.primaryBtn,
+.secondaryBtn {
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 0;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.primaryBtn {
+  background: #31925d;
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(49, 146, 93, 0.22);
+}
+
+.secondaryBtn {
+  background: rgba(23, 61, 37, 0.06);
+  color: #173d25;
+  border: 1px solid rgba(23, 61, 37, 0.14);
+}
+
+@media (max-width: 860px) {
+  .kpiGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .splitRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpiGrid {
+    grid-template-columns: 1fr;
+  }
+  .panelGrid {
+    grid-template-columns: 1fr;
+  }
+}
+

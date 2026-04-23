@@ -8,7 +8,8 @@
       "Bash(grep -v '^$')",
       "Bash(uv add *)",
       "Bash(npm uninstall *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "WebFetch(domain:semaphore.co)"
     ]
   }
 }

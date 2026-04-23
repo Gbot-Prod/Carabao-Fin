@@ -195,8 +195,8 @@ function Track() {
     mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_API_KEY || '';
     mapRef.current = new mapboxgl.Map({
       container: mapContainerRef.current,
-      center: [121.05, 14.53],
-      zoom: 11,
+      center: [121.013, 14.567],  // midpoint between Sampaloc and Taguig
+      zoom: 12,
       projection: 'globe',
     });
 

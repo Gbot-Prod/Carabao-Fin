@@ -158,6 +158,21 @@ export type OrderHistoryItem = {
   items: CartItem[];
 };
 
+export type MerchantPerformance = {
+  merchant_id: number;
+  merchant_name: string;
+  rating?: number | null;
+  total_products: number;
+  total_orders: number;
+  active_orders: number;
+  delivered_orders: number;
+  cancelled_orders: number;
+  total_revenue: number;
+  last_order_at?: string | null;
+  last_30_days_orders: number;
+  last_30_days_revenue: number;
+};
+
 export type CurrentOrderItem = {
   id: number;
   order_id: number;
@@ -245,6 +260,11 @@ export const fetchOrderHistory = async (): Promise<OrderHistoryItem[]> => {
 
 export const fetchCurrentOrders = async (): Promise<CurrentOrderItem[]> => {
   const response = await apiClient.get<CurrentOrderItem[]>('/orders/me/current');
+  return response.data;
+};
+
+export const fetchMyMerchantPerformance = async (): Promise<MerchantPerformance> => {
+  const response = await apiClient.get<MerchantPerformance>('/merchants/me/performance');
   return response.data;
 };
 
