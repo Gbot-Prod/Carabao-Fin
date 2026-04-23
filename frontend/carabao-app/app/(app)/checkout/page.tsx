@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
-import { fetchMyCart, placeOrderFromCart, type CartItem } from "@/util/api";
+import { createPaymentCheckout, fetchMyCart, placeOrderFromCart, type CartItem } from "@/util/api";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -56,7 +56,13 @@ export default function CheckoutPage() {
         notes: notes || null,
         service_fee: serviceFee,
       });
-      router.push(`/confirmation?orderId=${encodeURIComponent(result.order_reference)}`);
+
+      if (paymentMethod === "online") {
+        const checkout = await createPaymentCheckout(result.order_id);
+        window.location.href = checkout.checkout_url;
+      } else {
+        router.push(`/confirmation?orderId=${encodeURIComponent(result.order_reference)}`);
+      }
     } catch {
       setError("Unable to place order right now. Please try again.");
     } finally {
@@ -124,21 +130,16 @@ export default function CheckoutPage() {
                 <input
                   type="radio"
                   name="payment"
-                  value="gcash"
-                  checked={paymentMethod === "gcash"}
+                  value="online"
+                  checked={paymentMethod === "online"}
                   onChange={(event) => setPaymentMethod(event.target.value)}
                 />
-                GCash
-              </label>
-              <label className={styles.radioRow}>
-                <input
-                  type="radio"
-                  name="payment"
-                  value="bank-transfer"
-                  checked={paymentMethod === "bank-transfer"}
-                  onChange={(event) => setPaymentMethod(event.target.value)}
-                />
-                Bank Transfer
+                <span>
+                  Online Payment
+                  <small style={{ display: "block", fontWeight: 400, color: "#666" }}>
+                    GCash, Maya, Cards, GrabPay, and more
+                  </small>
+                </span>
               </label>
             </div>
           </div>
@@ -199,7 +200,11 @@ export default function CheckoutPage() {
             onClick={() => void handlePlaceOrder()}
             disabled={checkoutItems.length === 0 || isLoadingCart || isPlacingOrder}
           >
-            {isPlacingOrder ? "Placing Order..." : "Place Order"}
+            {isPlacingOrder
+              ? paymentMethod === "online"
+                ? "Redirecting to payment..."
+                : "Placing Order..."
+              : "Place Order"}
           </button>
           <Link href="/cart" className={styles.secondaryButton}>
             Back to Cart

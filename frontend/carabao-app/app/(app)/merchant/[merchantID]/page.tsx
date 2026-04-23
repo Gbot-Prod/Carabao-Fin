@@ -1,10 +1,11 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
-import { fetchMerchantById, type Merchant, type Produce } from '@/util/api';
+import { fetchMerchantById, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce } from '@/util/api';
 
 const fallbackProduces: Produce[] = [
   { id: 1, merchant_id: 0, name: 'Fresh Carabao Milk', description: 'Pure, farm-fresh carabao milk', contact_number: null, operating_hours: null, delivery_time: null, delivery_price: 85, rating: null },
@@ -66,12 +67,64 @@ export default function MerchantDetailPage() {
 
   const produces = merchant.produces.length > 0 ? merchant.produces : fallbackProduces;
 
-  const handleAddToCart = (produceName: string) => {
-    alert(`${produceName} added to cart!`);
+  const [addingId, setAddingId] = useState<number | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
+
+  const handleAddToCart = async (produce: Produce) => {
+    if (addingId !== null) return;
+    setAddingId(produce.id);
+
+    try {
+      const cart = await fetchMyCart();
+      const existing: CartItem[] = Array.isArray(cart.items) ? cart.items : [];
+      const itemId = String(produce.id);
+      const idx = existing.findIndex((i) => i.id === itemId);
+
+      const updated =
+        idx >= 0
+          ? existing.map((i, n) =>
+              n === idx ? { ...i, quantity: i.quantity + 1 } : i,
+            )
+          : [
+              ...existing,
+              {
+                id: itemId,
+                farm: merchant.merchant_name,
+                produce: produce.name ?? 'Item',
+                unit: 'kg',
+                quantity: 1,
+                price: produce.delivery_price ?? 0,
+              },
+            ];
+
+      await replaceMyCart(updated);
+      setNotification(produce.name ?? 'Item');
+      setTimeout(() => setNotification(null), 2500);
+    } catch {
+      // silently fail — cart page will show current state
+    } finally {
+      setAddingId(null);
+    }
   };
 
   return (
     <div className={styles.page}>
+      {notification && (
+        <div style={{
+          position: 'fixed', bottom: '1.5rem', right: '1.5rem',
+          background: '#166534', color: '#fff',
+          padding: '0.75rem 1.25rem', borderRadius: 10,
+          display: 'flex', alignItems: 'center', gap: '0.75rem',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 1000,
+          fontSize: '0.9rem', fontWeight: 500,
+        }}>
+          <span>&#10003; {notification} added to cart</span>
+          <Link href="/cart" style={{ color: '#86efac', textDecoration: 'underline', whiteSpace: 'nowrap' }}>
+            View Cart
+          </Link>
+        </div>
+      )}
+
       {error && <p>{error}</p>}
 
       <header className={styles.merchantHeader}>
@@ -125,9 +178,10 @@ export default function MerchantDetailPage() {
                 )}
                 <button
                   className={styles.addBtn}
-                  onClick={() => handleAddToCart(produce.name ?? 'Item')}
+                  disabled={addingId === produce.id}
+                  onClick={() => void handleAddToCart(produce)}
                 >
-                  Add to Cart
+                  {addingId === produce.id ? 'Adding…' : 'Add to Cart'}
                 </button>
               </div>
             </article>

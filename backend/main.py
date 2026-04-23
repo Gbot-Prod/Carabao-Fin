@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import SessionLocal, engine
 from app.core.database import Base
-from app.models import cart, current_orders, merchant, merchant_application, mobile_credential, order, order_history, produce, shopPage, user  # noqa: F401
+from app.models import cart, current_orders, merchant, merchant_application, merchant_payout, mobile_credential, order, order_history, payout_batch, produce, shopPage, transaction, user  # noqa: F401
 from app.api.routes.router import router  # import your router
 
 app = FastAPI()

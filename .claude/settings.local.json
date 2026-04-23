@@ -9,7 +9,8 @@
       "Bash(uv add *)",
       "Bash(npm uninstall *)",
       "Bash(npx tsc *)",
-      "WebFetch(domain:semaphore.co)"
+      "WebFetch(domain:semaphore.co)",
+      "WebFetch(domain:developers.paymongo.com)"
     ]
   }
 }
