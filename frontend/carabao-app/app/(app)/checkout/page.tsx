@@ -1,5 +1,6 @@
 "use client";
 
+import axios from "axios";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -63,8 +64,20 @@ export default function CheckoutPage() {
       } else {
         router.push(`/confirmation?orderId=${encodeURIComponent(result.order_reference)}`);
       }
-    } catch {
-      setError("Unable to place order right now. Please try again.");
+    } catch (err) {
+      let message = "Unable to place order right now. Please try again.";
+
+      if (axios.isAxiosError(err)) {
+        const data = err.response?.data as unknown;
+        const detail = (data as { detail?: unknown } | undefined)?.detail;
+        if (typeof detail === "string" && detail.trim()) {
+          message = detail;
+        } else if (typeof err.message === "string" && err.message.trim()) {
+          message = err.message;
+        }
+      }
+
+      setError(message);
     } finally {
       setIsPlacingOrder(false);
     }

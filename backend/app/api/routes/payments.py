@@ -1,4 +1,6 @@
 import os
+import logging
+from urllib.parse import urlparse
 from datetime import date, datetime, timedelta, timezone
 
 import requests
@@ -26,6 +28,14 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 PLATFORM_FEE_RATE = 0.01
+
+logger = logging.getLogger(__name__)
+
+
+def _validate_frontend_url(frontend_url: str) -> None:
+    parsed = urlparse(frontend_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise RuntimeError("FRONTEND_URL is invalid or missing")
 
 
 @router.post("/checkout/{order_id}", response_model=CheckoutResponse)
@@ -83,6 +93,8 @@ def create_payment_checkout(
     platform_fee = round(amount * PLATFORM_FEE_RATE)
     merchant_amount = amount - platform_fee
 
+    _validate_frontend_url(FRONTEND_URL)
+
     try:
         session_data = create_checkout_session(
             amount_pesos=amount,
@@ -93,9 +105,17 @@ def create_payment_checkout(
             reference_number=str(order_id),
         )
     except requests.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"PayMongo error: {e.response.text}")
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        response_text = ""
+        if e.response is not None:
+            response_text = e.response.text or ""
+        logger.warning("PayMongo HTTPError while creating checkout session: %s", response_text)
+        raise HTTPException(status_code=502, detail=f"PayMongo error: {response_text[:2000]}")
+    except RuntimeError as e:
+        logger.error("Payment configuration error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Unexpected error while creating checkout session")
+        raise HTTPException(status_code=500, detail="Unexpected error creating checkout session")
 
     txn = Transaction(
         order_id=order_id,
