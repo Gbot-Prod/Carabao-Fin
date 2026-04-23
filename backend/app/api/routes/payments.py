@@ -89,7 +89,7 @@ def create_payment_checkout(
             description=f"Carabao Order #{order_id}",
             merchant_name=merchant.merchant_name,
             success_url=f"{FRONTEND_URL}/orders/success?order_id={order_id}",
-            cancel_url=f"{FRONTEND_URL}/orders/{order_id}",
+            cancel_url=f"{FRONTEND_URL}/checkout",
             reference_number=str(order_id),
         )
     except requests.HTTPError as e:

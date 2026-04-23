@@ -14,11 +14,8 @@ PAYMONGO_BASE_URL = "https://api.paymongo.com/v1"
 SUPPORTED_METHODS = [
     "card",
     "gcash",
-    "maya",
+    "paymaya",
     "grab_pay",
-    "billease",
-    "dob",       # BPI online banking
-    "dob_ubp",   # UnionBank online banking
 ]
 
 
