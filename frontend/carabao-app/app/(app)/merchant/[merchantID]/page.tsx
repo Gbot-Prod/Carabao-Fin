@@ -8,12 +8,12 @@ import styles from '../page.module.css';
 import { fetchMerchantById, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce } from '@/util/api';
 
 const fallbackProduces: Produce[] = [
-  { id: 1, merchant_id: 0, name: 'Fresh Carabao Milk', description: 'Pure, farm-fresh carabao milk', contact_number: null, operating_hours: null, delivery_time: null, delivery_price: 85, rating: null },
-  { id: 2, merchant_id: 0, name: 'White Cheese (500g)', description: 'Artisanal kesong puti', contact_number: null, operating_hours: null, delivery_time: null, delivery_price: 320, rating: null },
-  { id: 3, merchant_id: 0, name: 'Organic Basil', description: 'Freshly harvested Thai basil', contact_number: null, operating_hours: null, delivery_time: null, delivery_price: 65, rating: null },
-  { id: 4, merchant_id: 0, name: 'Fresh Tomatoes (1kg)', description: 'Vine-ripened local tomatoes', contact_number: null, operating_hours: null, delivery_time: null, delivery_price: 120, rating: null },
-  { id: 5, merchant_id: 0, name: 'Carabao Yogurt', description: 'Naturally cultured carabao yogurt', contact_number: null, operating_hours: null, delivery_time: null, delivery_price: 95, rating: null },
-  { id: 6, merchant_id: 0, name: 'Fresh Papaya (5pcs)', description: 'Sweet farm-harvested papaya', contact_number: null, operating_hours: null, delivery_time: null, delivery_price: 180, rating: null },
+  { id: 1, merchant_id: 0, name: 'Fresh Carabao Milk', description: 'Pure, farm-fresh carabao milk', category: 'Dairy', price: 85, unit: 'L', stock_quantity: 50, image_url: null },
+  { id: 2, merchant_id: 0, name: 'White Cheese (500g)', description: 'Artisanal kesong puti', category: 'Dairy', price: 320, unit: 'pack', stock_quantity: 20, image_url: null },
+  { id: 3, merchant_id: 0, name: 'Organic Basil', description: 'Freshly harvested Thai basil', category: 'Herbs', price: 65, unit: 'bunch', stock_quantity: 30, image_url: null },
+  { id: 4, merchant_id: 0, name: 'Fresh Tomatoes (1kg)', description: 'Vine-ripened local tomatoes', category: 'Vegetables', price: 120, unit: 'kg', stock_quantity: 100, image_url: null },
+  { id: 5, merchant_id: 0, name: 'Carabao Yogurt', description: 'Naturally cultured carabao yogurt', category: 'Dairy', price: 95, unit: 'cup', stock_quantity: 40, image_url: null },
+  { id: 6, merchant_id: 0, name: 'Fresh Papaya (5pcs)', description: 'Sweet farm-harvested papaya', category: 'Fruits', price: 180, unit: 'pack', stock_quantity: 25, image_url: null },
 ];
 
 const fallbackMerchant: Merchant = {
@@ -91,9 +91,9 @@ export default function MerchantDetailPage() {
                 id: itemId,
                 farm: merchant.merchant_name,
                 produce: produce.name ?? 'Item',
-                unit: 'kg',
+                unit: produce.unit,
                 quantity: 1,
-                price: produce.delivery_price ?? 0,
+                price: produce.price,
               },
             ];
 
@@ -173,9 +173,7 @@ export default function MerchantDetailPage() {
               <div className={styles.productBody}>
                 <h3>{produce.name ?? 'Unnamed Produce'}</h3>
                 {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
-                {produce.delivery_price != null && (
-                  <p className={styles.price}>₱{produce.delivery_price}</p>
-                )}
+                <p className={styles.price}>₱{produce.price} / {produce.unit}</p>
                 <button
                   className={styles.addBtn}
                   disabled={addingId === produce.id}

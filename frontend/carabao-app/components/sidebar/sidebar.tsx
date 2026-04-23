@@ -8,11 +8,11 @@ import Logo from "@/public/images/icons/carabaoLogo.png";
 import { LogoutButton } from "../LogoutButton";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
+import { SidebarFilterChips } from "./SidebarFilterChips";
 
 const PROTECTED = new Set(["/track", "/history", "/profile", "/checkout", "/confirmation"]);
 const SHOP_PATHS = ["/order", "/cart"];
 const PROFILE_PATHS = ["/profile", "/history", "/track"];
-const SHOP_FILTERS = ["Drinks", "Food", "Popular", "Nearby", "Fast Delivery"];
 
 function StoreIcon() {
   return (
@@ -109,15 +109,6 @@ export default function Sidebar() {
   const [profileOpen, setProfileOpen] = useState(
     () => PROFILE_PATHS.some((p) => pathname.startsWith(p))
   );
-  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
-
-  const toggleFilter = (filter: string) => {
-    setActiveFilters((prev) => {
-      const next = new Set(prev);
-      next.has(filter) ? next.delete(filter) : next.add(filter);
-      return next;
-    });
-  };
 
   const renderNavLink = (
     href: string,
@@ -165,20 +156,7 @@ export default function Sidebar() {
                 {renderNavLink("/order", "Browse Shops", <MangoIcon />)}
                 {renderNavLink("/cart", "Cart", <CartIcon />)}
               </ul>
-              <div className="sidebar__filters">
-                <span className="sidebar__filters-label">Filter by</span>
-                <div className="sidebar__filter-chips">
-                  {SHOP_FILTERS.map((f) => (
-                    <button
-                      key={f}
-                      className={`sidebar__filter-chip${activeFilters.has(f) ? " sidebar__filter-chip--active" : ""}`}
-                      onClick={() => toggleFilter(f)}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <SidebarFilterChips />
             </div>
           </div>
         </div>

@@ -19,14 +19,6 @@ from app.services.merchant_service import create_merchant
 router = APIRouter()
 
 
-@router.post("/merchant/", response_model=MerchantResponse)
-async def create_merchant_route(merchant: MerchantPageBase, db: Session = Depends(get_db)):
-    try:
-        return create_merchant(db, merchant)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
 @router.post("/merchants/me", response_model=MerchantResponse)
 async def create_my_merchant_route(
     merchant: MerchantBase,

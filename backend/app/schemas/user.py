@@ -32,6 +32,7 @@ class UserUpdate(BaseModel):
     country: Optional[str] = None
     postal_code: Optional[str] = None
     created_at: Optional[datetime] = None
+    notifications_preferences: Optional[dict] = None
 
 
 class UserMerchantInfo(BaseModel):
@@ -53,6 +54,7 @@ class UserCartInfo(BaseModel):
 
 class UserResponse(UserBase):
     id: int
+    notifications_preferences: Optional[dict] = None
     merchant: Optional[UserMerchantInfo] = None
     cart: Optional[UserCartInfo] = None
 

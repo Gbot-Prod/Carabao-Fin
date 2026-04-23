@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import styles from './page.module.css';
 import { farms } from './data/farms';
 import { fetchMerchants, fetchMyCart, replaceMyCart, type CartItem } from '@/util/api';
@@ -12,6 +13,7 @@ type FarmView = {
   rating: number;
   reviews: string;
   time: string;
+  deliveryTimeDays: number | null;
   badge: string;
   category: string;
   deliveryFee: number;
@@ -25,6 +27,7 @@ const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]
   rating: merchant.rating ?? 0,
   reviews: '(0)',
   time: merchant.delivery_time ? `${merchant.delivery_time} Days` : 'N/A',
+  deliveryTimeDays: merchant.delivery_time ?? null,
   badge: '₱₱',
   category: merchant.location ?? 'Farm Goods',
   deliveryFee: merchant.delivery_price ?? 0,
@@ -34,10 +37,12 @@ const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]
 
 const farmFallbackData: FarmView[] = farms.map((farm) => ({
   merchantId: null,
+  deliveryTimeDays: null,
   ...farm,
 }));
 
 export default function Order() {
+  const searchParams = useSearchParams();
   const [farmList, setFarmList] = useState<FarmView[]>(farmFallbackData);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isAddingByFarm, setIsAddingByFarm] = useState<Record<string, boolean>>({});
@@ -79,19 +84,36 @@ export default function Order() {
     void loadData();
   }, []);
 
+  const activeFilters = useMemo(() => {
+    return new Set(
+      (searchParams.get("filters") ?? "").split(",").filter(Boolean)
+    );
+  }, [searchParams]);
+
   const filteredFarms = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    if (!query) {
-      return farmList;
+    let result = farmList;
+
+    if (activeFilters.has("Popular")) {
+      result = result.filter((farm) => farm.rating >= 4.0);
+    }
+    if (activeFilters.has("Fast Delivery")) {
+      result = result.filter(
+        (farm) => farm.deliveryTimeDays !== null && farm.deliveryTimeDays <= 2
+      );
     }
 
-    return farmList.filter(
-      (farm) =>
-        farm.name.toLowerCase().includes(query) ||
-        farm.category.toLowerCase().includes(query) ||
-        farm.promo.toLowerCase().includes(query),
-    );
-  }, [farmList, searchTerm]);
+    const query = searchTerm.trim().toLowerCase();
+    if (query) {
+      result = result.filter(
+        (farm) =>
+          farm.name.toLowerCase().includes(query) ||
+          farm.category.toLowerCase().includes(query) ||
+          farm.promo.toLowerCase().includes(query),
+      );
+    }
+
+    return result;
+  }, [farmList, searchTerm, activeFilters]);
 
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const merchantCountLabel = `${filteredFarms.length} ${filteredFarms.length === 1 ? 'merchant' : 'merchants'}`;

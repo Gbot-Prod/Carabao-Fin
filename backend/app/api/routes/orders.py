@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -50,6 +51,7 @@ async def place_order_from_cart(
         status="pending",
         total_price=total_price,
         items=cart_items,
+        delivery_address=payload.delivery_address,
     )
     db.add(order)
     db.flush()
@@ -140,6 +142,10 @@ ACTIVE_ORDER_STATUSES = {"pending", "processing", "shipped", "out_for_delivery"}
 VALID_ORDER_STATUSES = {"pending", "processing", "shipped", "out_for_delivery", "delivered", "cancelled"}
 
 
+class OrderStatusUpdate(BaseModel):
+    status: str
+
+
 @router.get("/orders/merchant/current", response_model=list[CurrentOrderResponse])
 async def get_merchant_current_orders(
     db: Session = Depends(get_db),
@@ -164,10 +170,11 @@ async def get_merchant_current_orders(
 @router.patch("/orders/{order_id}/status")
 async def update_order_status(
     order_id: int,
-    status: str,
+    body: OrderStatusUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    status = body.status
     merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
     if not merchant:
         raise HTTPException(status_code=403, detail="Only merchants can update order status")

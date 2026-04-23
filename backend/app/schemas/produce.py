@@ -3,13 +3,13 @@ from pydantic import BaseModel, ConfigDict
 
 
 class ProduceBase(BaseModel):
-    name: Optional[str] = None
+    name: str
     description: Optional[str] = None
-    contact_number: Optional[str] = None
-    operating_hours: Optional[str] = None
-    delivery_time: Optional[int] = None
-    delivery_price: Optional[int] = None
-    rating: Optional[int] = None
+    category: Optional[str] = None
+    price: int = 0
+    unit: str = "kg"
+    stock_quantity: int = 0
+    image_url: Optional[str] = None
 
 
 class ProduceCreate(ProduceBase):
@@ -19,11 +19,11 @@ class ProduceCreate(ProduceBase):
 class ProduceUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    contact_number: Optional[str] = None
-    operating_hours: Optional[str] = None
-    delivery_time: Optional[int] = None
-    delivery_price: Optional[int] = None
-    rating: Optional[int] = None
+    category: Optional[str] = None
+    price: Optional[int] = None
+    unit: Optional[str] = None
+    stock_quantity: Optional[int] = None
+    image_url: Optional[str] = None
 
 
 class ProduceResponse(ProduceBase):

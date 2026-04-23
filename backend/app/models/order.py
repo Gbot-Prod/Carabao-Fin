@@ -14,6 +14,7 @@ class Order(Base):
 	status = Column(String, nullable=False, index=True, default="pending")
 	total_price = Column(Integer, nullable=False, default=0)
 	items = Column(JSON, nullable=False, default=list)
+	delivery_address = Column(String, nullable=True)
 	ordered_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 	order_history = relationship("OrderHistory", back_populates="orders")

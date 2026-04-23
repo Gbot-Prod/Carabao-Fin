@@ -1,15 +1,15 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.core.database import SessionLocal, engine
+from app.core.database import engine
 from app.core.database import Base
 from app.models import cart, current_orders, merchant, merchant_application, merchant_payout, mobile_credential, order, order_history, payout_batch, produce, shopPage, transaction, user  # noqa: F401
-from app.api.routes.router import router  # import your router
+from app.api.routes.router import router
 
 app = FastAPI()
 
-import os as _os
-
-_raw_origins = _os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
 _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
@@ -20,12 +20,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-Base.metadata.create_all(bind=engine)  # DB init stays here
-app.include_router(router)             # register all routes
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+Base.metadata.create_all(bind=engine)
+app.include_router(router)

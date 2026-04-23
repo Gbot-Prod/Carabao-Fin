@@ -84,6 +84,67 @@ def retrieve_checkout_session(session_id: str) -> dict:
     return response.json()["data"]
 
 
+def get_or_create_paymongo_customer(db, user) -> str:
+    """Return the user's PayMongo customer ID, creating one if needed."""
+    if user.paymongo_customer_id:
+        return user.paymongo_customer_id
+
+    response = requests.post(
+        f"{PAYMONGO_BASE_URL}/customers",
+        json={
+            "data": {
+                "attributes": {
+                    "email": user.email,
+                    "first_name": user.first_name or "",
+                    "last_name": user.last_name or "",
+                    "phone": user.phone_number or "",
+                    "default_device": "phone",
+                }
+            }
+        },
+        headers=_auth_header(),
+        timeout=15,
+    )
+    response.raise_for_status()
+    customer_id: str = response.json()["data"]["id"]
+
+    user.paymongo_customer_id = customer_id
+    db.commit()
+    return customer_id
+
+
+def list_customer_payment_methods(customer_id: str) -> list:
+    response = requests.get(
+        f"{PAYMONGO_BASE_URL}/customers/{customer_id}/payment_methods",
+        headers=_auth_header(),
+        timeout=15,
+    )
+    if response.status_code == 404:
+        return []
+    response.raise_for_status()
+    return response.json().get("data", [])
+
+
+def attach_payment_method(customer_id: str, payment_method_id: str) -> dict:
+    response = requests.post(
+        f"{PAYMONGO_BASE_URL}/customers/{customer_id}/payment_methods",
+        json={"data": {"attributes": {"payment_method_id": payment_method_id}}},
+        headers=_auth_header(),
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()["data"]
+
+
+def detach_payment_method(customer_id: str, payment_method_id: str) -> None:
+    response = requests.delete(
+        f"{PAYMONGO_BASE_URL}/customers/{customer_id}/payment_methods/{payment_method_id}",
+        headers=_auth_header(),
+        timeout=15,
+    )
+    response.raise_for_status()
+
+
 def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
     """
     PayMongo sends: Paymongo-Signature: t=<ts>,te=<test_hmac>,li=<live_hmac>

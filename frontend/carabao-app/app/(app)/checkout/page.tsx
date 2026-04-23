@@ -15,6 +15,7 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deliveryTime, setDeliveryTime] = useState("08:00-10:00");
+  const [deliveryAddress, setDeliveryAddress] = useState("Brgy. Poblacion, Science City of Munoz, Nueva Ecija");
   const [paymentMethod, setPaymentMethod] = useState("cash-on-delivery");
   const [notes, setNotes] = useState("");
 
@@ -53,6 +54,7 @@ export default function CheckoutPage() {
       const result = await placeOrderFromCart({
         delivery_date: deliveryDate || null,
         delivery_time: deliveryTime,
+        delivery_address: deliveryAddress || null,
         payment_method: paymentMethod,
         notes: notes || null,
         service_fee: serviceFee,
@@ -121,7 +123,8 @@ export default function CheckoutPage() {
               Delivery address
               <textarea
                 rows={3}
-                defaultValue="Brgy. Poblacion, Science City of Munoz, Nueva Ecija"
+                value={deliveryAddress}
+                onChange={(event) => setDeliveryAddress(event.target.value)}
               />
             </label>
           </div>

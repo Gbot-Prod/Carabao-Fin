@@ -189,6 +189,183 @@
   border: 1px solid rgba(23, 61, 37, 0.14);
 }
 
+/* ---- Produce management ---- */
+
+.produceSection {
+  padding: 18px clamp(16px, 3vw, 22px);
+  border-top: 1px solid rgba(23, 61, 37, 0.08);
+}
+
+.produceSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.produceList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.produceRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(23, 61, 37, 0.10);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfefb 0%, #f4fbf6 100%);
+}
+
+.produceRowInfo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1;
+}
+
+.produceName {
+  font-size: 14px;
+  font-weight: 800;
+  color: #173d25;
+}
+
+.produceCategory {
+  font-size: 11px;
+  font-weight: 800;
+  color: #31925d;
+  background: rgba(49, 146, 93, 0.12);
+  border-radius: 6px;
+  padding: 2px 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.producePrice {
+  font-size: 13px;
+  font-weight: 700;
+  color: #173d25;
+}
+
+.produceStock {
+  font-size: 12px;
+  color: #5c6a5e;
+}
+
+.produceDesc {
+  width: 100%;
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #5c6a5e;
+  line-height: 1.4;
+}
+
+.produceRowActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.produceEmpty {
+  font-size: 13px;
+  color: #5c6a5e;
+  margin: 4px 0 0;
+}
+
+/* ---- Produce form ---- */
+
+.produceForm {
+  border: 1px solid rgba(23, 61, 37, 0.12);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 14px;
+  background: rgba(49, 146, 93, 0.03);
+}
+
+.formTitle {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #173d25;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.formLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #5c6a5e;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.formLabelFull {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #5c6a5e;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+
+.formInput {
+  padding: 8px 10px;
+  border: 1px solid rgba(23, 61, 37, 0.18);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #173d25;
+  background: #ffffff;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.formInput:focus {
+  border-color: #31925d;
+  box-shadow: 0 0 0 3px rgba(49, 146, 93, 0.15);
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dangerBtn {
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(185, 28, 28, 0.20);
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(185, 28, 28, 0.08);
+  color: #b91c1c;
+}
+
 @media (max-width: 860px) {
   .kpiGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -204,6 +381,15 @@
   }
   .panelGrid {
     grid-template-columns: 1fr;
+  }
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+  .produceRow {
+    flex-direction: column;
+  }
+  .produceRowActions {
+    align-self: flex-end;
   }
 }
 

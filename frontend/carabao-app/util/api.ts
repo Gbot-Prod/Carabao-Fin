@@ -45,11 +45,31 @@ export type Produce = {
   merchant_id: number;
   name: string | null;
   description: string | null;
-  contact_number: string | null;
-  operating_hours: string | null;
-  delivery_time: number | null;
-  delivery_price: number | null;
-  rating: number | null;
+  category: string | null;
+  price: number;
+  unit: string;
+  stock_quantity: number;
+  image_url: string | null;
+};
+
+export type ProduceCreatePayload = {
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  price: number;
+  unit?: string;
+  stock_quantity?: number;
+  image_url?: string | null;
+};
+
+export type ProduceUpdatePayload = {
+  name?: string | null;
+  description?: string | null;
+  category?: string | null;
+  price?: number | null;
+  unit?: string | null;
+  stock_quantity?: number | null;
+  image_url?: string | null;
 };
 
 export type Merchant = {
@@ -112,6 +132,12 @@ export type Cart = {
   total_price: number;
 };
 
+export type NotificationPrefs = {
+  order_updates: boolean;
+  promotions: boolean;
+  email_alerts: boolean;
+};
+
 export type UserProfile = {
   id: number;
   external_auth_id: string | null;
@@ -124,6 +150,7 @@ export type UserProfile = {
   country: string | null;
   postal_code: string | null;
   created_at: string | null;
+  notifications_preferences: Partial<NotificationPrefs> | null;
   merchant: {
     id: number;
     merchant_name: string;
@@ -144,6 +171,7 @@ export type UserProfileUpdatePayload = {
   city?: string | null;
   country?: string | null;
   postal_code?: string | null;
+  notifications_preferences?: Partial<NotificationPrefs> | null;
 };
 
 export type OrderHistoryItem = {
@@ -190,6 +218,7 @@ export type CurrentOrderItem = {
 export type PlaceOrderPayload = {
   delivery_date?: string | null;
   delivery_time?: string | null;
+  delivery_address?: string | null;
   payment_method?: string | null;
   notes?: string | null;
   service_fee?: number;
@@ -304,6 +333,25 @@ export const fetchTransactionByOrder = async (orderId: number): Promise<Transact
   return response.data;
 };
 
+export const fetchMerchantProduce = async (merchantId: number): Promise<Produce[]> => {
+  const response = await apiClient.get<Produce[]>(`/merchants/${merchantId}/produce`);
+  return response.data;
+};
+
+export const createProduce = async (payload: ProduceCreatePayload): Promise<Produce> => {
+  const response = await apiClient.post<Produce>('/produce/', payload);
+  return response.data;
+};
+
+export const updateProduce = async (produceId: number, payload: ProduceUpdatePayload): Promise<Produce> => {
+  const response = await apiClient.patch<Produce>(`/produce/${produceId}`, payload);
+  return response.data;
+};
+
+export const deleteProduce = async (produceId: number): Promise<void> => {
+  await apiClient.delete(`/produce/${produceId}`);
+};
+
 export type TrackingPosition = { lat: number; lng: number };
 
 export type TrackingData = {
@@ -319,6 +367,75 @@ export type TrackingData = {
 export const fetchDummyTracking = async (orderId: number): Promise<TrackingData> => {
   const response = await apiClient.get<TrackingData>(`/tracking/${orderId}`);
   return response.data;
+};
+
+// ─── Payment methods ──────────────────────────────────────────────────────────
+
+export type SavedCard = {
+  id: string;
+  last4: string;
+  brand: string;
+  exp_month: number;
+  exp_year: number;
+};
+
+export type CardTokenizePayload = {
+  card_number: string;
+  exp_month: number;
+  exp_year: number;
+  cvc: string;
+  name: string;
+  email: string;
+};
+
+export const fetchPaymentMethods = async (): Promise<SavedCard[]> => {
+  const response = await apiClient.get<SavedCard[]>('/users/me/payment-methods');
+  return response.data;
+};
+
+export const attachPaymentMethod = async (paymentMethodId: string): Promise<SavedCard> => {
+  const response = await apiClient.post<SavedCard>('/users/me/payment-methods', {
+    payment_method_id: paymentMethodId,
+  });
+  return response.data;
+};
+
+export const detachPaymentMethod = async (paymentMethodId: string): Promise<void> => {
+  await apiClient.delete(`/users/me/payment-methods/${paymentMethodId}`);
+};
+
+// Tokenizes card details directly with PayMongo — card data never touches our server.
+export const tokenizeCard = async (payload: CardTokenizePayload): Promise<string> => {
+  const publicKey = process.env.NEXT_PUBLIC_PAYMONGO_PUBLIC_KEY;
+  if (!publicKey) throw new Error('PayMongo public key is not configured');
+
+  const auth = btoa(`${publicKey}:`);
+  const res = await fetch('https://api.paymongo.com/v1/payment_methods', {
+    method: 'POST',
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      data: {
+        attributes: {
+          type: 'card',
+          details: {
+            card_number: payload.card_number.replace(/\s/g, ''),
+            exp_month: payload.exp_month,
+            exp_year: payload.exp_year,
+            cvc: payload.cvc,
+          },
+          billing: { name: payload.name, email: payload.email },
+        },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { errors?: { detail: string }[] };
+    throw new Error(err.errors?.[0]?.detail ?? 'Card tokenization failed');
+  }
+
+  const data = await res.json() as { data: { id: string } };
+  return data.data.id;
 };
 
 export default apiClient;

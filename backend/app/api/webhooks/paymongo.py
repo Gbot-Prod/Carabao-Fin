@@ -19,13 +19,12 @@ async def paymongo_webhook(request: Request, db: Session = Depends(get_db)):
     raw_body = await request.body()
     signature = request.headers.get("Paymongo-Signature", "")
 
-    if PAYMONGO_WEBHOOK_SECRET:
-        if not signature:
-            raise HTTPException(status_code=400, detail="Missing webhook signature")
-        if not verify_webhook_signature(raw_body, signature):
-            raise HTTPException(status_code=400, detail="Invalid webhook signature")
-    else:
-        logger.warning("PAYMONGO_WEBHOOK_SECRET not set; skipping webhook signature verification")
+    if not PAYMONGO_WEBHOOK_SECRET:
+        raise HTTPException(status_code=500, detail="Webhook secret is not configured")
+    if not signature:
+        raise HTTPException(status_code=400, detail="Missing webhook signature")
+    if not verify_webhook_signature(raw_body, signature):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     try:
         payload = await request.json()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import os
 from typing import Optional
 from uuid import uuid4
@@ -54,7 +55,7 @@ async def sync_auth(
             detail="AUTH_SYNC_SHARED_SECRET is not configured",
         )
 
-    if x_internal_auth_sync_secret != expected_secret:
+    if not hmac.compare_digest(x_internal_auth_sync_secret or "", expected_secret):
         raise HTTPException(status_code=401, detail="Unauthorized auth sync request")
 
     user = db.query(User).filter(User.external_auth_id == payload.provider_user_id).first()

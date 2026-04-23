@@ -45,6 +45,30 @@ class PayoutBatchResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SavedCard(BaseModel):
+    id: str
+    last4: str
+    brand: str
+    exp_month: int
+    exp_year: int
+
+    @classmethod
+    def from_paymongo(cls, pm_data: dict) -> "SavedCard":
+        attrs = pm_data.get("attributes", {})
+        details = attrs.get("details", {})
+        return cls(
+            id=pm_data["id"],
+            last4=str(details.get("last4", "****")),
+            brand=str(details.get("brand", "unknown")).lower(),
+            exp_month=int(details.get("exp_month", 0)),
+            exp_year=int(details.get("exp_year", 0)),
+        )
+
+
+class AttachPaymentMethodRequest(BaseModel):
+    payment_method_id: str
+
+
 class MerchantPayoutInfoCreate(BaseModel):
     payout_type: Literal["bank", "gcash", "maya"]
     bank_code: Optional[str] = None

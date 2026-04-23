@@ -39,6 +39,7 @@ class CurrentOrderResponse(BaseModel):
 class PlaceOrderRequest(BaseModel):
     delivery_date: Optional[str] = None
     delivery_time: Optional[str] = None
+    delivery_address: Optional[str] = None
     payment_method: Optional[str] = None
     notes: Optional[str] = None
     service_fee: int = 40

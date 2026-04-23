@@ -3,8 +3,11 @@ from __future__ import annotations
 import math
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+
+from app.api.dependencies import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -43,7 +46,7 @@ class TrackingResponse(BaseModel):
 
 
 @router.get("/tracking/{order_id}", response_model=TrackingResponse)
-async def get_dummy_tracking(order_id: int):
+async def get_dummy_tracking(order_id: int, _current_user: User = Depends(get_current_user)):
     elapsed = time.time() % _CYCLE_SECONDS
     progress = elapsed / _CYCLE_SECONDS  # 0.0 → 1.0
 

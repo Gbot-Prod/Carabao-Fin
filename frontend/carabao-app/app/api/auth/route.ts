@@ -1,4 +1,4 @@
-import { auth } from "@/public/auth";
+import { auth } from "@/lib/auth";
 import { type NextRequest, NextResponse } from "next/server";
 
 const rawApiUrl =
