@@ -7,11 +7,15 @@ import {
   fetchMyMerchantPerformance,
   fetchMyProfile,
   fetchMerchantProduce,
+  fetchMerchantShopPage,
   createProduce,
   updateProduce,
   deleteProduce,
+  uploadBannerImage,
+  uploadProduceImage,
   type MerchantPerformance,
   type Produce,
+  type ShopPage,
   type ProduceCreatePayload,
 } from "@/util/api";
 
@@ -122,8 +126,12 @@ export default function MerchantDashboardPage() {
   const [isMerchant, setIsMerchant] = useState<boolean | null>(null);
   const [performance, setPerformance] = useState<MerchantPerformance | null>(null);
 
+  const [shopPage, setShopPage] = useState<ShopPage | null>(null);
+  const [bannerUploading, setBannerUploading] = useState(false);
+
   const [produces, setProduces] = useState<Produce[]>([]);
   const [produceLoading, setProduceLoading] = useState(false);
+  const [uploadingProduceIds, setUploadingProduceIds] = useState<Set<number>>(new Set());
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<ProduceFormState>(emptyForm);
   const [editingProduceId, setEditingProduceId] = useState<number | null>(null);
@@ -164,19 +172,21 @@ export default function MerchantDashboardPage() {
   useEffect(() => {
     if (!performance?.merchant_id) return;
 
-    const loadProduces = async () => {
+    const loadProducesAndShopPage = async () => {
       setProduceLoading(true);
       try {
-        const data = await fetchMerchantProduce(performance.merchant_id);
-        setProduces(data);
-      } catch {
-        // silently fail — produce list will just be empty
+        const [produceData, shopPageData] = await Promise.allSettled([
+          fetchMerchantProduce(performance.merchant_id),
+          fetchMerchantShopPage(performance.merchant_id),
+        ]);
+        if (produceData.status === "fulfilled") setProduces(produceData.value);
+        if (shopPageData.status === "fulfilled") setShopPage(shopPageData.value);
       } finally {
         setProduceLoading(false);
       }
     };
 
-    void loadProduces();
+    void loadProducesAndShopPage();
   }, [performance?.merchant_id]);
 
   const merchantName = performance?.merchant_name ?? "Your Shop";
@@ -197,6 +207,43 @@ export default function MerchantDashboardPage() {
       stock_quantity: p.stock_quantity,
       image_url: p.image_url ?? "",
     });
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBannerUploading(true);
+    try {
+      const updated = await uploadBannerImage(file);
+      setShopPage(updated);
+    } catch {
+      // silently fail
+    } finally {
+      setBannerUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleProduceImageUpload = async (produceId: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingProduceIds((prev) => new Set(prev).add(produceId));
+    try {
+      const updated = await uploadProduceImage(produceId, file);
+      setProduces((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      if (editingProduceId === produceId) {
+        setEditForm((prev) => ({ ...prev, image_url: updated.image_url ?? "" }));
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUploadingProduceIds((prev) => {
+        const next = new Set(prev);
+        next.delete(produceId);
+        return next;
+      });
+      e.target.value = "";
+    }
   };
 
   const handleAddProduce = async (e: React.FormEvent) => {
@@ -364,6 +411,41 @@ export default function MerchantDashboardPage() {
           </>
         )}
 
+        {/* Shop banner */}
+        <section className={styles.bannerSection}>
+          <div className={styles.produceSectionHeader}>
+            <h2 className={styles.panelTitle} style={{ margin: 0 }}>Shop Banner</h2>
+            {shopPage && (
+              <label className={styles.uploadBtn}>
+                {bannerUploading ? "Uploading…" : "Upload Banner"}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  style={{ display: "none" }}
+                  disabled={bannerUploading}
+                  onChange={(e) => void handleBannerUpload(e)}
+                />
+              </label>
+            )}
+          </div>
+          {!shopPage ? (
+            <p className={styles.produceEmpty}>
+              No shop page yet.{" "}
+              <Link className={styles.inlineLink} href="/merchantOnboarding">Create your shop page</Link>
+              {" "}to add a banner.
+            </p>
+          ) : (
+            <div className={styles.bannerPreviewWrap}>
+              {shopPage.banner_image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={shopPage.banner_image_url} alt="Shop banner" className={styles.bannerImg} />
+              ) : (
+                <div className={styles.bannerEmpty}>No banner — upload one above</div>
+              )}
+            </div>
+          )}
+        </section>
+
         {/* Produce management */}
         <section className={styles.produceSection}>
           <div className={styles.produceSectionHeader}>
@@ -428,6 +510,23 @@ export default function MerchantDashboardPage() {
                 </form>
               ) : (
                 <div key={produce.id} className={styles.produceRow}>
+                  <label className={styles.produceThumbWrap} title="Click to upload image">
+                    {uploadingProduceIds.has(produce.id) ? (
+                      <div className={styles.produceThumbPlaceholder}>…</div>
+                    ) : produce.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={produce.image_url} alt={produce.name ?? ""} className={styles.produceThumb} />
+                    ) : (
+                      <div className={styles.produceThumbPlaceholder}>+</div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      style={{ display: "none" }}
+                      disabled={uploadingProduceIds.has(produce.id)}
+                      onChange={(e) => void handleProduceImageUpload(produce.id, e)}
+                    />
+                  </label>
                   <div className={styles.produceRowInfo}>
                     <strong className={styles.produceName}>{produce.name}</strong>
                     {produce.category && (

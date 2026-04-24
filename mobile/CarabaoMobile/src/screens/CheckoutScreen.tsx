@@ -45,12 +45,11 @@ export default function CheckoutScreen() {
     <SafeAreaView style={styles.root}>
       {/* Nav bar */}
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.backIcon}>←</Text>
-          </TouchableOpacity>
-          <Text style={styles.navTitle}>Checkout</Text>
-          <View style={{ width: 30 }} />
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.backIcon}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.navTitle}>Checkout</Text>
+        <View style={{ width: 30 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

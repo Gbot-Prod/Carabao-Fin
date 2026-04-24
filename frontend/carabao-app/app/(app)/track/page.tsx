@@ -7,7 +7,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import OrderCard from './components/orderCard';
 import { orders as fallbackOrders, type Order } from './data/orders';
-import { fetchCurrentOrders, fetchDummyTracking, type TrackingData } from '@/util/api';
+import { fetchCurrentOrders, fetchTracking, type TrackingData } from '@/util/api';
 import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
 
 type TrackOrder = Order & {
@@ -127,24 +127,30 @@ function Track() {
       const route = await fetchRouteGeoJSON(data.origin, data.destination, token);
       if (route) {
         routeRef.current = route;
-        if (map.loaded()) {
-          drawRouteLayer(map, route);
-        } else {
-          map.once('load', () => drawRouteLayer(map, route));
-        }
+        const addRoute = () => drawRouteLayer(map, route);
+        if (map.loaded()) addRoute();
+        else map.once('load', addRoute);
       }
+
+      // Fit the map to show both endpoints
+      const fitMap = () => {
+        map.fitBounds(
+          [[data.origin.lng, data.origin.lat], [data.destination.lng, data.destination.lat]],
+          { padding: 80, maxZoom: 14 },
+        );
+      };
+      if (map.loaded()) fitMap();
+      else map.once('load', fitMap);
     }
 
-    // Compute driver position — road-snapped if route is available, raw otherwise
+    // Road-snapped position if route loaded, otherwise start at origin
     const driverLngLat: [number, number] = routeRef.current
       ? getPositionAlongRoute(routeRef.current, data.progress)
-      : [data.current_position.lng, data.current_position.lat];
+      : [data.origin.lng, data.origin.lat];
 
-    if (map.loaded()) {
-      placeMarkers(map, driverLngLat, data.origin, data.destination);
-    } else {
-      map.once('load', () => placeMarkers(map, driverLngLat, data.origin, data.destination));
-    }
+    const applyMarkers = () => placeMarkers(map, driverLngLat, data.origin, data.destination);
+    if (map.loaded()) applyMarkers();
+    else map.once('load', applyMarkers);
   }, [drawRouteLayer, placeMarkers]);
 
   useEffect(() => {
@@ -154,7 +160,7 @@ function Track() {
     const poll = async () => {
       const map = mapRef.current;
       try {
-        const data = await fetchDummyTracking(orderId);
+        const data = await fetchTracking(orderId);
         setTracking(data);
         if (map) await updateTracking(data, map);
       } catch (err) {

@@ -352,19 +352,45 @@ export const deleteProduce = async (produceId: number): Promise<void> => {
   await apiClient.delete(`/produce/${produceId}`);
 };
 
+export type ShopPage = {
+  id: number;
+  merchant_id: number;
+  title: string;
+  slug: string;
+  banner_image_url: string | null;
+  description: string | null;
+};
+
+export const fetchMerchantShopPage = async (merchantId: number): Promise<ShopPage> => {
+  const response = await apiClient.get<ShopPage>(`/merchants/${merchantId}/shoppage`);
+  return response.data;
+};
+
+export const uploadBannerImage = async (file: File): Promise<ShopPage> => {
+  const formData = new FormData();
+  formData.append('banner', file);
+  const response = await apiClient.post<ShopPage>('/merchants/me/shoppage/banner', formData);
+  return response.data;
+};
+
+export const uploadProduceImage = async (produceId: number, file: File): Promise<Produce> => {
+  const formData = new FormData();
+  formData.append('image', file);
+  const response = await apiClient.post<Produce>(`/produce/${produceId}/image`, formData);
+  return response.data;
+};
+
 export type TrackingPosition = { lat: number; lng: number };
 
 export type TrackingData = {
   order_id: number;
   origin: TrackingPosition;
   destination: TrackingPosition;
-  current_position: TrackingPosition;
-  waypoints: TrackingPosition[];
   progress: number;
   eta_minutes: number;
 };
 
-export const fetchDummyTracking = async (orderId: number): Promise<TrackingData> => {
+export const fetchTracking = async (orderId: number): Promise<TrackingData> => {
   const response = await apiClient.get<TrackingData>(`/tracking/${orderId}`);
   return response.data;
 };

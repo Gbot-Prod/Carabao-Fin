@@ -103,12 +103,8 @@ export default function Sidebar() {
   const { isAuthenticated, isLoading } = useAuth();
   const { showPrompt } = useAuthPrompt();
 
-  const [shopsOpen, setShopsOpen] = useState(
-    () => SHOP_PATHS.some((p) => pathname.startsWith(p))
-  );
-  const [profileOpen, setProfileOpen] = useState(
-    () => PROFILE_PATHS.some((p) => pathname.startsWith(p))
-  );
+  const [shopsOpen, setShopsOpen] = useState(true);
+  const [profileOpen, setProfileOpen] = useState(true);
 
   const renderNavLink = (
     href: string,

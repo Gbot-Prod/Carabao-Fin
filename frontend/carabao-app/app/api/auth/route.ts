@@ -17,8 +17,15 @@ async function fetchWithRetry(
   baseDelayMs = 500
 ): Promise<Response | null> {
   for (let attempt = 0; attempt < retries; attempt++) {
-    const res = await fetch(url, options).catch(() => null);
+    const res = await fetch(url, options).catch((err) => {
+      console.error(`[auth/sync] fetch threw on attempt ${attempt + 1}:`, err);
+      return null;
+    });
     if (res?.ok) return res;
+    if (res) {
+      const body = await res.text().catch(() => "(unreadable)");
+      console.error(`[auth/sync] attempt ${attempt + 1} failed: status=${res.status} body=${body}`);
+    }
     if (attempt < retries - 1) {
       await new Promise((r) => setTimeout(r, baseDelayMs * (attempt + 1)));
     }

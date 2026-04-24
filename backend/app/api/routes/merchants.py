@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from app.schemas.merchant_performance import MerchantPerformanceResponse
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
 from app.services.merchant_service import create_merchant
+from app.services import r2_service
 
 router = APIRouter()
 
@@ -280,3 +281,62 @@ async def update_my_shoppage(
     db.commit()
     db.refresh(shop_page)
     return shop_page
+
+
+@router.post("/merchants/me/shoppage/banner", response_model=ShopPageResponse)
+async def upload_my_shoppage_banner(
+    banner: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+    shop_page = merchant.shop_page
+    if not shop_page:
+        raise HTTPException(status_code=404, detail="Shop page not found — create one first")
+
+    if banner.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Banner must be PNG, JPEG, or WebP")
+
+    data = await banner.read()
+    try:
+        url = r2_service.upload_banner(merchant.id, data, banner.content_type or "image/jpeg", banner.filename or "")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Image upload failed") from exc
+
+    shop_page.banner_image_url = url
+    db.commit()
+    db.refresh(shop_page)
+    return shop_page
+
+
+@router.post("/produce/{produce_id}/image", response_model=ProduceResponse)
+async def upload_produce_image(
+    produce_id: int,
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+    produce = db.query(Produce).filter(Produce.id == produce_id, Produce.merchant_id == merchant.id).first()
+    if not produce:
+        raise HTTPException(status_code=404, detail="Produce item not found")
+
+    if image.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Image must be PNG, JPEG, or WebP")
+
+    data = await image.read()
+    try:
+        url = r2_service.upload_produce_image(merchant.id, produce_id, data, image.content_type or "image/jpeg", image.filename or "")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Image upload failed") from exc
+
+    produce.image_url = url
+    db.commit()
+    db.refresh(produce)
+    return produce
