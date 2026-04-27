@@ -36,12 +36,21 @@ if (process.env.NODE_ENV !== "production") {
   }
 }
 
-const pool = new Pool({
-  connectionString: postgresUrl,
-  ssl: postgresUrl.includes("railway.com")
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
+const pool = (() => {
+  try {
+    const u = new URL(postgresUrl);
+    return new Pool({
+      host: u.hostname,
+      port: Number(u.port) || 5432,
+      database: u.pathname.replace(/^\//, ""),
+      user: decodeURIComponent(u.username),
+      password: decodeURIComponent(u.password),
+      ssl: { rejectUnauthorized: false },
+    });
+  } catch {
+    return new Pool({ connectionString: postgresUrl, ssl: { rejectUnauthorized: false } });
+  }
+})();
 
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || "";
 const normalizedApiUrl = rawApiUrl.trim().replace(/^"|"$/g, "");

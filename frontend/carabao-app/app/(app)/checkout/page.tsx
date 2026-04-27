@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
-import { createPaymentCheckout, fetchMyCart, placeOrderFromCart, type CartItem } from "@/util/api";
+import { createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
+import LocationSelects from "@/components/LocationSelects/LocationSelects";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -15,7 +16,9 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deliveryTime, setDeliveryTime] = useState("08:00-10:00");
-  const [deliveryAddress, setDeliveryAddress] = useState("Brgy. Poblacion, Science City of Munoz, Nueva Ecija");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
+  const [postal, setPostal] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash-on-delivery");
   const [notes, setNotes] = useState("");
 
@@ -31,7 +34,19 @@ export default function CheckoutPage() {
       }
     };
 
+    const loadProfile = async () => {
+      try {
+        const profile = await fetchMyProfile();
+        if (profile.address) setStreet(profile.address);
+        if (profile.city) setCity(profile.city);
+        if (profile.postal_code) setPostal(profile.postal_code);
+      } catch {
+        // leave address blank if profile fetch fails
+      }
+    };
+
     void loadCart();
+    void loadProfile();
   }, []);
 
   const subtotal = useMemo(
@@ -51,10 +66,11 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
+      const deliveryAddress = [street, city, 'Philippines'].filter(Boolean).join(', ') || null;
       const result = await placeOrderFromCart({
         delivery_date: deliveryDate || null,
         delivery_time: deliveryTime,
-        delivery_address: deliveryAddress || null,
+        delivery_address: deliveryAddress,
         payment_method: paymentMethod,
         notes: notes || null,
         service_fee: serviceFee,
@@ -120,11 +136,26 @@ export default function CheckoutPage() {
             </div>
 
             <label>
-              Delivery address
-              <textarea
-                rows={3}
-                value={deliveryAddress}
-                onChange={(event) => setDeliveryAddress(event.target.value)}
+              Street address
+              <input
+                type="text"
+                value={street}
+                onChange={(e) => setStreet(e.target.value)}
+                placeholder="123 Rizal Ave, Brgy. Poblacion"
+              />
+            </label>
+
+            <div className={styles.gridTwo}>
+              <LocationSelects value={city} onChange={setCity} />
+            </div>
+
+            <label>
+              Postal code
+              <input
+                type="text"
+                value={postal}
+                onChange={(e) => setPostal(e.target.value)}
+                placeholder="1634"
               />
             </label>
           </div>

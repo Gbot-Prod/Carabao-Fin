@@ -5,6 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
+from app.models.current_orders import CurrentOrder
+from app.models.mobile_credential import MobileCredential
+from app.models.order import Order
 from app.models.user import User
 from app.schemas.payment import AttachPaymentMethodRequest, SavedCard
 from app.schemas.user import UserResponse, UserUpdate
@@ -85,3 +88,27 @@ async def detach_my_payment_method(
     except requests.HTTPError as e:
         body = e.response.text if e.response is not None else ""
         raise HTTPException(status_code=502, detail=f"PayMongo error: {body[:400]}")
+
+
+@router.delete("/users/me", status_code=204)
+async def delete_my_account(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Orphan merchant references before cascade delete removes the merchant row.
+    if current_user.merchant:
+        merchant_id = current_user.merchant.id
+        db.query(Order).filter(Order.merchant_id == merchant_id).update(
+            {"merchant_id": None}, synchronize_session=False
+        )
+        db.query(CurrentOrder).filter(CurrentOrder.merchant_id == merchant_id).update(
+            {"merchant_id": None}, synchronize_session=False
+        )
+
+    # MobileCredential has no cascade on the User side, delete it manually.
+    db.query(MobileCredential).filter(
+        MobileCredential.user_id == current_user.id
+    ).delete(synchronize_session=False)
+
+    db.delete(current_user)
+    db.commit()

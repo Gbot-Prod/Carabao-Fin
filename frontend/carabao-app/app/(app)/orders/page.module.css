@@ -1,0 +1,174 @@
+.container {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.header {
+  background: linear-gradient(130deg, #f0fff1 0%, #dff5e6 52%, #ccefd8 100%);
+  border: 1px solid #c5e8d0;
+  border-radius: 20px;
+  padding: 1.4rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #2d7f47;
+  margin: 0 0 0.35rem;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  color: #11492a;
+}
+
+.historyLink {
+  padding: 0.6rem 1rem;
+  border: 1px solid #84c19f;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #146236;
+  white-space: nowrap;
+  background-color: #f6fffa;
+}
+
+.list {
+  list-style: none;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #d9e7dd;
+  border-radius: 16px;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 4px 12px rgba(4, 53, 21, 0.05);
+  display: grid;
+  gap: 0.6rem;
+}
+
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.orderId {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.merchant {
+  margin: 0.2rem 0 0;
+  font-size: 1.05rem;
+}
+
+.merchant a {
+  color: #146236;
+  text-decoration: none;
+}
+
+.merchant a:hover {
+  text-decoration: underline;
+}
+
+.badge {
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badgePending {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.badgeShipped {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.badgeCancelled {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.83rem;
+  color: #4e6155;
+}
+
+.dot {
+  color: #9ca3af;
+}
+
+.cardActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.trackBtn {
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background-color: #0a8b3a;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.empty {
+  background: #fff;
+  border: 1px solid #d9e7dd;
+  border-radius: 16px;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  color: #6b7280;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+}
+
+.emptyTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1d4f2f;
+  margin: 0;
+}
+
+.emptyText {
+  margin: 0;
+  color: #5a655f;
+}
+
+.browseLink {
+  margin-top: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  background-color: #0a8b3a;
+  color: #fff;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
+import { useRouter } from "next/navigation";
 import {
   fetchMyMerchantPerformance,
   fetchMyProfile,
@@ -13,6 +14,7 @@ import {
   deleteProduce,
   uploadBannerImage,
   uploadProduceImage,
+  deleteMyMerchant,
   type MerchantPerformance,
   type Produce,
   type ShopPage,
@@ -121,6 +123,7 @@ function ProduceFormFields({
 }
 
 export default function MerchantDashboardPage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMerchant, setIsMerchant] = useState<boolean | null>(null);
@@ -137,6 +140,9 @@ export default function MerchantDashboardPage() {
   const [editingProduceId, setEditingProduceId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<ProduceFormState>(emptyForm);
   const [produceFormLoading, setProduceFormLoading] = useState(false);
+
+  const [deletingMerchant, setDeletingMerchant] = useState(false);
+  const [confirmDeleteMerchant, setConfirmDeleteMerchant] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -300,6 +306,17 @@ export default function MerchantDashboardPage() {
       setProduces((prev) => prev.filter((p) => p.id !== id));
     } catch {
       // silently fail for now
+    }
+  };
+
+  const handleDeleteMerchant = async () => {
+    setDeletingMerchant(true);
+    try {
+      await deleteMyMerchant();
+      router.push("/profile");
+    } catch {
+      setDeletingMerchant(false);
+      setConfirmDeleteMerchant(false);
     }
   };
 
@@ -565,6 +582,38 @@ export default function MerchantDashboardPage() {
             Update merchant details
           </Link>
         </footer>
+
+        <section className={styles.dangerZone}>
+          <h2 className={styles.dangerTitle}>Danger Zone</h2>
+          {!confirmDeleteMerchant ? (
+            <button className={styles.dangerBtn} onClick={() => setConfirmDeleteMerchant(true)}>
+              Delete merchant profile
+            </button>
+          ) : (
+            <div className={styles.dangerConfirm}>
+              <p className={styles.dangerWarning}>
+                This will permanently delete your merchant profile, shop page, and all listed produce.
+                Your order history will be preserved. This cannot be undone.
+              </p>
+              <div className={styles.dangerActions}>
+                <button
+                  className={styles.dangerConfirmBtn}
+                  disabled={deletingMerchant}
+                  onClick={() => void handleDeleteMerchant()}
+                >
+                  {deletingMerchant ? "Deleting…" : "Yes, delete my merchant profile"}
+                </button>
+                <button
+                  className={styles.secondaryBtn}
+                  disabled={deletingMerchant}
+                  onClick={() => setConfirmDeleteMerchant(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
       </section>
     </div>
   );

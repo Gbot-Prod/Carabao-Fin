@@ -2,7 +2,15 @@
 
 import React from 'react';
 import Image from 'next/image';
-import { Order } from '../data/orders';
+
+export interface Order {
+  merchant: string;
+  shipped: boolean;
+  dateBought: string;
+  timeOfArrival: string;
+  deliveryFee: number;
+  image: string;
+}
 
 interface OrderCardProps {
   order: Order;
@@ -11,12 +19,13 @@ interface OrderCardProps {
 }
 
 export default function OrderCard({ order, onClick, isSelected = false }: OrderCardProps) {
-
   const deliveryFee = new Intl.NumberFormat('en-PH', {
     style: 'currency',
     currency: 'PHP',
     maximumFractionDigits: 0,
   }).format(order.deliveryFee);
+
+  const initials = order.merchant.slice(0, 2).toUpperCase();
 
   return (
     <li
@@ -28,13 +37,19 @@ export default function OrderCard({ order, onClick, isSelected = false }: OrderC
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <Image
-            className="h-14 w-14 rounded-xl object-cover"
-            src={order.image}
-            alt={order.merchant}
-            width={56}
-            height={56}
-          />
+          {order.image ? (
+            <Image
+              className="h-14 w-14 rounded-xl object-cover"
+              src={order.image}
+              alt={order.merchant}
+              width={56}
+              height={56}
+            />
+          ) : (
+            <div className="h-14 w-14 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 font-semibold text-sm shrink-0">
+              {initials}
+            </div>
+          )}
           <div>
             <p className="text-base font-semibold text-gray-900">{order.merchant}</p>
             <p className="text-sm text-gray-500">Bought: {order.dateBought}</p>

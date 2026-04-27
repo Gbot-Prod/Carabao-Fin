@@ -593,6 +593,70 @@
   margin-top: 20px;
 }
 
+/* ─── Profile danger zone ────────────────────────────────────────────────────── */
+.profileDangerZone {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid rgba(185, 28, 28, 0.18);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profileDangerLabel {
+  font-size: 11px;
+  font-weight: 900;
+  color: #b91c1c;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0;
+}
+
+.profileDangerBtn {
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(185, 28, 28, 0.25);
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  background: rgba(185, 28, 28, 0.07);
+  color: #b91c1c;
+  align-self: flex-start;
+}
+
+.profileDangerConfirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profileDangerWarning {
+  margin: 0;
+  font-size: 12px;
+  color: #7f1d1d;
+  line-height: 1.5;
+}
+
+.profileDangerConfirmBtn {
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(185, 28, 28, 0.35);
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  background: #b91c1c;
+  color: #ffffff;
+  align-self: flex-start;
+}
+
+.profileDangerConfirmBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ─── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 960px) {
   .main { flex-direction: column; }

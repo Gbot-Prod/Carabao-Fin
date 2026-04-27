@@ -6,7 +6,9 @@ import styles from './page.module.css';
 import {
   fetchMyProfile, updateMyProfile, type UserProfile, type NotificationPrefs,
   fetchPaymentMethods, attachPaymentMethod, detachPaymentMethod, tokenizeCard, type SavedCard,
+  deleteMyAccount,
 } from '@/util/api';
+import LocationSelects from '@/components/LocationSelects/LocationSelects';
 
 // ─── SVG avatar ───────────────────────────────────────────────────────────────
 function UserAvatar() {
@@ -63,7 +65,7 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
     finally { setSaving(false); }
   };
 
-  const set = (f: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [f]: e.target.value }));
+  const setField = (f: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [f]: e.target.value }));
 
   if (!profile) return <p className={styles.panelNote}>Loading…</p>;
 
@@ -71,21 +73,24 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
     <div className={styles.panelForm}>
       <div className={styles.panelFormField}>
         <label className={styles.formLabel}>Street address</label>
-        <input className={styles.formInput} value={form.address} onChange={set('address')} placeholder="123 Rizal Ave" />
+        <input className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave" />
       </div>
+      <LocationSelects
+        value={form.city}
+        onChange={(city) => setForm(p => ({ ...p, city }))}
+        selectClassName={styles.formInput}
+        labelClassName={styles.formLabel}
+        wrapClassName={styles.panelFormField}
+      />
       <div className={styles.panelFormRow}>
         <div className={styles.panelFormField}>
-          <label className={styles.formLabel}>City</label>
-          <input className={styles.formInput} value={form.city} onChange={set('city')} placeholder="Taguig" />
+          <label className={styles.formLabel}>Postal code</label>
+          <input className={styles.formInput} value={form.postal_code} onChange={setField('postal_code')} placeholder="1634" />
         </div>
         <div className={styles.panelFormField}>
-          <label className={styles.formLabel}>Postal code</label>
-          <input className={styles.formInput} value={form.postal_code} onChange={set('postal_code')} placeholder="1634" />
+          <label className={styles.formLabel}>Country</label>
+          <input className={styles.formInput} value={form.country} onChange={setField('country')} placeholder="Philippines" />
         </div>
-      </div>
-      <div className={styles.panelFormField}>
-        <label className={styles.formLabel}>Country</label>
-        <input className={styles.formInput} value={form.country} onChange={set('country')} placeholder="Philippines" />
       </div>
       {error && <p className={styles.panelError}>{error}</p>}
       <div className={styles.panelActions}>
@@ -311,6 +316,9 @@ export default function Profile() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   useEffect(() => {
     const load = async () => {
       setIsLoading(true); setLoadError(null);
@@ -338,6 +346,18 @@ export default function Profile() {
   };
 
   const set = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [field]: e.target.value }));
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      await deleteMyAccount();
+      await fetch('/api/auth/backend-token', { method: 'DELETE' });
+      window.location.href = '/auth';
+    } catch {
+      setDeletingAccount(false);
+      setConfirmDeleteAccount(false);
+    }
+  };
 
   const fullName = profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() || 'Carabao User' : null;
   const addressLine = profile ? [profile.address, profile.city, profile.country, profile.postal_code].filter(Boolean).join(', ') : null;
@@ -408,6 +428,43 @@ export default function Profile() {
               </Link>
             )}
           </section>
+
+          {/* Danger zone */}
+          <section className={styles.profileDangerZone}>
+            <p className={styles.profileDangerLabel}>Danger Zone</p>
+            {!confirmDeleteAccount ? (
+              <button
+                className={styles.profileDangerBtn}
+                onClick={() => setConfirmDeleteAccount(true)}
+                disabled={isLoading}
+                type="button"
+              >
+                Delete account
+              </button>
+            ) : (
+              <div className={styles.profileDangerConfirm}>
+                <p className={styles.profileDangerWarning}>
+                  This permanently deletes your account and all data. This cannot be undone.
+                </p>
+                <button
+                  className={styles.profileDangerConfirmBtn}
+                  disabled={deletingAccount}
+                  onClick={() => void handleDeleteAccount()}
+                  type="button"
+                >
+                  {deletingAccount ? 'Deleting…' : 'Yes, delete my account'}
+                </button>
+                <button
+                  className={styles.merchantBtn}
+                  disabled={deletingAccount}
+                  onClick={() => setConfirmDeleteAccount(false)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </section>
         </div>
 
         {/* ── Right column: Account Settings ── */}
@@ -466,10 +523,13 @@ export default function Profile() {
                 <label className={styles.formLabel}>Street address</label>
                 <input className={styles.formInput} value={form.address} onChange={set('address')} placeholder="123 Rizal Ave" />
               </div>
-              <div className={styles.formGroup}>
-                <label className={styles.formLabel}>City</label>
-                <input className={styles.formInput} value={form.city} onChange={set('city')} placeholder="Taguig" />
-              </div>
+              <LocationSelects
+                value={form.city}
+                onChange={(city) => setForm(p => ({ ...p, city }))}
+                selectClassName={styles.formInput}
+                labelClassName={styles.formLabel}
+                wrapClassName={styles.formGroup}
+              />
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>Country</label>
                 <input className={styles.formInput} value={form.country} onChange={set('country')} placeholder="Philippines" />

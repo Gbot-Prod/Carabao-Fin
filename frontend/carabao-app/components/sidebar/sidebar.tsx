@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
 import { SidebarFilterChips } from "./SidebarFilterChips";
 
-const PROTECTED = new Set(["/track", "/history", "/profile", "/checkout", "/confirmation"]);
+const PROTECTED = new Set(["/track", "/history", "/profile", "/checkout", "/confirmation", "/orders"]);
 const SHOP_PATHS = ["/order", "/cart"];
 const PROFILE_PATHS = ["/profile", "/history", "/track"];
 
@@ -66,6 +66,16 @@ function HistoryIcon() {
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function PackageIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+      <line x1="12" y1="2" x2="12" y2="12" />
     </svg>
   );
 }
@@ -172,7 +182,8 @@ export default function Sidebar() {
               <ul className="sidebar__nav-list">
                 {renderNavLink("/profile", "Settings", <SettingsIcon />, true)}
                 {renderNavLink("/history", "History", <HistoryIcon />, true)}
-                {renderNavLink("/track", "Current Orders", <TrackIcon />, true)}
+                {renderNavLink("/track", "Track", <TrackIcon />, true)}
+                {renderNavLink("/orders", "Orders", <PackageIcon />, true)}
               </ul>
             </div>
           </div>
@@ -181,9 +192,20 @@ export default function Sidebar() {
 
       <div className="sidebar__footer">
         {!isLoading && (
-          isAuthenticated
-            ? <LogoutButton />
-            : <Link href="/auth" className="sidebar__nav-link">Sign In</Link>
+          isAuthenticated ? (
+            <LogoutButton className="sidebar__logout sidebar__logout-button">
+              <span className="sidebar__nav-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </span>
+              <span>Sign Out</span>
+            </LogoutButton>
+          ) : (
+            <Link href="/auth" className="sidebar__nav-link">Sign In</Link>
+          )
         )}
       </div>
     </aside>

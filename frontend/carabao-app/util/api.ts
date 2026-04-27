@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-const rawApiBaseUrl =
-  process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || 'http://localhost:8000';
+const rawApiBaseUrl = (
+  process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || 'http://localhost:8000'
+).trim().replace(/^"|"$/g, '');
 
 const API_BASE_URL = rawApiBaseUrl.startsWith('http')
   ? rawApiBaseUrl
@@ -331,6 +332,14 @@ export const createPaymentCheckout = async (orderId: number): Promise<CheckoutSe
 export const fetchTransactionByOrder = async (orderId: number): Promise<TransactionStatusResponse> => {
   const response = await apiClient.get<TransactionStatusResponse>(`/payments/transactions/order/${orderId}`);
   return response.data;
+};
+
+export const deleteMyMerchant = async (): Promise<void> => {
+  await apiClient.delete('/merchants/me');
+};
+
+export const deleteMyAccount = async (): Promise<void> => {
+  await apiClient.delete('/users/me');
 };
 
 export const fetchMerchantProduce = async (merchantId: number): Promise<Produce[]> => {

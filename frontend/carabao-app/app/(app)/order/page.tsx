@@ -10,28 +10,20 @@ type FarmView = {
   merchantId: number | null;
   name: string;
   rating: number;
-  reviews: string;
   time: string;
   deliveryTimeDays: number | null;
-  badge: string;
   category: string;
   deliveryFee: number;
-  promo: string;
-  image: string;
 };
 
 const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]): FarmView => ({
   merchantId: merchant.id,
   name: merchant.merchant_name,
   rating: merchant.rating ?? 0,
-  reviews: '(0)',
   time: merchant.delivery_time ? `${merchant.delivery_time} Days` : 'N/A',
   deliveryTimeDays: merchant.delivery_time ?? null,
-  badge: '₱₱',
   category: merchant.location ?? 'Farm Goods',
   deliveryFee: merchant.delivery_price ?? 0,
-  promo: 'Fresh produce',
-  image: '/images/farms/dole.jpg',
 });
 
 
@@ -101,8 +93,7 @@ function OrderContent() {
       result = result.filter(
         (farm) =>
           farm.name.toLowerCase().includes(query) ||
-          farm.category.toLowerCase().includes(query) ||
-          farm.promo.toLowerCase().includes(query),
+          farm.category.toLowerCase().includes(query),
       );
     }
 
@@ -146,33 +137,24 @@ function OrderContent() {
 
   return (
     <div className={styles.container}>
-      <section className={styles.hero}>
-        <div>
-          <p className={styles.heroEyebrow}>Fresh from local farms</p>
-          <h1 className={styles.heroTitle}>Order From Verified Merchants</h1>
-          <p className={styles.heroSubtitle}>
-            Browse available merchants, open each store page, and add produce bundles to your cart.
-          </p>
-        </div>
-        <div className={styles.heroActions}>
-          <Link href="/cart" className={styles.cartLink}>
-            Open Cart ({cartItemCount})
-          </Link>
+      <section className={styles.pageHeader}>
+        <div className={styles.pageHeaderLeft}>
+          <h1 className={styles.pageTitle}>Browse Shops</h1>
           <span className={styles.merchantCount}>{merchantCountLabel}</span>
         </div>
+        <Link href="/cart" className={styles.cartLink}>
+          Cart ({cartItemCount})
+        </Link>
       </section>
 
       <section className={styles.controlsRow}>
-        <label className={styles.searchWrap}>
-          <span className={styles.searchLabel}>Find a merchant</span>
-          <input
-            type="search"
-            className={styles.searchInput}
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Search by name or location"
-          />
-        </label>
+        <input
+          type="search"
+          className={styles.searchInput}
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Search by merchant name or location…"
+        />
       </section>
 
       {feedback && <p className={styles.feedback}>{feedback}</p>}
@@ -188,10 +170,9 @@ function OrderContent() {
               <div
                 className={styles.cardImage}
                 style={{
-                  backgroundImage: `linear-gradient(165deg, rgba(11, 78, 36, 0.15), rgba(11, 78, 36, 0.6)), url(${farm.image})`,
+                  backgroundImage: 'linear-gradient(165deg, rgba(11, 78, 36, 0.15), rgba(11, 78, 36, 0.6))',
                 }}
               >
-                <span className={styles.badge}>{farm.badge}</span>
                 <span className={styles.categoryChip}>{farm.category}</span>
               </div>
 
@@ -203,7 +184,6 @@ function OrderContent() {
                   <span>{farm.time}</span>
                 </div>
                 <p className={styles.deliveryText}>Delivery Fee: ₱{farm.deliveryFee}</p>
-                <p className={styles.promoText}>{farm.promo}</p>
 
                 <div className={styles.cardActions}>
                   <Link href={merchantHref} className={styles.viewStoreButton}>

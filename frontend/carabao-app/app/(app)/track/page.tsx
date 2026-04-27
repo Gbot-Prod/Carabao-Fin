@@ -6,15 +6,20 @@ import styles from './page.module.css';
 import { useRef, useEffect, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import OrderCard from './components/orderCard';
-import { orders as fallbackOrders, type Order } from './data/orders';
 import { fetchCurrentOrders, fetchTracking, type TrackingData } from '@/util/api';
 import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
 
-type TrackOrder = Order & {
+type TrackOrder = {
   id: number;
   orderId: number;
-  status: string;
+  merchant: string;
   merchantId: number | null;
+  shipped: boolean;
+  dateBought: string;
+  timeOfArrival: string;
+  deliveryFee: number;
+  image: string;
+  status: string;
 };
 
 const toTrackOrder = (order: Awaited<ReturnType<typeof fetchCurrentOrders>>[number]): TrackOrder => ({
@@ -26,7 +31,7 @@ const toTrackOrder = (order: Awaited<ReturnType<typeof fetchCurrentOrders>>[numb
   dateBought: new Date(order.date_bought).toLocaleDateString(),
   timeOfArrival: order.time_of_arrival ? new Date(order.time_of_arrival).toLocaleDateString() : 'N/A',
   deliveryFee: order.delivery_fee,
-  image: order.image || '/images/farms/dole.jpg',
+  image: order.image ?? '',
   status: order.status,
 });
 
@@ -38,15 +43,7 @@ function Track() {
   const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const routeRef = useRef<RouteGeoJSON | null>(null);
   const [tracking, setTracking] = useState<TrackingData | null>(null);
-  const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>(
-    fallbackOrders.map((order, index) => ({
-      id: index + 1,
-      orderId: index + 1,
-      merchantId: null,
-      ...order,
-      status: order.shipped ? 'shipped' : 'pending',
-    })),
-  );
+  const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>([]);
   const [selectedOrderIndex, setSelectedOrderIndex] = useState(0);
 
   const selectedOrder = currentOrders[selectedOrderIndex];
@@ -60,7 +57,7 @@ function Track() {
           setSelectedOrderIndex(0);
         }
       } catch {
-        // Keep the fallback orders when the backend is unavailable.
+        // orders stay empty if the backend is unavailable
       }
     };
 

@@ -5,6 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
+from app.models.current_orders import CurrentOrder
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.produce import Produce
@@ -340,3 +341,24 @@ async def upload_produce_image(
     db.commit()
     db.refresh(produce)
     return produce
+
+
+@router.delete("/merchants/me", status_code=204)
+async def delete_my_merchant(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+    # Orphan references on orders that belong to other users before cascade-deleting the merchant.
+    db.query(Order).filter(Order.merchant_id == merchant.id).update(
+        {"merchant_id": None}, synchronize_session=False
+    )
+    db.query(CurrentOrder).filter(CurrentOrder.merchant_id == merchant.id).update(
+        {"merchant_id": None}, synchronize_session=False
+    )
+
+    db.delete(merchant)
+    db.commit()
