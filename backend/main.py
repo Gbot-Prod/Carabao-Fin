@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.database import engine
 from app.core.database import Base
+from app.core.migrations import run_migrations
 from app.models import cart, current_orders, merchant, merchant_application, merchant_payout, mobile_credential, order, order_history, payout_batch, produce, shopPage, transaction, user  # noqa: F401
 from app.api.routes.router import router
 
@@ -31,5 +32,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+run_migrations(engine)
 Base.metadata.create_all(bind=engine)
 app.include_router(router)

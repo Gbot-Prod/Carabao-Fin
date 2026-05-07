@@ -4,20 +4,47 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import styles from './page.module.css';
 import {
-  fetchMyProfile, updateMyProfile, type UserProfile, type NotificationPrefs,
+  fetchMyProfile, updateMyProfile, uploadProfilePicture, type UserProfile, type NotificationPrefs,
   fetchPaymentMethods, attachPaymentMethod, detachPaymentMethod, tokenizeCard, type SavedCard,
   deleteMyAccount,
 } from '@/util/api';
 import LocationSelects from '@/components/LocationSelects/LocationSelects';
 
-// ─── SVG avatar ───────────────────────────────────────────────────────────────
-function UserAvatar() {
+// ─── Avatar ───────────────────────────────────────────────────────────────────
+function UserAvatar({ pictureUrl, uploading, onUpload }: {
+  pictureUrl: string | null;
+  uploading: boolean;
+  onUpload: (file: File) => void;
+}) {
   return (
-    <svg className={styles.avatar} viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <circle cx="40" cy="40" r="40" fill="#d7e7da" />
-      <circle cx="40" cy="30" r="14" fill="#31925d" />
-      <path d="M8 76 Q8 54 40 54 Q72 54 72 76" fill="#31925d" />
-    </svg>
+    <label className={styles.avatarWrap} title="Click to change photo">
+      {uploading ? (
+        <div className={styles.avatarPlaceholder}><span className={styles.avatarSpinner} /></div>
+      ) : pictureUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={pictureUrl} alt="Profile" className={styles.avatar} />
+      ) : (
+        <svg className={styles.avatar} viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="40" cy="40" r="40" fill="#d7e7da" />
+          <circle cx="40" cy="30" r="14" fill="#31925d" />
+          <path d="M8 76 Q8 54 40 54 Q72 54 72 76" fill="#31925d" />
+        </svg>
+      )}
+      <div className={styles.avatarOverlay}>
+        <span className={styles.avatarOverlayText}>Change</span>
+      </div>
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        style={{ display: 'none' }}
+        disabled={uploading}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onUpload(file);
+          e.target.value = '';
+        }}
+      />
+    </label>
   );
 }
 
@@ -311,6 +338,8 @@ export default function Profile() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
+  const [avatarUploading, setAvatarUploading] = useState(false);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EditForm>({ first_name: '', last_name: '', phone_number: '', address: '', city: '', country: '', postal_code: '' });
   const [isSaving, setIsSaving] = useState(false);
@@ -332,6 +361,18 @@ export default function Profile() {
     };
     void load();
   }, []);
+
+  const handleAvatarUpload = async (file: File) => {
+    setAvatarUploading(true);
+    try {
+      const updated = await uploadProfilePicture(file);
+      setProfile(updated);
+    } catch {
+      // silently fail — avatar stays as-is
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   const openModal = () => { if (profile) setForm(profileToForm(profile)); setSaveError(null); setModalOpen(true); };
   const closeModal = () => { setSaveError(null); setModalOpen(false); };
@@ -372,7 +413,11 @@ export default function Profile() {
 
           {/* Profile card */}
           <section className={styles.profileSection}>
-            <div className={styles.avatarWrap}><UserAvatar /></div>
+            <UserAvatar
+              pictureUrl={profile?.profile_picture_url ?? null}
+              uploading={avatarUploading}
+              onUpload={(file) => void handleAvatarUpload(file)}
+            />
 
             <div className={styles.nameBlock}>
               <h2 className={styles.name}>{isLoading ? '—' : (fullName ?? '—')}</h2>
@@ -517,7 +562,10 @@ export default function Profile() {
               </div>
               <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
                 <label className={styles.formLabel}>Phone number</label>
-                <input className={styles.formInput} value={form.phone_number} onChange={set('phone_number')} placeholder="+63 912 345 6789" />
+                <div className={styles.phoneRow}>
+                  <span className={styles.phonePrefix}>+63</span>
+                  <input className={`${styles.formInput} ${styles.phoneInput}`} value={form.phone_number} onChange={set('phone_number')} placeholder="912 345 6789" />
+                </div>
               </div>
               <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
                 <label className={styles.formLabel}>Street address</label>
@@ -526,14 +574,10 @@ export default function Profile() {
               <LocationSelects
                 value={form.city}
                 onChange={(city) => setForm(p => ({ ...p, city }))}
-                selectClassName={styles.formInput}
+                selectClassName={`${styles.formInput} ${styles.locationSelect}`}
                 labelClassName={styles.formLabel}
                 wrapClassName={styles.formGroup}
               />
-              <div className={styles.formGroup}>
-                <label className={styles.formLabel}>Country</label>
-                <input className={styles.formInput} value={form.country} onChange={set('country')} placeholder="Philippines" />
-              </div>
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>Postal code</label>
                 <input className={styles.formInput} value={form.postal_code} onChange={set('postal_code')} placeholder="1634" />

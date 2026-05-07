@@ -7,17 +7,21 @@ class ShopPageBase(BaseModel):
     title: str
     slug: str
     banner_image_url: Optional[str] = None
+    logo_url: Optional[str] = None
     description: Optional[str] = None
 
 
-class ShopPageCreate(ShopPageBase):
-    merchant_id: int
+class ShopPageCreate(BaseModel):
+    title: str
+    slug: str
+    description: Optional[str] = None
 
 
 class ShopPageUpdate(BaseModel):
     title: Optional[str] = None
     slug: Optional[str] = None
     banner_image_url: Optional[str] = None
+    logo_url: Optional[str] = None
     description: Optional[str] = None
 
 

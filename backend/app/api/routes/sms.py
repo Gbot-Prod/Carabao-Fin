@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from app.integrations.sms.semaphore import SemaphoreError, send_sms
 
-router = APIRouter()
+router = APIRouter(tags=["sms"])
 
 
 class SemaphoreSendRequest(BaseModel):

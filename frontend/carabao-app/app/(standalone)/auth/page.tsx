@@ -74,6 +74,7 @@ export default function SignupPage() {
         <div className="auth-brand-orb auth-brand-orb-one" aria-hidden="true" />
         <div className="auth-brand-orb auth-brand-orb-three" aria-hidden="true" />
         <div className="auth-brand-orb auth-brand-orb-two" aria-hidden="true" />
+        <div className="auth-brand-orb auth-brand-orb-four" aria-hidden="true" />
       </section>
 
       <section className="auth-form-panel">

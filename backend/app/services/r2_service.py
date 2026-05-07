@@ -46,9 +46,21 @@ def _put(key: str, data: bytes, content_type: str) -> str:
     return f"{_PUBLIC_URL}/{key}"
 
 
+def upload_shop_logo(merchant_id: int, data: bytes, content_type: str, filename: str) -> str:
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    key = f"merchants/{merchant_id}/logo/{ts}_{uuid.uuid4().hex}{_ext(filename, content_type)}"
+    return _put(key, data, content_type)
+
+
 def upload_banner(merchant_id: int, data: bytes, content_type: str, filename: str) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     key = f"merchants/{merchant_id}/banner/{ts}_{uuid.uuid4().hex}{_ext(filename, content_type)}"
+    return _put(key, data, content_type)
+
+
+def upload_avatar(user_id: int, data: bytes, content_type: str, filename: str) -> str:
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    key = f"users/{user_id}/avatar/{ts}_{uuid.uuid4().hex}{_ext(filename, content_type)}"
     return _put(key, data, content_type)
 
 

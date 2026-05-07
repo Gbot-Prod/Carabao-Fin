@@ -1,16 +1,12 @@
 .page {
-  min-height: 100vh;
-  padding: clamp(16px, 3vw, 28px);
-  display: flex;
-  justify-content: center;
-  background: radial-gradient(1200px 600px at 15% 10%, rgba(49, 146, 93, 0.14) 0%, transparent 55%),
-    radial-gradient(900px 500px at 85% 15%, rgba(29, 78, 216, 0.10) 0%, transparent 60%),
-    linear-gradient(180deg, #f7fcf8 0%, #ecf6ef 100%);
+  min-height: 100%;
+  padding: 2rem;
 }
 
 .card {
   width: 100%;
   max-width: 980px;
+  margin: 0 auto;
   background: #ffffff;
   border: 1px solid rgba(23, 61, 37, 0.08);
   border-radius: 18px;
@@ -25,7 +21,6 @@
   gap: 14px;
   padding: clamp(16px, 3vw, 22px);
   border-bottom: 1px solid rgba(23, 61, 37, 0.08);
-  background: linear-gradient(180deg, rgba(49, 146, 93, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
 }
 
 .title {
@@ -151,7 +146,6 @@
   gap: 10px;
   flex-wrap: wrap;
   border-top: 1px solid rgba(23, 61, 37, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(49, 146, 93, 0.05) 100%);
 }
 
 .actions {
@@ -420,35 +414,165 @@
   color: #b91c1c;
 }
 
-/* ---- Shop banner ---- */
+/* ---- Shop page editor ---- */
 
-.bannerSection {
+.shopPageSection {
   padding: 18px clamp(16px, 3vw, 22px);
   border-top: 1px solid rgba(23, 61, 37, 0.08);
 }
 
-.bannerPreviewWrap {
-  width: 100%;
-  height: 160px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid rgba(23, 61, 37, 0.12);
-  background: rgba(49, 146, 93, 0.04);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.shopCreateForm {
+  border: 1px dashed rgba(49, 146, 93, 0.3);
+  border-radius: 14px;
+  padding: 16px;
+  background: rgba(49, 146, 93, 0.03);
 }
 
-.bannerImg {
+.shopEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid rgba(23, 61, 37, 0.10);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* Banner */
+.shopBannerWrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 160px;
+  cursor: pointer;
+  overflow: hidden;
+  background: rgba(49, 146, 93, 0.06);
+  border-bottom: 1px solid rgba(23, 61, 37, 0.08);
+}
+
+.shopBannerWrap:hover .shopBannerOverlay {
+  opacity: 1;
+}
+
+.shopBannerImg {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.bannerEmpty {
+.shopBannerEmpty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 13px;
   color: #5c6a5e;
+  font-weight: 600;
+}
+
+.shopBannerOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(23, 61, 37, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Logo + info row */
+.shopMetaRow {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 14px;
+}
+
+/* Square logo */
+.shopLogoWrap {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(23, 61, 37, 0.12);
+  flex-shrink: 0;
+  cursor: pointer;
+  display: block;
+}
+
+.shopLogoWrap:hover .shopLogoOverlay {
+  opacity: 1;
+}
+
+.shopLogoImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.shopLogoPlaceholder {
+  width: 100%;
+  height: 100%;
+  background: rgba(49, 146, 93, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: #5c6a5e;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.shopLogoOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(23, 61, 37, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.shopInfoView {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.shopInfoTitle {
+  font-size: 15px;
+  font-weight: 850;
+  color: #173d25;
+  line-height: 1.3;
+}
+
+.shopInfoDesc {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #5c6a5e;
+  line-height: 1.5;
+}
+
+.shopInfoForm {
+  flex: 1;
+  min-width: 0;
 }
 
 .uploadBtn {
@@ -468,12 +592,6 @@
 
 .uploadBtn:hover {
   background: rgba(49, 146, 93, 0.12);
-}
-
-.inlineLink {
-  color: #31925d;
-  font-weight: 700;
-  text-decoration: underline;
 }
 
 /* ---- Produce image thumbnail ---- */

@@ -15,6 +15,7 @@ class UserBase(BaseModel):
     country: Optional[str] = None
     postal_code: Optional[str] = None
     created_at: Optional[datetime] = None
+    profile_picture_url: Optional[str] = None
 
 
 class UserCreate(UserBase):

@@ -12,6 +12,7 @@ class ShopPage(Base):
     title = Column(String, nullable=False, index=True)
     slug = Column(String, nullable=False, unique=True, index=True)
     banner_image_url = Column(String, nullable=True)
+    logo_url = Column(String, nullable=True)
     description = Column(Text, nullable=True)
 
     merchant = relationship("Merchant", back_populates="shop_page")

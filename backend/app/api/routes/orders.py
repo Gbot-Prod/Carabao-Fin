@@ -25,7 +25,7 @@ from ._order_helpers import (
     _to_int,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["orders"])
 
 
 @router.post("/orders/me/place", response_model=PlaceOrderResponse)

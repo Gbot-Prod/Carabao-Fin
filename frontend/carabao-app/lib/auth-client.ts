@@ -64,6 +64,12 @@ export const signUp = {
       throw new Error(getErrorMessage(error, "Signup failed"));
     }
 
+    // Better Auth silently "succeeds" for existing verified emails (anti-enumeration).
+    // Detect it by checking if the returned user is already verified.
+    if (data.user.emailVerified) {
+      throw new Error("An account with this email already exists. Please sign in instead.");
+    }
+
     // Backend sync happens in /email-verified after the user verifies their email.
     return data;
   },
@@ -76,6 +82,10 @@ export const resendVerificationEmail = async (email: string) => {
   });
 
   if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "EMAIL_ALREADY_VERIFIED") {
+      throw new Error("ALREADY_VERIFIED");
+    }
     throw new Error(getErrorMessage(error, "Could not resend verification email"));
   }
 

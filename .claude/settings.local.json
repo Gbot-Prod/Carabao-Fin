@@ -10,7 +10,9 @@
       "Bash(npm uninstall *)",
       "Bash(npx tsc *)",
       "WebFetch(domain:semaphore.co)",
-      "WebFetch(domain:developers.paymongo.com)"
+      "WebFetch(domain:developers.paymongo.com)",
+      "WebFetch(domain:alns.readthedocs.io)",
+      "Bash(.venv\\\\Scripts\\\\pip install *)"
     ]
   }
 }

@@ -1,0 +1,23 @@
+"""
+Lightweight, additive schema migrations.
+
+Each entry is a raw SQL statement that is safe to run on every startup
+(uses IF NOT EXISTS / idempotent DDL). Add new statements at the bottom —
+never remove or reorder existing ones.
+"""
+
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+
+_MIGRATIONS: list[str] = [
+    # 2025-05-06 — user profile picture
+    "ALTER TABLE backend_users ADD COLUMN IF NOT EXISTS profile_picture_url VARCHAR",
+    # 2025-05-07 — merchant shop page logo
+    "ALTER TABLE shop_pages ADD COLUMN IF NOT EXISTS logo_url VARCHAR",
+]
+
+
+def run_migrations(engine: Engine) -> None:
+    with engine.begin() as conn:
+        for stmt in _MIGRATIONS:
+            conn.execute(text(stmt))

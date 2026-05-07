@@ -7,7 +7,7 @@ from app.schemas.cart import CartResponse, CartUpdate
 
 from ._order_helpers import compute_cart_totals, get_or_create_cart
 
-router = APIRouter()
+router = APIRouter(tags=["carts"])
 
 
 @router.get("/carts/me", response_model=CartResponse)

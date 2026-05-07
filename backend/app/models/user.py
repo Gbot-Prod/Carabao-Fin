@@ -22,6 +22,7 @@ class User(Base):
     member_since = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     notifications_preferences = Column(JSON, nullable=False, default=dict)
 
+    profile_picture_url = Column(String, nullable=True)
     paymongo_customer_id = Column(String, unique=True, index=True, nullable=True)
     is_admin = Column(Boolean, nullable=False, default=False)
 

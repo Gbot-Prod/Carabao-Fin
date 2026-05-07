@@ -7,7 +7,7 @@ import { resendVerificationEmail } from "@/lib/auth-client";
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") ?? "";
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error" | "already_verified">("idle");
 
   const handleResend = async () => {
     if (!email) return;
@@ -15,8 +15,12 @@ function VerifyEmailContent() {
     try {
       await resendVerificationEmail(email);
       setStatus("sent");
-    } catch {
-      setStatus("error");
+    } catch (err) {
+      if (err instanceof Error && err.message === "ALREADY_VERIFIED") {
+        setStatus("already_verified");
+      } else {
+        setStatus("error");
+      }
     }
   };
 
@@ -47,6 +51,11 @@ function VerifyEmailContent() {
         {status === "sent" && (
           <p style={{ fontSize: 13, color: "#31925d", margin: "0 0 16px", padding: "10px 14px", background: "#e8f5ec", borderRadius: 8 }}>
             Verification email resent.
+          </p>
+        )}
+        {status === "already_verified" && (
+          <p style={{ fontSize: 13, color: "#92400e", margin: "0 0 16px", padding: "10px 14px", background: "#fef3c7", borderRadius: 8 }}>
+            This email is already verified. <a href="/auth" style={{ color: "#92400e", fontWeight: 600 }}>Sign in instead.</a>
           </p>
         )}
         {status === "error" && (

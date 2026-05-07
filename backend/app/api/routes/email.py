@@ -8,7 +8,7 @@ from pydantic import BaseModel, EmailStr
 
 from app.services.email import send_verification_email
 
-router = APIRouter()
+router = APIRouter(tags=["email"])
 
 
 class VerificationEmailPayload(BaseModel):

@@ -6,7 +6,7 @@ import styles from './page.module.css';
 import { useRef, useEffect, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import OrderCard from './components/orderCard';
-import { fetchCurrentOrders, fetchTracking, type TrackingData } from '@/util/api';
+import { fetchCurrentOrders, fetchTracking, type TrackingData, type Waypoint } from '@/util/api';
 import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
 
 type TrackOrder = {
@@ -35,12 +35,16 @@ const toTrackOrder = (order: Awaited<ReturnType<typeof fetchCurrentOrders>>[numb
   status: order.status,
 });
 
+function buildBounds(waypoints: Waypoint[]): mapboxgl.LngLatBounds {
+  const bounds = new mapboxgl.LngLatBounds();
+  waypoints.forEach(w => bounds.extend([w.lng, w.lat]));
+  return bounds;
+}
+
 function Track() {
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const driverMarkerRef = useRef<mapboxgl.Marker | null>(null);
-  const destinationMarkerRef = useRef<mapboxgl.Marker | null>(null);
-  const originMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const stopMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const routeRef = useRef<RouteGeoJSON | null>(null);
   const [tracking, setTracking] = useState<TrackingData | null>(null);
   const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>([]);
@@ -85,43 +89,39 @@ function Track() {
     }
   }, []);
 
-  const placeMarkers = useCallback((
-    map: mapboxgl.Map,
-    driverLngLat: [number, number],
-    origin: TrackingData['origin'],
-    destination: TrackingData['destination'],
-  ) => {
+  const placeStopMarkers = useCallback((map: mapboxgl.Map, waypoints: Waypoint[]) => {
+    // Clear previous stop markers
+    stopMarkersRef.current.forEach(m => m.remove());
+    stopMarkersRef.current = [];
+
+    waypoints.forEach(wp => {
+      const color = wp.type === 'pickup' ? '#3b82f6' : '#ef4444';
+      const marker = new mapboxgl.Marker({ color })
+        .setLngLat([wp.lng, wp.lat])
+        .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(wp.label))
+        .addTo(map);
+      stopMarkersRef.current.push(marker);
+    });
+  }, []);
+
+  const updateDriverMarker = useCallback((map: mapboxgl.Map, lngLat: [number, number]) => {
     if (!driverMarkerRef.current) {
       const el = document.createElement('div');
       el.style.cssText = 'background:#22c55e;width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)';
       driverMarkerRef.current = new mapboxgl.Marker({ element: el })
-        .setLngLat(driverLngLat)
+        .setLngLat(lngLat)
         .setPopup(new mapboxgl.Popup({ offset: 20 }).setText('Driver'))
         .addTo(map);
     } else {
-      driverMarkerRef.current.setLngLat(driverLngLat);
-    }
-
-    if (!originMarkerRef.current) {
-      originMarkerRef.current = new mapboxgl.Marker({ color: '#3b82f6' })
-        .setLngLat([origin.lng, origin.lat])
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setText('Farm (Origin)'))
-        .addTo(map);
-    }
-
-    if (!destinationMarkerRef.current) {
-      destinationMarkerRef.current = new mapboxgl.Marker({ color: '#ef4444' })
-        .setLngLat([destination.lng, destination.lat])
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setText('Your Location'))
-        .addTo(map);
+      driverMarkerRef.current.setLngLat(lngLat);
     }
   }, []);
 
   const updateTracking = useCallback(async (data: TrackingData, map: mapboxgl.Map) => {
-    // Fetch road route once per order selection
+    // Fetch road route once per order selection, passing all ALNS-ordered waypoints
     if (!routeRef.current) {
       const token = process.env.NEXT_PUBLIC_MAPBOX_API_KEY ?? '';
-      const route = await fetchRouteGeoJSON(data.origin, data.destination, token);
+      const route = await fetchRouteGeoJSON(data.waypoints, token);
       if (route) {
         routeRef.current = route;
         const addRoute = () => drawRouteLayer(map, route);
@@ -129,26 +129,27 @@ function Track() {
         else map.once('load', addRoute);
       }
 
-      // Fit the map to show both endpoints
       const fitMap = () => {
-        map.fitBounds(
-          [[data.origin.lng, data.origin.lat], [data.destination.lng, data.destination.lat]],
-          { padding: 80, maxZoom: 14 },
-        );
+        if (data.waypoints.length > 0) {
+          map.fitBounds(buildBounds(data.waypoints), { padding: 80, maxZoom: 14 });
+        }
       };
       if (map.loaded()) fitMap();
       else map.once('load', fitMap);
+
+      const addMarkers = () => placeStopMarkers(map, data.waypoints);
+      if (map.loaded()) addMarkers();
+      else map.once('load', addMarkers);
     }
 
-    // Road-snapped position if route loaded, otherwise start at origin
     const driverLngLat: [number, number] = routeRef.current
       ? getPositionAlongRoute(routeRef.current, data.progress)
       : [data.origin.lng, data.origin.lat];
 
-    const applyMarkers = () => placeMarkers(map, driverLngLat, data.origin, data.destination);
-    if (map.loaded()) applyMarkers();
-    else map.once('load', applyMarkers);
-  }, [drawRouteLayer, placeMarkers]);
+    const applyDriver = () => updateDriverMarker(map, driverLngLat);
+    if (map.loaded()) applyDriver();
+    else map.once('load', applyDriver);
+  }, [drawRouteLayer, placeStopMarkers, updateDriverMarker]);
 
   useEffect(() => {
     const orderId = selectedOrder?.orderId;
@@ -176,10 +177,8 @@ function Track() {
       routeRef.current = null;
       driverMarkerRef.current?.remove();
       driverMarkerRef.current = null;
-      originMarkerRef.current?.remove();
-      originMarkerRef.current = null;
-      destinationMarkerRef.current?.remove();
-      destinationMarkerRef.current = null;
+      stopMarkersRef.current.forEach(m => m.remove());
+      stopMarkersRef.current = [];
       setTracking(null);
     };
   }, [selectedOrder?.orderId, updateTracking]);
@@ -190,24 +189,22 @@ function Track() {
     maximumFractionDigits: 0,
   }).format(selectedOrder?.deliveryFee ?? 0);
 
-  useEffect(() => {
-    if (!mapContainerRef.current) {
+  const mapContainerRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) {
+      mapRef.current?.remove();
+      mapRef.current = null;
       return;
     }
+    if (mapRef.current) return;
 
     mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_API_KEY || '';
     mapRef.current = new mapboxgl.Map({
-      container: mapContainerRef.current,
-      center: [121.013, 14.567],  // midpoint between Sampaloc and Taguig
+      container: node,
+      center: [121.013, 14.567],
       zoom: 12,
       projection: 'globe',
     });
-
     mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-    return () => {
-      mapRef.current?.remove();
-    };
   }, []);
 
   return (

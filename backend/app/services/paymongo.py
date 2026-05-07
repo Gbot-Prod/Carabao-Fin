@@ -7,7 +7,10 @@ from typing import Optional
 
 import requests
 
-PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
+_use_test = os.getenv("PAYMONGO_USE_TEST", "false").lower() == "true"
+PAYMONGO_SECRET_KEY = (
+    os.getenv("PAYMONGO_SECRET_TEST_KEY") if _use_test else os.getenv("PAYMONGO_SECRET_KEY")
+)
 PAYMONGO_WEBHOOK_SECRET = os.getenv("PAYMONGO_WEBHOOK_SECRET", "")
 PAYMONGO_BASE_URL = "https://api.paymongo.com/v1"
 

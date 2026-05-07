@@ -1,7 +1,7 @@
 import logging
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -11,6 +11,7 @@ from app.models.order import Order
 from app.models.user import User
 from app.schemas.payment import AttachPaymentMethodRequest, SavedCard
 from app.schemas.user import UserResponse, UserUpdate
+from app.services import r2_service
 from app.services.paymongo import (
     attach_payment_method,
     detach_payment_method,
@@ -18,7 +19,7 @@ from app.services.paymongo import (
     list_customer_payment_methods,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["users"])
 logger = logging.getLogger(__name__)
 
 
@@ -37,6 +38,27 @@ async def update_current_user_profile(
     for field, value in updates.items():
         setattr(current_user, field, value)
 
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.post("/users/me/avatar", response_model=UserResponse)
+async def upload_my_avatar(
+    avatar: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if avatar.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Avatar must be PNG, JPEG, or WebP")
+
+    data = await avatar.read()
+    try:
+        url = r2_service.upload_avatar(current_user.id, data, avatar.content_type or "image/jpeg", avatar.filename or "")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Image upload failed") from exc
+
+    current_user.profile_picture_url = url
     db.commit()
     db.refresh(current_user)
     return current_user

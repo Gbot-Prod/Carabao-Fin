@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
-import { fetchMerchantById, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce } from '@/util/api';
+import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
 
 export default function MerchantDetailPage() {
   const params = useParams<{ merchantID?: string }>();
@@ -12,6 +12,7 @@ export default function MerchantDetailPage() {
   const hasValidMerchantId = Number.isFinite(merchantID) && merchantID > 0;
 
   const [merchant, setMerchant] = useState<Merchant | undefined>(undefined);
+  const [shopPage, setShopPage] = useState<ShopPage | null>(null);
   const [error, setError] = useState<string | null>(hasValidMerchantId ? null : 'Invalid merchant ID.');
 
   useEffect(() => {
@@ -19,11 +20,15 @@ export default function MerchantDetailPage() {
 
     const loadMerchant = async () => {
       try {
-        const found = await fetchMerchantById(merchantID);
-        setMerchant(found);
+        const [found, page] = await Promise.allSettled([
+          fetchMerchantById(merchantID),
+          fetchMerchantShopPage(merchantID),
+        ]);
+        if (found.status === 'fulfilled') setMerchant(found.value);
+        else { setError('Unable to load merchant profile right now.'); setMerchant(undefined); }
+        if (page.status === 'fulfilled') setShopPage(page.value);
       } catch {
         setError('Unable to load merchant profile right now.');
-        setMerchant(undefined);
       }
     };
 
@@ -99,29 +104,43 @@ export default function MerchantDetailPage() {
       {merchant && (
         <>
           <header className={styles.merchantHeader}>
-            <div className={styles.merchantInfo}>
-              <h1 className={styles.merchantName}>{merchant.merchant_name}</h1>
-              <p className={styles.merchantLocation}>Location: {merchant.location ?? 'Not specified'}</p>
-              <p className={styles.merchantDesc}>
-                Fresh produce directly from our farm to your table.
-              </p>
+            {/* Banner */}
+            {shopPage?.banner_image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={shopPage.banner_image_url} alt="" className={styles.shopBanner} />
+            ) : (
+              <div className={styles.shopBannerPlaceholder} />
+            )}
 
-              <div className={styles.details}>
-                <div className={styles.detailItem}>
-                  <span className={styles.label}>Rating</span>
-                  <span className={styles.value}>{merchant.rating ?? 'N/A'}</span>
-                </div>
-                <div className={styles.detailItem}>
-                  <span className={styles.label}>Delivery</span>
-                  <span className={styles.value}>{merchant.delivery_time ? `${merchant.delivery_time} day(s)` : 'N/A'}</span>
-                </div>
-                <div className={styles.detailItem}>
-                  <span className={styles.label}>Hours</span>
-                  <span className={styles.value}>{merchant.operating_hours ?? 'Not available'}</span>
-                </div>
-                <div className={styles.detailItem}>
-                  <span className={styles.label}>Contact</span>
-                  <span className={styles.value}>{merchant.contact_number}</span>
+            {/* Logo + info */}
+            <div className={styles.merchantHeaderBody}>
+              {shopPage?.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={shopPage.logo_url} alt={merchant.merchant_name} className={styles.merchantImage} />
+              ) : null}
+              <div className={styles.merchantInfo}>
+                <h1 className={styles.merchantName}>{merchant.merchant_name}</h1>
+                <p className={styles.merchantLocation}>Location: {merchant.location ?? 'Not specified'}</p>
+                {(shopPage?.description) && (
+                  <p className={styles.merchantDesc}>{shopPage.description}</p>
+                )}
+                <div className={styles.details}>
+                  <div className={styles.detailItem}>
+                    <span className={styles.label}>Rating</span>
+                    <span className={styles.value}>{merchant.rating ?? 'N/A'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.label}>Delivery</span>
+                    <span className={styles.value}>{merchant.delivery_time ? `${merchant.delivery_time} day(s)` : 'N/A'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.label}>Hours</span>
+                    <span className={styles.value}>{merchant.operating_hours ?? 'Not available'}</span>
+                  </div>
+                  <div className={styles.detailItem}>
+                    <span className={styles.label}>Contact</span>
+                    <span className={styles.value}>{merchant.contact_number}</span>
+                  </div>
                 </div>
               </div>
             </div>

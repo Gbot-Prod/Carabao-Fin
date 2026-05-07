@@ -9,10 +9,13 @@ import {
   fetchMyProfile,
   fetchMerchantProduce,
   fetchMerchantShopPage,
+  createMyShopPage,
+  updateMyShopPage,
+  uploadBannerImage,
+  uploadShopLogo,
   createProduce,
   updateProduce,
   deleteProduce,
-  uploadBannerImage,
   uploadProduceImage,
   deleteMyMerchant,
   type MerchantPerformance,
@@ -131,6 +134,12 @@ export default function MerchantDashboardPage() {
 
   const [shopPage, setShopPage] = useState<ShopPage | null>(null);
   const [bannerUploading, setBannerUploading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [shopPageEditing, setShopPageEditing] = useState(false);
+  const [shopPageDraft, setShopPageDraft] = useState({ title: "", description: "" });
+  const [shopPageSaving, setShopPageSaving] = useState(false);
+  const [shopPageCreating, setShopPageCreating] = useState(false);
+  const [createDraft, setCreateDraft] = useState({ title: "", description: "" });
 
   const [produces, setProduces] = useState<Produce[]>([]);
   const [produceLoading, setProduceLoading] = useState(false);
@@ -230,6 +239,51 @@ export default function MerchantDashboardPage() {
     }
   };
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true);
+    try {
+      const updated = await uploadShopLogo(file);
+      setShopPage(updated);
+    } catch { /* silently fail */ }
+    finally { setLogoUploading(false); e.target.value = ""; }
+  };
+
+  const startEditShopPage = () => {
+    setShopPageDraft({ title: shopPage?.title ?? "", description: shopPage?.description ?? "" });
+    setShopPageEditing(true);
+  };
+
+  const handleSaveShopPage = async () => {
+    setShopPageSaving(true);
+    try {
+      const updated = await updateMyShopPage({
+        title: shopPageDraft.title.trim() || undefined,
+        description: shopPageDraft.description.trim() || null,
+      });
+      setShopPage(updated);
+      setShopPageEditing(false);
+    } catch { /* silently fail */ }
+    finally { setShopPageSaving(false); }
+  };
+
+  const handleCreateShopPage = async () => {
+    if (!createDraft.title.trim()) return;
+    setShopPageCreating(true);
+    const slug = createDraft.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    try {
+      const created = await createMyShopPage({
+        title: createDraft.title.trim(),
+        slug,
+        description: createDraft.description.trim() || null,
+      });
+      setShopPage(created);
+      setCreateDraft({ title: "", description: "" });
+    } catch { /* silently fail */ }
+    finally { setShopPageCreating(false); }
+  };
+
   const handleProduceImageUpload = async (produceId: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -324,8 +378,12 @@ export default function MerchantDashboardPage() {
     return (
       <div className={styles.page}>
         <section className={styles.card}>
-          <h1 className={styles.title}>Merchant Dashboard</h1>
-          <p className={styles.subtitle}>Loading your performance data…</p>
+          <header className={styles.header}>
+            <div>
+              <h1 className={styles.title}>Merchant Dashboard</h1>
+              <p className={styles.subtitle}>Loading your performance data…</p>
+            </div>
+          </header>
         </section>
       </div>
     );
@@ -335,16 +393,20 @@ export default function MerchantDashboardPage() {
     return (
       <div className={styles.page}>
         <section className={styles.card}>
-          <h1 className={styles.title}>Merchant Dashboard</h1>
-          <p className={styles.subtitle}>You don&apos;t have a merchant profile yet.</p>
-          <div className={styles.actions}>
-            <Link className={styles.primaryBtn} href="/merchantOnboarding">
-              Apply as Merchant
-            </Link>
-            <Link className={styles.secondaryBtn} href="/profile">
-              Back to Profile
-            </Link>
-          </div>
+          <header className={styles.header}>
+            <div>
+              <h1 className={styles.title}>Merchant Dashboard</h1>
+              <p className={styles.subtitle}>You don&apos;t have a merchant profile yet.</p>
+              <div className={styles.actions}>
+                <Link className={styles.primaryBtn} href="/merchantOnboarding">
+                  Apply as Merchant
+                </Link>
+                <Link className={styles.secondaryBtn} href="/profile">
+                  Back to Profile
+                </Link>
+              </div>
+            </div>
+          </header>
         </section>
       </div>
     );
@@ -428,13 +490,57 @@ export default function MerchantDashboardPage() {
           </>
         )}
 
-        {/* Shop banner */}
-        <section className={styles.bannerSection}>
-          <div className={styles.produceSectionHeader}>
-            <h2 className={styles.panelTitle} style={{ margin: 0 }}>Shop Banner</h2>
-            {shopPage && (
-              <label className={styles.uploadBtn}>
-                {bannerUploading ? "Uploading…" : "Upload Banner"}
+        {/* Shop page editor */}
+        <section className={styles.shopPageSection}>
+          <h2 className={styles.panelTitle} style={{ margin: "0 0 14px" }}>Shop Page</h2>
+
+          {!shopPage ? (
+            <div className={styles.shopCreateForm}>
+              <p className={styles.produceEmpty} style={{ marginBottom: 12 }}>
+                Set up your public shop page so customers can find you.
+              </p>
+              <label className={styles.formLabel}>
+                Title *
+                <input
+                  className={styles.formInput}
+                  value={createDraft.title}
+                  onChange={(e) => setCreateDraft((d) => ({ ...d, title: e.target.value }))}
+                  placeholder="e.g. Dela Cruz Farm"
+                />
+              </label>
+              <label className={styles.formLabel} style={{ marginTop: 8 }}>
+                Description
+                <textarea
+                  className={styles.formInput}
+                  rows={2}
+                  value={createDraft.description}
+                  onChange={(e) => setCreateDraft((d) => ({ ...d, description: e.target.value }))}
+                  placeholder="Short description shown on your shop page"
+                />
+              </label>
+              <div className={styles.formActions} style={{ marginTop: 10 }}>
+                <button
+                  className={styles.primaryBtn}
+                  disabled={shopPageCreating || !createDraft.title.trim()}
+                  onClick={() => void handleCreateShopPage()}
+                >
+                  {shopPageCreating ? "Creating…" : "Create Shop Page"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.shopEditor}>
+              {/* Banner — full clickable area */}
+              <label className={styles.shopBannerWrap} title="Click to change banner">
+                {bannerUploading ? (
+                  <div className={styles.shopBannerEmpty}>Uploading…</div>
+                ) : shopPage.banner_image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={shopPage.banner_image_url} alt="Shop banner" className={styles.shopBannerImg} />
+                ) : (
+                  <div className={styles.shopBannerEmpty}>Click to upload a banner image</div>
+                )}
+                <div className={styles.shopBannerOverlay}>Change Banner</div>
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
@@ -443,22 +549,64 @@ export default function MerchantDashboardPage() {
                   onChange={(e) => void handleBannerUpload(e)}
                 />
               </label>
-            )}
-          </div>
-          {!shopPage ? (
-            <p className={styles.produceEmpty}>
-              No shop page yet.{" "}
-              <Link className={styles.inlineLink} href="/merchantOnboarding">Create your shop page</Link>
-              {" "}to add a banner.
-            </p>
-          ) : (
-            <div className={styles.bannerPreviewWrap}>
-              {shopPage.banner_image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={shopPage.banner_image_url} alt="Shop banner" className={styles.bannerImg} />
-              ) : (
-                <div className={styles.bannerEmpty}>No banner — upload one above</div>
-              )}
+
+              {/* Logo + info row */}
+              <div className={styles.shopMetaRow}>
+                {/* Square logo */}
+                <label className={styles.shopLogoWrap} title="Click to change logo">
+                  {logoUploading ? (
+                    <div className={styles.shopLogoPlaceholder}>…</div>
+                  ) : shopPage.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={shopPage.logo_url} alt="Shop logo" className={styles.shopLogoImg} />
+                  ) : (
+                    <div className={styles.shopLogoPlaceholder}>Logo</div>
+                  )}
+                  <div className={styles.shopLogoOverlay}>Change</div>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    style={{ display: "none" }}
+                    disabled={logoUploading}
+                    onChange={(e) => void handleLogoUpload(e)}
+                  />
+                </label>
+
+                {/* Title / description */}
+                {shopPageEditing ? (
+                  <div className={styles.shopInfoForm}>
+                    <label className={styles.formLabel}>
+                      Title
+                      <input
+                        className={styles.formInput}
+                        value={shopPageDraft.title}
+                        onChange={(e) => setShopPageDraft((d) => ({ ...d, title: e.target.value }))}
+                      />
+                    </label>
+                    <label className={styles.formLabel} style={{ marginTop: 8 }}>
+                      Description
+                      <textarea
+                        className={styles.formInput}
+                        rows={2}
+                        value={shopPageDraft.description}
+                        onChange={(e) => setShopPageDraft((d) => ({ ...d, description: e.target.value }))}
+                      />
+                    </label>
+                    <div className={styles.formActions} style={{ marginTop: 8 }}>
+                      <button className={styles.primaryBtn} disabled={shopPageSaving} onClick={() => void handleSaveShopPage()}>
+                        {shopPageSaving ? "Saving…" : "Save"}
+                      </button>
+                      <button className={styles.secondaryBtn} onClick={() => setShopPageEditing(false)}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.shopInfoView}>
+                    <strong className={styles.shopInfoTitle}>{shopPage.title}</strong>
+                    {shopPage.description && <p className={styles.shopInfoDesc}>{shopPage.description}</p>}
+                    <button className={styles.uploadBtn} style={{ marginTop: 8 }} onClick={startEditShopPage}>Edit title & description</button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </section>
@@ -577,9 +725,6 @@ export default function MerchantDashboardPage() {
         <footer className={styles.footer}>
           <Link className={styles.secondaryBtn} href="/track">
             View orders
-          </Link>
-          <Link className={styles.secondaryBtn} href="/merchantOnboarding">
-            Update merchant details
           </Link>
         </footer>
 

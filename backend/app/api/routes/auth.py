@@ -15,7 +15,7 @@ from app.core.security import create_access_token
 from app.models.mobile_credential import MobileCredential
 from app.models.user import User
 
-router = APIRouter()
+router = APIRouter(tags=["auth"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

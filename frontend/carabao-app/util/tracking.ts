@@ -8,15 +8,16 @@ export type LatLng = { lat: number; lng: number };
 
 /**
  * Fetches a road-following route from the Mapbox Directions API.
+ * Accepts 2+ waypoints; Mapbox will route through all of them in order.
  * Returns null if the request fails or no route is found.
- * Pure fetch — works in both Next.js and React Native.
  */
 export async function fetchRouteGeoJSON(
-  origin: LatLng,
-  destination: LatLng,
+  waypoints: LatLng[],
   accessToken: string,
 ): Promise<RouteGeoJSON | null> {
-  const coords = `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
+  if (waypoints.length < 2) return null;
+
+  const coords = waypoints.map(w => `${w.lng},${w.lat}`).join(';');
   const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&overview=full&access_token=${accessToken}`;
 
   try {
@@ -33,7 +34,6 @@ export async function fetchRouteGeoJSON(
 
 /**
  * Returns the [lng, lat] coordinate at `progress` (0–1) along a road route.
- * Uses turf.along so the point stays on the road geometry, not a straight line.
  */
 export function getPositionAlongRoute(
   route: RouteGeoJSON,

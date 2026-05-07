@@ -18,7 +18,7 @@ from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdat
 from app.services.merchant_service import create_merchant
 from app.services import r2_service
 
-router = APIRouter()
+router = APIRouter(tags=["merchants"])
 
 
 @router.post("/merchants/me", response_model=MerchantResponse)
@@ -249,7 +249,7 @@ async def create_my_shoppage(
     if existing_slug:
         raise HTTPException(status_code=400, detail="Slug already taken")
 
-    shop_page = ShopPage(merchant_id=merchant.id, **shop_page_in.model_dump(exclude={"merchant_id"}))
+    shop_page = ShopPage(merchant_id=merchant.id, **shop_page_in.model_dump())
     db.add(shop_page)
     db.commit()
     db.refresh(shop_page)
@@ -279,6 +279,35 @@ async def update_my_shoppage(
     for field, value in updates.items():
         setattr(shop_page, field, value)
 
+    db.commit()
+    db.refresh(shop_page)
+    return shop_page
+
+
+@router.post("/merchants/me/shoppage/logo", response_model=ShopPageResponse)
+async def upload_my_shoppage_logo(
+    logo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+    shop_page = merchant.shop_page
+    if not shop_page:
+        raise HTTPException(status_code=404, detail="Shop page not found — create one first")
+
+    if logo.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Logo must be PNG, JPEG, or WebP")
+
+    data = await logo.read()
+    try:
+        url = r2_service.upload_shop_logo(merchant.id, data, logo.content_type or "image/jpeg", logo.filename or "")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Image upload failed") from exc
+
+    shop_page.logo_url = url
     db.commit()
     db.refresh(shop_page)
     return shop_page

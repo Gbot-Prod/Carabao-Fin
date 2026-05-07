@@ -36,18 +36,69 @@
 
 /* ─── Avatar ─────────────────────────────────────────────────────────────────── */
 .avatarWrap {
+  position: relative;
   width: 80px;
   height: 80px;
   border-radius: 50%;
   overflow: hidden;
   border: 3px solid #d7e7da;
   flex-shrink: 0;
+  cursor: pointer;
+  display: block;
+}
+
+.avatarWrap:hover .avatarOverlay {
+  opacity: 1;
 }
 
 .avatar {
   width: 100%;
   height: 100%;
   display: block;
+  object-fit: cover;
+}
+
+.avatarPlaceholder {
+  width: 100%;
+  height: 100%;
+  background: #d7e7da;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatarSpinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(49, 146, 93, 0.3);
+  border-top-color: #31925d;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.avatarOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(23, 61, 37, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  border-radius: 50%;
+}
+
+.avatarOverlayText {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* ─── Name block ─────────────────────────────────────────────────────────────── */
@@ -580,6 +631,38 @@
 }
 
 .formGroupFull { grid-column: 1 / -1; }
+
+.phoneRow {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.phonePrefix {
+  font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+  border: 1px solid #c4dbc8;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 14px;
+  color: #4b594d;
+  background: #f3f8f4;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+
+.phoneInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.locationSelect {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .saveError {
   margin: 12px 0 0;

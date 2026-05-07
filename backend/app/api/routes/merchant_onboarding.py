@@ -17,7 +17,7 @@ from app.schemas.merchant import MerchantPageBase, MerchantResponse
 from app.schemas.merchant_application import MerchantApplicationResponse, MerchantOnboardingPayload
 from app.services.merchant_service import create_merchant
 
-router = APIRouter()
+router = APIRouter(tags=["merchant-onboarding"])
 
 
 @router.get("/merchant-applications/me", response_model=MerchantApplicationResponse)
