@@ -10,7 +10,7 @@ function PaymentSuccessContent() {
   const orderId = searchParams.get("order_id");
 
   const [transaction, setTransaction] = useState<TransactionStatusResponse | null>(null);
-  const [status, setStatus] = useState<"polling" | "paid" | "failed" | "not_found">("polling");
+  const [status, setStatus] = useState<"polling" | "paid" | "failed" | "not_found" | "timeout">("polling");
 
   useEffect(() => {
     if (!orderId) {
@@ -19,11 +19,15 @@ function PaymentSuccessContent() {
     }
 
     let attempts = 0;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let cancelled = false;
     const MAX_ATTEMPTS = 10;
 
     const poll = async () => {
+      if (cancelled) return;
       try {
         const txn = await fetchTransactionByOrder(Number(orderId));
+        if (cancelled) return;
         setTransaction(txn);
 
         if (txn.status === "paid") {
@@ -40,14 +44,17 @@ function PaymentSuccessContent() {
 
       attempts += 1;
       if (attempts < MAX_ATTEMPTS) {
-        setTimeout(() => void poll(), 3000);
+        timeoutId = setTimeout(() => void poll(), 3000);
       } else {
-        // Webhook may be delayed — show success optimistically since PayMongo confirmed
-        setStatus("paid");
+        setStatus("timeout");
       }
     };
 
     void poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [orderId]);
 
   if (status === "not_found") {
@@ -79,6 +86,21 @@ function PaymentSuccessContent() {
         <div style={styles.spinner} />
         <h1 style={styles.heading}>Confirming your payment…</h1>
         <p style={styles.subtext}>This usually takes a few seconds.</p>
+      </div>
+    );
+  }
+
+  if (status === "timeout") {
+    return (
+      <div style={styles.container}>
+        <div style={{ ...styles.badge, background: "#fef9c3", color: "#854d0e" }}>
+          Payment Pending
+        </div>
+        <h1 style={styles.heading}>Still confirming your payment</h1>
+        <p style={styles.subtext}>
+          This is taking longer than usual. Check your order history in a few minutes — if payment went through it will appear there.
+        </p>
+        <Link href="/history" style={styles.primaryButton}>View Order History</Link>
       </div>
     );
   }

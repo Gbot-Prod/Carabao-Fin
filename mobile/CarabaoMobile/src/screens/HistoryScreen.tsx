@@ -1,41 +1,40 @@
 // src/screens/HistoryScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, FlatList, Image, TouchableOpacity,
-  StyleSheet, SafeAreaView,
+  View, Text, FlatList, TouchableOpacity,
+  StyleSheet, SafeAreaView, ActivityIndicator,
 } from 'react-native';
-import { mockOrders } from '../lib/mockData';
-import { Order } from '../types';
+import { useAuth } from '../lib/AuthContext';
+import { api, type ApiHistoryOrder } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge } from '../components/UI';
 
-function HistoryCard({ order }: { order: Order }) {
+function HistoryCard({ order }: { order: ApiHistoryOrder }) {
   const [expanded, setExpanded] = useState(false);
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(n);
 
-  const statusColor = (s: string): 'green' | 'blue' | 'yellow' | 'gray' => {
-    if (s === 'Delivered') return 'green';
-    if (s === 'Shipped') return 'blue';
-    if (s === 'Processing') return 'yellow';
+  const badgeColor = (s: string): 'green' | 'blue' | 'yellow' | 'gray' => {
+    const lower = s.toLowerCase();
+    if (lower === 'delivered') return 'green';
+    if (lower === 'shipped') return 'blue';
+    if (lower === 'processing') return 'yellow';
     return 'gray';
   };
 
   return (
-    <TouchableOpacity
-      onPress={() => setExpanded((p) => !p)}
-      activeOpacity={0.8}
-      style={styles.card}
-    >
+    <TouchableOpacity onPress={() => setExpanded((p) => !p)} activeOpacity={0.8} style={styles.card}>
       <View style={styles.cardHeader}>
-        <Image source={{ uri: order.image }} style={styles.thumb} />
+        <View style={styles.thumb}>
+          <Text style={{ fontSize: 22 }}>🧾</Text>
+        </View>
         <View style={styles.cardInfo}>
           <Text style={styles.merchant}>{order.merchant}</Text>
-          <Text style={styles.orderId}>{order.id}</Text>
-          <Text style={styles.date}>📅 {order.dateBought}</Text>
+          <Text style={styles.orderId}>#{order.order_id}</Text>
+          <Text style={styles.date}>📅 {order.order_date}</Text>
         </View>
         <View style={styles.cardRight}>
-          <Badge label={order.status} color={statusColor(order.status)} />
+          <Badge label={order.status} color={badgeColor(order.status)} />
           <Text style={styles.chevron}>{expanded ? '▲' : '▼'}</Text>
         </View>
       </View>
@@ -44,21 +43,14 @@ function HistoryCard({ order }: { order: Order }) {
         <View style={styles.details}>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Order Total</Text>
-            <Text style={styles.detailValue}>{fmt(order.totalAmount)}</Text>
+            <Text style={styles.detailValue}>{fmt(order.total_amount)}</Text>
           </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Delivery Fee</Text>
-            <Text style={styles.detailValue}>{fmt(order.deliveryFee)}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>ETA</Text>
-            <Text style={styles.detailValue}>
-              {order.shipped ? order.timeOfArrival : 'Pending shipment'}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.reorderBtn}>
-            <Text style={styles.reorderText}>🔁  Reorder</Text>
-          </TouchableOpacity>
+          {order.items?.length > 0 && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Items</Text>
+              <Text style={styles.detailValue}>{order.items.length} item{order.items.length !== 1 ? 's' : ''}</Text>
+            </View>
+          )}
         </View>
       )}
     </TouchableOpacity>
@@ -66,6 +58,41 @@ function HistoryCard({ order }: { order: Order }) {
 }
 
 export default function HistoryScreen() {
+  const { token } = useAuth();
+  const [orders, setOrders] = useState<ApiHistoryOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const data = await api.orders.history(token);
+        setOrders(data);
+      } catch {
+        // Show empty state on error
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [token]);
+
+  const totalSpent = orders.reduce((s, o) => s + o.total_amount, 0);
+  const delivered = orders.filter((o) => o.status.toLowerCase() === 'delivered').length;
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Order History</Text>
+        </View>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
@@ -74,8 +101,8 @@ export default function HistoryScreen() {
       </View>
 
       <FlatList
-        data={mockOrders}
-        keyExtractor={(item) => item.id}
+        data={orders}
+        keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => <HistoryCard order={item} />}
@@ -89,21 +116,17 @@ export default function HistoryScreen() {
         ListHeaderComponent={
           <View style={styles.summaryBanner}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryNum}>{mockOrders.length}</Text>
+              <Text style={styles.summaryNum}>{orders.length}</Text>
               <Text style={styles.summaryLabel}>Total Orders</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryNum}>
-                {mockOrders.filter((o) => o.status === 'Delivered').length}
-              </Text>
+              <Text style={styles.summaryNum}>{delivered}</Text>
               <Text style={styles.summaryLabel}>Delivered</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryNum}>
-                ₱{mockOrders.reduce((s, o) => s + o.totalAmount, 0).toLocaleString()}
-              </Text>
+              <Text style={styles.summaryNum}>₱{totalSpent.toLocaleString()}</Text>
               <Text style={styles.summaryLabel}>Total Spent</Text>
             </View>
           </View>
@@ -146,7 +169,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start',
     gap: Spacing.md, padding: Spacing.md,
   },
-  thumb: { width: 56, height: 56, borderRadius: Radius.md },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  thumb: { width: 56, height: 56, borderRadius: Radius.md, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   cardInfo: { flex: 1, gap: 2 },
   merchant: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   orderId: { fontSize: FontSize.xs, color: Colors.textMuted, fontFamily: 'monospace' },

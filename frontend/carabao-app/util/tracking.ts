@@ -22,12 +22,19 @@ export async function fetchRouteGeoJSON(
 
   try {
     const res = await fetch(url);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error('[tracking] Directions API error:', res.status, await res.text());
+      return null;
+    }
     const data = (await res.json()) as { routes?: { geometry: LineString }[] };
     const route = data.routes?.[0];
-    if (!route) return null;
+    if (!route) {
+      console.error('[tracking] Directions API returned no routes for coords:', coords);
+      return null;
+    }
     return { type: 'Feature', properties: {}, geometry: route.geometry };
-  } catch {
+  } catch (err) {
+    console.error('[tracking] Directions API fetch threw:', err);
     return null;
   }
 }

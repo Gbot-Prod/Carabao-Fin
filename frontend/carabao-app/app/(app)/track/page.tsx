@@ -46,6 +46,7 @@ function Track() {
   const driverMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const stopMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const routeRef = useRef<RouteGeoJSON | null>(null);
+  const stopMarkersPlacedRef = useRef(false);
   const [tracking, setTracking] = useState<TrackingData | null>(null);
   const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>([]);
   const [selectedOrderIndex, setSelectedOrderIndex] = useState(0);
@@ -118,37 +119,31 @@ function Track() {
   }, []);
 
   const updateTracking = useCallback(async (data: TrackingData, map: mapboxgl.Map) => {
-    // Fetch road route once per order selection, passing all ALNS-ordered waypoints
+    // Place stop markers once per order — independent of whether the route loads.
+    if (!stopMarkersPlacedRef.current && data.waypoints.length > 0) {
+      placeStopMarkers(map, data.waypoints);
+      stopMarkersPlacedRef.current = true;
+
+      // Fit bounds to all waypoints on first render.
+      map.fitBounds(buildBounds(data.waypoints), { padding: 80, maxZoom: 14 });
+    }
+
+    // Fetch road route once per order selection, passing all ALNS-ordered waypoints.
     if (!routeRef.current) {
       const token = process.env.NEXT_PUBLIC_MAPBOX_API_KEY ?? '';
+      console.debug('[tracking] fetching route for waypoints:', data.waypoints);
       const route = await fetchRouteGeoJSON(data.waypoints, token);
       if (route) {
         routeRef.current = route;
-        const addRoute = () => drawRouteLayer(map, route);
-        if (map.loaded()) addRoute();
-        else map.once('load', addRoute);
+        drawRouteLayer(map, route);
       }
-
-      const fitMap = () => {
-        if (data.waypoints.length > 0) {
-          map.fitBounds(buildBounds(data.waypoints), { padding: 80, maxZoom: 14 });
-        }
-      };
-      if (map.loaded()) fitMap();
-      else map.once('load', fitMap);
-
-      const addMarkers = () => placeStopMarkers(map, data.waypoints);
-      if (map.loaded()) addMarkers();
-      else map.once('load', addMarkers);
     }
 
     const driverLngLat: [number, number] = routeRef.current
       ? getPositionAlongRoute(routeRef.current, data.progress)
       : [data.origin.lng, data.origin.lat];
 
-    const applyDriver = () => updateDriverMarker(map, driverLngLat);
-    if (map.loaded()) applyDriver();
-    else map.once('load', applyDriver);
+    updateDriverMarker(map, driverLngLat);
   }, [drawRouteLayer, placeStopMarkers, updateDriverMarker]);
 
   useEffect(() => {
@@ -175,6 +170,7 @@ function Track() {
       if (map?.getLayer('driver-route-line')) map.removeLayer('driver-route-line');
       if (map?.getSource('driver-route')) map.removeSource('driver-route');
       routeRef.current = null;
+      stopMarkersPlacedRef.current = false;
       driverMarkerRef.current?.remove();
       driverMarkerRef.current = null;
       stopMarkersRef.current.forEach(m => m.remove());
@@ -200,9 +196,9 @@ function Track() {
     mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_API_KEY || '';
     mapRef.current = new mapboxgl.Map({
       container: node,
+      style: 'mapbox://styles/mapbox/streets-v12',
       center: [121.013, 14.567],
       zoom: 12,
-      projection: 'globe',
     });
     mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
   }, []);

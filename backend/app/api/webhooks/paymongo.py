@@ -5,7 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
+from app.models.cart import Cart
 from app.models.order import Order
+from app.models.order_history import OrderHistory
 from app.models.transaction import Transaction
 from app.services.paymongo import PAYMONGO_WEBHOOK_SECRET, verify_webhook_signature
 
@@ -87,9 +89,21 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
     txn.paymongo_payment_id = payment_id
     txn.paid_at = datetime.now(timezone.utc)
 
+    cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()
+    if cart:
+        cart.items = []
+        cart.total_items = 0
+        cart.total_price = 0
+
     order = db.query(Order).filter(Order.id == txn.order_id).first()
     if order:
         order.status = "processing"
+        if order.order_history_id:
+            history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
+            if history:
+                history.total_orders = (history.total_orders or 0) + 1
+                history.total_spent = (history.total_spent or 0) + order.total_price
+                history.last_order_at = datetime.now(timezone.utc)
 
     db.commit()
     logger.info("Transaction %s marked paid, order %s -> processing", txn.id, txn.order_id)

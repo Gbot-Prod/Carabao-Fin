@@ -9,6 +9,8 @@ from app.models.current_orders import CurrentOrder
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.order_history import OrderHistory
+from app.models.produce import Produce
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.order import CurrentOrderResponse, OrderItemResponse, PlaceOrderRequest, PlaceOrderResponse
 
@@ -17,12 +19,12 @@ from ._order_helpers import (
     get_or_create_cart,
     get_or_create_order_history,
     get_order_history,
-    now_utc,
     resolve_merchant_from_items,
     to_current_order_item,
     to_current_order_item_from_order,
     to_order_history_item,
     _to_int,
+    _extract_item_int,
 )
 
 router = APIRouter(tags=["orders"])
@@ -44,6 +46,30 @@ async def place_order_from_cart(
     merchant = resolve_merchant_from_items(db, cart_items)
     service_fee = max(_to_int(payload.service_fee, 40), 0)
     total_price = max(_to_int(cart.total_price, 0), 0) + service_fee
+
+    for item in cart_items:
+        if not isinstance(item, dict):
+            continue
+        produce_id = _extract_item_int(item, "produce_id", "produceId", "id")
+        if produce_id is None:
+            continue
+        quantity = max(_to_int(item.get("quantity"), 0), 0)
+        if quantity == 0:
+            continue
+        produce = (
+            db.query(Produce)
+            .filter(Produce.id == produce_id)
+            .with_for_update()
+            .first()
+        )
+        if produce is None:
+            raise HTTPException(status_code=400, detail=f"Produce ID {produce_id} not found")
+        if produce.stock_quantity < quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock for '{produce.name}': {produce.stock_quantity} available, {quantity} requested",
+            )
+        produce.stock_quantity -= quantity
 
     order = Order(
         order_history_id=history.id,
@@ -69,14 +95,6 @@ async def place_order_from_cart(
         image=payload.image,
     )
     db.add(current_order)
-
-    history.total_orders = _to_int(history.total_orders, 0) + 1
-    history.total_spent = _to_int(history.total_spent, 0) + total_price
-    history.last_order_at = now_utc()
-
-    cart.items = []
-    cart.total_items = 0
-    cart.total_price = 0
 
     db.commit()
     db.refresh(order)
@@ -157,9 +175,12 @@ async def get_merchant_current_orders(
 
     current_orders = (
         db.query(CurrentOrder)
+        .join(Order, CurrentOrder.order_id == Order.id)
+        .join(Transaction, Transaction.order_id == Order.id)
         .filter(
             CurrentOrder.merchant_id == merchant.id,
             CurrentOrder.status.in_(ACTIVE_ORDER_STATUSES),
+            Transaction.status == "paid",
         )
         .order_by(CurrentOrder.created_at.asc())
         .all()

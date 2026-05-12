@@ -5,7 +5,6 @@ from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
-
 class MerchantOnboardingPayload(BaseModel):
     # Step 1
     merchant_name: str = Field(min_length=1)

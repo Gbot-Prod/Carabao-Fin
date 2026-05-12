@@ -6,6 +6,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCart } from '../lib/CartContext';
+import { useAuth } from '../lib/AuthContext';
+import { api } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Button, Divider, StatRow } from '../components/UI';
 
@@ -22,9 +24,10 @@ const TIME_WINDOWS = [
 export default function CheckoutScreen() {
   const router = useRouter();
   const { items, total, clearCart } = useCart();
+  const { token } = useAuth();
   const [payment, setPayment] = useState('cod');
   const [timeWindow, setTimeWindow] = useState(TIME_WINDOWS[0]);
-  const [address, setAddress] = useState('Brgy. Poblacion, Science City of Munoz, Nueva Ecija');
+  const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -32,13 +35,27 @@ export default function CheckoutScreen() {
   const grandTotal = total + serviceFee;
 
   const handlePlaceOrder = async () => {
+    if (!token) {
+      Alert.alert('Sign In Required', 'Please sign in to place an order.');
+      return;
+    }
     setLoading(true);
-    // Simulate API call
-    await new Promise((r) => setTimeout(r, 800));
-    setLoading(false);
-    clearCart();
-    const orderId = `CB-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000 + 1000)}`;
-    router.replace({ pathname: '/confirmation', params: { orderId } });
+    try {
+      const result = await api.orders.place(token, {
+        delivery_address: address.trim() || null,
+        delivery_time: timeWindow,
+        payment_method: payment,
+        notes: notes.trim() || null,
+        service_fee: serviceFee,
+      });
+      clearCart();
+      router.replace({ pathname: '/confirmation', params: { orderId: result.order_reference } });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to place order';
+      Alert.alert('Order Failed', message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

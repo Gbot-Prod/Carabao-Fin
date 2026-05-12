@@ -179,7 +179,7 @@ Set in `backend/.env` and in Railway. Same key as the frontend's `NEXT_PUBLIC_MA
 
 ---
 
-## What still needs to happen
+## What still needs to happen 
 
 1. **Rider depot position** — `compute_route()` currently uses the merchant's geocoords as the depot (i.e. rider starts at pickup). When the driver app exists, replace this with the rider's live GPS so ALNS optimises from their actual position. Requires a `PATCH /tracking/{order_id}/location` endpoint and a `driver_lat`/`driver_lng` field on `CurrentOrder` (or a separate `DriverLocation` table).
 2. **Multi-order batching** — the endpoint currently solves one order at a time. The real value of ALNS is over a batch of orders assigned to one rider. A future endpoint (e.g. `GET /tracking/batch/{rider_id}`) would pull all `CurrentOrder` rows for a rider, build one `Stop` per order, and let ALNS sequence them optimally. The solver is already built for this — only the endpoint and batching logic are missing.

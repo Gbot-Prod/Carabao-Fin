@@ -53,10 +53,13 @@ async def upload_my_avatar(
         raise HTTPException(status_code=400, detail="Avatar must be PNG, JPEG, or WebP")
 
     data = await avatar.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Avatar must be under 5 MB")
     try:
         url = r2_service.upload_avatar(current_user.id, data, avatar.content_type or "image/jpeg", avatar.filename or "")
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Image upload failed") from exc
+        logger.error("R2 avatar upload failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=502, detail=f"Image upload failed: {exc}") from exc
 
     current_user.profile_picture_url = url
     db.commit()

@@ -1,12 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.current_orders import CurrentOrder
 from app.models.merchant import Merchant
+from app.models.merchant_application import MerchantApplication
 from app.models.order import Order
 from app.models.produce import Produce
 from app.models.shopPage import ShopPage
@@ -36,7 +37,18 @@ async def create_my_merchant_route(
 
 @router.get("/merchants", response_model=list[MerchantResponse])
 async def list_merchants(db: Session = Depends(get_db)):
-    return db.query(Merchant).order_by(Merchant.id.asc()).all()
+    return (
+        db.query(Merchant)
+        .outerjoin(MerchantApplication, MerchantApplication.user_id == Merchant.user_id)
+        .filter(
+            or_(
+                MerchantApplication.id.is_(None),
+                MerchantApplication.status == "approved",
+            )
+        )
+        .order_by(Merchant.id.asc())
+        .all()
+    )
 
 
 @router.get("/merchants/{merchant_id}", response_model=MerchantResponse)
@@ -302,6 +314,8 @@ async def upload_my_shoppage_logo(
         raise HTTPException(status_code=400, detail="Logo must be PNG, JPEG, or WebP")
 
     data = await logo.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Logo must be under 5 MB")
     try:
         url = r2_service.upload_shop_logo(merchant.id, data, logo.content_type or "image/jpeg", logo.filename or "")
     except Exception as exc:
@@ -331,6 +345,8 @@ async def upload_my_shoppage_banner(
         raise HTTPException(status_code=400, detail="Banner must be PNG, JPEG, or WebP")
 
     data = await banner.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Banner must be under 5 MB")
     try:
         url = r2_service.upload_banner(merchant.id, data, banner.content_type or "image/jpeg", banner.filename or "")
     except Exception as exc:
@@ -361,6 +377,8 @@ async def upload_produce_image(
         raise HTTPException(status_code=400, detail="Image must be PNG, JPEG, or WebP")
 
     data = await image.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image must be under 5 MB")
     try:
         url = r2_service.upload_produce_image(merchant.id, produce_id, data, image.content_type or "image/jpeg", image.filename or "")
     except Exception as exc:

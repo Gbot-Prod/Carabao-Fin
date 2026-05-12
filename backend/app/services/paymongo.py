@@ -173,8 +173,9 @@ def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
     except ValueError:
         return False
 
-    # Basic replay protection
-    if abs(int(time.time()) - timestamp) > 300:
+    # Allow up to 24 h to accommodate PayMongo retry attempts; the webhook
+    # handler's idempotency check prevents double-processing.
+    if abs(int(time.time()) - timestamp) > 86400:
         return False
 
     signed_payload = f"{timestamp_str}.".encode("utf-8") + raw_body

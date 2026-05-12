@@ -60,13 +60,11 @@ def get_or_create_order_history(db: Session, user_id: int) -> OrderHistory:
 
 
 def derive_merchant_name(items: list[dict[str, Any]] | None, fallback: str) -> str:
-    if not items:
-        return fallback
-    first_item = items[0]
-    if isinstance(first_item, dict):
-        merchant_name = first_item.get("farm") or first_item.get("merchant")
-        if merchant_name:
-            return str(merchant_name)
+    for item in (items or []):
+        if isinstance(item, dict):
+            merchant_name = item.get("farm") or item.get("merchant")
+            if merchant_name:
+                return str(merchant_name)
     return fallback
 
 

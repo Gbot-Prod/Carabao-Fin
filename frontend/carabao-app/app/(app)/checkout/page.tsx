@@ -62,11 +62,16 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!street.trim() || !city.trim()) {
+      setError("Please enter your street address and city before placing an order.");
+      return;
+    }
+
     setIsPlacingOrder(true);
     setError(null);
 
     try {
-      const deliveryAddress = [street, city, 'Philippines'].filter(Boolean).join(', ') || null;
+      const deliveryAddress = [street, city, postal, 'Philippines'].filter(Boolean).join(', ') || null;
       const result = await placeOrderFromCart({
         delivery_date: deliveryDate || null,
         delivery_time: deliveryTime,
@@ -114,7 +119,7 @@ export default function CheckoutPage() {
             <h2>Delivery Information</h2>
             <div className={styles.gridTwo}>
               <label>
-                Delivery date
+                Delivery date (optional)
                 <input
                   type="date"
                   value={deliveryDate}

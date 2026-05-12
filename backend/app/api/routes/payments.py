@@ -48,6 +48,7 @@ def create_payment_checkout(
         db.query(Order)
         .join(OrderHistory, Order.order_history_id == OrderHistory.id)
         .filter(Order.id == order_id, OrderHistory.user_id == current_user.id)
+        .with_for_update()
         .first()
     )
     if not order:

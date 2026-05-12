@@ -72,7 +72,7 @@ async def _geocode(address: str) -> tuple[float, float] | None:
     key = address.strip().lower()
     if key in _geocode_cache:
         return _geocode_cache[key]
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, _geocode_sync, address)
     if result:
         _geocode_cache[key] = result

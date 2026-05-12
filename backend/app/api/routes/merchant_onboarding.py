@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
-from pathlib import Path
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.exc import IntegrityError
@@ -15,9 +14,11 @@ from app.models.merchant_application import MerchantApplication
 from app.models.user import User
 from app.schemas.merchant import MerchantPageBase, MerchantResponse
 from app.schemas.merchant_application import MerchantApplicationResponse, MerchantOnboardingPayload
+from app.services import r2_service
 from app.services.merchant_service import create_merchant
 
 router = APIRouter(tags=["merchant-onboarding"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/merchant-applications/me", response_model=MerchantApplicationResponse)
@@ -34,37 +35,6 @@ async def get_my_merchant_application_route(
         raise HTTPException(status_code=404, detail="No merchant application found")
     return application
 
-
-def _safe_suffix(filename: str | None, content_type: str | None) -> str:
-    if filename:
-        suffix = Path(filename).suffix.lower()
-        if suffix in {".pdf", ".png", ".jpg", ".jpeg", ".webp"}:
-            return suffix
-    if content_type == "application/pdf":
-        return ".pdf"
-    if content_type in {"image/png"}:
-        return ".png"
-    if content_type in {"image/jpg", "image/jpeg"}:
-        return ".jpg"
-    if content_type in {"image/webp"}:
-        return ".webp"
-    return ".bin"
-
-
-async def _save_rsbsa_upload(user_id: int, rsbsa_file: UploadFile) -> str:
-    backend_root = Path(__file__).resolve().parents[3]
-    upload_dir = backend_root / "uploads" / "rsbsa"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
-    suffix = _safe_suffix(rsbsa_file.filename, rsbsa_file.content_type)
-    filename = f"user_{user_id}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex}{suffix}"
-    full_path = upload_dir / filename
-
-    content = await rsbsa_file.read()
-    full_path.write_bytes(content)
-
-    # Store a relative path to keep responses stable across environments.
-    return str(Path("uploads") / "rsbsa" / filename)
 
 
 @router.post("/merchant-onboarding/me", response_model=MerchantResponse)
@@ -86,7 +56,16 @@ async def submit_my_merchant_onboarding_route(
     if rsbsa_file.content_type not in {"application/pdf", "image/png", "image/jpeg", "image/jpg", "image/webp"}:
         raise HTTPException(status_code=400, detail="RSBSA file must be an image or PDF")
 
-    saved_path = await _save_rsbsa_upload(current_user.id, rsbsa_file)
+    content = await rsbsa_file.read()
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="RSBSA document must be under 20 MB")
+    try:
+        saved_path = r2_service.upload_rsbsa_document(
+            current_user.id, content, rsbsa_file.content_type or "application/octet-stream", rsbsa_file.filename or ""
+        )
+    except Exception as exc:
+        logger.error("R2 RSBSA upload failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=502, detail=f"Document upload failed: {exc}") from exc
 
     application = (
         db.query(MerchantApplication)

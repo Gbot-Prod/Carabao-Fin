@@ -1,11 +1,12 @@
 // src/screens/ProfileScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, Alert, Switch, Image,
+  StyleSheet, SafeAreaView, Alert, Switch,
 } from 'react-native';
 import { useAuth } from '../lib/AuthContext';
 import { useRouter } from 'expo-router';
+import { api, type ApiUserProfile } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 interface SettingItemProps {
@@ -44,14 +45,26 @@ function SectionHeader({ title }: { title: string }) {
 }
 
 export default function ProfileScreen() {
-  const { user, signOut } = useAuth();
+  const { user, token, signOut } = useAuth();
   const router = useRouter();
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [promoEnabled, setPromoEnabled] = useState(false);
+  const [profile, setProfile] = useState<ApiUserProfile | null>(null);
 
-  const displayName = user
-    ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email?.split('@')[0] || 'User'
-    : 'Guest User';
+  useEffect(() => {
+    if (!token) return;
+    void api.users.me(token).then(setProfile).catch(() => {});
+  }, [token]);
+
+  const firstName = profile?.first_name ?? user?.firstName ?? '';
+  const lastName = profile?.last_name ?? user?.lastName ?? '';
+  const email = profile?.email ?? user?.email ?? '';
+  const displayName = [firstName, lastName].filter(Boolean).join(' ') || email.split('@')[0] || 'User';
+  const phone = profile?.phone_number;
+  const address = [profile?.address, profile?.city, profile?.country].filter(Boolean).join(', ');
+  const memberSince = profile?.created_at
+    ? new Date(profile.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long' })
+    : null;
 
   const handleSignOut = () => {
     Alert.alert(
@@ -88,7 +101,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.displayName}>{displayName}</Text>
-          <Text style={styles.userEmail}>{user?.email ?? 'Not signed in'}</Text>
+          <Text style={styles.userEmail}>{email || 'Not signed in'}</Text>
           <TouchableOpacity style={styles.editProfileBtn}>
             <Text style={styles.editProfileText}>Edit Profile</Text>
           </TouchableOpacity>
@@ -110,9 +123,12 @@ export default function ProfileScreen() {
           {/* Account */}
           <SectionHeader title="Account" />
           <View style={styles.settingsGroup}>
-            <SettingItem icon="📍" label="Saved Addresses" value="1 address saved" onPress={() => { }} />
+            <SettingItem icon="✉️" label="Email" value={email || 'Not set'} />
+            <SettingItem icon="📞" label="Phone" value={phone ?? 'Not set'} onPress={() => { }} />
+            <SettingItem icon="📍" label="Address" value={address || 'Not set'} onPress={() => { }} />
             <SettingItem icon="💳" label="Payment Methods" value="No cards saved" onPress={() => { }} />
             <SettingItem icon="🧾" label="Order History" onPress={() => router.push('/(tabs)/history')} />
+            {memberSince ? <SettingItem icon="📅" label="Member Since" value={memberSince} /> : null}
           </View>
 
           {/* Notifications */}

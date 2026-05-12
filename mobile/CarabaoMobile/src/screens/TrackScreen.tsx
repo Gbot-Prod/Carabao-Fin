@@ -1,13 +1,13 @@
 // src/screens/TrackScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, SafeAreaView, Image,
+  StyleSheet, SafeAreaView, Image, ActivityIndicator,
 } from 'react-native';
-import { mockOrders } from '../lib/mockData';
-import { Order } from '../types';
+import { useAuth } from '../lib/AuthContext';
+import { api, type ApiCurrentOrder } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
-import { Badge, Card, Divider, StatRow } from '../components/UI';
+import { Badge, Divider } from '../components/UI';
 
 const STATUS_STEPS = ['Order Placed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
 
@@ -45,7 +45,17 @@ function StatusTimeline({ status }: { status: string }) {
   );
 }
 
-function OrderCard({ order, isSelected, onPress }: { order: Order; isSelected: boolean; onPress: () => void }) {
+function statusColor(s: string): 'green' | 'blue' | 'yellow' | 'gray' {
+  const lower = s.toLowerCase();
+  if (lower === 'delivered') return 'green';
+  if (lower === 'shipped' || lower === 'out for delivery') return 'blue';
+  if (lower === 'processing') return 'yellow';
+  return 'gray';
+}
+
+function OrderCard({
+  order, isSelected, onPress,
+}: { order: ApiCurrentOrder; isSelected: boolean; onPress: () => void }) {
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -53,102 +63,133 @@ function OrderCard({ order, isSelected, onPress }: { order: Order; isSelected: b
       style={[styles.orderCard, isSelected && styles.orderCardSelected]}
     >
       <View style={styles.orderCardRow}>
-        <Image source={{ uri: order.image }} style={styles.orderThumb} />
+        <View style={styles.orderThumb}>
+          <Text style={{ fontSize: 24 }}>📦</Text>
+        </View>
         <View style={styles.orderCardInfo}>
           <Text style={styles.orderMerchant}>{order.merchant}</Text>
-          <Text style={styles.orderDate}>Ordered: {order.dateBought}</Text>
+          <Text style={styles.orderDate}>Ordered: {order.date_bought}</Text>
           <Text style={styles.orderDate}>
-            ETA: {order.shipped ? order.timeOfArrival : 'Pending shipment'}
+            ETA: {order.shipped ? (order.time_of_arrival ?? 'TBD') : 'Pending shipment'}
           </Text>
         </View>
-        <Badge
-          label={order.status}
-          color={
-            order.status === 'Delivered' ? 'green'
-              : order.status === 'Shipped' ? 'blue'
-                : 'yellow'
-          }
-        />
+        <Badge label={order.status} color={statusColor(order.status)} />
       </View>
     </TouchableOpacity>
   );
 }
 
 export default function TrackScreen() {
+  const { token } = useAuth();
+  const [orders, setOrders] = useState<ApiCurrentOrder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const selected = mockOrders[selectedIdx];
 
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const data = await api.orders.current(token);
+        setOrders(data);
+      } catch {
+        // Show empty state on error
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [token]);
+
+  const selected = orders[selectedIdx];
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(n);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Track Orders</Text>
+        </View>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Track Orders</Text>
-        <Text style={styles.headerSub}>{mockOrders.length} active orders</Text>
+        <Text style={styles.headerSub}>{orders.length} active order{orders.length !== 1 ? 's' : ''}</Text>
       </View>
 
-      <FlatList
-        data={mockOrders}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={
-          <View style={styles.detailsCard}>
-            <Text style={styles.detailCardTitle}>Delivery Details</Text>
-            <View style={styles.mapPlaceholder}>
-              <Text style={styles.mapPlaceholderIcon}>🗺️</Text>
-              <Text style={styles.mapPlaceholderText}>Live map tracking</Text>
-              <Text style={styles.mapPlaceholderSub}>Tap to open in Maps app</Text>
+      {orders.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={{ fontSize: 48 }}>📭</Text>
+          <Text style={styles.emptyTitle}>No active orders</Text>
+          <Text style={styles.emptySub}>Orders you place will appear here</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={orders}
+          keyExtractor={(item) => String(item.id)}
+          ListHeaderComponent={
+            selected ? (
+              <View style={styles.detailsCard}>
+                <Text style={styles.detailCardTitle}>Delivery Details</Text>
+                <View style={styles.mapPlaceholder}>
+                  <Text style={styles.mapPlaceholderIcon}>🗺️</Text>
+                  <Text style={styles.mapPlaceholderText}>Live map tracking</Text>
+                  <Text style={styles.mapPlaceholderSub}>Coming soon</Text>
+                </View>
+
+                <View style={styles.detailsGrid}>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>MERCHANT</Text>
+                    <Text style={styles.detailValue}>{selected.merchant}</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>DATE BOUGHT</Text>
+                    <Text style={styles.detailValue}>{selected.date_bought}</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>STATUS</Text>
+                    <Text style={[styles.detailValue, { color: Colors.primary }]}>{selected.status}</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>ESTIMATED ARRIVAL</Text>
+                    <Text style={styles.detailValue}>
+                      {selected.shipped ? (selected.time_of_arrival ?? 'TBD') : 'Pending'}
+                    </Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.detailLabel}>DELIVERY FEE</Text>
+                    <Text style={styles.detailValue}>{fmt(selected.delivery_fee)}</Text>
+                  </View>
+                </View>
+
+                <Divider />
+                <Text style={styles.timelineTitle}>Order Progress</Text>
+                <StatusTimeline status={selected.status} />
+                <Divider />
+                <Text style={[styles.timelineTitle, { marginBottom: Spacing.sm }]}>Your Orders</Text>
+              </View>
+            ) : null
+          }
+          renderItem={({ item, index }) => (
+            <View style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm }}>
+              <OrderCard
+                order={item}
+                isSelected={selectedIdx === index}
+                onPress={() => setSelectedIdx(index)}
+              />
             </View>
-
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>MERCHANT</Text>
-                <Text style={styles.detailValue}>{selected.merchant}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>DATE BOUGHT</Text>
-                <Text style={styles.detailValue}>{selected.dateBought}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>STATUS</Text>
-                <Text style={[styles.detailValue, { color: Colors.primary }]}>{selected.status}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>ESTIMATED ARRIVAL</Text>
-                <Text style={styles.detailValue}>
-                  {selected.shipped ? selected.timeOfArrival : 'Pending'}
-                </Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>DELIVERY FEE</Text>
-                <Text style={styles.detailValue}>{fmt(selected.deliveryFee)}</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>ORDER TOTAL</Text>
-                <Text style={styles.detailValue}>{fmt(selected.totalAmount)}</Text>
-              </View>
-            </View>
-
-            <Divider />
-            <Text style={styles.timelineTitle}>Order Progress</Text>
-            <StatusTimeline status={selected.status} />
-
-            <Divider />
-            <Text style={[styles.timelineTitle, { marginBottom: Spacing.sm }]}>Select Order</Text>
-          </View>
-        }
-        renderItem={({ item, index }) => (
-          <View style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm }}>
-            <OrderCard
-              order={item}
-              isSelected={selectedIdx === index}
-              onPress={() => setSelectedIdx(index)}
-            />
-          </View>
-        )}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        showsVerticalScrollIndicator={false}
-      />
+          )}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -214,13 +255,17 @@ const styles = StyleSheet.create({
 
   timelineTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginTop: Spacing.sm },
 
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
+  emptyTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
+  emptySub: { fontSize: FontSize.sm, color: Colors.textMuted },
+
   orderCard: {
     backgroundColor: Colors.white, borderRadius: Radius.md,
     padding: Spacing.md, borderWidth: 1.5, borderColor: Colors.border, ...Shadow.sm,
   },
   orderCardSelected: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
   orderCardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
-  orderThumb: { width: 52, height: 52, borderRadius: Radius.md },
+  orderThumb: { width: 52, height: 52, borderRadius: Radius.md, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   orderCardInfo: { flex: 1 },
   orderMerchant: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   orderDate: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },

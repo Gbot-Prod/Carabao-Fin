@@ -100,6 +100,7 @@
   padding: clamp(1.2rem, 3vw, 2.8rem);
 }
 
+
 .auth-form-shell {
   width: min(30rem, 100%);
   background: var(--form-bg);
@@ -108,7 +109,7 @@
   padding: clamp(1.25rem, 2.5vw, 2.15rem);
   box-shadow: 0 24px 45px rgb(15 50 28 / 0.11);
 }
-
+z
 .auth-header {
   margin-bottom: 1.25rem;
 }

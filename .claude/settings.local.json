@@ -12,7 +12,9 @@
       "WebFetch(domain:semaphore.co)",
       "WebFetch(domain:developers.paymongo.com)",
       "WebFetch(domain:alns.readthedocs.io)",
-      "Bash(.venv\\\\Scripts\\\\pip install *)"
+      "Bash(.venv\\\\Scripts\\\\pip install *)",
+      "Bash(Get-ChildItem -Recurse -Path \"c:\\\\Users\\\\gilbe\\\\OneDrive\\\\Documents\\\\Coding_Project_FIles\\\\NextJs\\\\Carabao-Fin\" -Filter \"orders.py\")",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ]
   }
 }

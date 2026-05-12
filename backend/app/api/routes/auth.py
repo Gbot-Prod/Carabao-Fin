@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hmac
 import os
 from typing import Optional
@@ -76,9 +77,12 @@ async def sync_auth(
     else:
         user.external_auth_id = payload.provider_user_id
         user.email = payload.email
-        user.first_name = payload.first_name
-        user.last_name = payload.last_name
-        user.phone_number = payload.phone_number
+        if payload.first_name is not None:
+            user.first_name = payload.first_name
+        if payload.last_name is not None:
+            user.last_name = payload.last_name
+        if payload.phone_number is not None:
+            user.phone_number = payload.phone_number
 
     db.commit()
     db.refresh(user)
@@ -131,6 +135,9 @@ async def mobile_sign_up(
     payload: MobileSignUpPayload,
     db: Session = Depends(get_db),
 ) -> AuthSyncResponse:
+    if not payload.password or len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -185,14 +192,17 @@ async def mobile_sign_in(
 
     if credential is not None:
         if not pwd_context.verify(payload.password, credential.password_hash):
+            await asyncio.sleep(1)
             raise HTTPException(status_code=401, detail="Invalid email or password")
     else:
         # Backward-compat for the earlier prototype that stored the bcrypt hash
         # directly in external_auth_id as "mobile:<hash>".
         if not user.external_auth_id.startswith("mobile:"):
+            await asyncio.sleep(1)
             raise HTTPException(status_code=401, detail="Invalid email or password")
         stored_hash = user.external_auth_id[len("mobile:") :]
         if not pwd_context.verify(payload.password, stored_hash):
+            await asyncio.sleep(1)
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
     access_token = create_access_token(

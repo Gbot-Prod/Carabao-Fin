@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
+const TOKEN_KEY = 'carabao_token';
+const USER_KEY = 'carabao_user';
 
 interface User {
   id: string;
@@ -43,7 +46,35 @@ function buildUser(data: MobileAuthResponse): User {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Restore persisted session on mount
+  useEffect(() => {
+    const restore = async () => {
+      try {
+        const [savedToken, savedUserJson] = await Promise.all([
+          AsyncStorage.getItem(TOKEN_KEY),
+          AsyncStorage.getItem(USER_KEY),
+        ]);
+        if (savedToken && savedUserJson) {
+          setToken(savedToken);
+          setUser(JSON.parse(savedUserJson) as User);
+        }
+      } catch {
+        // Storage read failed — start unauthenticated
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    void restore();
+  }, []);
+
+  const persist = async (t: string, u: User) => {
+    await Promise.all([
+      AsyncStorage.setItem(TOKEN_KEY, t),
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(u)),
+    ]);
+  };
 
   const signIn = async (email: string, password: string) => {
     const res = await fetch(`${API_BASE}/auth/mobile/sign-in`, {
@@ -56,8 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(err.detail ?? 'Sign in failed');
     }
     const data = await res.json() as MobileAuthResponse;
+    const u = buildUser(data);
     setToken(data.access_token);
-    setUser(buildUser(data));
+    setUser(u);
+    await persist(data.access_token, u);
   };
 
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
@@ -71,26 +104,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(err.detail ?? 'Sign up failed');
     }
     const data = await res.json() as MobileAuthResponse;
+    const u = buildUser(data);
     setToken(data.access_token);
-    setUser(buildUser(data));
+    setUser(u);
+    await persist(data.access_token, u);
   };
 
   const signOut = async () => {
     setToken(null);
     setUser(null);
+    await Promise.all([
+      AsyncStorage.removeItem(TOKEN_KEY),
+      AsyncStorage.removeItem(USER_KEY),
+    ]);
   };
 
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isAuthenticated: !!user,
-        isLoading,
-        signIn,
-        signUp,
-        signOut,
-      }}
+      value={{ user, token, isAuthenticated: !!user, isLoading, signIn, signUp, signOut }}
     >
       {children}
     </AuthContext.Provider>
