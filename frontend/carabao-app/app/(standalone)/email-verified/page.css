@@ -1,0 +1,78 @@
+.email-verified-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f7fcf8 0%, #ecf6ef 100%);
+}
+
+.email-verified-container {
+  text-align: center;
+}
+
+.email-verified-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #e8f5ec;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.email-verified-icon-wrapper svg {
+  width: 24px;
+  height: 24px;
+  stroke: #31925d;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.email-verified-title {
+  color: #173d25;
+  font-weight: 600;
+  font-size: 16px;
+  margin: 0;
+}
+
+.email-verified-subtitle {
+  color: #647067;
+  font-size: 14px;
+  margin-top: 6px;
+}
+
+.email-verified-error-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f7fcf8 0%, #ecf6ef 100%);
+  padding: 16px;
+}
+
+.email-verified-error-card {
+  background: white;
+  border-radius: 16px;
+  padding: 40px 32px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.email-verified-error-message {
+  color: #b91c1c;
+  margin-bottom: 16px;
+}
+
+.email-verified-error-link {
+  color: #31925d;
+  font-size: 14px;
+  text-decoration: underline;
+}
+
+.email-verified-error-link:hover {
+  opacity: 0.8;
+}

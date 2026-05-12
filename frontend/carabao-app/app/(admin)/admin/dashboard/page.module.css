@@ -1,0 +1,45 @@
+.page {
+  padding: 40px 32px;
+  max-width: 960px;
+}
+
+.heading {
+  font-size: 22px;
+  font-weight: 700;
+  color: #173d25;
+  margin: 0 0 28px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  display: block;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid #d4e9dc;
+  background: #fff;
+  text-decoration: none;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.card:hover {
+  box-shadow: 0 4px 16px rgba(49, 146, 93, 0.12);
+  border-color: #31925d;
+}
+
+.cardTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #173d25;
+  margin: 0 0 6px;
+}
+
+.cardDesc {
+  font-size: 13px;
+  color: #647067;
+  margin: 0;
+}

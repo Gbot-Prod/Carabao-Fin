@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { getMigrations } from "better-auth/db/migration";
+import { admin } from "better-auth/plugins";
 import { Pool } from "pg";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -64,12 +65,11 @@ if (!postgresUrl) {
 
 const pool = new Pool({
   connectionString: postgresUrl,
-  ssl: postgresUrl.includes("render.com")
-    ? { rejectUnauthorized: false }
-    : undefined,
+  ssl: { rejectUnauthorized: false },
 });
 
 const config = {
+  plugins: [admin()],
   database: pool,
   baseURL:
     env.NEXT_PUBLIC_APP_URL || env.BETTER_AUTH_URL || "http://localhost:3000",

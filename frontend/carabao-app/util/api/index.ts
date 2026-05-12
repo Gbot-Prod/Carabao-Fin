@@ -7,3 +7,4 @@ export * from './payments';
 export * from './produce';
 export * from './tracking';
 export * from './users';
+export * from './admin';

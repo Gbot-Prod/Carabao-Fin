@@ -8,9 +8,12 @@ from app.api.dependencies import get_current_user, get_db
 from app.models.current_orders import CurrentOrder
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
+from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
+from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.produce import Produce
 from app.models.shopPage import ShopPage
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.merchant import MerchantBase, MerchantPageBase, MerchantResponse, MerchantUpdate
 from app.schemas.merchant_performance import MerchantPerformanceResponse
@@ -43,7 +46,7 @@ async def list_merchants(db: Session = Depends(get_db)):
         .filter(
             or_(
                 MerchantApplication.id.is_(None),
-                MerchantApplication.status == "approved",
+                MerchantApplication.status != "rejected",
             )
         )
         .order_by(Merchant.id.asc())
@@ -399,13 +402,28 @@ async def delete_my_merchant(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    # Orphan references on orders that belong to other users before cascade-deleting the merchant.
+    # Null out nullable merchant_id references on order records (preserves order history)
     db.query(Order).filter(Order.merchant_id == merchant.id).update(
         {"merchant_id": None}, synchronize_session=False
     )
     db.query(CurrentOrder).filter(CurrentOrder.merchant_id == merchant.id).update(
         {"merchant_id": None}, synchronize_session=False
     )
+
+    # Remove payout batch items before batches (FK: payout_batch_items.batch_id)
+    batch_ids = [
+        row.id for row in
+        db.query(PayoutBatch.id).filter(PayoutBatch.merchant_id == merchant.id).all()
+    ]
+    if batch_ids:
+        db.query(PayoutBatchItem).filter(PayoutBatchItem.batch_id.in_(batch_ids)).delete(synchronize_session=False)
+        db.query(PayoutBatch).filter(PayoutBatch.merchant_id == merchant.id).delete(synchronize_session=False)
+
+    # Remove transactions (merchant_id is non-nullable, cannot be orphaned)
+    db.query(Transaction).filter(Transaction.merchant_id == merchant.id).delete(synchronize_session=False)
+
+    # Remove payout configuration
+    db.query(MerchantPayoutInfo).filter(MerchantPayoutInfo.merchant_id == merchant.id).delete(synchronize_session=False)
 
     db.delete(merchant)
     db.commit()

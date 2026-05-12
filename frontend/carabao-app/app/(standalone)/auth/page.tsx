@@ -46,11 +46,15 @@ export default function SignupPage() {
         });
         router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
       } else {
-        await signIn.email({
+        const data = await signIn.email({
           email: formData.email,
           password: formData.password,
         });
-        router.push("/order");
+        if ((data.user as { role?: string }).role === "admin") {
+          router.push("/admin/dashboard");
+        } else {
+          router.push("/order");
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Authentication failed. Please try again.";

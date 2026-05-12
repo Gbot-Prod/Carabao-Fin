@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { admin } from "better-auth/plugins";
 import { Pool } from "pg";
 
 const rawPostgresUrl =
@@ -61,6 +62,7 @@ const apiBaseUrl = normalizedApiUrl
   : "";
 
 export const auth = betterAuth({
+  plugins: [admin()],
   database: pool,
   session: {
     cookieCache: {

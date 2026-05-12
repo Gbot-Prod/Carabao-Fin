@@ -1,0 +1,82 @@
+.page {
+  padding: 40px 32px;
+}
+
+.heading {
+  font-size: 22px;
+  font-weight: 700;
+  color: #173d25;
+  margin: 0 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.count {
+  font-size: 14px;
+  font-weight: 500;
+  color: #647067;
+  background: #f0f5f2;
+  border-radius: 20px;
+  padding: 2px 10px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid #e0ece5;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  text-align: left;
+  padding: 10px 16px;
+  background: #f7fcf8;
+  color: #647067;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e0ece5;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 12px 16px;
+  color: #1a2e20;
+  border-bottom: 1px solid #f0f5f2;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tr:hover td {
+  background: #f7fcf8;
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  color: #647067;
+}
+
+.empty {
+  color: #b0bdb3;
+}
+
+.state {
+  padding: 40px 32px;
+  color: #647067;
+  font-size: 14px;
+}
+
+.stateError {
+  padding: 40px 32px;
+  color: #b91c1c;
+  font-size: 14px;
+}

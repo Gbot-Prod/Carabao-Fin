@@ -6,6 +6,7 @@ import { fetchRegions, fetchCitiesByRegion, type PsgcRegion, type PsgcCity } fro
 interface LocationSelectsProps {
   value: string;
   onChange: (cityName: string) => void;
+  onRegionChange?: (regionName: string) => void;
   selectClassName?: string;
   labelClassName?: string;
   wrapClassName?: string;
@@ -14,6 +15,7 @@ interface LocationSelectsProps {
 export default function LocationSelects({
   value,
   onChange,
+  onRegionChange,
   selectClassName = '',
   labelClassName = '',
   wrapClassName = '',
@@ -35,7 +37,11 @@ export default function LocationSelects({
     setRegionCode(code);
     onChange('');
     setCities([]);
-    if (!code) return;
+    if (!code) {
+      onRegionChange?.('');
+      return;
+    }
+    onRegionChange?.(regions.find((r) => r.code === code)?.name ?? '');
     setLoadingCities(true);
     try {
       const data = await fetchCitiesByRegion(code);

@@ -187,6 +187,46 @@
   background: rgba(49, 146, 93, 0.14);
 }
 
+/* ── Phone number ─────────────────────────────────────────────────── */
+.phoneRow {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid #d0e4d5;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f9fcf9;
+}
+
+.phoneRow:focus-within {
+  border-color: rgba(49, 146, 93, 0.55);
+  box-shadow: 0 0 0 4px rgba(49, 146, 93, 0.12);
+}
+
+.phonePrefix {
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #5c6a5e;
+  background: rgba(23, 61, 37, 0.04);
+  border-right: 1px solid #d0e4d5;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.phoneInput {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #173d25;
+  border: none;
+  background: transparent;
+  outline: none;
+  min-width: 0;
+  font-family: inherit;
+}
+
+/* ── Docs step ────────────────────────────────────────────────────── */
 .docs {
   display: flex;
   flex-direction: column;
@@ -199,31 +239,138 @@
   color: #4f5a52;
 }
 
-.file {
-  padding: 10px 0 0;
+/* ── File dropzone ────────────────────────────────────────────────── */
+.dropzone {
+  border: 2px dashed rgba(49, 146, 93, 0.35);
+  border-radius: 14px;
+  padding: 28px 20px;
+  background: rgba(49, 146, 93, 0.04);
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
 }
 
-.fileMeta {
+.dropzone:hover {
+  border-color: rgba(49, 146, 93, 0.60);
+  background: rgba(49, 146, 93, 0.07);
+}
+
+.dropzoneDragOver {
+  border-color: rgba(49, 146, 93, 0.80);
+  background: rgba(49, 146, 93, 0.10);
+}
+
+.dropzoneWithFile {
+  padding: 14px 16px;
+  cursor: default;
+}
+
+.dropzoneWithFile:hover {
+  border-color: rgba(49, 146, 93, 0.35);
+  background: rgba(49, 146, 93, 0.04);
+}
+
+.dropzoneLabel {
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px dashed rgba(23, 61, 37, 0.20);
-  background: rgba(49, 146, 93, 0.05);
-  color: #173d25;
-  font-size: 13px;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
 }
 
-.fileName {
+.dropzoneIcon {
+  width: 40px;
+  height: 40px;
+  color: #31925d;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.dropzoneTitle {
+  font-size: 15px;
   font-weight: 700;
+  color: #173d25;
+}
+
+.dropzoneSubtitle {
+  font-size: 13px;
+  color: #31925d;
+  font-weight: 600;
+}
+
+.dropzoneMeta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #8a9b8d;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* ── Selected file card ───────────────────────────────────────────── */
+.fileCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.fileCardIcon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  color: #31925d;
+}
+
+.fileCardIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.fileCardInfo {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.fileCardName {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #173d25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.fileSize {
-  opacity: 0.8;
+.fileCardMeta {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: #5c6a5e;
+}
+
+.fileCardRemove {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(185, 28, 28, 0.25);
+  background: rgba(185, 28, 28, 0.08);
+  color: #b91c1c;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-family: inherit;
+  padding-bottom: 1px;
+}
+
+.fileCardRemove:hover {
+  background: rgba(185, 28, 28, 0.16);
+  border-color: rgba(185, 28, 28, 0.40);
 }
 
 .errorBox {

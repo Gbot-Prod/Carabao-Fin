@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
+import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import {
   fetchMyProfile,
   submitMyMerchantOnboarding,
@@ -21,8 +22,32 @@ const STEPS: { id: StepId; title: string; subtitle: string }[] = [
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
-function normalizePhone(v: string) {
-  return v.replace(/\s+/g, " ").trim();
+function formatTIN(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 12);
+  const parts: string[] = [];
+  for (let i = 0; i < digits.length; i += 3) parts.push(digits.slice(i, i + 3));
+  return parts.join("-");
+}
+
+function formatLocalPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  const a = digits.slice(0, 3);
+  const b = digits.slice(3, 6);
+  const c = digits.slice(6, 10);
+  return [a, b, c].filter(Boolean).join(" ");
+}
+
+function formatRegNum(raw: string): string {
+  return raw.replace(/[^A-Za-z0-9-]/g, "").toUpperCase().slice(0, 30);
+}
+
+function formatRSBSA(raw: string): string {
+  if (!raw) return "";
+  const stripped = raw.toUpperCase().replace(/^RSBSA-?/, "").replace(/[^A-Z0-9]/g, "").slice(0, 16);
+  if (!stripped) return "";
+  const parts: string[] = [];
+  for (let i = 0; i < stripped.length; i += 4) parts.push(stripped.slice(i, i + 4));
+  return `RSBSA-${parts.join("-")}`;
 }
 
 export default function MerchantOnboardingPage() {
@@ -31,6 +56,7 @@ export default function MerchantOnboardingPage() {
   const step = STEPS[stepIndex] ?? STEPS[0]!;
 
   const [rsbsaFile, setRsbsaFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMerchant, setSuccessMerchant] = useState<Merchant | null>(null);
@@ -62,7 +88,7 @@ export default function MerchantOnboardingPage() {
         setForm((prev) => ({
           ...prev,
           contact_email: prev.contact_email || p.email || "",
-          contact_number: prev.contact_number || (p.phone_number ?? ""),
+          contact_number: prev.contact_number || (p.phone_number?.replace(/^\+63\s?/, "") ?? ""),
           address_line: prev.address_line || (p.address ?? ""),
           city: prev.city || (p.city ?? ""),
           province: prev.province || (p.country ?? ""),
@@ -90,6 +116,18 @@ export default function MerchantOnboardingPage() {
         });
       };
 
+  const handleTIN = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, tin: formatTIN(e.target.value) }));
+
+  const handlePhone = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, contact_number: formatLocalPhone(e.target.value) }));
+
+  const handleRegNum = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, registration_number: formatRegNum(e.target.value) }));
+
+  const handleRSBSA = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, rsbsa_number: formatRSBSA(e.target.value) }));
+
   const toggleDay = (day: (typeof DAYS)[number]) => {
     setForm((prev) => {
       const set = new Set(prev.available_days);
@@ -105,7 +143,7 @@ export default function MerchantOnboardingPage() {
       if (!form.legal_business_name.trim()) return "Legal business name is required.";
       if (!form.business_type.trim()) return "Business type is required.";
       if (!form.contact_email.trim()) return "Email is required.";
-      if (!normalizePhone(form.contact_number)) return "Contact number is required.";
+      if (!form.contact_number.trim()) return "Contact number is required.";
       return null;
     }
 
@@ -158,7 +196,7 @@ export default function MerchantOnboardingPage() {
       const merchant = await submitMyMerchantOnboarding(
         {
           ...form,
-          contact_number: normalizePhone(form.contact_number),
+          contact_number: form.contact_number.trim() ? `+63 ${form.contact_number.trim()}` : "",
           available_days: [...form.available_days].sort(
             (a, b) => dayOrder(a) - dayOrder(b),
           ),
@@ -250,12 +288,19 @@ export default function MerchantOnboardingPage() {
                 </select>
               </div>
               <div className={styles.field}>
-                <label className={styles.label}>TIN </label>
-                <input className={styles.input} value={form.tin ?? ""} onChange={setField("tin")} placeholder="123-456-789-000" />
+                <label className={styles.label}>TIN (optional)</label>
+                <input
+                  className={styles.input}
+                  value={form.tin ?? ""}
+                  onChange={handleTIN}
+                  placeholder="123-456-789-000"
+                  inputMode="numeric"
+                  maxLength={15}
+                />
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Registration type </label>
+                <label className={styles.label}>Registration type</label>
                 <select className={styles.select} value={form.registration_type ?? ""} onChange={setField("registration_type")}>
                   <option value="DTI">DTI</option>
                   <option value="SEC">SEC</option>
@@ -266,7 +311,13 @@ export default function MerchantOnboardingPage() {
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Registration number (optional)</label>
-                <input className={styles.input} value={form.registration_number ?? ""} onChange={setField("registration_number")} placeholder="DTI/SEC/CDA number" />
+                <input
+                  className={styles.input}
+                  value={form.registration_number ?? ""}
+                  onChange={handleRegNum}
+                  placeholder="DTI-00000-000000"
+                  maxLength={30}
+                />
               </div>
 
               <div className={styles.field}>
@@ -275,7 +326,17 @@ export default function MerchantOnboardingPage() {
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Contact number</label>
-                <input className={styles.input} value={form.contact_number} onChange={setField("contact_number")} placeholder="+63 9XX XXX XXXX" />
+                <div className={styles.phoneRow}>
+                  <span className={styles.phonePrefix}>+63</span>
+                  <input
+                    className={styles.phoneInput}
+                    value={form.contact_number}
+                    onChange={handlePhone}
+                    placeholder="912 345 6789"
+                    inputMode="numeric"
+                    maxLength={12}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -286,18 +347,19 @@ export default function MerchantOnboardingPage() {
                 <label className={styles.label}>Address</label>
                 <input className={styles.input} value={form.address_line} onChange={setField("address_line")} placeholder="Street, Barangay" />
               </div>
-              <div className={styles.field}>
-                <label className={styles.label}>City / Municipality</label>
-                <input className={styles.input} value={form.city} onChange={setField("city")} placeholder="Taguig" />
-              </div>
-              <div className={styles.field}>
-                <label className={styles.label}>Province</label>
-                <input className={styles.input} value={form.province} onChange={setField("province")} placeholder="Metro Manila" />
-              </div>
+
+              <LocationSelects
+                value={form.city}
+                onChange={(city) => setForm((prev) => ({ ...prev, city }))}
+                onRegionChange={(region) => setForm((prev) => ({ ...prev, region }))}
+                selectClassName={styles.select}
+                labelClassName={styles.label}
+                wrapClassName={styles.field}
+              />
 
               <div className={styles.field}>
-                <label className={styles.label}>Region (optional)</label>
-                <input className={styles.input} value={form.region ?? ""} onChange={setField("region")} placeholder="NCR / Region IV-A" />
+                <label className={styles.label}>Province</label>
+                <input className={styles.input} value={form.province} onChange={setField("province")} placeholder="Laguna" />
               </div>
               <div className={styles.field}>
                 <label className={styles.label}>Postal code (optional)</label>
@@ -345,24 +407,81 @@ export default function MerchantOnboardingPage() {
 
               <div className={styles.grid}>
                 <div className={styles.field}>
-                  <label className={styles.label}>RSBSA number</label>
-                  <input className={styles.input} value={form.rsbsa_number ?? ""} onChange={setField("rsbsa_number")} placeholder="RSBSA-XXXX-XXXX" />
+                  <label className={styles.label}>RSBSA number (optional)</label>
+                  <input
+                    className={styles.input}
+                    value={form.rsbsa_number ?? ""}
+                    onChange={handleRSBSA}
+                    placeholder="RSBSA-XXXX-XXXX"
+                    maxLength={24}
+                  />
                 </div>
 
                 <div className={`${styles.field} ${styles.fieldFull}`}>
                   <label className={styles.label}>RSBSA document (photo or PDF)</label>
-                  <input
-                    className={styles.file}
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) => setRsbsaFile(e.target.files?.[0] ?? null)}
-                  />
-                  {rsbsaFile && (
-                    <div className={styles.fileMeta}>
-                      <span className={styles.fileName}>{rsbsaFile.name}</span>
-                      <span className={styles.fileSize}>{Math.round(rsbsaFile.size / 1024)} KB</span>
-                    </div>
-                  )}
+                  <div
+                    className={`${styles.dropzone} ${dragOver ? styles.dropzoneDragOver : ""} ${rsbsaFile ? styles.dropzoneWithFile : ""}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOver(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) setRsbsaFile(file);
+                    }}
+                  >
+                    {rsbsaFile ? (
+                      <div className={styles.fileCard}>
+                        <span className={styles.fileCardIcon}>
+                          {rsbsaFile.type === "application/pdf" ? (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                              <polyline points="14 2 14 8 20 8" />
+                              <line x1="9" y1="13" x2="15" y2="13" />
+                              <line x1="9" y1="17" x2="15" y2="17" />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                              <circle cx="8.5" cy="8.5" r="1.5" />
+                              <polyline points="21 15 16 10 5 21" />
+                            </svg>
+                          )}
+                        </span>
+                        <div className={styles.fileCardInfo}>
+                          <span className={styles.fileCardName}>{rsbsaFile.name}</span>
+                          <span className={styles.fileCardMeta}>
+                            {rsbsaFile.type === "application/pdf" ? "PDF" : rsbsaFile.type.split("/")[1]?.toUpperCase()} · {(rsbsaFile.size / 1024).toFixed(0)} KB
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.fileCardRemove}
+                          onClick={() => setRsbsaFile(null)}
+                          aria-label="Remove file"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <label className={styles.dropzoneLabel}>
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          style={{ display: "none" }}
+                          onChange={(e) => setRsbsaFile(e.target.files?.[0] ?? null)}
+                        />
+                        <svg className={styles.dropzoneIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="16 16 12 12 8 16" />
+                          <line x1="12" y1="12" x2="12" y2="21" />
+                          <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+                        </svg>
+                        <span className={styles.dropzoneTitle}>Drop your file here</span>
+                        <span className={styles.dropzoneSubtitle}>or click to browse</span>
+                        <span className={styles.dropzoneMeta}>PDF · PNG · JPG · WEBP · max 10 MB</span>
+                      </label>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
