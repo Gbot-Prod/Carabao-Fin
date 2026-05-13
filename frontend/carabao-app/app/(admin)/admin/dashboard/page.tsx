@@ -106,7 +106,7 @@ export default function AdminDashboard() {
                   width={48}
                 />
                 <Tooltip
-                  formatter={(v: number) => peso(v)}
+                  formatter={(v) => peso(Number(v ?? 0))}
                   labelFormatter={shortDate}
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e0ece5" }}
                 />

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import cast, Date, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -11,9 +12,11 @@ from app.models.order import Order
 from app.models.payout_batch import PayoutBatch
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.schemas.merchant import MerchantPageBase
 from app.schemas.merchant_application import ApplicationReviewPayload, MerchantApplicationResponse
 from app.schemas.payment import PayoutBatchResponse
 from app.schemas.user import UserResponse
+from app.services.merchant_service import create_merchant
 
 router = APIRouter(tags=["admin"])
 
@@ -144,6 +147,30 @@ def review_merchant_application(
 
     application.status = payload.status
     application.admin_note = payload.admin_note
+
+    if payload.status == "approved" and application.merchant_id is None:
+        location = ", ".join([p for p in [application.address_line, application.city, application.province] if p])
+        operating_hours = (
+            f"Available: {', '.join(application.available_days)}" if application.available_days else None
+        )
+        merchant_payload = MerchantPageBase(
+            user_id=application.user_id,
+            merchant_name=application.merchant_name,
+            location=location or None,
+            contact_number=application.contact_number,
+            operating_hours=operating_hours,
+            delivery_price=None,
+            delivery_time=None,
+            rating=None,
+        )
+        try:
+            merchant = create_merchant(db, merchant_payload)
+            db.flush()
+            application.merchant_id = merchant.id
+        except (ValueError, IntegrityError) as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Failed to create merchant profile") from exc
+
     db.commit()
     db.refresh(application)
     return application

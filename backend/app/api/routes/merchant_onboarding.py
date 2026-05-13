@@ -12,10 +12,8 @@ from app.api.dependencies import get_current_user, get_db
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.user import User
-from app.schemas.merchant import MerchantPageBase, MerchantResponse
 from app.schemas.merchant_application import MerchantApplicationResponse, MerchantOnboardingPayload
 from app.services import r2_service
-from app.services.merchant_service import create_merchant
 
 router = APIRouter(tags=["merchant-onboarding"])
 logger = logging.getLogger(__name__)
@@ -37,7 +35,7 @@ async def get_my_merchant_application_route(
 
 
 
-@router.post("/merchant-onboarding/me", response_model=MerchantResponse)
+@router.post("/merchant-onboarding/me", response_model=MerchantApplicationResponse)
 async def submit_my_merchant_onboarding_route(
     payload: str = Form(...),
     rsbsa_file: UploadFile = File(...),
@@ -102,31 +100,11 @@ async def submit_my_merchant_onboarding_route(
     application.rsbsa_document_original_name = rsbsa_file.filename
     application.rsbsa_document_content_type = rsbsa_file.content_type
 
-    location = ", ".join([p for p in [data.address_line, data.city, data.province] if p])
-    operating_hours = f"Available: {', '.join(data.available_days)}" if data.available_days else None
-
-    merchant_payload = MerchantPageBase(
-        user_id=current_user.id,
-        merchant_name=data.merchant_name,
-        location=location or None,
-        contact_number=data.contact_number,
-        operating_hours=operating_hours,
-        delivery_price=None,
-        delivery_time=None,
-        rating=None,
-    )
-
     try:
-        merchant = create_merchant(db, merchant_payload)
-        db.flush()
-        application.merchant_id = merchant.id
         db.commit()
         db.refresh(application)
-        return merchant
-    except ValueError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return application
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Merchant onboarding could not be saved") from exc
+        raise HTTPException(status_code=400, detail="Merchant application could not be saved") from exc
 
