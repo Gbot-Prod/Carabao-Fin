@@ -1,14 +1,23 @@
 import { redirect } from "next/navigation";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
+import { unstable_cache } from "next/cache";
 import { auth } from "@/lib/auth";
+
+const getSessionCached = unstable_cache(
+  async (token: string) => {
+    const h = new Headers({ cookie: `better-auth.session_token=${token}` });
+    return auth.api.getSession({ headers: h });
+  },
+  ["root-session"],
+  { revalidate: 10 },
+);
 
 export default async function Home() {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get("better-auth.session_token")?.value;
 
   if (sessionToken) {
-    const reqHeaders = await headers();
-    const session = await auth.api.getSession({ headers: reqHeaders });
+    const session = await getSessionCached(sessionToken);
     if (session?.user.role === "admin") redirect("/admin/dashboard");
   }
 
