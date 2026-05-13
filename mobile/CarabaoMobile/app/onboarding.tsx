@@ -1,3 +1,1 @@
-import OnboardingScreen from '../src/screens/OnboardingScreen';
-
-export default OnboardingScreen;
+export { default } from '../src/screens/OnboardingScreen';

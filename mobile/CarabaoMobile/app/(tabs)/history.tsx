@@ -1,3 +1,1 @@
-import HistoryScreen from '../../src/screens/HistoryScreen';
-
-export default HistoryScreen;
+export { default } from '../../src/screens/HistoryScreen';

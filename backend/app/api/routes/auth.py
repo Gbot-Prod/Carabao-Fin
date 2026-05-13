@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException
 from passlib.context import CryptContext  # pip install passlib[bcrypt]
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -136,6 +137,80 @@ class MobileSignInPayload(BaseModel):
     password: str
 
 
+def _split_name(full_name: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    if not full_name:
+        return None, None
+
+    parts = full_name.strip().split()
+    if not parts:
+        return None, None
+
+    first_name = parts[0]
+    last_name = " ".join(parts[1:]) if len(parts) > 1 else None
+    return first_name, last_name
+
+
+def _find_better_auth_account(db: Session, email: str) -> Optional[tuple[str, Optional[str], str]]:
+    row = db.execute(
+        text(
+            """
+            SELECT u.id AS user_id, u.name AS name, a.password AS password_hash
+            FROM "user" u
+            JOIN account a ON a."userId" = u.id
+            WHERE u.email = :email
+              AND a.password IS NOT NULL
+            ORDER BY a."updatedAt" DESC
+            LIMIT 1
+            """
+        ),
+        {"email": email},
+    ).mappings().first()
+
+    if row is None:
+        return None
+
+    return str(row["user_id"]), row["name"], str(row["password_hash"])
+
+
+def _sync_backend_user_from_better_auth(
+    db: Session,
+    *,
+    email: str,
+    better_auth_user_id: str,
+    full_name: Optional[str],
+    password_hash: str,
+) -> User:
+    first_name, last_name = _split_name(full_name)
+
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        user = User(
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            external_auth_id=better_auth_user_id,
+        )
+        db.add(user)
+        db.flush()
+    else:
+        user.external_auth_id = better_auth_user_id
+        if first_name is not None:
+            user.first_name = first_name
+        if last_name is not None:
+            user.last_name = last_name
+
+    credential = db.query(MobileCredential).filter(MobileCredential.user_id == user.id).first()
+    if credential is None:
+        credential = MobileCredential(user_id=user.id, password_hash=password_hash)
+        db.add(credential)
+    else:
+        credential.password_hash = password_hash
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 @router.post("/auth/mobile/sign-up", response_model=AuthSyncResponse)
 async def mobile_sign_up(
     payload: MobileSignUpPayload,
@@ -191,21 +266,46 @@ async def mobile_sign_in(
 ) -> AuthSyncResponse:
     user = db.query(User).filter(User.email == payload.email).first()
 
-    if not user or not user.external_auth_id:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    credential = db.query(MobileCredential).filter(MobileCredential.user_id == user.id).first()
+    credential = None
+    if user is not None:
+        credential = db.query(MobileCredential).filter(MobileCredential.user_id == user.id).first()
 
     if credential is not None:
         if not pwd_context.verify(payload.password, credential.password_hash):
             await asyncio.sleep(1)
             raise HTTPException(status_code=401, detail="Invalid email or password")
     else:
-        # Backward-compat for the earlier prototype that stored the bcrypt hash
-        # directly in external_auth_id as "mobile:<hash>".
-        if not user.external_auth_id.startswith("mobile:"):
-            await asyncio.sleep(1)
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+        if user is not None and user.external_auth_id and user.external_auth_id.startswith("mobile:"):
+            # Backward-compat for the earlier prototype that stored the bcrypt hash
+            # directly in external_auth_id as "mobile:<hash>".
+            stored_hash = user.external_auth_id[len("mobile:") :]
+            if not pwd_context.verify(payload.password, stored_hash):
+                await asyncio.sleep(1)
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+        else:
+            better_auth_account = _find_better_auth_account(db, payload.email)
+            if better_auth_account is None:
+                await asyncio.sleep(1)
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+
+            better_auth_user_id, better_auth_name, better_auth_password_hash = better_auth_account
+            if not pwd_context.verify(payload.password, better_auth_password_hash):
+                await asyncio.sleep(1)
+                raise HTTPException(status_code=401, detail="Invalid email or password")
+
+            user = _sync_backend_user_from_better_auth(
+                db,
+                email=payload.email,
+                better_auth_user_id=better_auth_user_id,
+                full_name=better_auth_name,
+                password_hash=better_auth_password_hash,
+            )
+
+    if user is None or not user.external_auth_id:
+        await asyncio.sleep(1)
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if user.external_auth_id.startswith("mobile:"):
         stored_hash = user.external_auth_id[len("mobile:") :]
         if not pwd_context.verify(payload.password, stored_hash):
             await asyncio.sleep(1)

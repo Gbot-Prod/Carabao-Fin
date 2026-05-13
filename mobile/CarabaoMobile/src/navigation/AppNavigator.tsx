@@ -9,15 +9,15 @@ import { Colors, FontSize } from '../lib/theme';
 import { useCart } from '../lib/CartContext';
 
 import AuthScreen from '../screens/AuthScreen';
-import OrderScreen from '../screens/OrderScreen';
+import OrderScreenContent from '../screens/OrderScreen';
 import CartScreen from '../screens/CartScreen';
-import TrackScreen from '../screens/TrackScreen';
-import HistoryScreen from '../screens/HistoryScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import MerchantScreen from '../screens/MerchantScreen';
+import TrackScreenContent from '../screens/TrackScreen';
+import HistoryScreenContent from '../screens/HistoryScreen';
+import ProfileScreenContent from '../screens/ProfileScreen';
+import MerchantScreenContent from '../screens/MerchantScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
-import ConfirmationScreen from '../screens/ConfirmationScreen';
-import OnboardingScreen from '../screens/OnboardingScreen';
+import ConfirmationScreenContent from '../screens/ConfirmationScreen';
+import OnboardingScreenContent from '../screens/OnboardingScreen';
 
 import type { RootStackParamList, TabParamList } from '../types';
 
@@ -73,11 +73,11 @@ function MainTabs() {
         ),
       })}
     >
-      <Tab.Screen name="Order" component={OrderScreen} options={{ title: 'Order' }} />
+      <Tab.Screen name="Order" component={OrderScreenContent} options={{ title: 'Order' }} />
       <Tab.Screen name="Cart" component={CartScreen} options={{ title: 'Cart' }} />
-      <Tab.Screen name="Track" component={TrackScreen} options={{ title: 'Track' }} />
-      <Tab.Screen name="History" component={HistoryScreen} options={{ title: 'History' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
+      <Tab.Screen name="Track" component={TrackScreenContent} options={{ title: 'Track' }} />
+      <Tab.Screen name="History" component={HistoryScreenContent} options={{ title: 'History' }} />
+      <Tab.Screen name="Profile" component={ProfileScreenContent} options={{ title: 'Profile' }} />
     </Tab.Navigator>
   );
 }
@@ -86,10 +86,10 @@ function AuthenticatedStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainTabs} />
-      <Stack.Screen name="Merchant" component={MerchantScreen} />
+      <Stack.Screen name="Merchant" component={MerchantScreenContent} />
       <Stack.Screen name="Checkout" component={CheckoutScreen} />
-      <Stack.Screen name="Confirmation" component={ConfirmationScreen} />
-      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+      <Stack.Screen name="Confirmation" component={ConfirmationScreenContent} />
+      <Stack.Screen name="Onboarding" component={OnboardingScreenContent} />
     </Stack.Navigator>
   );
 }

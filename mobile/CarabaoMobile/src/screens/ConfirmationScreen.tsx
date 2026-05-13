@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
+import { ProtectedScreen } from '../components/ProtectedScreen';
 
 const STEPS = [
   { icon: '✅', label: 'Merchant confirms stock' },
@@ -13,7 +14,7 @@ const STEPS = [
   { icon: '🚚', label: 'Rider pickup and delivery' },
 ];
 
-export default function ConfirmationScreen() {
+function ConfirmationScreenContent() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams<{ orderId?: string }>();
 
@@ -115,6 +116,14 @@ export default function ConfirmationScreen() {
         </Animated.View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+export default function ConfirmationScreen() {
+  return (
+    <ProtectedScreen>
+      <ConfirmationScreenContent />
+    </ProtectedScreen>
   );
 }
 

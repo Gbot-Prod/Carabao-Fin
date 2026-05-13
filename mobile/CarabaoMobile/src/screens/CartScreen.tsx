@@ -5,14 +5,16 @@ import {
   StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { StatRow, Divider, Button, EmptyState } from '../components/UI';
 
-export default function CartScreen() {
+function CartScreenContent() {
   const router = useRouter();
   const { items, updateQuantity, removeItem, total, itemCount, clearCart } = useCart();
+  const insets = useSafeAreaInsets();
 
   const serviceFee = total > 0 ? 40 : 0;
   const grandTotal = total + serviceFee;
@@ -121,8 +123,8 @@ export default function CartScreen() {
         }
       />
 
-      {/* Bottom CTA */}
-      <View style={styles.footer}>
+      {/* Bottom CTA — extra padding so it clears the floating tab bar */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 80 }]}>
         <Button
           label={`Proceed to Checkout  ₱${grandTotal.toLocaleString()}`}
           onPress={handleCheckout}
@@ -131,6 +133,10 @@ export default function CartScreen() {
       </View>
     </SafeAreaView>
   );
+}
+
+export default function CartScreen() {
+  return <CartScreenContent />;
 }
 
 const styles = StyleSheet.create({

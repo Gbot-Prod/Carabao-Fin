@@ -9,6 +9,7 @@ import { useAuth } from '../lib/AuthContext';
 import { api, type ApiCurrentOrder } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, Divider } from '../components/UI';
+import { ProtectedScreen } from '../components/ProtectedScreen';
 
 const STATUS_STEPS = ['Order Placed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
 
@@ -90,7 +91,7 @@ function OrderCard({
   );
 }
 
-export default function TrackScreen() {
+function TrackScreenContent() {
   const { token } = useAuth();
   const [orders, setOrders] = useState<ApiCurrentOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -202,6 +203,14 @@ export default function TrackScreen() {
         />
       )}
     </SafeAreaView>
+  );
+}
+
+export default function TrackScreen() {
+  return (
+    <ProtectedScreen>
+      <TrackScreenContent />
+    </ProtectedScreen>
   );
 }
 

@@ -3,11 +3,25 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../lib/AuthContext';
+import { api } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
+import { ProtectedScreen } from '../components/ProtectedScreen';
 
-export default function OnboardingScreen() {
-  const navigation = useNavigation();
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+const BENEFITS: { icon: IoniconName; title: string; desc: string }[] = [
+  { icon: 'cube-outline', title: 'Easy listing', desc: 'Add your produce in minutes' },
+  { icon: 'cash-outline', title: 'Fast payouts', desc: 'Get paid within 24 hours of delivery' },
+  { icon: 'bicycle-outline', title: 'Logistics support', desc: 'We handle delivery coordination' },
+  { icon: 'bar-chart-outline', title: 'Sales analytics', desc: 'Track your performance in real-time' },
+];
+
+function OnboardingScreenContent() {
+  const router = useRouter();
+  const { token } = useAuth();
   const [step, setStep] = useState<'intro' | 'form'>('intro');
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
@@ -26,21 +40,35 @@ export default function OnboardingScreen() {
       Alert.alert('Missing Fields', 'Please fill in the required fields.');
       return;
     }
+    if (!token) {
+      Alert.alert('Sign In Required', 'Please sign in to apply.');
+      return;
+    }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
-    Alert.alert(
-      'Application Submitted! 🌱',
-      'Your merchant application is under review. We\'ll notify you within 1–2 business days.',
-      [{ text: 'Done', onPress: () => navigation.goBack() }]
-    );
+    try {
+      await api.merchants.apply(token, {
+        merchant_name: form.farmName,
+        location: form.location,
+        contact_number: form.contactInfo,
+      });
+      Alert.alert(
+        'Application Submitted',
+        "Your merchant application is under review. We'll notify you within 1–2 business days.",
+        [{ text: 'Done', onPress: () => router.back() }]
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to submit application';
+      Alert.alert('Submission Failed', message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (step === 'intro') {
     return (
       <SafeAreaView style={styles.root}>
         <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.backIcon}>←</Text>
           </TouchableOpacity>
           <Text style={styles.navTitle}>Become a Merchant</Text>
@@ -49,25 +77,22 @@ export default function OnboardingScreen() {
 
         <ScrollView contentContainerStyle={styles.introScroll}>
           <View style={styles.heroBg}>
-            <Text style={styles.heroEmoji}>🌾</Text>
+            <View style={styles.heroIconWrap}>
+              <Ionicons name="storefront" size={52} color={Colors.white} />
+            </View>
             <Text style={styles.heroTitle}>Sell on Carabao</Text>
             <Text style={styles.heroSub}>
-              Connect with thousands of buyers across the Philippines.
+              Connect with thousands of buyers across the Philippines.{'\n'}
               Fresh produce, fair prices, reliable delivery.
             </Text>
           </View>
 
           <View style={styles.benefitsCard}>
             <Text style={styles.benefitsTitle}>Why join us?</Text>
-            {[
-              { icon: '📦', title: 'Easy listing', desc: 'Add your produce in minutes' },
-              { icon: '💸', title: 'Fast payouts', desc: 'Get paid within 24 hours of delivery' },
-              { icon: '🚚', title: 'Logistics support', desc: 'We handle delivery coordination' },
-              { icon: '📊', title: 'Sales analytics', desc: 'Track your performance in real-time' },
-            ].map((b) => (
-              <View key={b.icon} style={styles.benefit}>
+            {BENEFITS.map((b) => (
+              <View key={b.title} style={styles.benefit}>
                 <View style={styles.benefitIcon}>
-                  <Text style={{ fontSize: 22 }}>{b.icon}</Text>
+                  <Ionicons name={b.icon} size={22} color={Colors.primary} />
                 </View>
                 <View style={styles.benefitInfo}>
                   <Text style={styles.benefitTitle}>{b.title}</Text>
@@ -78,7 +103,8 @@ export default function OnboardingScreen() {
           </View>
 
           <TouchableOpacity style={styles.ctaBtn} onPress={() => setStep('form')}>
-            <Text style={styles.ctaBtnText}>Apply Now →</Text>
+            <Text style={styles.ctaBtnText}>Apply Now</Text>
+            <Ionicons name="arrow-forward" size={18} color={Colors.white} style={{ marginLeft: 6 }} />
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
@@ -111,7 +137,7 @@ export default function OnboardingScreen() {
               style={styles.input}
               placeholder={field.placeholder}
               placeholderTextColor={Colors.textLight}
-              value={(form as any)[field.key]}
+              value={(form as Record<string, string>)[field.key]}
               onChangeText={(v) => handleChange(field.key, v)}
             />
           </View>
@@ -152,6 +178,14 @@ export default function OnboardingScreen() {
   );
 }
 
+export default function OnboardingScreen() {
+  return (
+    <ProtectedScreen>
+      <OnboardingScreenContent />
+    </ProtectedScreen>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.offWhite },
   navBar: {
@@ -168,7 +202,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryDark, borderRadius: Radius.lg,
     padding: Spacing.xxl, alignItems: 'center', gap: Spacing.sm,
   },
-  heroEmoji: { fontSize: 52 },
+  heroIconWrap: {
+    width: 88, height: 88, borderRadius: 44,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 4,
+  },
   heroTitle: { fontSize: FontSize.xxl, fontWeight: '800', color: Colors.white, textAlign: 'center' },
   heroSub: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.8)', textAlign: 'center', lineHeight: 20 },
 
@@ -190,6 +228,7 @@ const styles = StyleSheet.create({
   ctaBtn: {
     backgroundColor: Colors.primary, borderRadius: Radius.md,
     paddingVertical: 15, alignItems: 'center', ...Shadow.sm,
+    flexDirection: 'row', justifyContent: 'center',
   },
   ctaBtnText: { color: Colors.white, fontSize: FontSize.md, fontWeight: '700' },
 

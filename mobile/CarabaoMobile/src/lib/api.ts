@@ -32,6 +32,13 @@ export type ApiMerchant = {
   delivery_time: number | null;
   rating: number | null;
   produces: ApiProduce[];
+  shop_page: {
+    id: number;
+    title: string;
+    slug: string;
+    banner_image_url: string | null;
+    description: string | null;
+  } | null;
 };
 
 export type ApiProduce = {
@@ -118,6 +125,8 @@ export const api = {
       request<ApiMerchant>(`/merchants/${id}`, token),
     produce: (id: number, token: string | null) =>
       request<ApiProduce[]>(`/merchants/${id}/produce`, token),
+    apply: (token: string, payload: { merchant_name: string; location: string; contact_number: string }) =>
+      request<ApiMerchant>('/merchants/me', token, { method: 'POST', body: JSON.stringify(payload) }),
   },
   orders: {
     current: (token: string | null) =>

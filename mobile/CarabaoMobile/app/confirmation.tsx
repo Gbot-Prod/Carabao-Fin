@@ -1,3 +1,1 @@
-import ConfirmationScreen from '../src/screens/ConfirmationScreen';
-
-export default ConfirmationScreen;
+export { default } from '../src/screens/ConfirmationScreen';

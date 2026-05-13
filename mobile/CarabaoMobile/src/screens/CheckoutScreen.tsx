@@ -11,6 +11,7 @@ import { useAuth } from '../lib/AuthContext';
 import { api } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Button, Divider, StatRow } from '../components/UI';
+import { ProtectedScreen } from '../components/ProtectedScreen';
 
 const PAYMENT_METHODS = [
   { id: 'cod', label: 'Cash on Delivery', icon: '💵' },
@@ -22,7 +23,7 @@ const TIME_WINDOWS = [
   '08:00 – 10:00', '10:00 – 12:00', '13:00 – 15:00', '16:00 – 18:00',
 ];
 
-export default function CheckoutScreen() {
+function CheckoutScreenContent() {
   const router = useRouter();
   const { items, total, clearCart } = useCart();
   const { token } = useAuth();
@@ -184,6 +185,14 @@ export default function CheckoutScreen() {
         />
       </View>
     </SafeAreaView>
+  );
+}
+
+export default function CheckoutScreen() {
+  return (
+    <ProtectedScreen>
+      <CheckoutScreenContent />
+    </ProtectedScreen>
   );
 }
 

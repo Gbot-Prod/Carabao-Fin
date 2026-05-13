@@ -12,26 +12,26 @@ import { useAuth } from '../lib/AuthContext';
 import { api, type ApiMerchant } from '../lib/api';
 import { type Farm } from '../lib/mockData';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
-
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
 
 function merchantToFarm(m: ApiMerchant): Farm {
+  const firstCategory = m.produces.find((p) => p.category)?.category;
   return {
     id: String(m.id),
     name: m.merchant_name,
-    category: m.location ?? 'Farm Goods',
+    category: firstCategory ?? 'Farm Goods',
     location: m.location ?? '',
-    description: '',
+    description: m.shop_page?.description ?? '',
     rating: m.rating ?? 0,
     time: m.delivery_time ? `${m.delivery_time} day${m.delivery_time > 1 ? 's' : ''}` : 'N/A',
     deliveryFee: m.delivery_price ?? 0,
     operatingHours: m.operating_hours ?? '',
     contactInfo: m.contact_number,
-    image: PLACEHOLDER_IMAGE,
+    image: m.shop_page?.banner_image_url ?? PLACEHOLDER_IMAGE,
   };
 }
 
-export default function OrderScreen() {
+function OrderScreenContent() {
   const router = useRouter();
   const { itemCount } = useCart();
   const { token } = useAuth();
@@ -175,6 +175,10 @@ export default function OrderScreen() {
       )}
     </SafeAreaView>
   );
+}
+
+export default function OrderScreen() {
+  return <OrderScreenContent />;
 }
 
 const styles = StyleSheet.create({

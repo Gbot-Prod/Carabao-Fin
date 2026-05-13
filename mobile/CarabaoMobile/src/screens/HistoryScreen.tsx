@@ -9,6 +9,7 @@ import { useAuth } from '../lib/AuthContext';
 import { api, type ApiHistoryOrder } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge } from '../components/UI';
+import { ProtectedScreen } from '../components/ProtectedScreen';
 
 function HistoryCard({ order }: { order: ApiHistoryOrder }) {
   const [expanded, setExpanded] = useState(false);
@@ -65,7 +66,7 @@ function HistoryCard({ order }: { order: ApiHistoryOrder }) {
   );
 }
 
-export default function HistoryScreen() {
+function HistoryScreenContent() {
   const { token } = useAuth();
   const [orders, setOrders] = useState<ApiHistoryOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +142,14 @@ export default function HistoryScreen() {
         }
       />
     </SafeAreaView>
+  );
+}
+
+export default function HistoryScreen() {
+  return (
+    <ProtectedScreen>
+      <HistoryScreenContent />
+    </ProtectedScreen>
   );
 }
 

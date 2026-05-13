@@ -1,3 +1,1 @@
-import MerchantScreen from '../src/screens/MerchantScreen';
-
-export default MerchantScreen;
+export { default } from '../src/screens/MerchantScreen';

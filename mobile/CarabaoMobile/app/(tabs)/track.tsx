@@ -1,3 +1,1 @@
-import TrackScreen from '../../src/screens/TrackScreen';
-
-export default TrackScreen;
+export { default } from '../../src/screens/TrackScreen';

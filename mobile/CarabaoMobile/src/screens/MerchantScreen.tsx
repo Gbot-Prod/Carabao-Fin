@@ -13,7 +13,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
 
-export default function MerchantScreen() {
+function MerchantScreenContent() {
   const router = useRouter();
   const { farmId, farmName } = useLocalSearchParams<{ farmId: string; farmName: string }>();
   const { addItem, itemCount } = useCart();
@@ -213,6 +213,10 @@ export default function MerchantScreen() {
       )}
     </SafeAreaView>
   );
+}
+
+export default function MerchantScreen() {
+  return <MerchantScreenContent />;
 }
 
 const styles = StyleSheet.create({

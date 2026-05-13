@@ -9,6 +9,7 @@ import { useAuth } from '../lib/AuthContext';
 import { useRouter } from 'expo-router';
 import { api, type ApiUserProfile } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
+import { ProtectedScreen } from '../components/ProtectedScreen';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -47,7 +48,7 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-export default function ProfileScreen() {
+function ProfileScreenContent() {
   const { user, token, signOut } = useAuth();
   const router = useRouter();
   const [notifEnabled, setNotifEnabled] = useState(true);
@@ -56,7 +57,7 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (!token) return;
-    void api.users.me(token).then(setProfile).catch(() => {});
+    void api.users.me(token).then(setProfile).catch(() => { });
   }, [token]);
 
   const firstName = profile?.first_name ?? user?.firstName ?? '';
@@ -84,6 +85,8 @@ export default function ProfileScreen() {
     );
   };
 
+  const isMerchant = !!profile?.merchant;
+
   const handleMerchant = () => {
     router.push('/onboarding');
   };
@@ -110,16 +113,24 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Become a Merchant Banner */}
-        <TouchableOpacity style={styles.merchantBanner} onPress={handleMerchant} activeOpacity={0.85}>
+        {/* Merchant Banner */}
+        <TouchableOpacity
+          style={[styles.merchantBanner, isMerchant && styles.merchantBannerActive]}
+          onPress={isMerchant ? undefined : handleMerchant}
+          activeOpacity={isMerchant ? 1 : 0.85}
+        >
           <View style={styles.merchantBannerLeft}>
-            <Ionicons name="leaf" size={28} color={Colors.white} />
+            <Ionicons name={isMerchant ? 'storefront' : 'leaf'} size={28} color={Colors.white} />
             <View>
-              <Text style={styles.merchantBannerTitle}>Become a Merchant</Text>
-              <Text style={styles.merchantBannerSub}>Sell your produce on Carabao</Text>
+              <Text style={styles.merchantBannerTitle}>
+                {isMerchant ? profile!.merchant!.merchant_name : 'Become a Merchant'}
+              </Text>
+              <Text style={styles.merchantBannerSub}>
+                {isMerchant ? 'Manage your store on the web app' : 'Sell your produce on Carabao'}
+              </Text>
             </View>
           </View>
-          <Ionicons name="arrow-forward" size={20} color={Colors.white} />
+          {!isMerchant && <Ionicons name="arrow-forward" size={20} color={Colors.white} />}
         </TouchableOpacity>
 
         <View style={styles.sections}>
@@ -196,6 +207,14 @@ export default function ProfileScreen() {
   );
 }
 
+export default function ProfileScreen() {
+  return (
+    <ProtectedScreen>
+      <ProfileScreenContent />
+    </ProtectedScreen>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.offWhite },
   scroll: { paddingBottom: 100 },
@@ -236,6 +255,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     ...Shadow.md,
   },
+  merchantBannerActive: { backgroundColor: Colors.primaryDark },
   merchantBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   merchantBannerTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.white },
   merchantBannerSub: { fontSize: FontSize.xs, color: 'rgba(255,255,255,0.8)' },
