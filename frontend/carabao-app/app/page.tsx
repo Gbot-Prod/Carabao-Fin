@@ -5,14 +5,16 @@ import { auth } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  let role: string | null = null;
+
   try {
     const reqHeaders = await headers();
     const session = await auth.api.getSession({ headers: reqHeaders });
-    console.log("[root] role:", session?.user?.role ?? "no session");
-    if (session?.user.role === "admin") redirect("/admin/dashboard");
-  } catch (err) {
-    console.error("[root] getSession threw:", err);
+    role = session?.user?.role ?? null;
+  } catch {
+    // getSession failure — fall through to /order
   }
 
+  if (role === "admin") redirect("/admin/dashboard");
   redirect("/order");
 }

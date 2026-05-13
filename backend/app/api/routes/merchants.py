@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func, or_
@@ -17,6 +18,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.merchant import MerchantBase, MerchantPageBase, MerchantResponse, MerchantUpdate
 from app.schemas.merchant_performance import MerchantPerformanceResponse
+from app.schemas.payout import PayoutBatchResponse, PayoutInfoResponse, PayoutInfoUpdate, TransactionSummary
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
 from app.services.merchant_service import create_merchant
@@ -391,6 +393,141 @@ async def upload_produce_image(
     db.commit()
     db.refresh(produce)
     return produce
+
+
+# ---------------------------------------------------------------------------
+# Payout routes (merchant-facing)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/merchants/me/payout-info", response_model=Optional[PayoutInfoResponse])
+async def get_my_payout_info(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    return db.query(MerchantPayoutInfo).filter(MerchantPayoutInfo.merchant_id == merchant.id).first()
+
+
+@router.put("/merchants/me/payout-info", response_model=PayoutInfoResponse)
+async def update_my_payout_info(
+    payload: PayoutInfoUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+    info = db.query(MerchantPayoutInfo).filter(MerchantPayoutInfo.merchant_id == merchant.id).first()
+    if not info:
+        info = MerchantPayoutInfo(merchant_id=merchant.id, **payload.model_dump())
+        db.add(info)
+    else:
+        for field, value in payload.model_dump().items():
+            setattr(info, field, value)
+
+    db.commit()
+    db.refresh(info)
+    return info
+
+
+@router.get("/merchants/me/payouts", response_model=list[PayoutBatchResponse])
+async def get_my_payouts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    return (
+        db.query(PayoutBatch)
+        .filter(PayoutBatch.merchant_id == merchant.id)
+        .order_by(PayoutBatch.created_at.desc())
+        .all()
+    )
+
+
+@router.get("/merchants/me/transactions", response_model=list[TransactionSummary])
+async def get_my_transactions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    return (
+        db.query(Transaction)
+        .filter(Transaction.merchant_id == merchant.id)
+        .order_by(Transaction.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+
+@router.post("/merchants/me/payouts/request", response_model=PayoutBatchResponse)
+async def request_my_payout(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+    payout_info = db.query(MerchantPayoutInfo).filter(MerchantPayoutInfo.merchant_id == merchant.id).first()
+    if not payout_info:
+        raise HTTPException(status_code=400, detail="Set up your payout method before requesting a cash out")
+
+    pending = (
+        db.query(PayoutBatch)
+        .filter(
+            PayoutBatch.merchant_id == merchant.id,
+            PayoutBatch.status.in_(["pending", "approved", "processing"]),
+        )
+        .first()
+    )
+    if pending:
+        raise HTTPException(status_code=400, detail="You already have a pending payout request")
+
+    already_batched_ids = (
+        db.query(PayoutBatchItem.transaction_id)
+        .join(PayoutBatch, PayoutBatch.id == PayoutBatchItem.batch_id)
+        .filter(PayoutBatch.status.in_(["released", "approved", "processing", "pending"]))
+        .scalar_subquery()
+    )
+
+    unpaid_txns = (
+        db.query(Transaction)
+        .filter(
+            Transaction.merchant_id == merchant.id,
+            Transaction.status == "paid",
+            Transaction.id.not_in(already_batched_ids),
+        )
+        .all()
+    )
+
+    if not unpaid_txns:
+        raise HTTPException(status_code=400, detail="No unpaid earnings to cash out")
+
+    total = sum(t.merchant_amount for t in unpaid_txns)
+    batch = PayoutBatch(
+        merchant_id=merchant.id,
+        period_date=datetime.now(timezone.utc).date(),
+        transaction_count=len(unpaid_txns),
+        gross_amount=total,
+        status="pending",
+    )
+    db.add(batch)
+    db.flush()
+
+    for txn in unpaid_txns:
+        db.add(PayoutBatchItem(batch_id=batch.id, transaction_id=txn.id, amount=txn.merchant_amount))
+
+    db.commit()
+    db.refresh(batch)
+    return batch
 
 
 @router.delete("/merchants/me", status_code=204)

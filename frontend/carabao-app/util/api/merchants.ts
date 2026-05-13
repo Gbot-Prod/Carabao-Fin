@@ -132,3 +132,73 @@ export const uploadShopLogo = async (file: File): Promise<ShopPage> => {
   const response = await apiClient.post<ShopPage>('/merchants/me/shoppage/logo', formData);
   return response.data;
 };
+
+// ── Payout ────────────────────────────────────────────────────────────────────
+
+export type PayoutInfo = {
+  id: number;
+  merchant_id: number;
+  payout_type: string;
+  bank_code: string | null;
+  account_number: string | null;
+  account_name: string | null;
+  ewallet_number: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PayoutInfoPayload = {
+  payout_type: string;
+  bank_code?: string | null;
+  account_number?: string | null;
+  account_name?: string | null;
+  ewallet_number?: string | null;
+};
+
+export type PayoutBatch = {
+  id: number;
+  merchant_id: number;
+  period_date: string;
+  transaction_count: number;
+  gross_amount: number;
+  status: string;
+  notes: string | null;
+  released_at: string | null;
+  created_at: string;
+};
+
+export type MerchantTransaction = {
+  id: number;
+  order_id: number;
+  amount: number;
+  merchant_amount: number;
+  status: string;
+  description: string | null;
+  created_at: string;
+  paid_at: string | null;
+};
+
+export const fetchMyPayoutInfo = async (): Promise<PayoutInfo | null> => {
+  const response = await apiClient.get<PayoutInfo | null>('/merchants/me/payout-info');
+  return response.data;
+};
+
+export const updateMyPayoutInfo = async (payload: PayoutInfoPayload): Promise<PayoutInfo> => {
+  const response = await apiClient.put<PayoutInfo>('/merchants/me/payout-info', payload);
+  return response.data;
+};
+
+export const fetchMyPayouts = async (): Promise<PayoutBatch[]> => {
+  const response = await apiClient.get<PayoutBatch[]>('/merchants/me/payouts');
+  return response.data;
+};
+
+export const fetchMyTransactions = async (): Promise<MerchantTransaction[]> => {
+  const response = await apiClient.get<MerchantTransaction[]>('/merchants/me/transactions');
+  return response.data;
+};
+
+export const requestPayout = async (): Promise<PayoutBatch> => {
+  const response = await apiClient.post<PayoutBatch>('/merchants/me/payouts/request');
+  return response.data;
+};
