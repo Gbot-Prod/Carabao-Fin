@@ -7,7 +7,11 @@ from sqlalchemy.ext.declarative import declarative_base
 load_dotenv()
 
 URL_DATABASE = os.getenv("DATABASE_URL")
-engine = create_engine(URL_DATABASE)
+engine = create_engine(
+    URL_DATABASE,
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
