@@ -79,7 +79,7 @@ const btn = StyleSheet.create({
 
 // ── EmptyState ────────────────────────────────────────────────────────────────
 interface EmptyStateProps {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   message: string;
   action?: React.ReactNode;
@@ -88,7 +88,7 @@ interface EmptyStateProps {
 export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
   return (
     <View style={es.wrap}>
-      <Text style={es.icon}>{icon}</Text>
+      {icon}
       <Text style={es.title}>{title}</Text>
       <Text style={es.message}>{message}</Text>
       {action}
@@ -98,7 +98,6 @@ export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
 
 const es = StyleSheet.create({
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xxl, gap: Spacing.sm },
-  icon: { fontSize: 52 },
   title: { fontSize: FontSize.xl, fontWeight: '700', color: Colors.text, textAlign: 'center' },
   message: { fontSize: FontSize.sm, color: Colors.textMuted, textAlign: 'center', lineHeight: 20 },
 });

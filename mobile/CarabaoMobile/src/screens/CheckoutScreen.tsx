@@ -4,6 +4,7 @@ import {
   View, Text, TextInput, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
@@ -72,7 +73,10 @@ export default function CheckoutScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Delivery Info */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📍 Delivery Information</Text>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="location-outline" size={16} color={Colors.text} />
+            <Text style={styles.sectionTitle}> Delivery Information</Text>
+          </View>
 
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Delivery Address</Text>
@@ -105,7 +109,10 @@ export default function CheckoutScreen() {
 
         {/* Payment */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>💳 Payment Method</Text>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="card-outline" size={16} color={Colors.text} />
+            <Text style={styles.sectionTitle}> Payment Method</Text>
+          </View>
           {PAYMENT_METHODS.map((pm) => (
             <TouchableOpacity
               key={pm.id}
@@ -125,7 +132,10 @@ export default function CheckoutScreen() {
 
         {/* Notes */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📝 Order Notes</Text>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="create-outline" size={16} color={Colors.text} />
+            <Text style={styles.sectionTitle}> Order Notes</Text>
+          </View>
           <TextInput
             style={[styles.input, styles.textArea]}
             value={notes}
@@ -139,7 +149,10 @@ export default function CheckoutScreen() {
 
         {/* Order Summary */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🧾 Order Summary</Text>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="receipt-outline" size={16} color={Colors.text} />
+            <Text style={styles.sectionTitle}> Order Summary</Text>
+          </View>
           {items.map((item) => (
             <StatRow
               key={item.id}
@@ -190,7 +203,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white, borderRadius: Radius.lg,
     padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border, ...Shadow.sm,
   },
-  sectionTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.md },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
+  sectionTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
 
   fieldGroup: { marginBottom: Spacing.md },
   fieldLabel: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '600', marginBottom: 6 },

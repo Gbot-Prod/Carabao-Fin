@@ -4,13 +4,16 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, Alert, Switch,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
 import { useRouter } from 'expo-router';
 import { api, type ApiUserProfile } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
 interface SettingItemProps {
-  icon: string;
+  icon: IoniconName;
   label: string;
   value?: string;
   onPress?: () => void;
@@ -27,13 +30,13 @@ function SettingItem({ icon, label, value, onPress, rightElement, danger }: Sett
       activeOpacity={0.7}
     >
       <View style={[styles.settingIconWrap, danger && styles.settingIconDanger]}>
-        <Text style={styles.settingIcon}>{icon}</Text>
+        <Ionicons name={icon} size={18} color={danger ? Colors.error : Colors.textMuted} />
       </View>
       <View style={styles.settingInfo}>
         <Text style={[styles.settingLabel, danger && styles.settingLabelDanger]}>{label}</Text>
         {value ? <Text style={styles.settingValue}>{value}</Text> : null}
       </View>
-      {rightElement ?? (onPress ? <Text style={styles.settingChevron}>›</Text> : null)}
+      {rightElement ?? (onPress ? <Ionicons name="chevron-forward" size={16} color={Colors.textLight} /> : null)}
     </TouchableOpacity>
   );
 }
@@ -97,7 +100,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
             <TouchableOpacity style={styles.editAvatarBtn}>
-              <Text style={styles.editAvatarIcon}>📷</Text>
+              <Ionicons name="camera" size={14} color={Colors.primaryDark} />
             </TouchableOpacity>
           </View>
           <Text style={styles.displayName}>{displayName}</Text>
@@ -110,32 +113,32 @@ export default function ProfileScreen() {
         {/* Become a Merchant Banner */}
         <TouchableOpacity style={styles.merchantBanner} onPress={handleMerchant} activeOpacity={0.85}>
           <View style={styles.merchantBannerLeft}>
-            <Text style={styles.merchantBannerIcon}>🌾</Text>
+            <Ionicons name="leaf" size={28} color={Colors.white} />
             <View>
               <Text style={styles.merchantBannerTitle}>Become a Merchant</Text>
               <Text style={styles.merchantBannerSub}>Sell your produce on Carabao</Text>
             </View>
           </View>
-          <Text style={styles.merchantBannerArrow}>→</Text>
+          <Ionicons name="arrow-forward" size={20} color={Colors.white} />
         </TouchableOpacity>
 
         <View style={styles.sections}>
           {/* Account */}
           <SectionHeader title="Account" />
           <View style={styles.settingsGroup}>
-            <SettingItem icon="✉️" label="Email" value={email || 'Not set'} />
-            <SettingItem icon="📞" label="Phone" value={phone ?? 'Not set'} onPress={() => { }} />
-            <SettingItem icon="📍" label="Address" value={address || 'Not set'} onPress={() => { }} />
-            <SettingItem icon="💳" label="Payment Methods" value="No cards saved" onPress={() => { }} />
-            <SettingItem icon="🧾" label="Order History" onPress={() => router.push('/(tabs)/history')} />
-            {memberSince ? <SettingItem icon="📅" label="Member Since" value={memberSince} /> : null}
+            <SettingItem icon="mail-outline" label="Email" value={email || 'Not set'} />
+            <SettingItem icon="call-outline" label="Phone" value={phone ?? 'Not set'} onPress={() => { }} />
+            <SettingItem icon="location-outline" label="Address" value={address || 'Not set'} onPress={() => { }} />
+            <SettingItem icon="card-outline" label="Payment Methods" value="No cards saved" onPress={() => { }} />
+            <SettingItem icon="receipt-outline" label="Order History" onPress={() => router.push('/(tabs)/history')} />
+            {memberSince ? <SettingItem icon="calendar-outline" label="Member Since" value={memberSince} /> : null}
           </View>
 
           {/* Notifications */}
           <SectionHeader title="Notifications" />
           <View style={styles.settingsGroup}>
             <SettingItem
-              icon="🔔"
+              icon="notifications-outline"
               label="Order Updates"
               rightElement={
                 <Switch
@@ -147,7 +150,7 @@ export default function ProfileScreen() {
               }
             />
             <SettingItem
-              icon="📣"
+              icon="megaphone-outline"
               label="Promotions"
               rightElement={
                 <Switch
@@ -163,22 +166,22 @@ export default function ProfileScreen() {
           {/* Preferences */}
           <SectionHeader title="Preferences" />
           <View style={styles.settingsGroup}>
-            <SettingItem icon="🌐" label="Language" value="English" onPress={() => { }} />
-            <SettingItem icon="☀️" label="Theme" value="Light" onPress={() => { }} />
+            <SettingItem icon="language-outline" label="Language" value="English" onPress={() => { }} />
+            <SettingItem icon="sunny-outline" label="Theme" value="Light" onPress={() => { }} />
           </View>
 
           {/* Support */}
           <SectionHeader title="Support" />
           <View style={styles.settingsGroup}>
-            <SettingItem icon="❓" label="Help Center" onPress={() => { }} />
-            <SettingItem icon="📄" label="Terms & Privacy" onPress={() => { }} />
-            <SettingItem icon="⭐" label="Rate the App" onPress={() => { }} />
+            <SettingItem icon="help-circle-outline" label="Help Center" onPress={() => { }} />
+            <SettingItem icon="document-text-outline" label="Terms & Privacy" onPress={() => { }} />
+            <SettingItem icon="star-outline" label="Rate the App" onPress={() => { }} />
           </View>
 
           {/* Sign out */}
           <View style={[styles.settingsGroup, { marginTop: Spacing.sm }]}>
             <SettingItem
-              icon="🚪"
+              icon="log-out-outline"
               label="Sign Out"
               onPress={handleSignOut}
               danger
@@ -217,7 +220,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: Colors.primaryDark,
   },
-  editAvatarIcon: { fontSize: 14 },
   displayName: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.white },
   userEmail: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.7)' },
   editProfileBtn: {
@@ -235,10 +237,8 @@ const styles = StyleSheet.create({
     ...Shadow.md,
   },
   merchantBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  merchantBannerIcon: { fontSize: 28 },
   merchantBannerTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.white },
   merchantBannerSub: { fontSize: FontSize.xs, color: 'rgba(255,255,255,0.8)' },
-  merchantBannerArrow: { fontSize: FontSize.xl, color: Colors.white, fontWeight: '300' },
 
   sections: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, gap: 2 },
   sectionHeader: {
@@ -260,12 +260,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   settingIconDanger: { backgroundColor: Colors.errorBg },
-  settingIcon: { fontSize: 18 },
   settingInfo: { flex: 1 },
   settingLabel: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
   settingLabelDanger: { color: Colors.error },
   settingValue: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 1 },
-  settingChevron: { fontSize: FontSize.xl, color: Colors.textLight, fontWeight: '300' },
 
   version: {
     textAlign: 'center', fontSize: FontSize.xs, color: Colors.textLight,

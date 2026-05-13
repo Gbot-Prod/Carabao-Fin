@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, SafeAreaView, Image, ActivityIndicator,
+  StyleSheet, SafeAreaView, ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
 import { api, type ApiCurrentOrder } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
@@ -26,7 +27,13 @@ function StatusTimeline({ status }: { status: string }) {
           <View key={step} style={tl.stepRow}>
             <View style={tl.lineCol}>
               <View style={[tl.dot, done && tl.dotDone, active && tl.dotActive]}>
-                {done && <Text style={tl.dotCheck}>{i < idx ? '✓' : '●'}</Text>}
+                {done && (
+                  <Ionicons
+                    name={i < idx ? 'checkmark' : 'ellipse'}
+                    size={i < idx ? 12 : 8}
+                    color={i < idx ? Colors.success : Colors.white}
+                  />
+                )}
               </View>
               {i < STATUS_STEPS.length - 1 && (
                 <View style={[tl.line, i < idx && tl.lineDone]} />
@@ -63,8 +70,12 @@ function OrderCard({
       style={[styles.orderCard, isSelected && styles.orderCardSelected]}
     >
       <View style={styles.orderCardRow}>
-        <View style={styles.orderThumb}>
-          <Text style={{ fontSize: 24 }}>📦</Text>
+        <View style={[styles.orderThumb, isSelected && styles.orderThumbSelected]}>
+          <Ionicons
+            name="cube-outline"
+            size={24}
+            color={isSelected ? Colors.primary : Colors.textMuted}
+          />
         </View>
         <View style={styles.orderCardInfo}>
           <Text style={styles.orderMerchant}>{order.merchant}</Text>
@@ -126,7 +137,7 @@ export default function TrackScreen() {
 
       {orders.length === 0 ? (
         <View style={styles.center}>
-          <Text style={{ fontSize: 48 }}>📭</Text>
+          <Ionicons name="mail-outline" size={48} color={Colors.textLight} />
           <Text style={styles.emptyTitle}>No active orders</Text>
           <Text style={styles.emptySub}>Orders you place will appear here</Text>
         </View>
@@ -139,7 +150,7 @@ export default function TrackScreen() {
               <View style={styles.detailsCard}>
                 <Text style={styles.detailCardTitle}>Delivery Details</Text>
                 <View style={styles.mapPlaceholder}>
-                  <Text style={styles.mapPlaceholderIcon}>🗺️</Text>
+                  <Ionicons name="map-outline" size={36} color={Colors.textLight} />
                   <Text style={styles.mapPlaceholderText}>Live map tracking</Text>
                   <Text style={styles.mapPlaceholderSub}>Coming soon</Text>
                 </View>
@@ -205,7 +216,6 @@ const tl = StyleSheet.create({
   },
   dotDone: { backgroundColor: Colors.successBg, borderColor: Colors.success },
   dotActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  dotCheck: { fontSize: 11, color: Colors.success, fontWeight: '800' },
   line: { width: 2, height: 24, backgroundColor: Colors.border, marginVertical: 2 },
   lineDone: { backgroundColor: Colors.success },
   stepContent: { flex: 1, paddingBottom: 20 },
@@ -238,7 +248,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, borderStyle: 'dashed',
     marginBottom: Spacing.lg, gap: 4,
   },
-  mapPlaceholderIcon: { fontSize: 36 },
   mapPlaceholderText: { fontSize: FontSize.md, fontWeight: '600', color: Colors.textMuted },
   mapPlaceholderSub: { fontSize: FontSize.xs, color: Colors.textLight },
 
@@ -266,6 +275,7 @@ const styles = StyleSheet.create({
   orderCardSelected: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
   orderCardRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
   orderThumb: { width: 52, height: 52, borderRadius: Radius.md, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  orderThumbSelected: { backgroundColor: Colors.white },
   orderCardInfo: { flex: 1 },
   orderMerchant: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   orderDate: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },

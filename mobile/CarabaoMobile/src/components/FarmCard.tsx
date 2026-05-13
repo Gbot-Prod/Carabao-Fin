@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Farm } from '../lib/mockData';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
@@ -17,9 +18,13 @@ export default function FarmCard({ farm, onPress }: FarmCardProps) {
       </View>
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>{farm.name}</Text>
-        <Text style={styles.location} numberOfLines={1}>📍 {farm.location}</Text>
+        <View style={styles.locationRow}>
+          <Ionicons name="location-outline" size={11} color={Colors.textMuted} />
+          <Text style={styles.location} numberOfLines={1}> {farm.location}</Text>
+        </View>
         <View style={styles.meta}>
-          <Text style={styles.rating}>⭐ {farm.rating}</Text>
+          <Ionicons name="star" size={11} color={Colors.warning} />
+          <Text style={styles.rating}> {farm.rating}</Text>
           <Text style={styles.dot}>·</Text>
           <Text style={styles.time}>{farm.time}</Text>
         </View>
@@ -44,6 +49,7 @@ const styles = StyleSheet.create({
   badgeText: { color: Colors.white, fontSize: FontSize.xs, fontWeight: '700' },
   info: { padding: Spacing.sm, gap: 3 },
   name: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
+  locationRow: { flexDirection: 'row', alignItems: 'center' },
   location: { fontSize: FontSize.xs, color: Colors.textMuted },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   rating: { fontSize: FontSize.xs, color: Colors.text, fontWeight: '600' },

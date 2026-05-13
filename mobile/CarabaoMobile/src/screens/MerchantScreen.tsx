@@ -4,6 +4,7 @@ import {
   View, Text, Image, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
@@ -79,7 +80,7 @@ export default function MerchantScreen() {
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.errorIcon}>⚠️</Text>
+          <Ionicons name="warning-outline" size={36} color={Colors.warning} />
           <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : (
@@ -97,13 +98,19 @@ export default function MerchantScreen() {
           <View style={styles.infoSection}>
             <Text style={styles.merchantName}>{displayName}</Text>
             {merchant?.location ? (
-              <Text style={styles.merchantLocation}>📍 {merchant.location}</Text>
+              <View style={styles.locationRow}>
+                <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
+                <Text style={styles.merchantLocation}> {merchant.location}</Text>
+              </View>
             ) : null}
 
             {/* Stats row */}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>⭐ {(merchant?.rating ?? 0).toFixed(1)}</Text>
+                <View style={styles.statValueRow}>
+                  <Ionicons name="star" size={14} color={Colors.warning} />
+                  <Text style={styles.statValue}> {(merchant?.rating ?? 0).toFixed(1)}</Text>
+                </View>
                 <Text style={styles.statLabel}>Rating</Text>
               </View>
               <View style={styles.statDivider} />
@@ -124,7 +131,7 @@ export default function MerchantScreen() {
             <View style={styles.detailsGrid}>
               {merchant?.operating_hours ? (
                 <View style={styles.detailCard}>
-                  <Text style={styles.detailIcon}>🕐</Text>
+                  <Ionicons name="time-outline" size={20} color={Colors.textMuted} />
                   <View>
                     <Text style={styles.detailLabel}>Hours</Text>
                     <Text style={styles.detailValue}>{merchant.operating_hours}</Text>
@@ -133,7 +140,7 @@ export default function MerchantScreen() {
               ) : null}
               {merchant?.contact_number ? (
                 <View style={styles.detailCard}>
-                  <Text style={styles.detailIcon}>📞</Text>
+                  <Ionicons name="call-outline" size={20} color={Colors.textMuted} />
                   <View>
                     <Text style={styles.detailLabel}>Contact</Text>
                     <Text style={styles.detailValue}>{merchant.contact_number}</Text>
@@ -161,7 +168,7 @@ export default function MerchantScreen() {
                       <Image source={{ uri: product.image_url }} style={styles.productImage} resizeMode="cover" />
                     ) : (
                       <View style={[styles.productImage, styles.productImagePlaceholder]}>
-                        <Text style={{ fontSize: 28 }}>🌿</Text>
+                        <Ionicons name="leaf-outline" size={28} color={Colors.textLight} />
                       </View>
                     )}
                     <View style={styles.productInfo}>
@@ -224,7 +231,7 @@ const styles = StyleSheet.create({
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
   loadingText: { fontSize: FontSize.sm, color: Colors.textMuted },
-  errorIcon: { fontSize: 36 },
+
   errorText: { fontSize: FontSize.sm, color: Colors.error, textAlign: 'center', paddingHorizontal: Spacing.xl },
 
   heroContainer: { height: 240, position: 'relative' },
@@ -238,7 +245,9 @@ const styles = StyleSheet.create({
 
   infoSection: { padding: Spacing.lg },
   merchantName: { fontSize: FontSize.xxl, fontWeight: '800', color: Colors.text, marginBottom: 4 },
-  merchantLocation: { fontSize: FontSize.sm, color: Colors.textMuted, marginBottom: Spacing.md },
+  locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
+  merchantLocation: { fontSize: FontSize.sm, color: Colors.textMuted },
+  statValueRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
 
   statsRow: {
     flexDirection: 'row', backgroundColor: Colors.surfaceAlt,
@@ -256,7 +265,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md, backgroundColor: Colors.surfaceAlt,
     borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
   },
-  detailIcon: { fontSize: 20 },
+
   detailLabel: { fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: '600' },
   detailValue: { fontSize: FontSize.sm, color: Colors.text, fontWeight: '500' },
 

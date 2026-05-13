@@ -4,6 +4,7 @@ import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, SafeAreaView, ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
 import { api, type ApiHistoryOrder } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
@@ -26,16 +27,23 @@ function HistoryCard({ order }: { order: ApiHistoryOrder }) {
     <TouchableOpacity onPress={() => setExpanded((p) => !p)} activeOpacity={0.8} style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.thumb}>
-          <Text style={{ fontSize: 22 }}>🧾</Text>
+          <Ionicons name="receipt-outline" size={22} color={Colors.primary} />
         </View>
         <View style={styles.cardInfo}>
           <Text style={styles.merchant}>{order.merchant}</Text>
           <Text style={styles.orderId}>#{order.order_id}</Text>
-          <Text style={styles.date}>📅 {order.order_date}</Text>
+          <View style={styles.dateRow}>
+            <Ionicons name="calendar-outline" size={11} color={Colors.textMuted} />
+            <Text style={styles.date}> {order.order_date}</Text>
+          </View>
         </View>
         <View style={styles.cardRight}>
           <Badge label={order.status} color={badgeColor(order.status)} />
-          <Text style={styles.chevron}>{expanded ? '▲' : '▼'}</Text>
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={14}
+            color={Colors.textLight}
+          />
         </View>
       </View>
 
@@ -108,7 +116,7 @@ export default function HistoryScreen() {
         renderItem={({ item }) => <HistoryCard order={item} />}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📋</Text>
+            <Ionicons name="document-text-outline" size={48} color={Colors.textLight} />
             <Text style={styles.emptyTitle}>No orders yet</Text>
             <Text style={styles.emptySub}>Your past orders will appear here</Text>
           </View>
@@ -170,13 +178,13 @@ const styles = StyleSheet.create({
     gap: Spacing.md, padding: Spacing.md,
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  thumb: { width: 56, height: 56, borderRadius: Radius.md, backgroundColor: Colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  thumb: { width: 56, height: 56, borderRadius: Radius.md, backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   cardInfo: { flex: 1, gap: 2 },
   merchant: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   orderId: { fontSize: FontSize.xs, color: Colors.textMuted, fontFamily: 'monospace' },
+  dateRow: { flexDirection: 'row', alignItems: 'center' },
   date: { fontSize: FontSize.xs, color: Colors.textMuted },
   cardRight: { alignItems: 'flex-end', gap: 6 },
-  chevron: { fontSize: 11, color: Colors.textLight },
 
   details: {
     borderTopWidth: 1, borderTopColor: Colors.border,
@@ -192,7 +200,6 @@ const styles = StyleSheet.create({
   reorderText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '700' },
 
   empty: { alignItems: 'center', paddingTop: 60, gap: Spacing.sm },
-  emptyIcon: { fontSize: 48 },
   emptyTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
   emptySub: { fontSize: FontSize.sm, color: Colors.textMuted },
 });

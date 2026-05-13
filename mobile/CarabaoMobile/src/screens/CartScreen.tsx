@@ -2,8 +2,9 @@
 import React from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, SafeAreaView, Image, Alert,
+  StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
@@ -39,7 +40,7 @@ export default function CartScreen() {
           <Text style={styles.headerTitle}>Your Cart</Text>
         </View>
         <EmptyState
-          icon="🛒"
+          icon={<Ionicons name="cart-outline" size={52} color={Colors.textLight} />}
           title="Your cart is empty"
           message="Add fresh produce from farms to get started"
           action={

@@ -4,6 +4,7 @@ import {
   View, Text, FlatList, TextInput, StyleSheet,
   TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import FarmCard from '../components/FarmCard';
 import { useCart } from '../lib/CartContext';
@@ -76,11 +77,11 @@ export default function OrderScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>Good morning 🌱</Text>
+          <Text style={styles.greeting}>Good morning</Text>
           <Text style={styles.headerTitle}>Find Fresh Farms</Text>
         </View>
         <TouchableOpacity style={styles.cartBtn} onPress={() => router.push('/(tabs)/cart')}>
-          <Text style={styles.cartIcon}>🛒</Text>
+          <Ionicons name="cart-outline" size={22} color={Colors.primary} />
           {itemCount > 0 && (
             <View style={styles.cartBadge}>
               <Text style={styles.cartBadgeText}>{itemCount}</Text>
@@ -91,7 +92,7 @@ export default function OrderScreen() {
 
       {/* Search */}
       <View style={styles.searchWrap}>
-        <Text style={styles.searchIcon}>🔍</Text>
+        <Ionicons name="search-outline" size={16} color={Colors.textLight} style={{ marginRight: Spacing.sm }} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search farms, products..."
@@ -139,7 +140,7 @@ export default function OrderScreen() {
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.errorIcon}>⚠️</Text>
+          <Ionicons name="warning-outline" size={36} color={Colors.warning} />
           <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : (
@@ -165,7 +166,7 @@ export default function OrderScreen() {
           )}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>🌾</Text>
+              <Ionicons name="leaf-outline" size={48} color={Colors.textLight} />
               <Text style={styles.emptyText}>No farms found</Text>
               <Text style={styles.emptySubText}>Try adjusting your search</Text>
             </View>
@@ -190,7 +191,6 @@ const styles = StyleSheet.create({
     width: 44, height: 44, backgroundColor: Colors.primaryLight,
     borderRadius: 22, alignItems: 'center', justifyContent: 'center', position: 'relative',
   },
-  cartIcon: { fontSize: 20 },
   cartBadge: {
     position: 'absolute', top: -2, right: -2,
     backgroundColor: Colors.error, width: 18, height: 18, borderRadius: 9,
@@ -204,7 +204,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
     paddingHorizontal: Spacing.md, ...Shadow.sm,
   },
-  searchIcon: { fontSize: 16, marginRight: Spacing.sm },
   searchInput: { flex: 1, paddingVertical: 12, fontSize: FontSize.md, color: Colors.text },
 
   pills: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, gap: Spacing.sm },
@@ -226,11 +225,10 @@ const styles = StyleSheet.create({
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm },
   loadingText: { fontSize: FontSize.sm, color: Colors.textMuted },
-  errorIcon: { fontSize: 36 },
+
   errorText: { fontSize: FontSize.sm, color: Colors.error, textAlign: 'center', paddingHorizontal: Spacing.xl },
 
   empty: { alignItems: 'center', paddingTop: 60, gap: Spacing.sm },
-  emptyIcon: { fontSize: 48 },
   emptyText: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
   emptySubText: { fontSize: FontSize.sm, color: Colors.textMuted },
 });
