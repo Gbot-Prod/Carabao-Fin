@@ -126,7 +126,7 @@
   width: 100%;
   height: 180px;
   overflow: hidden;
-  background: #e2ebe0;
+  background: linear-gradient(135deg, #d7e7da 0%, #c0d9c6 100%);
 }
 
 .productImage img {

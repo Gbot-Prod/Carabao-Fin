@@ -11,6 +11,8 @@ import {
   fetchMyPayoutInfo,
   fetchMyPayouts,
   fetchMyTransactions,
+  fetchMyMerchantOrders,
+  updateMerchantOrderStatus,
   updateMyPayoutInfo,
   requestPayout,
   createMyShopPage,
@@ -29,6 +31,7 @@ import {
   type PayoutInfo,
   type MerchantPayoutBatch,
   type MerchantTransaction,
+  type MerchantOrder,
 } from "@/util/api";
 
 const formatPeso = (v: number) =>
@@ -40,26 +43,95 @@ const formatDate = (v?: string | null) => {
   return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "2-digit" });
 };
 
-type Tab = "overview" | "produce" | "shop" | "earnings";
+type Tab = "overview" | "produce" | "shop" | "earnings" | "orders";
 
 type ProduceFormState = {
-  name: string; description: string; category: string;
-  price: number; unit: string; stock_quantity: number; image_url: string;
+  name: string;
+  description: string;
+  category: "Vegetables" | "Fruits" | "";
+  price: number;
+  unit: "kg" | "lbs";
+  unit_quantity: number;
+  stock_quantity: number;
+  image_url: string;
 };
 
-const emptyForm: ProduceFormState = { name: "", description: "", category: "", price: 0, unit: "kg", stock_quantity: 0, image_url: "" };
+const emptyForm: ProduceFormState = { name: "", description: "", category: "", price: 0, unit: "kg", unit_quantity: 1, stock_quantity: 0, image_url: "" };
+
+function TickGroup<T extends string>({
+  label, options, value, onChange,
+}: { label: string; options: T[]; value: T | ""; onChange: (v: T) => void }) {
+  return (
+    <div>
+      <div className={styles.formTickLabel}>{label}</div>
+      <div className={styles.tickRow}>
+        {options.map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            className={`${styles.tickBtn} ${value === opt ? styles.tickBtnActive : ""}`}
+            onClick={() => onChange(opt)}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ProduceFormFields({ form, onChange }: { form: ProduceFormState; onChange: (f: ProduceFormState) => void }) {
   return (
     <>
       <div className={styles.formGrid}>
-        <label className={styles.formLabel}>Name *<input className={styles.formInput} required value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} /></label>
-        <label className={styles.formLabel}>Category<input className={styles.formInput} value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value })} /></label>
-        <label className={styles.formLabel}>Price (₱)<input className={styles.formInput} type="number" min="0" value={form.price} onChange={(e) => onChange({ ...form, price: Number(e.target.value) })} /></label>
-        <label className={styles.formLabel}>Unit<input className={styles.formInput} value={form.unit} onChange={(e) => onChange({ ...form, unit: e.target.value })} /></label>
-        <label className={styles.formLabel}>Stock<input className={styles.formInput} type="number" min="0" value={form.stock_quantity} onChange={(e) => onChange({ ...form, stock_quantity: Number(e.target.value) })} /></label>
+        <label className={styles.formLabel}>
+          Name *
+          <input className={styles.formInput} required value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} />
+        </label>
+        <label className={styles.formLabel}>
+          Stock
+          <input className={styles.formInput} type="number" min="0" value={form.stock_quantity} onChange={(e) => onChange({ ...form, stock_quantity: Number(e.target.value) })} />
+        </label>
       </div>
-      <label className={styles.formLabelFull}>Description<textarea className={styles.formInput} rows={2} value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} /></label>
+
+      <div className={styles.formTickRow}>
+        <TickGroup
+          label="Category"
+          options={["Vegetables", "Fruits"] as const}
+          value={form.category}
+          onChange={(v) => onChange({ ...form, category: v })}
+        />
+        <TickGroup
+          label="Unit"
+          options={["kg", "lbs"] as const}
+          value={form.unit}
+          onChange={(v) => onChange({ ...form, unit: v })}
+        />
+      </div>
+
+      <div className={styles.priceRow}>
+        <label className={styles.formLabel} style={{ flex: 1 }}>
+          Price (₱)
+          <input className={styles.formInput} type="number" min="0" value={form.price} onChange={(e) => onChange({ ...form, price: Number(e.target.value) })} />
+        </label>
+        <div className={styles.pricePerLabel}>per</div>
+        <label className={styles.formLabel} style={{ width: 90 }}>
+          Quantity
+          <input className={styles.formInput} type="number" min="0.1" step="0.1" value={form.unit_quantity ?? 1} onChange={(e) => onChange({ ...form, unit_quantity: Number(e.target.value) || 1 })} />
+        </label>
+        <div className={styles.priceUnitLabel}>{form.unit}</div>
+      </div>
+
+      {form.price > 0 && form.unit_quantity > 0 && (
+        <div className={styles.pricePreview}>
+          ₱{form.price} per {form.unit_quantity === 1 ? "" : form.unit_quantity}{form.unit}
+        </div>
+      )}
+
+      <label className={styles.formLabelFull}>
+        Description
+        <textarea className={styles.formInput} rows={2} value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} />
+      </label>
     </>
   );
 }
@@ -98,6 +170,12 @@ export default function MerchantDashboardPage() {
   const [requestingPayout, setRequestingPayout] = useState(false);
   const [payoutMessage, setPayoutMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [earningsLoaded, setEarningsLoaded] = useState(false);
+
+  const [orders, setOrders] = useState<MerchantOrder[]>([]);
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
+  const [orderFilter, setOrderFilter] = useState<string>("all");
 
   const [deletingMerchant, setDeletingMerchant] = useState(false);
   const [confirmDeleteMerchant, setConfirmDeleteMerchant] = useState(false);
@@ -155,6 +233,20 @@ export default function MerchantDashboardPage() {
     void loadEarnings();
   }, [activeTab, earningsLoaded]);
 
+  useEffect(() => {
+    if (activeTab !== "orders" || ordersLoaded) return;
+    const loadOrders = async () => {
+      setOrdersLoading(true);
+      try {
+        const data = await fetchMyMerchantOrders();
+        setOrders(data);
+        setOrdersLoaded(true);
+      } catch { /* silently fail */ }
+      finally { setOrdersLoading(false); }
+    };
+    void loadOrders();
+  }, [activeTab, ordersLoaded]);
+
   const merchantName = performance?.merchant_name ?? "Your Shop";
 
   const stockAnalytics = useMemo(() => {
@@ -181,7 +273,7 @@ export default function MerchantDashboardPage() {
 
   const startEdit = (p: Produce) => {
     setEditingProduceId(p.id);
-    setEditForm({ name: p.name ?? "", description: p.description ?? "", category: p.category ?? "", price: p.price, unit: p.unit, stock_quantity: p.stock_quantity, image_url: p.image_url ?? "" });
+    setEditForm({ name: p.name ?? "", description: p.description ?? "", category: p.category ?? "", price: p.price, unit: p.unit ?? "kg", unit_quantity: p.unit_quantity ?? 1, stock_quantity: p.stock_quantity, image_url: p.image_url ?? "" });
   };
 
   const handleProduceImageUpload = async (produceId: number, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -203,7 +295,7 @@ export default function MerchantDashboardPage() {
     e.preventDefault();
     setProduceFormLoading(true);
     try {
-      const payload: ProduceCreatePayload = { name: addForm.name, description: addForm.description || null, category: addForm.category || null, price: addForm.price, unit: addForm.unit, stock_quantity: addForm.stock_quantity, image_url: addForm.image_url || null };
+      const payload: ProduceCreatePayload = { name: addForm.name, description: addForm.description || null, category: addForm.category || null, price: addForm.price, unit: addForm.unit, unit_quantity: addForm.unit_quantity, stock_quantity: addForm.stock_quantity, image_url: addForm.image_url || null };
       const created = await createProduce(payload);
       setProduces((prev) => [...prev, created]);
       setShowAddForm(false);
@@ -217,7 +309,7 @@ export default function MerchantDashboardPage() {
     if (editingProduceId === null) return;
     setProduceFormLoading(true);
     try {
-      const updated = await updateProduce(editingProduceId, { name: editForm.name, description: editForm.description || null, category: editForm.category || null, price: editForm.price, unit: editForm.unit, stock_quantity: editForm.stock_quantity, image_url: editForm.image_url || null });
+      const updated = await updateProduce(editingProduceId, { name: editForm.name, description: editForm.description || null, category: editForm.category || null, price: editForm.price, unit: editForm.unit, unit_quantity: editForm.unit_quantity, stock_quantity: editForm.stock_quantity, image_url: editForm.image_url || null });
       setProduces((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       setEditingProduceId(null);
     } catch { /* silently fail */ }
@@ -306,6 +398,15 @@ export default function MerchantDashboardPage() {
     }
   };
 
+  const handleUpdateOrderStatus = async (orderId: number, status: string) => {
+    setUpdatingOrderId(orderId);
+    try {
+      const updated = await updateMerchantOrderStatus(orderId, status);
+      setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+    } catch { /* silently fail */ }
+    finally { setUpdatingOrderId(null); }
+  };
+
   const handleDeleteMerchant = async () => {
     setDeletingMerchant(true);
     try { await deleteMyMerchant(); router.push("/profile"); }
@@ -382,7 +483,7 @@ export default function MerchantDashboardPage() {
 
       {/* Tab bar */}
       <nav className={styles.tabBar}>
-        {(["overview", "produce", "shop", "earnings"] as Tab[]).map((tab) => (
+        {(["overview", "produce", "shop", "orders", "earnings"] as Tab[]).map((tab) => (
           <button
             key={tab}
             className={`${styles.tabBtn} ${activeTab === tab ? styles.tabBtnActive : ""}`}
@@ -391,6 +492,7 @@ export default function MerchantDashboardPage() {
             {tab === "overview" && "Overview"}
             {tab === "produce" && `Produce (${produces.length})`}
             {tab === "shop" && "Shop Page"}
+            {tab === "orders" && `Orders${orders.length ? ` (${orders.length})` : ""}`}
             {tab === "earnings" && "Earnings"}
           </button>
         ))}
@@ -521,7 +623,7 @@ export default function MerchantDashboardPage() {
             )}
 
             <div className={styles.overviewActions}>
-              <Link className={styles.secondaryBtn} href="/track">View Orders</Link>
+              <button className={styles.secondaryBtn} onClick={() => setActiveTab("orders")}>View All Orders</button>
             </div>
           </div>
         )}
@@ -581,7 +683,7 @@ export default function MerchantDashboardPage() {
                     <div className={styles.produceRowInfo}>
                       <strong className={styles.produceName}>{produce.name}</strong>
                       {produce.category && <span className={styles.produceCategory}>{produce.category}</span>}
-                      <span className={styles.producePrice}>₱{produce.price} / {produce.unit}</span>
+                      <span className={styles.producePrice}>₱{produce.price} / {produce.unit_quantity !== 1 ? produce.unit_quantity : ""}{produce.unit}</span>
                       <span className={styles.produceStock}>Stock: {produce.stock_quantity}</span>
                       {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
                     </div>
@@ -657,6 +759,103 @@ export default function MerchantDashboardPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── ORDERS ──────────────────────────────────────────────────────── */}
+        {activeTab === "orders" && (
+          <div className={styles.ordersLayout}>
+            <div className={styles.ordersHeader}>
+              <h2 className={styles.sectionTitle} style={{ margin: 0 }}>Customer Orders</h2>
+              <div className={styles.orderFilterRow}>
+                {["all", "pending", "processing", "shipped", "delivered", "cancelled"].map((f) => (
+                  <button
+                    key={f}
+                    className={`${styles.filterChip} ${orderFilter === f ? styles.filterChipActive : ""}`}
+                    onClick={() => setOrderFilter(f)}
+                  >
+                    {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {ordersLoading && <p className={styles.emptyText}>Loading orders…</p>}
+            {!ordersLoading && orders.length === 0 && (
+              <p className={styles.emptyText}>No orders yet.</p>
+            )}
+
+            <div className={styles.ordersList}>
+              {orders
+                .filter((o) => orderFilter === "all" || o.status === orderFilter)
+                .map((order) => (
+                  <div key={order.id} className={styles.orderCard}>
+                    <div className={styles.orderCardHeader}>
+                      <div className={styles.orderCardMeta}>
+                        <span className={styles.orderIdLabel}>Order #{order.id}</span>
+                        <span className={`${styles.orderStatusBadge} ${styles[`orderStatus_${order.status}`]}`}>
+                          {order.status}
+                        </span>
+                        <span className={styles.orderDate}>{formatDate(order.ordered_at)}</span>
+                      </div>
+                      <strong className={styles.orderTotal}>{formatPeso(order.total_price)}</strong>
+                    </div>
+
+                    {/* Buyer info */}
+                    <div className={styles.orderBuyer}>
+                      <span className={styles.orderBuyerLabel}>Buyer</span>
+                      <span className={styles.orderBuyerName}>{order.buyer_name ?? "—"}</span>
+                      {order.buyer_email && <span className={styles.orderBuyerContact}>{order.buyer_email}</span>}
+                      {order.buyer_phone && <span className={styles.orderBuyerContact}>{order.buyer_phone}</span>}
+                    </div>
+
+                    {/* Delivery address */}
+                    {order.delivery_address && (
+                      <div className={styles.orderAddress}>
+                        <span className={styles.orderBuyerLabel}>Deliver to</span>
+                        <span>{order.delivery_address}</span>
+                      </div>
+                    )}
+
+                    {/* Items */}
+                    <div className={styles.orderItems}>
+                      {order.items.map((item, i) => (
+                        <div key={i} className={styles.orderItem}>
+                          <span className={styles.orderItemName}>{item.produce ?? "Item"}</span>
+                          <span className={styles.orderItemQty}>×{item.quantity}</span>
+                          <span className={styles.orderItemPrice}>{item.price != null ? `₱${item.price}/${item.unit ?? "unit"}` : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Status actions */}
+                    {!["delivered", "cancelled"].includes(order.status) && (
+                      <div className={styles.orderActions}>
+                        {order.status === "pending" && (
+                          <button className={styles.orderActionBtn} disabled={updatingOrderId === order.id} onClick={() => void handleUpdateOrderStatus(order.id, "processing")}>
+                            {updatingOrderId === order.id ? "…" : "Confirm Order"}
+                          </button>
+                        )}
+                        {order.status === "processing" && (
+                          <button className={styles.orderActionBtn} disabled={updatingOrderId === order.id} onClick={() => void handleUpdateOrderStatus(order.id, "shipped")}>
+                            {updatingOrderId === order.id ? "…" : "Mark as Shipped"}
+                          </button>
+                        )}
+                        {order.status === "shipped" && (
+                          <button className={styles.orderActionBtn} disabled={updatingOrderId === order.id} onClick={() => void handleUpdateOrderStatus(order.id, "delivered")}>
+                            {updatingOrderId === order.id ? "…" : "Mark as Delivered"}
+                          </button>
+                        )}
+                        {order.status !== "cancelled" && (
+                          <button className={styles.orderCancelBtn} disabled={updatingOrderId === order.id} onClick={() => void handleUpdateOrderStatus(order.id, "cancelled")}>
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
           </div>
         )}
 

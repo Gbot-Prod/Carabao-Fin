@@ -10,9 +10,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
 import { SidebarFilterChips } from "./SidebarFilterChips";
 
-const PROTECTED = new Set(["/track", "/history", "/profile", "/checkout", "/confirmation", "/orders"]);
+const PROTECTED = new Set(["/track", "/profile", "/checkout", "/confirmation", "/orders"]);
 const SHOP_PATHS = ["/order", "/cart"];
-const PROFILE_PATHS = ["/profile", "/history", "/track"];
+const PROFILE_PATHS = ["/profile", "/track"];
 
 function StoreIcon() {
   return (
@@ -23,12 +23,12 @@ function StoreIcon() {
   );
 }
 
-function MangoIcon() {
+function ShopIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 6c-2.8 0-5 2.8-5 6.5C7 17.5 9.5 21.5 12 21.5s5-4 5-9C17 8.8 14.8 6 12 6z" />
-      <path d="M12 6c0-1.5.8-2.8 2-3.5" />
-      <path d="M14 2.5c1.5-.5 3 .5 2.5 2.5" />
+      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <path d="M16 10a4 4 0 0 1-8 0" />
     </svg>
   );
 }
@@ -61,21 +61,13 @@ function SettingsIcon() {
   );
 }
 
-function HistoryIcon() {
+function ReceiptIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
-function PackageIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-      <line x1="12" y1="2" x2="12" y2="12" />
+      <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z" />
+      <line x1="8" y1="9" x2="16" y2="9" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="12" y2="17" />
     </svg>
   );
 }
@@ -159,7 +151,7 @@ export default function Sidebar() {
           <div className={`sidebar__section-body${shopsOpen ? " sidebar__section-body--open" : ""}`}>
             <div className="sidebar__section-inner">
               <ul className="sidebar__nav-list">
-                {renderNavLink("/order", "Browse Shops", <MangoIcon />)}
+                {renderNavLink("/order", "Browse Shops", <ShopIcon />)}
                 {renderNavLink("/cart", "Cart", <CartIcon />)}
               </ul>
               <SidebarFilterChips />
@@ -181,9 +173,8 @@ export default function Sidebar() {
             <div className="sidebar__section-inner">
               <ul className="sidebar__nav-list">
                 {renderNavLink("/profile", "Settings", <SettingsIcon />, true)}
-                {renderNavLink("/history", "History", <HistoryIcon />, true)}
                 {renderNavLink("/track", "Track", <TrackIcon />, true)}
-                {renderNavLink("/orders", "Orders", <PackageIcon />, true)}
+                {renderNavLink("/orders", "Orders", <ReceiptIcon />, true)}
               </ul>
             </div>
           </div>

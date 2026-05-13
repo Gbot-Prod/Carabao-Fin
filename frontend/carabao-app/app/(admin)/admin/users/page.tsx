@@ -60,14 +60,17 @@ export default function AdminUsersPage() {
                 <td>{u.merchant ? u.merchant.merchant_name : <span className={styles.empty}>—</span>}</td>
                 <td className={styles.mono}>{u.created_at ? new Date(u.created_at).toLocaleDateString("en-PH") : "—"}</td>
                 <td>
-                  <button
-                    className={u.is_admin ? styles.roleAdmin : styles.roleUser}
-                    onClick={() => void handleRoleToggle(u)}
-                    disabled={toggling === u.id}
-                    title={u.is_admin ? "Demote to user" : "Promote to admin"}
-                  >
-                    {toggling === u.id ? "…" : u.is_admin ? "Admin" : "User"}
-                  </button>
+                  <label className={`${styles.toggle} ${toggling === u.id ? styles.toggleBusy : ""}`} title={u.is_admin ? "Demote to user" : "Promote to admin"}>
+                    <input
+                      type="checkbox"
+                      checked={u.is_admin}
+                      disabled={toggling === u.id}
+                      onChange={() => void handleRoleToggle(u)}
+                    />
+                    <span className={styles.toggleTrack}>
+                      <span className={styles.toggleThumb} />
+                    </span>
+                  </label>
                 </td>
               </tr>
             ))}

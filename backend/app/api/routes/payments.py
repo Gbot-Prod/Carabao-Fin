@@ -26,7 +26,8 @@ from app.services.paymongo import create_checkout_session
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+_raw_frontend = os.getenv("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_URL = _raw_frontend.split(",")[0].strip()
 PLATFORM_FEE_RATE = 0.01
 
 logger = logging.getLogger(__name__)

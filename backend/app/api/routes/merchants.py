@@ -11,6 +11,7 @@ from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
+from app.models.order_history import OrderHistory
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.produce import Produce
 from app.models.shopPage import ShopPage
@@ -18,7 +19,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.merchant import MerchantBase, MerchantPageBase, MerchantResponse, MerchantUpdate
 from app.schemas.merchant_performance import MerchantPerformanceResponse
-from app.schemas.payout import PayoutBatchResponse, PayoutInfoResponse, PayoutInfoUpdate, TransactionSummary
+from app.schemas.payout import MerchantOrderResponse, PayoutBatchResponse, PayoutInfoResponse, PayoutInfoUpdate, TransactionSummary
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
 from app.services.merchant_service import create_merchant
@@ -528,6 +529,96 @@ async def request_my_payout(
     db.commit()
     db.refresh(batch)
     return batch
+
+
+# ---------------------------------------------------------------------------
+# Merchant order management
+# ---------------------------------------------------------------------------
+
+
+@router.get("/merchants/me/orders", response_model=list[MerchantOrderResponse])
+async def get_my_merchant_orders(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+    rows = (
+        db.query(Order, User, CurrentOrder)
+        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
+        .join(User, User.id == OrderHistory.user_id)
+        .outerjoin(CurrentOrder, CurrentOrder.order_id == Order.id)
+        .filter(Order.merchant_id == merchant.id)
+        .order_by(Order.ordered_at.desc())
+        .limit(200)
+        .all()
+    )
+
+    result = []
+    for order, user, current in rows:
+        buyer_name = " ".join(filter(None, [user.first_name, user.last_name])) or None
+        result.append(MerchantOrderResponse(
+            id=order.id,
+            status=order.status,
+            total_price=order.total_price,
+            items=order.items or [],
+            delivery_address=order.delivery_address,
+            ordered_at=order.ordered_at,
+            buyer_name=buyer_name,
+            buyer_email=user.email,
+            buyer_phone=user.phone_number,
+            shipped=current.shipped if current else False,
+            time_of_arrival=current.time_of_arrival if current else None,
+        ))
+    return result
+
+
+@router.patch("/merchants/me/orders/{order_id}/status", response_model=MerchantOrderResponse)
+async def update_my_merchant_order_status(
+    order_id: int,
+    status: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+    order = db.query(Order).filter(Order.id == order_id, Order.merchant_id == merchant.id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    allowed = {"processing", "shipped", "delivered", "cancelled"}
+    if status not in allowed:
+        raise HTTPException(status_code=400, detail=f"Status must be one of: {', '.join(allowed)}")
+
+    order.status = status
+    if order.current_order:
+        order.current_order.status = status
+        order.current_order.shipped = status in {"shipped", "out_for_delivery", "delivered"}
+
+    db.commit()
+
+    current = order.current_order
+    order_history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
+    user = db.query(User).filter(User.id == order_history.user_id).first() if order_history else None
+    buyer_name = " ".join(filter(None, [user.first_name, user.last_name])) if user else None
+
+    return MerchantOrderResponse(
+        id=order.id,
+        status=order.status,
+        total_price=order.total_price,
+        items=order.items or [],
+        delivery_address=order.delivery_address,
+        ordered_at=order.ordered_at,
+        buyer_name=buyer_name,
+        buyer_email=user.email if user else None,
+        buyer_phone=user.phone_number if user else None,
+        shipped=current.shipped if current else False,
+        time_of_arrival=current.time_of_arrival if current else None,
+    )
 
 
 @router.delete("/merchants/me", status_code=204)

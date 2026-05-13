@@ -94,7 +94,21 @@ export const fetchAdminStats = async (): Promise<AdminStats> => {
 };
 
 export const fetchAdminPayoutBatches = async (status?: string): Promise<PayoutBatch[]> => {
-  const res = await apiClient.get<PayoutBatch[]>('/admin/batches', { params: status ? { status } : {} });
+  const res = await apiClient.get<PayoutBatch[]>('/payments/admin/batches', { params: status ? { status } : {} });
+  return res.data;
+};
+
+export const generatePayoutBatches = async (periodDate?: string): Promise<PayoutBatch[]> => {
+  const res = await apiClient.post<PayoutBatch[]>('/payments/admin/batches/generate', null, {
+    params: periodDate ? { period: periodDate } : {},
+  });
+  return res.data;
+};
+
+export const releasePayoutBatch = async (batchId: number, notes?: string): Promise<PayoutBatch> => {
+  const res = await apiClient.patch<PayoutBatch>(`/payments/admin/batches/${batchId}/release`, null, {
+    params: notes ? { notes } : {},
+  });
   return res.data;
 };
 

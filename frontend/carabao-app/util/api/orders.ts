@@ -57,3 +57,7 @@ export const placeOrderFromCart = async (payload: PlaceOrderPayload): Promise<Pl
   const response = await apiClient.post<PlaceOrderResponse>('/orders/me/place', payload);
   return response.data;
 };
+
+export const deleteOrderFromHistory = async (orderId: number): Promise<void> => {
+  await apiClient.delete(`/orders/me/history/${orderId}`);
+};

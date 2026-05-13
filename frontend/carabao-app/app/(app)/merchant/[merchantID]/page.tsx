@@ -152,10 +152,19 @@ export default function MerchantDetailPage() {
             <div className={styles.productsGrid}>
               {produces.map((produce) => (
                 <article key={produce.id} className={styles.productCard}>
+                  <div className={styles.productImage}>
+                    {produce.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={produce.image_url} alt={produce.name ?? ''} />
+                    ) : null}
+                    {produce.category && (
+                      <span className={styles.badge}>{produce.category}</span>
+                    )}
+                  </div>
                   <div className={styles.productBody}>
                     <h3>{produce.name ?? 'Unnamed Produce'}</h3>
                     {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
-                    <p className={styles.price}>₱{produce.price} / {produce.unit}</p>
+                    <p className={styles.price}>₱{produce.price} / {produce.unit_quantity && produce.unit_quantity !== 1 ? produce.unit_quantity : ""}{produce.unit}</p>
                     <button
                       className={styles.addBtn}
                       disabled={addingId === produce.id}

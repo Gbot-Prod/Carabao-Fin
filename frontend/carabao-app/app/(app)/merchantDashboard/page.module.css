@@ -649,6 +649,227 @@
   min-width: 0;
 }
 
+/* ── Orders tab ──────────────────────────────────────────────────────────── */
+.ordersLayout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ordersHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.orderFilterRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filterChip {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(23,61,37,0.14);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5c6a5e;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s;
+}
+
+.filterChip:hover {
+  background: rgba(23,61,37,0.06);
+  color: #173d25;
+}
+
+.filterChipActive {
+  background: #173d25;
+  border-color: #173d25;
+  color: #fff;
+}
+
+.ordersList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.orderCard {
+  background: #fff;
+  border: 1px solid rgba(23,61,37,0.08);
+  border-radius: 16px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.orderCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.orderCardMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.orderIdLabel {
+  font-size: 14px;
+  font-weight: 850;
+  color: #173d25;
+}
+
+.orderDate {
+  font-size: 12px;
+  color: #7a8f7a;
+  font-weight: 600;
+}
+
+.orderTotal {
+  font-size: 16px;
+  font-weight: 900;
+  color: #173d25;
+  white-space: nowrap;
+}
+
+.orderStatusBadge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 20px;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.orderStatus_pending { background: rgba(217,119,6,0.10); color: #92400e; }
+.orderStatus_processing { background: rgba(59,130,246,0.10); color: #1e40af; }
+.orderStatus_shipped { background: rgba(139,92,246,0.10); color: #5b21b6; }
+.orderStatus_delivered { background: rgba(49,146,93,0.12); color: #1a6634; }
+.orderStatus_cancelled { background: rgba(185,28,28,0.10); color: #b91c1c; }
+
+.orderBuyer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: #f4f8f5;
+  border-radius: 10px;
+}
+
+.orderBuyerLabel {
+  font-size: 10px;
+  font-weight: 850;
+  color: #5c6a5e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.orderBuyerName {
+  font-size: 13px;
+  font-weight: 800;
+  color: #173d25;
+}
+
+.orderBuyerContact {
+  font-size: 12px;
+  color: #5c6a5e;
+  font-weight: 600;
+}
+
+.orderAddress {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: #5c6a5e;
+}
+
+.orderItems {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid rgba(23,61,37,0.06);
+  padding-top: 10px;
+}
+
+.orderItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.orderItemName {
+  font-weight: 700;
+  color: #173d25;
+  flex: 1;
+}
+
+.orderItemQty {
+  font-weight: 600;
+  color: #5c6a5e;
+  min-width: 32px;
+}
+
+.orderItemPrice {
+  font-weight: 600;
+  color: #5c6a5e;
+  font-size: 12px;
+}
+
+.orderActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid rgba(23,61,37,0.06);
+  padding-top: 10px;
+}
+
+.orderActionBtn {
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: none;
+  background: #31925d;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+
+.orderActionBtn:hover:not(:disabled) { opacity: 0.85; }
+.orderActionBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.orderCancelBtn {
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(185,28,28,0.2);
+  background: rgba(185,28,28,0.06);
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+
+.orderCancelBtn:hover:not(:disabled) { opacity: 0.8; }
+.orderCancelBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* ── Earnings tab ────────────────────────────────────────────────────────── */
 .earningsLayout {
   display: flex;
@@ -967,6 +1188,85 @@
 .formActions {
   display: flex;
   gap: 8px;
+}
+
+.formTickRow {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.formTickLabel {
+  font-size: 10px;
+  font-weight: 850;
+  color: #5c6a5e;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.tickRow {
+  display: flex;
+  gap: 6px;
+}
+
+.tickBtn {
+  padding: 7px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(23,61,37,0.18);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: #5c6a5e;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.12s;
+}
+
+.tickBtn:hover {
+  border-color: #31925d;
+  color: #31925d;
+}
+
+.tickBtnActive {
+  background: #173d25;
+  border-color: #173d25;
+  color: #fff;
+}
+
+.priceRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pricePerLabel {
+  font-size: 13px;
+  color: #5c6a5e;
+  font-weight: 600;
+  padding-bottom: 9px;
+  flex-shrink: 0;
+}
+
+.priceUnitLabel {
+  font-size: 13px;
+  font-weight: 700;
+  color: #173d25;
+  padding-bottom: 9px;
+  flex-shrink: 0;
+}
+
+.pricePreview {
+  font-size: 12px;
+  font-weight: 700;
+  color: #31925d;
+  background: rgba(49,146,93,0.08);
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  display: inline-block;
 }
 
 /* ── Danger zone ─────────────────────────────────────────────────────────── */

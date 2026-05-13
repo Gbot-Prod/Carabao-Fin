@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Float, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -12,6 +12,7 @@ class Produce(Base):
     category = Column(String, nullable=True, index=True)
     price = Column(Integer, nullable=False, default=0)
     unit = Column(String, nullable=False, default="kg")
+    unit_quantity = Column(Float, nullable=False, default=1.0)
     stock_quantity = Column(Integer, nullable=False, default=0)
     image_url = Column(String, nullable=True)
 

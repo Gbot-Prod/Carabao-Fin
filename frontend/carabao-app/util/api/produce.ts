@@ -5,9 +5,10 @@ export type Produce = {
   merchant_id: number;
   name: string | null;
   description: string | null;
-  category: string | null;
+  category: 'Vegetables' | 'Fruits' | null;
   price: number;
-  unit: string;
+  unit: 'kg' | 'lbs';
+  unit_quantity: number;
   stock_quantity: number;
   image_url: string | null;
 };
@@ -15,9 +16,10 @@ export type Produce = {
 export type ProduceCreatePayload = {
   name: string;
   description?: string | null;
-  category?: string | null;
+  category?: 'Vegetables' | 'Fruits' | null;
   price: number;
-  unit?: string;
+  unit?: 'kg' | 'lbs';
+  unit_quantity?: number;
   stock_quantity?: number;
   image_url?: string | null;
 };
@@ -25,9 +27,10 @@ export type ProduceCreatePayload = {
 export type ProduceUpdatePayload = {
   name?: string | null;
   description?: string | null;
-  category?: string | null;
+  category?: 'Vegetables' | 'Fruits' | null;
   price?: number | null;
-  unit?: string | null;
+  unit?: 'kg' | 'lbs' | null;
+  unit_quantity?: number | null;
   stock_quantity?: number | null;
   image_url?: string | null;
 };

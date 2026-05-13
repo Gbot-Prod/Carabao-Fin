@@ -119,6 +119,17 @@
   padding: 0.65rem;
   display: flex;
   align-items: flex-start;
+  position: relative;
+  overflow: hidden;
+}
+
+.cardLogo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }
 
 .categoryChip {
@@ -128,6 +139,8 @@
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.2rem 0.5rem;
+  position: relative;
+  z-index: 1;
 }
 
 .cardContent {

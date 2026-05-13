@@ -8,16 +8,19 @@ import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import {
   fetchMyProfile,
   submitMyMerchantOnboarding,
+  sendOtp,
+  verifyOtp,
   type Merchant,
   type MerchantOnboardingPayload,
 } from "@/util/api";
 
-type StepId = "legal" | "ops" | "docs";
+type StepId = "legal" | "ops" | "docs" | "verify";
 
 const STEPS: { id: StepId; title: string; subtitle: string }[] = [
   { id: "legal", title: "Legal Details", subtitle: "Tell us who you are as a business." },
   { id: "ops", title: "Operations", subtitle: "Where you operate, your pricing, and availability." },
   { id: "docs", title: "RSBSA Upload", subtitle: "Upload a photo or PDF of your Philippine RSBSA." },
+  { id: "verify", title: "Verify Phone", subtitle: "Confirm your contact number via SMS." },
 ];
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -61,6 +64,14 @@ export default function MerchantOnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMerchant, setSuccessMerchant] = useState<Merchant | null>(null);
 
+  // OTP state
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpValue, setOtpValue] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+
   const [form, setForm] = useState<MerchantOnboardingPayload>({
     merchant_name: "",
     legal_business_name: "",
@@ -101,7 +112,16 @@ export default function MerchantOnboardingPage() {
     void prefill();
   }, []);
 
+  // Resend cooldown countdown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
   const progressLabel = useMemo(() => `${stepIndex + 1} / ${STEPS.length}`, [stepIndex]);
+
+  const fullPhoneNumber = `+63${form.contact_number.replace(/\s/g, "")}`;
 
   const setField =
     <K extends keyof MerchantOnboardingPayload>(key: K) =>
@@ -146,7 +166,6 @@ export default function MerchantOnboardingPage() {
       if (!form.contact_number.trim()) return "Contact number is required.";
       return null;
     }
-
     if (index === 1) {
       if (!form.address_line.trim()) return "Address is required.";
       if (!form.city.trim()) return "City / Municipality is required.";
@@ -157,7 +176,6 @@ export default function MerchantOnboardingPage() {
       if (form.price_range_min > form.price_range_max) return "Minimum price must be less than or equal to maximum price.";
       return null;
     }
-
     if (index === 2) {
       if (!rsbsaFile) return "Please upload your RSBSA document (photo or PDF).";
       const okType = ["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(rsbsaFile.type);
@@ -165,7 +183,6 @@ export default function MerchantOnboardingPage() {
       if (rsbsaFile.size > 10 * 1024 * 1024) return "RSBSA file must be 10MB or smaller.";
       return null;
     }
-
     return null;
   };
 
@@ -178,15 +195,33 @@ export default function MerchantOnboardingPage() {
 
   const goBack = () => {
     setError(null);
+    setOtpError(null);
+    if (stepIndex === STEPS.length - 1) {
+      setOtpSent(false);
+      setOtpValue("");
+    }
     setStepIndex((s) => Math.max(s - 1, 0));
+  };
+
+  const handleSendOtp = async () => {
+    setIsSendingOtp(true);
+    setOtpError(null);
+    try {
+      await sendOtp(fullPhoneNumber);
+      setOtpSent(true);
+      setResendCooldown(30);
+    } catch (e: any) {
+      setOtpError(
+        e?.response?.data?.detail || "Failed to send verification code. Please try again.",
+      );
+    } finally {
+      setIsSendingOtp(false);
+    }
   };
 
   const submit = async () => {
     setError(null);
-    const validationError = validateStep(2);
-    if (validationError) return setError(validationError);
     if (!rsbsaFile) return;
-
     setIsSubmitting(true);
     try {
       const dayOrder = (d: string) => {
@@ -197,9 +232,7 @@ export default function MerchantOnboardingPage() {
         {
           ...form,
           contact_number: form.contact_number.trim() ? `+63 ${form.contact_number.trim()}` : "",
-          available_days: [...form.available_days].sort(
-            (a, b) => dayOrder(a) - dayOrder(b),
-          ),
+          available_days: [...form.available_days].sort((a, b) => dayOrder(a) - dayOrder(b)),
         },
         rsbsaFile,
       );
@@ -212,6 +245,20 @@ export default function MerchantOnboardingPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleVerifyAndSubmit = async () => {
+    setOtpError(null);
+    setIsVerifyingOtp(true);
+    try {
+      await verifyOtp(fullPhoneNumber, otpValue);
+    } catch (e: any) {
+      setOtpError(e?.response?.data?.detail || "Incorrect code. Please try again.");
+      setIsVerifyingOtp(false);
+      return;
+    }
+    setIsVerifyingOtp(false);
+    await submit();
   };
 
   if (successMerchant) {
@@ -487,11 +534,72 @@ export default function MerchantOnboardingPage() {
             </div>
           )}
 
-          {error && <div className={styles.errorBox}>{error}</div>}
+          {step.id === "verify" && (
+            <div className={styles.verifyStep}>
+              <div className={styles.verifyPhoneBox}>
+                <div className={styles.verifyPhoneLeft}>
+                  <span className={styles.verifyPhoneLabel}>Contact number</span>
+                  <span className={styles.verifyPhoneNum}>+63 {form.contact_number}</span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.editPhoneBtn}
+                  onClick={() => { setStepIndex(0); setOtpSent(false); setOtpValue(""); setOtpError(null); }}
+                >
+                  Edit
+                </button>
+              </div>
+
+              {!otpSent ? (
+                <button
+                  type="button"
+                  className={styles.sendOtpBtn}
+                  onClick={handleSendOtp}
+                  disabled={isSendingOtp}
+                >
+                  {isSendingOtp ? "Sending…" : "Send verification code"}
+                </button>
+              ) : (
+                <div className={styles.otpGroup}>
+                  <p className={styles.otpHint}>
+                    Enter the 6-digit code sent to your number.
+                  </p>
+                  <input
+                    className={styles.otpInput}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="––––––"
+                    value={otpValue}
+                    onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    autoComplete="one-time-code"
+                  />
+                  <button
+                    type="button"
+                    className={styles.resendBtn}
+                    disabled={resendCooldown > 0 || isSendingOtp}
+                    onClick={handleSendOtp}
+                  >
+                    {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"}
+                  </button>
+                </div>
+              )}
+
+              {otpError && <div className={styles.errorBox}>{otpError}</div>}
+            </div>
+          )}
+
+          {step.id !== "verify" && error && <div className={styles.errorBox}>{error}</div>}
+          {step.id === "verify" && error && <div className={styles.errorBox}>{error}</div>}
         </div>
 
         <footer className={styles.footer}>
-          <button className={styles.secondaryBtn} type="button" onClick={goBack} disabled={stepIndex === 0 || isSubmitting}>
+          <button
+            className={styles.secondaryBtn}
+            type="button"
+            onClick={goBack}
+            disabled={stepIndex === 0 || isSubmitting || isVerifyingOtp}
+          >
             Back
           </button>
           {stepIndex < STEPS.length - 1 ? (
@@ -499,8 +607,13 @@ export default function MerchantOnboardingPage() {
               Continue
             </button>
           ) : (
-            <button className={styles.primaryBtn} type="button" onClick={submit} disabled={isSubmitting}>
-              {isSubmitting ? "Submitting..." : "Submit application"}
+            <button
+              className={styles.primaryBtn}
+              type="button"
+              onClick={handleVerifyAndSubmit}
+              disabled={!otpSent || otpValue.length < 6 || isVerifyingOtp || isSubmitting}
+            >
+              {isVerifyingOtp || isSubmitting ? "Submitting…" : "Verify & Submit"}
             </button>
           )}
         </footer>

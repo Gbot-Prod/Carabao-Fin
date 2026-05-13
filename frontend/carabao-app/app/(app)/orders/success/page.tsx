@@ -61,7 +61,7 @@ function PaymentSuccessContent() {
     return (
       <div style={styles.container}>
         <p>No order found. Please check your order history.</p>
-        <Link href="/history" style={styles.primaryButton}>View Order History</Link>
+        <Link href="/orders" style={styles.primaryButton}>View Order History</Link>
       </div>
     );
   }
@@ -75,7 +75,7 @@ function PaymentSuccessContent() {
         <h1 style={styles.heading}>Something went wrong</h1>
         <p style={styles.subtext}>Your payment was not completed. No charges were made.</p>
         <Link href="/checkout" style={styles.primaryButton}>Try Again</Link>
-        <Link href="/history" style={styles.secondaryButton}>View Order History</Link>
+        <Link href="/orders" style={styles.secondaryButton}>View Order History</Link>
       </div>
     );
   }
@@ -100,7 +100,7 @@ function PaymentSuccessContent() {
         <p style={styles.subtext}>
           This is taking longer than usual. Check your order history in a few minutes — if payment went through it will appear there.
         </p>
-        <Link href="/history" style={styles.primaryButton}>View Order History</Link>
+        <Link href="/orders" style={styles.primaryButton}>View Order History</Link>
       </div>
     );
   }
@@ -131,7 +131,7 @@ function PaymentSuccessContent() {
       </div>
 
       <Link href={`/track`} style={styles.primaryButton}>Track Order</Link>
-      <Link href="/history" style={styles.secondaryButton}>View Order History</Link>
+      <Link href="/orders" style={styles.secondaryButton}>View Order History</Link>
       <Link href="/order" style={styles.secondaryButton}>Place Another Order</Link>
     </div>
   );

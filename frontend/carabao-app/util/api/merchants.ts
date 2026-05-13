@@ -202,3 +202,29 @@ export const requestPayout = async (): Promise<MerchantPayoutBatch> => {
   const response = await apiClient.post<MerchantPayoutBatch>('/merchants/me/payouts/request');
   return response.data;
 };
+
+// ── Merchant orders ────────────────────────────────────────────────────────────
+
+export type MerchantOrder = {
+  id: number;
+  status: string;
+  total_price: number;
+  items: Array<{ id?: string; produce?: string; quantity?: number; price?: number; unit?: string; farm?: string }>;
+  delivery_address: string | null;
+  ordered_at: string;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  buyer_phone: string | null;
+  shipped: boolean;
+  time_of_arrival: string | null;
+};
+
+export const fetchMyMerchantOrders = async (): Promise<MerchantOrder[]> => {
+  const response = await apiClient.get<MerchantOrder[]>('/merchants/me/orders');
+  return response.data;
+};
+
+export const updateMerchantOrderStatus = async (orderId: number, status: string): Promise<MerchantOrder> => {
+  const response = await apiClient.patch<MerchantOrder>(`/merchants/me/orders/${orderId}/status`, null, { params: { status } });
+  return response.data;
+};

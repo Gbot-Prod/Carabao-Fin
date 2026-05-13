@@ -62,7 +62,7 @@
 .stepper {
   padding: 12px var(--pad-x) 8px;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
 
@@ -463,9 +463,139 @@
   gap: 10px;
 }
 
+/* ── Verify step ──────────────────────────────────────────────────── */
+.verifyStep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 0 4px;
+}
+
+.verifyPhoneBox {
+  width: 100%;
+  max-width: 400px;
+  padding: 16px 18px;
+  background: rgba(49, 146, 93, 0.05);
+  border: 1px solid rgba(49, 146, 93, 0.22);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.verifyPhoneLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.verifyPhoneLabel {
+  font-size: 11px;
+  font-weight: 900;
+  color: #5c6a5e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.verifyPhoneNum {
+  font-size: 18px;
+  font-weight: 800;
+  color: #173d25;
+}
+
+.editPhoneBtn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(49, 146, 93, 0.30);
+  background: rgba(49, 146, 93, 0.08);
+  color: #31925d;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.editPhoneBtn:hover {
+  background: rgba(49, 146, 93, 0.15);
+}
+
+.sendOtpBtn {
+  padding: 12px 28px;
+  border-radius: 12px;
+  border: none;
+  background: #31925d;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 6px 16px rgba(49, 146, 93, 0.22);
+}
+
+.sendOtpBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.otpGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.otpHint {
+  margin: 0;
+  font-size: 13px;
+  color: #5c6a5e;
+  text-align: center;
+}
+
+.otpInput {
+  width: 100%;
+  max-width: 240px;
+  padding: 14px 16px;
+  border: 2px solid #d0e4d5;
+  border-radius: 12px;
+  font-size: 26px;
+  font-weight: 800;
+  color: #173d25;
+  text-align: center;
+  letter-spacing: 0.3em;
+  font-family: monospace;
+  background: #f9fcf9;
+  outline: none;
+}
+
+.otpInput:focus {
+  border-color: rgba(49, 146, 93, 0.55);
+  box-shadow: 0 0 0 4px rgba(49, 146, 93, 0.12);
+}
+
+.resendBtn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(23, 61, 37, 0.14);
+  background: rgba(23, 61, 37, 0.04);
+  color: #173d25;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.resendBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (max-width: 860px) {
   .stepper {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
   }
   .grid {
     grid-template-columns: 1fr;

@@ -49,8 +49,8 @@ function ConfirmationContent() {
         <Link href="/track" className={styles.primaryButton}>
           Track Order
         </Link>
-        <Link href="/history" className={styles.secondaryButton}>
-          View Order History
+        <Link href="/orders" className={styles.secondaryButton}>
+          View Orders
         </Link>
         <Link href="/order" className={styles.secondaryButton}>
           Place Another Order

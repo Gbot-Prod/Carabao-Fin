@@ -1,7 +1,23 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
+
+
+class MerchantOrderResponse(BaseModel):
+    id: int
+    status: str
+    total_price: int
+    items: list[Any]
+    delivery_address: Optional[str] = None
+    ordered_at: datetime
+    buyer_name: Optional[str] = None
+    buyer_email: Optional[str] = None
+    buyer_phone: Optional[str] = None
+    shipped: bool = False
+    time_of_arrival: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
 
 
 class PayoutInfoResponse(BaseModel):

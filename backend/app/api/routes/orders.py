@@ -122,6 +122,28 @@ async def get_my_order_history(
     return [to_order_history_item(order) for order in orders]
 
 
+@router.delete("/orders/me/history/{order_id}", status_code=204)
+async def delete_order_from_history(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    history = get_order_history(db, current_user.id)
+    if history is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.order_history_id == history.id)
+        .first()
+    )
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    db.delete(order)
+    db.commit()
+
+
 @router.get("/orders/me/current", response_model=list[CurrentOrderResponse])
 async def get_my_current_orders(
     db: Session = Depends(get_db),

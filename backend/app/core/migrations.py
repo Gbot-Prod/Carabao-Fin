@@ -19,6 +19,8 @@ _MIGRATIONS: list[str] = [
     # 2026-05-13 — link application to merchant for cascade delete
     "ALTER TABLE merchant_applications ADD COLUMN IF NOT EXISTS merchant_id INTEGER REFERENCES merchants(id) ON DELETE CASCADE",
     "UPDATE merchant_applications ma SET merchant_id = m.id FROM merchants m WHERE m.user_id = ma.user_id AND ma.merchant_id IS NULL",
+    # 2026-05-14 — produce unit quantity (price per X units)
+    "ALTER TABLE produces ADD COLUMN IF NOT EXISTS unit_quantity FLOAT NOT NULL DEFAULT 1.0",
 ]
 
 

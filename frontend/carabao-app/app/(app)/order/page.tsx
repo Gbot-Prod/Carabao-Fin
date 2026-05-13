@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import styles from './page.module.css';
-import { fetchMerchants, fetchMyCart, replaceMyCart, type CartItem } from '@/util/api';
+import { fetchMerchants, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem } from '@/util/api';
 
 type FarmView = {
   merchantId: number | null;
@@ -14,9 +14,10 @@ type FarmView = {
   deliveryTimeDays: number | null;
   category: string;
   deliveryFee: number;
+  logoUrl: string | null;
 };
 
-const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]): FarmView => ({
+const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number], logoUrl: string | null = null): FarmView => ({
   merchantId: merchant.id,
   name: merchant.merchant_name,
   rating: merchant.rating ?? 0,
@@ -24,6 +25,7 @@ const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]
   deliveryTimeDays: merchant.delivery_time ?? null,
   category: merchant.location ?? 'Farm Goods',
   deliveryFee: merchant.delivery_price ?? 0,
+  logoUrl,
 });
 
 
@@ -42,7 +44,16 @@ function OrderContent() {
       try {
         const merchants = await fetchMerchants();
         if (merchants.length > 0) {
-          setFarmList(merchants.map(toFarmView));
+          const shopPages = await Promise.allSettled(
+            merchants.map((m) => fetchMerchantShopPage(m.id))
+          );
+          setFarmList(
+            merchants.map((m, i) => {
+              const result = shopPages[i];
+              const logoUrl = result.status === 'fulfilled' ? result.value.logo_url : null;
+              return toFarmView(m, logoUrl);
+            })
+          );
         }
       } catch {
 
@@ -173,6 +184,10 @@ function OrderContent() {
                   backgroundImage: 'linear-gradient(165deg, rgba(11, 78, 36, 0.15), rgba(11, 78, 36, 0.6))',
                 }}
               >
+                {farm.logoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={farm.logoUrl} alt={farm.name} className={styles.cardLogo} />
+                )}
                 <span className={styles.categoryChip}>{farm.category}</span>
               </div>
 
