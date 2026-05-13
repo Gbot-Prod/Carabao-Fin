@@ -27,6 +27,48 @@ export type MerchantApplication = {
   rsbsa_document_path: string;
   rsbsa_document_original_name: string | null;
   rsbsa_document_content_type: string | null;
+  admin_note: string | null;
+};
+
+export type DailyRevenue = {
+  date: string;
+  revenue: number;
+  platform_fee: number;
+};
+
+export type OrderStatusCount = {
+  status: string;
+  count: number;
+};
+
+export type PayoutSummaryItem = {
+  status: string;
+  count: number;
+  total_amount: number;
+};
+
+export type AdminStats = {
+  total_revenue: number;
+  platform_fees: number;
+  total_orders: number;
+  total_users: number;
+  active_merchants: number;
+  pending_applications: number;
+  daily_revenue: DailyRevenue[];
+  order_breakdown: OrderStatusCount[];
+  payout_summary: PayoutSummaryItem[];
+};
+
+export type PayoutBatch = {
+  id: number;
+  merchant_id: number;
+  period_date: string;
+  transaction_count: number;
+  gross_amount: number;
+  status: string;
+  notes: string | null;
+  released_at: string | null;
+  created_at: string;
 };
 
 export type { UserProfile, Merchant };
@@ -43,5 +85,27 @@ export const fetchAdminMerchantApplications = async (): Promise<MerchantApplicat
 
 export const fetchAdminMerchants = async (): Promise<Merchant[]> => {
   const res = await apiClient.get<Merchant[]>('/merchants');
+  return res.data;
+};
+
+export const fetchAdminStats = async (): Promise<AdminStats> => {
+  const res = await apiClient.get<AdminStats>('/admin/stats');
+  return res.data;
+};
+
+export const fetchAdminPayoutBatches = async (status?: string): Promise<PayoutBatch[]> => {
+  const res = await apiClient.get<PayoutBatch[]>('/admin/batches', { params: status ? { status } : {} });
+  return res.data;
+};
+
+export const reviewMerchantApplication = async (
+  id: number,
+  status: "approved" | "rejected" | "clarification",
+  admin_note?: string,
+): Promise<MerchantApplication> => {
+  const res = await apiClient.patch<MerchantApplication>(`/admin/merchant-applications/${id}`, {
+    status,
+    admin_note: admin_note ?? null,
+  });
   return res.data;
 };

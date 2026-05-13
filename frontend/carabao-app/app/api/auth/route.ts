@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
         email: session.user.email,
         first_name: firstName || null,
         last_name: lastName || null,
+        role: session.user.role ?? null,
       }),
     }
   );

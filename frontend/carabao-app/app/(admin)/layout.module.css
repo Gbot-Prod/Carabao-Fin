@@ -1,50 +1,106 @@
 .shell {
   min-height: 100vh;
+  display: flex;
   background: #f7fcf8;
+}
+
+/* ── Sidebar ─────────────────────────────────── */
+
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #fff;
+  border-right: 1px solid #e0ece5;
   display: flex;
   flex-direction: column;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 32px;
-  height: 56px;
-  background: #fff;
-  border-bottom: 1px solid #e0ece5;
   position: sticky;
   top: 0;
-  z-index: 10;
+  height: 100vh;
+  padding: 24px 16px;
+  box-sizing: border-box;
 }
 
+.sidebarTop {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sidebarBottom {
+  padding-top: 16px;
+  border-top: 1px solid #e0ece5;
+}
+
+/* ── Brand ───────────────────────────────────── */
+
 .brand {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: #173d25;
   letter-spacing: -0.01em;
+  padding: 0 8px;
 }
+
+/* ── Nav ─────────────────────────────────────── */
 
 .nav {
   display: flex;
-  gap: 4px;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.nav a {
+.navLink {
+  display: block;
   font-size: 13px;
   font-weight: 500;
   color: #647067;
   text-decoration: none;
-  padding: 6px 12px;
+  padding: 8px 12px;
   border-radius: 8px;
   transition: background 0.12s, color 0.12s;
 }
 
-.nav a:hover {
+.navLink:hover {
   background: #f0f5f2;
   color: #173d25;
 }
 
+.navLinkActive {
+  background: #e8f5ec;
+  color: #173d25;
+  font-weight: 600;
+}
+
+/* ── Sign out ────────────────────────────────── */
+
+.signOutBtn {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: #647067;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+
+.signOutBtn:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.signOutBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Main content ────────────────────────────── */
+
 .main {
   flex: 1;
+  min-width: 0;
 }

@@ -118,6 +118,8 @@ async def submit_my_merchant_onboarding_route(
 
     try:
         merchant = create_merchant(db, merchant_payload)
+        db.flush()
+        application.merchant_id = merchant.id
         db.commit()
         db.refresh(application)
         return merchant

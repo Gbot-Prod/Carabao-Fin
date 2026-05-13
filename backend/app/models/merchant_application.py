@@ -11,6 +11,7 @@ class MerchantApplication(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("backend_users.id"), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # Lifecycle
     status = Column(String, nullable=False, default="submitted", index=True)
@@ -43,4 +44,7 @@ class MerchantApplication(Base):
     rsbsa_document_path = Column(String, nullable=False)
     rsbsa_document_original_name = Column(String, nullable=True)
     rsbsa_document_content_type = Column(String, nullable=True)
+
+    # Admin review
+    admin_note = Column(String, nullable=True)
 

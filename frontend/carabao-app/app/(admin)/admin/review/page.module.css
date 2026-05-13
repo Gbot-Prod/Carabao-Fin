@@ -106,6 +106,11 @@
   color: #991b1b;
 }
 
+.badge_clarification {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
 .chevron {
   font-size: 10px;
   color: #647067;
@@ -142,8 +147,13 @@
   color: #1a2e20;
 }
 
-.empty {
+.emptyVal {
   color: #b0bdb3;
+}
+
+.emptyState {
+  color: #647067;
+  font-size: 14px;
 }
 
 .docLink {
@@ -157,6 +167,153 @@
 
 .docLink:hover {
   opacity: 0.75;
+}
+
+/* Admin note */
+.adminNote {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.adminNoteLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.adminNoteText {
+  font-size: 13px;
+  color: #78350f;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* Action panel */
+.actionPanel {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f5f2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.actionLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #647067;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actionBtn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.actionBtnApprove {
+  background: #f0fdf4;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.actionBtnApprove:hover,
+.actionBtnApprove.actionBtnSelected {
+  background: #dcfce7;
+  border-color: #4ade80;
+}
+
+.actionBtnReject {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.actionBtnReject:hover,
+.actionBtnReject.actionBtnSelected {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+.actionBtnClarify {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fed7aa;
+}
+
+.actionBtnClarify:hover,
+.actionBtnClarify.actionBtnSelected {
+  background: #ffedd5;
+  border-color: #fb923c;
+}
+
+.noteInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #1a2e20;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.noteInput:focus {
+  border-color: #31925d;
+}
+
+.actionConfirm {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.actionError {
+  font-size: 12px;
+  color: #b91c1c;
+}
+
+.submitBtn {
+  padding: 8px 20px;
+  background: #173d25;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.submitBtn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.submitBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .state {

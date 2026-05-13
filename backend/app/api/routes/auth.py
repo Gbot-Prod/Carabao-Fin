@@ -27,6 +27,7 @@ class AuthSyncPayload(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone_number: Optional[str] = None
+    role: Optional[str] = None
 
 
 class AuthSyncResponse(BaseModel):
@@ -65,6 +66,8 @@ async def sync_auth(
     if user is None:
         user = db.query(User).filter(User.email == payload.email).first()
 
+    is_admin = payload.role == "admin"
+
     if user is None:
         user = User(
             external_auth_id=payload.provider_user_id,
@@ -72,6 +75,7 @@ async def sync_auth(
             first_name=payload.first_name,
             last_name=payload.last_name,
             phone_number=payload.phone_number,
+            is_admin=is_admin,
         )
         db.add(user)
     else:
@@ -83,6 +87,8 @@ async def sync_auth(
             user.last_name = payload.last_name
         if payload.phone_number is not None:
             user.phone_number = payload.phone_number
+        if payload.role is not None:
+            user.is_admin = is_admin
 
     db.commit()
     db.refresh(user)

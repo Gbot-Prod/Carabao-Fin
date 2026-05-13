@@ -5,6 +5,11 @@ from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
+class ApplicationReviewPayload(BaseModel):
+    status: str
+    admin_note: Optional[str] = None
+
+
 class MerchantOnboardingPayload(BaseModel):
     # Step 1
     merchant_name: str = Field(min_length=1)
@@ -58,6 +63,8 @@ class MerchantApplicationResponse(BaseModel):
     rsbsa_document_path: str
     rsbsa_document_original_name: Optional[str] = None
     rsbsa_document_content_type: Optional[str] = None
+
+    admin_note: Optional[str] = None
 
     class Config:
         from_attributes = True

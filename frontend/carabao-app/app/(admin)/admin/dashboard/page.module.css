@@ -1,6 +1,6 @@
 .page {
   padding: 40px 32px;
-  max-width: 960px;
+  max-width: 1100px;
 }
 
 .heading {
@@ -10,36 +10,166 @@
   margin: 0 0 28px;
 }
 
-.grid {
+/* ── KPI cards ───────────────────────────────── */
+
+.kpiGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
 }
 
-.card {
-  display: block;
-  padding: 24px;
-  border-radius: 12px;
-  border: 1px solid #d4e9dc;
+.kpiCard {
   background: #fff;
-  text-decoration: none;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  border: 1px solid #e0ece5;
+  border-radius: 12px;
+  padding: 18px 20px;
 }
 
-.card:hover {
-  box-shadow: 0 4px 16px rgba(49, 146, 93, 0.12);
-  border-color: #31925d;
+.kpiCardAlert {
+  border-color: #fde68a;
+  background: #fffbeb;
 }
 
-.cardTitle {
-  font-size: 15px;
+.kpiLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #647067;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+}
+
+.kpiValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: #173d25;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Sections ────────────────────────────────── */
+
+.section {
+  background: #fff;
+  border: 1px solid #e0ece5;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+
+.sectionTitle {
+  font-size: 14px;
   font-weight: 600;
   color: #173d25;
-  margin: 0 0 6px;
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.cardDesc {
+.chartWrap {
+  width: 100%;
+}
+
+/* ── Two-column row ──────────────────────────── */
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.flex1 {
+  margin-bottom: 0;
+}
+
+/* ── Payout summary ──────────────────────────── */
+
+.payoutList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.payoutRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f7fcf8;
+}
+
+.payoutLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.payoutDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot_pending   { background: #fbbf24; }
+.dot_approved  { background: #34d399; }
+.dot_processing { background: #60a5fa; }
+.dot_released  { background: #31925d; }
+.dot_failed    { background: #f87171; }
+
+.payoutStatus {
   font-size: 13px;
+  font-weight: 500;
+  color: #1a2e20;
+  text-transform: capitalize;
+}
+
+.payoutCount {
+  font-size: 12px;
   color: #647067;
+  background: #e8f5ec;
+  border-radius: 20px;
+  padding: 1px 8px;
+}
+
+.payoutAmount {
+  font-size: 13px;
+  font-weight: 600;
+  color: #173d25;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Alert badge ─────────────────────────────── */
+
+.alertBadge {
+  font-size: 11px;
+  font-weight: 600;
+  background: #fef9c3;
+  color: #854d0e;
+  border-radius: 20px;
+  padding: 2px 8px;
+}
+
+/* ── Empty / loading states ──────────────────── */
+
+.emptyText {
+  font-size: 13px;
+  color: #b0bdb3;
   margin: 0;
+}
+
+.state {
+  padding: 40px 32px;
+  color: #647067;
+  font-size: 14px;
+}
+
+.stateError {
+  padding: 40px 32px;
+  color: #b91c1c;
+  font-size: 14px;
 }

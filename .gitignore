@@ -29,3 +29,6 @@ Thumbs.db
 
 #API Keys and Secrets
 *.env
+
+#Claude
+Claude.md
