@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import os
 from typing import Optional
@@ -20,6 +21,12 @@ from app.models.user import User
 router = APIRouter(tags=["auth"])
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+BETTER_AUTH_SCRYPT_PARAMS = {
+    "n": 16384,
+    "r": 16,
+    "p": 1,
+    "dklen": 64,
+}
 
 
 class AuthSyncPayload(BaseModel):
@@ -172,13 +179,30 @@ def _find_better_auth_account(db: Session, email: str) -> Optional[tuple[str, Op
     return str(row["user_id"]), row["name"], str(row["password_hash"])
 
 
+def _verify_better_auth_password(hash_value: str, password: str) -> bool:
+    try:
+        salt, stored_key = hash_value.split(":", 1)
+    except ValueError:
+        return False
+
+    derived_key = hashlib.scrypt(
+        password.encode("utf-8"),
+        salt=salt.encode("utf-8"),
+        n=BETTER_AUTH_SCRYPT_PARAMS["n"],
+        r=BETTER_AUTH_SCRYPT_PARAMS["r"],
+        p=BETTER_AUTH_SCRYPT_PARAMS["p"],
+        dklen=BETTER_AUTH_SCRYPT_PARAMS["dklen"],
+    )
+    return derived_key.hex() == stored_key
+
+
 def _sync_backend_user_from_better_auth(
     db: Session,
     *,
     email: str,
     better_auth_user_id: str,
     full_name: Optional[str],
-    password_hash: str,
+    password: str,
 ) -> User:
     first_name, last_name = _split_name(full_name)
 
@@ -200,11 +224,12 @@ def _sync_backend_user_from_better_auth(
             user.last_name = last_name
 
     credential = db.query(MobileCredential).filter(MobileCredential.user_id == user.id).first()
+    backend_password_hash = pwd_context.hash(password)
     if credential is None:
-        credential = MobileCredential(user_id=user.id, password_hash=password_hash)
+        credential = MobileCredential(user_id=user.id, password_hash=backend_password_hash)
         db.add(credential)
     else:
-        credential.password_hash = password_hash
+        credential.password_hash = backend_password_hash
 
     db.commit()
     db.refresh(user)
@@ -289,7 +314,7 @@ async def mobile_sign_in(
                 raise HTTPException(status_code=401, detail="Invalid email or password")
 
             better_auth_user_id, better_auth_name, better_auth_password_hash = better_auth_account
-            if not pwd_context.verify(payload.password, better_auth_password_hash):
+            if not _verify_better_auth_password(better_auth_password_hash, payload.password):
                 await asyncio.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -298,7 +323,7 @@ async def mobile_sign_in(
                 email=payload.email,
                 better_auth_user_id=better_auth_user_id,
                 full_name=better_auth_name,
-                password_hash=better_auth_password_hash,
+                password=payload.password,
             )
 
     if user is None or not user.external_auth_id:

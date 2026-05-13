@@ -23,6 +23,14 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
 _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+for dev_origin in (
+    "http://localhost:8081",
+    "http://localhost:19006",
+    "exp://localhost:8081",
+    "exp://127.0.0.1:8081",
+):
+    if dev_origin not in _allowed_origins:
+        _allowed_origins.append(dev_origin)
 
 app.add_middleware(
     CORSMiddleware,
