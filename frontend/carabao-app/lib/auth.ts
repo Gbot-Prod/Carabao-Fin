@@ -66,8 +66,7 @@ export const auth = betterAuth({
   database: pool,
   session: {
     cookieCache: {
-      enabled: true,
-      maxAge: 5 * 60, // 5 minutes — re-validates against DB after expiry
+      enabled: false,
     },
   },
   baseURL:
