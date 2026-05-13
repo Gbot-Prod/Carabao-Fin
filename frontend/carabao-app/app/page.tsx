@@ -16,13 +16,10 @@ export default async function Home() {
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get("better-auth.session_token")?.value;
 
-  if (!sessionToken) redirect("/auth");
-
-  const session = await getSessionCached(sessionToken);
-
-  if (!session) redirect("/auth");
-
-  if (session.user.role === "admin") redirect("/admin/dashboard");
+  if (sessionToken) {
+    const session = await getSessionCached(sessionToken);
+    if (session?.user.role === "admin") redirect("/admin/dashboard");
+  }
 
   redirect("/order");
 }

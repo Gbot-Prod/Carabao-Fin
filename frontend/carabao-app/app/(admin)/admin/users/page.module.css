@@ -80,3 +80,36 @@
   color: #b91c1c;
   font-size: 14px;
 }
+
+.roleAdmin,
+.roleUser {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 3px 10px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.roleAdmin {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.roleUser {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.roleAdmin:hover,
+.roleUser:hover {
+  opacity: 0.75;
+}
+
+.roleAdmin:disabled,
+.roleUser:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

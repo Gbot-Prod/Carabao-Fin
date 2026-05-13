@@ -98,6 +98,11 @@ export const fetchAdminPayoutBatches = async (status?: string): Promise<PayoutBa
   return res.data;
 };
 
+export const setUserAdminRole = async (userId: number, isAdmin: boolean): Promise<UserProfile> => {
+  const res = await apiClient.patch<UserProfile>(`/admin/users/${userId}/role`, { is_admin: isAdmin });
+  return res.data;
+};
+
 export const reviewMerchantApplication = async (
   id: number,
   status: "approved" | "rejected" | "clarification",

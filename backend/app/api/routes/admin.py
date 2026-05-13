@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import cast, Date, func
+from pydantic import BaseModel
+from sqlalchemy import cast, Date, func, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -25,6 +26,35 @@ def _require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
     return current_user
+
+
+class RolePayload(BaseModel):
+    is_admin: bool
+
+
+@router.patch("/admin/users/{user_id}/role", response_model=UserResponse)
+def set_user_admin_role(
+    user_id: int,
+    payload: RolePayload,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(_require_admin),
+):
+    if current_admin.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.is_admin = payload.is_admin
+    if user.external_auth_id:
+        ba_role = "admin" if payload.is_admin else "user"
+        db.execute(
+            text('UPDATE "user" SET role = :role WHERE id = :ba_id'),
+            {"role": ba_role, "ba_id": user.external_auth_id},
+        )
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.get("/admin/users", response_model=list[UserResponse])

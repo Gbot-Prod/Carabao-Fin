@@ -9,6 +9,7 @@ export type NotificationPrefs = {
 export type UserProfile = {
   id: number;
   external_auth_id: string | null;
+  is_admin: boolean;
   first_name: string | null;
   last_name: string | null;
   email: string;

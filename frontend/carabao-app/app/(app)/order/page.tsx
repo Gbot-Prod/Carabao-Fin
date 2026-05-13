@@ -2,10 +2,9 @@
 
 import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import styles from './page.module.css';
 import { fetchMerchants, fetchMyCart, replaceMyCart, type CartItem } from '@/util/api';
-import { useAuth } from '@/hooks/useAuth';
 
 type FarmView = {
   merchantId: number | null;
@@ -30,19 +29,11 @@ const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]
 
 function OrderContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const { user, isLoading: authLoading } = useAuth();
   const [farmList, setFarmList] = useState<FarmView[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isAddingByFarm, setIsAddingByFarm] = useState<Record<string, boolean>>({});
   const [feedback, setFeedback] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-
-  useEffect(() => {
-    if (!authLoading && user?.role === "admin") {
-      router.replace("/admin/dashboard");
-    }
-  }, [authLoading, user, router]);
 
   const buildItemId = (farmName: string) => farmName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 

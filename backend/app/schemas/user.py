@@ -55,6 +55,7 @@ class UserCartInfo(BaseModel):
 
 class UserResponse(UserBase):
     id: int
+    is_admin: bool = False
     notifications_preferences: Optional[dict] = None
     merchant: Optional[UserMerchantInfo] = None
     cart: Optional[UserCartInfo] = None
