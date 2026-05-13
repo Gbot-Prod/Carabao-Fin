@@ -66,7 +66,8 @@ export const auth = betterAuth({
   database: pool,
   session: {
     cookieCache: {
-      enabled: false,
+      enabled: true,
+      maxAge: 5 * 60,
     },
   },
   baseURL:

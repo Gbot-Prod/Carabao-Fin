@@ -18,7 +18,10 @@ export default async function Home() {
 
   if (sessionToken) {
     const session = await getSessionCached(sessionToken);
+    console.log("[root] session user:", JSON.stringify(session?.user ?? null));
     if (session?.user.role === "admin") redirect("/admin/dashboard");
+  } else {
+    console.log("[root] no session token cookie found");
   }
 
   redirect("/order");
