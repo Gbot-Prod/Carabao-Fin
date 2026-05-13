@@ -155,7 +155,7 @@ export type PayoutInfoPayload = {
   ewallet_number?: string | null;
 };
 
-export type PayoutBatch = {
+export type MerchantPayoutBatch = {
   id: number;
   merchant_id: number;
   period_date: string;
@@ -188,8 +188,8 @@ export const updateMyPayoutInfo = async (payload: PayoutInfoPayload): Promise<Pa
   return response.data;
 };
 
-export const fetchMyPayouts = async (): Promise<PayoutBatch[]> => {
-  const response = await apiClient.get<PayoutBatch[]>('/merchants/me/payouts');
+export const fetchMyPayouts = async (): Promise<MerchantPayoutBatch[]> => {
+  const response = await apiClient.get<MerchantPayoutBatch[]>('/merchants/me/payouts');
   return response.data;
 };
 
@@ -198,7 +198,7 @@ export const fetchMyTransactions = async (): Promise<MerchantTransaction[]> => {
   return response.data;
 };
 
-export const requestPayout = async (): Promise<PayoutBatch> => {
-  const response = await apiClient.post<PayoutBatch>('/merchants/me/payouts/request');
+export const requestPayout = async (): Promise<MerchantPayoutBatch> => {
+  const response = await apiClient.post<MerchantPayoutBatch>('/merchants/me/payouts/request');
   return response.data;
 };

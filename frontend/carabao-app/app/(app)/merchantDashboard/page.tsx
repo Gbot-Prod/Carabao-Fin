@@ -27,7 +27,7 @@ import {
   type ShopPage,
   type ProduceCreatePayload,
   type PayoutInfo,
-  type PayoutBatch,
+  type MerchantMerchantPayoutBatch,
   type MerchantTransaction,
 } from "@/util/api";
 
@@ -90,7 +90,7 @@ export default function MerchantDashboardPage() {
   const [produceFormLoading, setProduceFormLoading] = useState(false);
 
   const [payoutInfo, setPayoutInfo] = useState<PayoutInfo | null>(null);
-  const [payouts, setPayouts] = useState<PayoutBatch[]>([]);
+  const [payouts, setPayouts] = useState<MerchantPayoutBatch[]>([]);
   const [transactions, setTransactions] = useState<MerchantTransaction[]>([]);
   const [payoutInfoDraft, setPayoutInfoDraft] = useState({ payout_type: "gcash", bank_code: "", account_number: "", account_name: "", ewallet_number: "" });
   const [payoutInfoEditing, setPayoutInfoEditing] = useState(false);
