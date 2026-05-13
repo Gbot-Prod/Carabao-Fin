@@ -27,7 +27,7 @@ import {
   type ShopPage,
   type ProduceCreatePayload,
   type PayoutInfo,
-  type MerchantMerchantPayoutBatch,
+  type MerchantPayoutBatch,
   type MerchantTransaction,
 } from "@/util/api";
 
