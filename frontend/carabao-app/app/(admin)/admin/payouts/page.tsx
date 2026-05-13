@@ -156,7 +156,7 @@ export default function PayoutsPage() {
           </div>
         </div>
 
-        <table>
+        <table className={styles.table}>
           <thead>
             <tr>
               <th>Date</th>

@@ -131,12 +131,12 @@
   border-color: #173d25;
 }
 
-table {
+.table {
   width: 100%;
   border-collapse: collapse;
 }
 
-th {
+.table th {
   font-size: 11px;
   font-weight: 600;
   color: #647067;
@@ -148,7 +148,7 @@ th {
   border-bottom: 1px solid #e0ece5;
 }
 
-td {
+.table td {
   font-size: 13px;
   color: #1a2e20;
   padding: 14px 20px;
@@ -156,11 +156,11 @@ td {
   vertical-align: middle;
 }
 
-tr:last-child td {
+.table tr:last-child td {
   border-bottom: none;
 }
 
-tr:hover td {
+.table tr:hover td {
   background: #f7fcf8;
 }
 
@@ -193,11 +193,30 @@ tr:hover td {
   white-space: nowrap;
 }
 
-.badge_pending    { background: #fef9c3; color: #854d0e; }
-.badge_approved   { background: #d1fae5; color: #065f46; }
-.badge_processing { background: #dbeafe; color: #1e40af; }
-.badge_released   { background: #dcfce7; color: #166534; }
-.badge_failed     { background: #fee2e2; color: #991b1b; }
+.badge_pending {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.badge_approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.badge_processing {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge_released {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge_failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
 
 /* ── Actions ─────────────────────────────────── */
 
@@ -291,5 +310,5 @@ tr:hover td {
   font-size: 13px;
   font-weight: 500;
   z-index: 1000;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
