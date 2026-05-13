@@ -17,8 +17,8 @@ import styles from "./page.module.css";
 const peso = (v: number) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 }).format(v);
 
-const shortDate = (d: string) =>
-  new Date(d).toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+const shortDate = (d: unknown) =>
+  new Date(String(d)).toLocaleDateString("en-PH", { month: "short", day: "numeric" });
 
 const PAYOUT_STATUS_ORDER = ["pending", "approved", "processing", "released", "failed"];
 
