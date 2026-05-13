@@ -50,7 +50,7 @@ export default function SignupPage() {
           email: formData.email,
           password: formData.password,
         });
-        router.push("/order");
+        router.push("/");
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Authentication failed. Please try again.";
