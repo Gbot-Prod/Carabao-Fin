@@ -135,7 +135,7 @@ export default function MerchantDetailPage() {
                   </div>
                   <div className={styles.detailItem}>
                     <span className={styles.label}>Hours</span>
-                    <span className={styles.value}>{merchant.operating_hours ?? 'Not available'}</span>
+                    <span className={styles.value}>{merchant.operating_hours != null ? (typeof merchant.operating_hours === 'string' ? merchant.operating_hours : JSON.stringify(merchant.operating_hours)) : 'Not available'}</span>
                   </div>
                   <div className={styles.detailItem}>
                     <span className={styles.label}>Contact</span>

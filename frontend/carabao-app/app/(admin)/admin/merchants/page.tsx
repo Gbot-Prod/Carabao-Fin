@@ -43,7 +43,7 @@ export default function AdminMerchantsPage() {
                 <td className={styles.bold}>{m.merchant_name}</td>
                 <td>{m.location ?? <span className={styles.empty}>—</span>}</td>
                 <td>{m.contact_number}</td>
-                <td>{m.operating_hours ?? <span className={styles.empty}>—</span>}</td>
+                <td>{m.operating_hours != null ? (typeof m.operating_hours === 'string' ? m.operating_hours : JSON.stringify(m.operating_hours)) : <span className={styles.empty}>—</span>}</td>
                 <td>
                   {m.delivery_price != null
                     ? `₱${m.delivery_price}${m.delivery_time != null ? ` · ${m.delivery_time}d` : ""}`
