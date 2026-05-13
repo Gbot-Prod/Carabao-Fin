@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel
 
@@ -9,10 +9,10 @@ class MerchantBase(BaseModel):
     merchant_name: str
     location: Optional[str] = None
     contact_number: str
-    operating_hours: Optional[str] = None
+    operating_hours: Optional[Any] = None
     delivery_price: Optional[int] = None
     delivery_time: Optional[int] = None
-    rating: Optional[int] = None
+    rating: Optional[float] = None
 
 
 class MerchantCreate(MerchantBase):
@@ -23,10 +23,10 @@ class MerchantUpdate(BaseModel):
     merchant_name: Optional[str] = None
     location: Optional[str] = None
     contact_number: Optional[str] = None
-    operating_hours: Optional[str] = None
+    operating_hours: Optional[Any] = None
     delivery_price: Optional[int] = None
     delivery_time: Optional[int] = None
-    rating: Optional[int] = None
+    rating: Optional[float] = None
 
 
 class MerchantShopPageInfo(BaseModel):

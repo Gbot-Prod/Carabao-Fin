@@ -31,8 +31,6 @@ class CartCreate(CartBase):
 
 class CartUpdate(BaseModel):
     items: list[CartItem] | None = None
-    total_items: int | None = None
-    total_price: int | None = None
 
 
 class CartResponse(BaseModel):

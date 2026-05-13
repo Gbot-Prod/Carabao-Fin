@@ -15,7 +15,6 @@ from app.models.user import User
 from app.schemas.order import CurrentOrderResponse, OrderItemResponse, PlaceOrderRequest, PlaceOrderResponse
 
 from ._order_helpers import (
-    derive_merchant_name,
     get_or_create_cart,
     get_or_create_order_history,
     get_order_history,
@@ -73,6 +72,7 @@ async def place_order_from_cart(
 
     order = Order(
         order_history_id=history.id,
+        user_id=current_user.id,
         merchant_id=merchant.id if merchant is not None else None,
         status="pending",
         total_price=total_price,
@@ -85,12 +85,7 @@ async def place_order_from_cart(
     current_order = CurrentOrder(
         order_id=order.id,
         merchant_id=merchant.id if merchant is not None else None,
-        merchant_name=derive_merchant_name(
-            cart_items,
-            merchant.merchant_name if merchant is not None else f"Order #{order.id}",
-        ),
         status="pending",
-        shipped=False,
         delivery_fee=service_fee,
         image=payload.image,
     )
@@ -235,7 +230,6 @@ async def update_order_status(
     order.status = status
     if order.current_order:
         order.current_order.status = status
-        order.current_order.shipped = status in {"shipped", "out_for_delivery", "delivered"}
 
     db.commit()
     return {"order_id": order_id, "status": status}

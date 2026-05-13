@@ -19,7 +19,6 @@ class User(Base):
     city = Column(String, index=True, nullable=True)
     country = Column(String, index=True, nullable=True)
     postal_code = Column(String, index=True, nullable=True)
-    member_since = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     notifications_preferences = Column(JSON, nullable=False, default=dict)
 
     profile_picture_url = Column(String, nullable=True)

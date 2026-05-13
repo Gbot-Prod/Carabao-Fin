@@ -597,7 +597,6 @@ async def update_my_merchant_order_status(
     order.status = status
     if order.current_order:
         order.current_order.status = status
-        order.current_order.shipped = status in {"shipped", "out_for_delivery", "delivered"}
 
     db.commit()
 

@@ -25,23 +25,6 @@
   margin: 0;
 }
 
-/* ── Info banner ─────────────────────────────── */
-
-.infoBanner {
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 10px;
-  padding: 14px 18px;
-  margin-bottom: 24px;
-  font-size: 13px;
-  color: #166534;
-  line-height: 1.6;
-}
-
-.infoBanner strong {
-  font-weight: 600;
-}
-
 /* ── KPI row ─────────────────────────────────── */
 
 .kpiRow {

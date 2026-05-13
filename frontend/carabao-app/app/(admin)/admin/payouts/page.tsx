@@ -114,12 +114,6 @@ export default function PayoutsPage() {
         </button>
       </div>
 
-      <div className={styles.infoBanner}>
-        <strong>How payouts work:</strong> When a user pays, the full amount lands in Carabao's PayMongo wallet.
-        Each merchant is owed <strong>99%</strong> of their sales — Carabao keeps the 1% platform fee.
-        Generate daily batches to see what's owed per merchant, then release and transfer to their bank or e-wallet.
-      </div>
-
       <div className={styles.kpiRow}>
         <div className={`${styles.kpiCard} ${pending.length > 0 ? styles.kpiCardAlert : ""}`}>
           <p className={styles.kpiLabel}>Pending Batches</p>

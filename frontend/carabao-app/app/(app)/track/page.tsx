@@ -45,7 +45,10 @@ function Track() {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const driverMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const stopMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  // routeRef: set only after the route is successfully drawn onto the map.
+  // pendingRouteRef: fetched from Directions API but not yet drawn (style may not be ready).
   const routeRef = useRef<RouteGeoJSON | null>(null);
+  const pendingRouteRef = useRef<RouteGeoJSON | null>(null);
   const stopMarkersPlacedRef = useRef(false);
   const [tracking, setTracking] = useState<TrackingData | null>(null);
   const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>([]);
@@ -119,23 +122,35 @@ function Track() {
   }, []);
 
   const updateTracking = useCallback(async (data: TrackingData, map: mapboxgl.Map) => {
-    // Place stop markers once per order — independent of whether the route loads.
+    // Place stop markers once per order — markers are DOM elements and work
+    // regardless of whether the map style is ready.
     if (!stopMarkersPlacedRef.current && data.waypoints.length > 0) {
       placeStopMarkers(map, data.waypoints);
       stopMarkersPlacedRef.current = true;
-
-      // Fit bounds to all waypoints on first render.
       map.fitBounds(buildBounds(data.waypoints), { padding: 80, maxZoom: 14 });
     }
 
-    // Fetch road route once per order selection, passing all ALNS-ordered waypoints.
-    if (!routeRef.current) {
+    // Fetch the route from Mapbox Directions once per order selection.
+    // Store it in pendingRouteRef so we never redundantly hit the API.
+    if (!routeRef.current && !pendingRouteRef.current) {
       const token = process.env.NEXT_PUBLIC_MAPBOX_API_KEY ?? '';
-      console.debug('[tracking] fetching route for waypoints:', data.waypoints);
       const route = await fetchRouteGeoJSON(data.waypoints, token);
       if (route) {
-        routeRef.current = route;
-        drawRouteLayer(map, route);
+        pendingRouteRef.current = route;
+      }
+    }
+
+    // Draw the route layer as soon as the map style is ready.
+    // addSource/addLayer require isStyleLoaded() — retry on every poll until it's true.
+    if (pendingRouteRef.current && !routeRef.current) {
+      if (map.isStyleLoaded()) {
+        try {
+          drawRouteLayer(map, pendingRouteRef.current);
+          routeRef.current = pendingRouteRef.current;
+          pendingRouteRef.current = null;
+        } catch (err) {
+          console.error('[tracking] drawRouteLayer failed:', err);
+        }
       }
     }
 
@@ -170,6 +185,7 @@ function Track() {
       if (map?.getLayer('driver-route-line')) map.removeLayer('driver-route-line');
       if (map?.getSource('driver-route')) map.removeSource('driver-route');
       routeRef.current = null;
+      pendingRouteRef.current = null;
       stopMarkersPlacedRef.current = false;
       driverMarkerRef.current?.remove();
       driverMarkerRef.current = null;

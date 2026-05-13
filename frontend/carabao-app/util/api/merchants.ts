@@ -7,7 +7,7 @@ export type Merchant = {
   merchant_name: string;
   location: string | null;
   contact_number: string;
-  operating_hours: string | null;
+  operating_hours: string | Record<string, string> | null;
   delivery_price: number | null;
   delivery_time: number | null;
   rating: number | null;
@@ -18,7 +18,7 @@ export type MerchantCreatePayload = {
   merchant_name: string;
   location?: string | null;
   contact_number: string;
-  operating_hours?: string | null;
+  operating_hours?: string | Record<string, string> | null;
   delivery_price?: number | null;
   delivery_time?: number | null;
   rating?: number | null;

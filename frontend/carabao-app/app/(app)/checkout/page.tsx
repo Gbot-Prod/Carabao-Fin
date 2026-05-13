@@ -3,13 +3,11 @@
 import axios from "axios";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
 import { createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 
 export default function CheckoutPage() {
-  const router = useRouter();
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
   const [isLoadingCart, setIsLoadingCart] = useState(true);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
@@ -19,7 +17,7 @@ export default function CheckoutPage() {
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
   const [postal, setPostal] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("cash-on-delivery");
+  const [paymentMethod] = useState("online");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -81,12 +79,8 @@ export default function CheckoutPage() {
         service_fee: serviceFee,
       });
 
-      if (paymentMethod === "online") {
-        const checkout = await createPaymentCheckout(result.order_id);
-        window.location.href = checkout.checkout_url;
-      } else {
-        router.push(`/confirmation?orderId=${encodeURIComponent(result.order_reference)}`);
-      }
+      const checkout = await createPaymentCheckout(result.order_id);
+      window.location.href = checkout.checkout_url;
     } catch (err) {
       let message = "Unable to place order right now. Please try again.";
 
@@ -110,7 +104,7 @@ export default function CheckoutPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <h1>Checkout</h1>
-        <p>Confirm your delivery details and payment method.</p>
+        <p>Confirm your delivery details before paying.</p>
       </header>
 
       <div className={styles.layout}>
@@ -163,37 +157,6 @@ export default function CheckoutPage() {
                 placeholder="1634"
               />
             </label>
-          </div>
-
-          <div className={styles.block}>
-            <h2>Payment Method</h2>
-            <div className={styles.paymentChoices}>
-              <label className={styles.radioRow}>
-                <input
-                  type="radio"
-                  name="payment"
-                  value="cash-on-delivery"
-                  checked={paymentMethod === "cash-on-delivery"}
-                  onChange={(event) => setPaymentMethod(event.target.value)}
-                />
-                Cash on Delivery
-              </label>
-              <label className={styles.radioRow}>
-                <input
-                  type="radio"
-                  name="payment"
-                  value="online"
-                  checked={paymentMethod === "online"}
-                  onChange={(event) => setPaymentMethod(event.target.value)}
-                />
-                <span>
-                  Online Payment
-                  <small style={{ display: "block", fontWeight: 400, color: "#666" }}>
-                    GCash, Maya, Cards, GrabPay, and more
-                  </small>
-                </span>
-              </label>
-            </div>
           </div>
 
           <div className={styles.block}>
@@ -252,11 +215,7 @@ export default function CheckoutPage() {
             onClick={() => void handlePlaceOrder()}
             disabled={checkoutItems.length === 0 || isLoadingCart || isPlacingOrder}
           >
-            {isPlacingOrder
-              ? paymentMethod === "online"
-                ? "Redirecting to payment..."
-                : "Placing Order..."
-              : "Place Order"}
+            {isPlacingOrder ? "Redirecting to payment..." : "Place Order"}
           </button>
           <Link href="/cart" className={styles.secondaryButton}>
             Back to Cart

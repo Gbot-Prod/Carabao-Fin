@@ -10,7 +10,7 @@ class Produce(Base):
     name = Column(String, nullable=False, index=True)
     description = Column(String, nullable=True)
     category = Column(String, nullable=True, index=True)
-    price = Column(Integer, nullable=False, default=0)
+    price = Column(Integer, nullable=False, default=0)  # pesos
     unit = Column(String, nullable=False, default="kg")
     unit_quantity = Column(Float, nullable=False, default=1.0)
     stock_quantity = Column(Integer, nullable=False, default=0)

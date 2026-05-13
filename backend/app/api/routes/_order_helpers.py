@@ -21,23 +21,12 @@ def _to_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def compute_cart_totals(items: list[dict[str, Any]]) -> tuple[int, int]:
-    total_items = 0
-    total_price = 0
-    for item in items:
-        quantity = max(_to_int(item.get("quantity"), 0), 0)
-        unit_price = max(_to_int(item.get("price"), 0), 0)
-        total_items += quantity
-        total_price += quantity * unit_price
-    return total_items, total_price
-
-
 def get_or_create_cart(db: Session, user_id: int) -> Cart:
     cart = db.query(Cart).filter(Cart.user_id == user_id).first()
     if cart is not None:
         return cart
 
-    cart = Cart(user_id=user_id, items=[], total_items=0, total_price=0)
+    cart = Cart(user_id=user_id, items=[])
     db.add(cart)
     db.commit()
     db.refresh(cart)
@@ -53,7 +42,7 @@ def get_or_create_order_history(db: Session, user_id: int) -> OrderHistory:
     if history is not None:
         return history
 
-    history = OrderHistory(user_id=user_id, total_orders=0, total_spent=0)
+    history = OrderHistory(user_id=user_id)
     db.add(history)
     db.flush()
     return history

@@ -11,11 +11,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-
-# Ensure all models are registered in metadata before create_all.
 from app.models import cart, current_orders, merchant, order, order_history, produce, shopPage, user  # noqa: F401
 from app.core.database import Base
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(

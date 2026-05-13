@@ -6,7 +6,7 @@ from app.models.produce import Produce
 from app.models.user import User
 from app.schemas.cart import CartResponse, CartUpdate
 
-from ._order_helpers import compute_cart_totals, get_or_create_cart, _extract_item_int
+from ._order_helpers import get_or_create_cart, _extract_item_int
 
 router = APIRouter(tags=["carts"])
 
@@ -41,10 +41,6 @@ async def replace_my_cart(
             if produce is not None:
                 item["price"] = produce.price
         cart.items = items
-
-    total_items, total_price = compute_cart_totals(cart.items or [])
-    cart.total_items = total_items
-    cart.total_price = total_price
 
     db.commit()
     db.refresh(cart)

@@ -92,8 +92,6 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
     cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()
     if cart:
         cart.items = []
-        cart.total_items = 0
-        cart.total_price = 0
 
     order = db.query(Order).filter(Order.id == txn.order_id).first()
     if order:
@@ -101,8 +99,6 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
         if order.order_history_id:
             history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
             if history:
-                history.total_orders = (history.total_orders or 0) + 1
-                history.total_spent = (history.total_spent or 0) + order.total_price
                 history.last_order_at = datetime.now(timezone.utc)
 
     db.commit()
