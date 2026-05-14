@@ -16,6 +16,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     phone_number = Column(String, unique=True, index=True, nullable=True)
     address = Column(String, index=True, nullable=True)
+    barangay = Column(String, index=True, nullable=True)
     city = Column(String, index=True, nullable=True)
     country = Column(String, index=True, nullable=True)
     postal_code = Column(String, index=True, nullable=True)

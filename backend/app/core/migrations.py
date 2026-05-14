@@ -21,6 +21,10 @@ _MIGRATIONS: list[str] = [
     "UPDATE merchant_applications ma SET merchant_id = m.id FROM merchants m WHERE m.user_id = ma.user_id AND ma.merchant_id IS NULL",
     # 2026-05-14 — produce unit quantity (price per X units)
     "ALTER TABLE produces ADD COLUMN IF NOT EXISTS unit_quantity FLOAT NOT NULL DEFAULT 1.0",
+    # 2026-05-14 — province removed (region + city from PSGC is sufficient)
+    "ALTER TABLE merchant_applications DROP COLUMN IF EXISTS province",
+    # 2026-05-14 — barangay for geocoding-quality address storage
+    "ALTER TABLE backend_users ADD COLUMN IF NOT EXISTS barangay VARCHAR",
 ]
 
 

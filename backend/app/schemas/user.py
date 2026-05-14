@@ -11,6 +11,7 @@ class UserBase(BaseModel):
     email: EmailStr
     phone_number: Optional[str] = None
     address: Optional[str] = None
+    barangay: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
     postal_code: Optional[str] = None
@@ -29,6 +30,7 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone_number: Optional[str] = None
     address: Optional[str] = None
+    barangay: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
     postal_code: Optional[str] = None

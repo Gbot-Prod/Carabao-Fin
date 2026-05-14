@@ -169,7 +169,6 @@ export default function MerchantOnboardingPage() {
     if (index === 1) {
       if (!form.address_line.trim()) return "Address is required.";
       if (!form.city.trim()) return "City / Municipality is required.";
-      if (!form.province.trim()) return "Province is required.";
       if (!Array.isArray(form.available_days) || form.available_days.length === 0) return "Select at least one available day.";
       if (!Number.isFinite(form.price_range_min) || form.price_range_min < 0) return "Minimum price must be 0 or higher.";
       if (!Number.isFinite(form.price_range_max) || form.price_range_max < 0) return "Maximum price must be 0 or higher.";
@@ -398,16 +397,12 @@ export default function MerchantOnboardingPage() {
               <LocationSelects
                 value={form.city}
                 onChange={(city) => setForm((prev) => ({ ...prev, city }))}
-                onRegionChange={(region) => setForm((prev) => ({ ...prev, region }))}
+                onRegionChange={(region) => setForm((prev) => ({ ...prev, region, province: region }))}
                 selectClassName={styles.select}
                 labelClassName={styles.label}
                 wrapClassName={styles.field}
               />
 
-              <div className={styles.field}>
-                <label className={styles.label}>Province</label>
-                <input className={styles.input} value={form.province} onChange={setField("province")} placeholder="Laguna" />
-              </div>
               <div className={styles.field}>
                 <label className={styles.label}>Postal code (optional)</label>
                 <input className={styles.input} value={form.postal_code ?? ""} onChange={setField("postal_code")} placeholder="1634" />

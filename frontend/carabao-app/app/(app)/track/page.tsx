@@ -94,7 +94,8 @@ function Track() {
   }, []);
 
   const placeStopMarkers = useCallback((map: mapboxgl.Map, waypoints: Waypoint[]) => {
-    // Clear previous stop markers
+    if (!map.getContainer()) return;
+
     stopMarkersRef.current.forEach(m => m.remove());
     stopMarkersRef.current = [];
 
@@ -166,10 +167,12 @@ function Track() {
     if (!orderId) return;
 
     const poll = async () => {
-      const map = mapRef.current;
       try {
         const data = await fetchTracking(orderId);
         setTracking(data);
+        // Read mapRef AFTER the await — if the map was removed while fetching
+        // (order changed, component unmounted), mapRef.current will be null here.
+        const map = mapRef.current;
         if (map) await updateTracking(data, map);
       } catch (err) {
         console.error('[tracking] fetch failed:', err);

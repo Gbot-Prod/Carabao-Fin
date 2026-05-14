@@ -79,7 +79,10 @@ function ProfileScreenContent() {
         {
           text: 'Sign Out',
           style: 'destructive',
-          onPress: async () => { await signOut(); },
+          onPress: async () => {
+            await signOut();
+            router.replace('/auth');
+          },
         },
       ]
     );

@@ -82,18 +82,6 @@ function MainTabs() {
   );
 }
 
-function AuthenticatedStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="MainTabs" component={MainTabs} />
-      <Stack.Screen name="Merchant" component={MerchantScreenContent} />
-      <Stack.Screen name="Checkout" component={CheckoutScreen} />
-      <Stack.Screen name="Confirmation" component={ConfirmationScreenContent} />
-      <Stack.Screen name="Onboarding" component={OnboardingScreenContent} />
-    </Stack.Navigator>
-  );
-}
-
 export default function AppNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -111,13 +99,19 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
-      {isAuthenticated ? (
-        <AuthenticatedStack />
-      ) : (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {isAuthenticated ? (
+          <>
+            <Stack.Screen name="MainTabs" component={MainTabs} />
+            <Stack.Screen name="Merchant" component={MerchantScreenContent} />
+            <Stack.Screen name="Checkout" component={CheckoutScreen} />
+            <Stack.Screen name="Confirmation" component={ConfirmationScreenContent} />
+            <Stack.Screen name="Onboarding" component={OnboardingScreenContent} />
+          </>
+        ) : (
           <Stack.Screen name="Auth" component={AuthScreen} />
-        </Stack.Navigator>
-      )}
+        )}
+      </Stack.Navigator>
     </NavigationContainer>
   );
 }

@@ -1,3 +1,4 @@
+import 'mapbox-gl/dist/mapbox-gl.css';
 import Sidebar from "@/components/sidebar/sidebar";
 import { AuthPromptProvider } from "@/components/AuthPrompt/AuthPromptContext";
 

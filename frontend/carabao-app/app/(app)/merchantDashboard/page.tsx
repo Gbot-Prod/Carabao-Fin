@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 import { useRouter } from "next/navigation";
+import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import {
   fetchMyMerchantPerformance,
+  fetchMerchantById,
   fetchMerchantProduce,
   fetchMerchantShopPage,
+  updateMyMerchant,
   fetchMyPayoutInfo,
   fetchMyPayouts,
   fetchMyTransactions,
@@ -24,6 +27,7 @@ import {
   deleteProduce,
   uploadProduceImage,
   deleteMyMerchant,
+  type Merchant,
   type MerchantPerformance,
   type Produce,
   type ShopPage,
@@ -33,6 +37,16 @@ import {
   type MerchantTransaction,
   type MerchantOrder,
 } from "@/util/api";
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+function formatLocalPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  const a = digits.slice(0, 3);
+  const b = digits.slice(3, 6);
+  const c = digits.slice(6, 10);
+  return [a, b, c].filter(Boolean).join(" ");
+}
 
 const formatPeso = (v: number) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 }).format(v);
@@ -174,8 +188,14 @@ export default function MerchantDashboardPage() {
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
   const [orderFilter, setOrderFilter] = useState<string>("all");
+
+  const [merchant, setMerchant] = useState<Merchant | null>(null);
+  const [locationEditing, setLocationEditing] = useState(false);
+  const [locationDraft, setLocationDraft] = useState({ address_line: "", city: "", contact_number: "", available_days: [] as string[] });
+  const [locationSaving, setLocationSaving] = useState(false);
 
   const [deletingMerchant, setDeletingMerchant] = useState(false);
   const [confirmDeleteMerchant, setConfirmDeleteMerchant] = useState(false);
@@ -203,12 +223,14 @@ export default function MerchantDashboardPage() {
     const loadSidePanels = async () => {
       setProduceLoading(true);
       try {
-        const [produceData, shopPageData] = await Promise.allSettled([
+        const [produceData, shopPageData, merchantData] = await Promise.allSettled([
           fetchMerchantProduce(performance.merchant_id),
           fetchMerchantShopPage(performance.merchant_id),
+          fetchMerchantById(performance.merchant_id),
         ]);
         if (produceData.status === "fulfilled") setProduces(produceData.value);
         if (shopPageData.status === "fulfilled") setShopPage(shopPageData.value);
+        if (merchantData.status === "fulfilled") setMerchant(merchantData.value);
       } finally {
         setProduceLoading(false);
       }
@@ -237,12 +259,14 @@ export default function MerchantDashboardPage() {
     if (activeTab !== "orders" || ordersLoaded) return;
     const loadOrders = async () => {
       setOrdersLoading(true);
+      setOrdersError(null);
       try {
         const data = await fetchMyMerchantOrders();
         setOrders(data);
         setOrdersLoaded(true);
-      } catch { /* silently fail */ }
-      finally { setOrdersLoading(false); }
+      } catch {
+        setOrdersError("Failed to load orders. Please refresh the tab.");
+      } finally { setOrdersLoading(false); }
     };
     void loadOrders();
   }, [activeTab, ordersLoaded]);
@@ -320,6 +344,24 @@ export default function MerchantDashboardPage() {
     if (!window.confirm("Delete this produce item?")) return;
     try { await deleteProduce(id); setProduces((prev) => prev.filter((p) => p.id !== id)); }
     catch { /* silently fail */ }
+  };
+
+  // ── Location / merchant profile handlers ─────────────────────────────────────
+
+  const handleSaveLocation = async () => {
+    setLocationSaving(true);
+    try {
+      const location = [locationDraft.address_line, locationDraft.city]
+        .map((s) => s.trim()).filter(Boolean).join(", ") || null;
+      const localDigits = locationDraft.contact_number.replace(/\s/g, "");
+      const contact_number = localDigits ? `+63 ${formatLocalPhone(localDigits)}` : undefined;
+      const operating_hours = locationDraft.available_days.length > 0
+        ? locationDraft.available_days.join(", ") : null;
+      const updated = await updateMyMerchant({ location, contact_number, operating_hours });
+      setMerchant(updated);
+      setLocationEditing(false);
+    } catch { /* silently fail */ }
+    finally { setLocationSaving(false); }
   };
 
   // ── Shop page handlers ───────────────────────────────────────────────────────
@@ -759,6 +801,123 @@ export default function MerchantDashboardPage() {
                 </div>
               </div>
             )}
+
+            {/* ── Store details (location / contact / hours) ── */}
+            <div className={styles.shopDetailsSection}>
+              <h3 className={styles.shopDetailsSectionTitle}>Store Details</h3>
+              {locationEditing ? (
+                <div className={styles.shopDetailsForm}>
+                  {/* Address line */}
+                  <label className={styles.formLabel}>
+                    Street / Barangay
+                    <input
+                      className={styles.formInput}
+                      value={locationDraft.address_line}
+                      onChange={(e) => setLocationDraft((d) => ({ ...d, address_line: e.target.value }))}
+                      placeholder="e.g. 123 Rizal St., Brgy. Sta. Cruz"
+                    />
+                  </label>
+
+                  {/* PSGC region + city */}
+                  <div className={styles.shopDetailsLocRow}>
+                    <LocationSelects
+                      value={locationDraft.city}
+                      onChange={(city) => setLocationDraft((d) => ({ ...d, city }))}
+                      selectClassName={styles.formInput}
+                      labelClassName={styles.formLabel}
+                      wrapClassName={styles.shopDetailsLocField}
+                    />
+                  </div>
+
+                  {/* Province */}
+                  {/* Contact number */}
+                  <div className={styles.formLabel} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <span>Contact Number</span>
+                    <div className={styles.phoneRow}>
+                      <span className={styles.phonePrefix}>+63</span>
+                      <input
+                        className={styles.phoneInput}
+                        value={locationDraft.contact_number}
+                        onChange={(e) => setLocationDraft((d) => ({ ...d, contact_number: formatLocalPhone(e.target.value) }))}
+                        placeholder="912 345 6789"
+                        inputMode="numeric"
+                        maxLength={12}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Operating days */}
+                  <div className={styles.formLabel} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <span>Operating Days</span>
+                    <div className={styles.tickRow}>
+                      {DAYS.map((d) => {
+                        const active = locationDraft.available_days.includes(d);
+                        return (
+                          <button
+                            key={d}
+                            type="button"
+                            className={`${styles.tickBtn} ${active ? styles.tickBtnActive : ""}`}
+                            onClick={() => setLocationDraft((prev) => {
+                              const set = new Set(prev.available_days);
+                              if (set.has(d)) set.delete(d); else set.add(d);
+                              return { ...prev, available_days: DAYS.filter((x) => set.has(x)) };
+                            })}
+                          >
+                            {d}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className={styles.formActions} style={{ marginTop: 10 }}>
+                    <button className={styles.primaryBtn} disabled={locationSaving} onClick={() => void handleSaveLocation()}>
+                      {locationSaving ? "Saving…" : "Save"}
+                    </button>
+                    <button className={styles.secondaryBtn} onClick={() => setLocationEditing(false)}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.shopDetailsView}>
+                  <div className={styles.shopDetailRow}>
+                    <span className={styles.shopDetailLabel}>Address</span>
+                    <span className={styles.shopDetailValue}>{merchant?.location ?? <em>Not set</em>}</span>
+                  </div>
+                  <div className={styles.shopDetailRow}>
+                    <span className={styles.shopDetailLabel}>Contact</span>
+                    <span className={styles.shopDetailValue}>{merchant?.contact_number ?? <em>Not set</em>}</span>
+                  </div>
+                  <div className={styles.shopDetailRow}>
+                    <span className={styles.shopDetailLabel}>Open</span>
+                    <span className={styles.shopDetailValue}>
+                      {merchant?.operating_hours
+                        ? (typeof merchant.operating_hours === "string" ? merchant.operating_hours : JSON.stringify(merchant.operating_hours))
+                        : <em>Not set</em>}
+                    </span>
+                  </div>
+                  <button
+                    className={styles.uploadBtn}
+                    style={{ marginTop: 12 }}
+                    onClick={() => {
+                      const rawContact = merchant?.contact_number ?? "";
+                      const localPart = rawContact.replace(/^\+63\s?/, "");
+                      const oh = merchant?.operating_hours;
+                      const ohStr = oh ? (typeof oh === "string" ? oh : JSON.stringify(oh)) : "";
+                      const savedDays = ohStr.split(",").map((s) => s.trim()).filter((s) => DAYS.includes(s as typeof DAYS[number]));
+                      setLocationDraft({
+                        address_line: merchant?.location ?? "",
+                        city: "",
+                        contact_number: formatLocalPhone(localPart),
+                        available_days: savedDays,
+                      });
+                      setLocationEditing(true);
+                    }}
+                  >
+                    Edit store details
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -781,7 +940,8 @@ export default function MerchantDashboardPage() {
             </div>
 
             {ordersLoading && <p className={styles.emptyText}>Loading orders…</p>}
-            {!ordersLoading && orders.length === 0 && (
+            {!ordersLoading && ordersError && <p className={styles.emptyText} style={{ color: "#b91c1c" }}>{ordersError}</p>}
+            {!ordersLoading && !ordersError && orders.length === 0 && (
               <p className={styles.emptyText}>No orders yet.</p>
             )}
 

@@ -4,11 +4,12 @@ import asyncio
 import hashlib
 import hmac
 import os
+import unicodedata
 from typing import Optional
 from uuid import uuid4
 
+import bcrypt as _bcrypt
 from fastapi import APIRouter, Depends, Header, HTTPException
-from passlib.context import CryptContext  # pip install passlib[bcrypt]
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -20,10 +21,18 @@ from app.models.user import User
 
 router = APIRouter(tags=["auth"])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _bcrypt_hash(password: str) -> str:
+    return _bcrypt.hashpw(password.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
+
+
+def _bcrypt_verify(password: str, hashed: str) -> bool:
+    return _bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+
+
 BETTER_AUTH_SCRYPT_PARAMS = {
     "n": 16384,
-    "r": 16,
+    "r": 16,  # @better-auth/utils uses r=16
     "p": 1,
     "dklen": 64,
 }
@@ -174,26 +183,53 @@ def _find_better_auth_account(db: Session, email: str) -> Optional[tuple[str, Op
     ).mappings().first()
 
     if row is None:
+        print(f"[DEBUG] No BetterAuth account found for email: {email}")
         return None
 
-    return str(row["user_id"]), row["name"], str(row["password_hash"])
+    user_id = str(row["user_id"])
+    name = row["name"]
+    password_hash = str(row["password_hash"])
+    print(f"[DEBUG] Found BetterAuth account for {email}: user_id={user_id}, name={name}")
+    print(f"[DEBUG] Password hash format: {password_hash[:50]}...")
+    return user_id, name, password_hash
 
 
 def _verify_better_auth_password(hash_value: str, password: str) -> bool:
     try:
-        salt, stored_key = hash_value.split(":", 1)
-    except ValueError:
+        salt_hex, stored_key_hex = hash_value.split(":", 1)
+        print(f"[DEBUG] Salt (hex): {salt_hex[:30]}..., Key (hex): {stored_key_hex[:30]}...")
+        # BetterAuth (@better-auth/utils) passes the hex salt string directly to scryptAsync
+        # (noble-hashes converts it to UTF-8 bytes internally, so salt is 32 bytes not 16).
+        # The key is hex-encoded output bytes.
+        salt_bytes = salt_hex.encode("utf-8")
+        stored_key_bytes = bytes.fromhex(stored_key_hex)
+        print(f"[DEBUG] Salt bytes length: {len(salt_bytes)}, key length: {len(stored_key_bytes)}")
+    except (ValueError, Exception) as e:
+        print(f"[DEBUG] Failed to decode hash: {e}")
         return False
 
-    derived_key = hashlib.scrypt(
-        password.encode("utf-8"),
-        salt=salt.encode("utf-8"),
-        n=BETTER_AUTH_SCRYPT_PARAMS["n"],
-        r=BETTER_AUTH_SCRYPT_PARAMS["r"],
-        p=BETTER_AUTH_SCRYPT_PARAMS["p"],
-        dklen=BETTER_AUTH_SCRYPT_PARAMS["dklen"],
-    )
-    return derived_key.hex() == stored_key
+    try:
+        # BetterAuth normalizes the password with NFKC before hashing
+        normalized_password = unicodedata.normalize("NFKC", password)
+        print(f"[DEBUG] Password received: {password[:20]}... (length: {len(password)})")
+        print(f"[DEBUG] Calling scrypt with params: n={BETTER_AUTH_SCRYPT_PARAMS['n']}, r={BETTER_AUTH_SCRYPT_PARAMS['r']}, p={BETTER_AUTH_SCRYPT_PARAMS['p']}, dklen={BETTER_AUTH_SCRYPT_PARAMS['dklen']}")
+        derived_key = hashlib.scrypt(
+            normalized_password.encode("utf-8"),
+            salt=salt_bytes,
+            n=BETTER_AUTH_SCRYPT_PARAMS["n"],
+            r=BETTER_AUTH_SCRYPT_PARAMS["r"],
+            p=BETTER_AUTH_SCRYPT_PARAMS["p"],
+            dklen=BETTER_AUTH_SCRYPT_PARAMS["dklen"],
+            maxmem=256 * 1024 * 1024,
+        )
+        print(f"[DEBUG] Derived key: {derived_key.hex()[:30]}...")
+        print(f"[DEBUG] Stored key:  {stored_key_hex[:30]}...")
+        match = hmac.compare_digest(derived_key, stored_key_bytes)
+        print(f"[DEBUG] Password match: {match}")
+        return match
+    except ValueError as e:
+        print(f"[DEBUG] Scrypt error: {e}")
+        return False
 
 
 def _sync_backend_user_from_better_auth(
@@ -224,7 +260,7 @@ def _sync_backend_user_from_better_auth(
             user.last_name = last_name
 
     credential = db.query(MobileCredential).filter(MobileCredential.user_id == user.id).first()
-    backend_password_hash = pwd_context.hash(password)
+    backend_password_hash = _bcrypt_hash(password)
     if credential is None:
         credential = MobileCredential(user_id=user.id, password_hash=backend_password_hash)
         db.add(credential)
@@ -243,6 +279,8 @@ async def mobile_sign_up(
 ) -> AuthSyncResponse:
     if not payload.password or len(payload.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if len(payload.password.encode("utf-8")) > 72:
+        raise HTTPException(status_code=400, detail="Password must be 72 characters or fewer")
 
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
@@ -260,7 +298,7 @@ async def mobile_sign_up(
     db.commit()
     db.refresh(user)
 
-    credential = MobileCredential(user_id=user.id, password_hash=pwd_context.hash(payload.password))
+    credential = MobileCredential(user_id=user.id, password_hash=_bcrypt_hash(payload.password))
     db.add(credential)
     db.commit()
 
@@ -289,6 +327,7 @@ async def mobile_sign_in(
     payload: MobileSignInPayload,
     db: Session = Depends(get_db),
 ) -> AuthSyncResponse:
+    print(f"[DEBUG] mobile_sign_in called for email: {payload.email}")
     user = db.query(User).filter(User.email == payload.email).first()
 
     credential = None
@@ -296,7 +335,7 @@ async def mobile_sign_in(
         credential = db.query(MobileCredential).filter(MobileCredential.user_id == user.id).first()
 
     if credential is not None:
-        if not pwd_context.verify(payload.password, credential.password_hash):
+        if not _bcrypt_verify(payload.password, credential.password_hash):
             await asyncio.sleep(1)
             raise HTTPException(status_code=401, detail="Invalid email or password")
     else:
@@ -304,19 +343,24 @@ async def mobile_sign_in(
             # Backward-compat for the earlier prototype that stored the bcrypt hash
             # directly in external_auth_id as "mobile:<hash>".
             stored_hash = user.external_auth_id[len("mobile:") :]
-            if not pwd_context.verify(payload.password, stored_hash):
+            if not _bcrypt_verify(payload.password, stored_hash):
                 await asyncio.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
         else:
+            print(f"[DEBUG] Checking BetterAuth for email: {payload.email}")
             better_auth_account = _find_better_auth_account(db, payload.email)
             if better_auth_account is None:
+                print(f"[DEBUG] BetterAuth account not found")
                 await asyncio.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
 
             better_auth_user_id, better_auth_name, better_auth_password_hash = better_auth_account
+            print(f"[DEBUG] Verifying password for BetterAuth user")
             if not _verify_better_auth_password(better_auth_password_hash, payload.password):
+                print(f"[DEBUG] Password verification failed")
                 await asyncio.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
+            print(f"[DEBUG] Password verified successfully, syncing user")
 
             user = _sync_backend_user_from_better_auth(
                 db,
@@ -332,7 +376,7 @@ async def mobile_sign_in(
 
     if user.external_auth_id.startswith("mobile:"):
         stored_hash = user.external_auth_id[len("mobile:") :]
-        if not pwd_context.verify(payload.password, stored_hash):
+        if not _bcrypt_verify(payload.password, stored_hash):
             await asyncio.sleep(1)
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -370,7 +414,7 @@ async def mobile_set_password(
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
     credential = db.query(MobileCredential).filter(MobileCredential.user_id == current_user.id).first()
-    hashed = pwd_context.hash(payload.password)
+    hashed = _bcrypt_hash(payload.password)
 
     if credential is None:
         credential = MobileCredential(user_id=current_user.id, password_hash=hashed)

@@ -15,6 +15,7 @@ export type UserProfile = {
   email: string;
   phone_number: string | null;
   address: string | null;
+  barangay: string | null;
   city: string | null;
   country: string | null;
   postal_code: string | null;
@@ -38,6 +39,7 @@ export type UserProfileUpdatePayload = {
   email?: string;
   phone_number?: string | null;
   address?: string | null;
+  barangay?: string | null;
   city?: string | null;
   country?: string | null;
   postal_code?: string | null;

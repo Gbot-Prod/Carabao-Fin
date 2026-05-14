@@ -35,7 +35,7 @@ export type MerchantOnboardingPayload = {
   contact_number: string;
   address_line: string;
   city: string;
-  province: string;
+  province?: string | null;
   region?: string | null;
   postal_code?: string | null;
   price_range_min: number;
@@ -81,6 +81,20 @@ export const fetchMerchantById = async (merchantId: number): Promise<Merchant> =
 
 export const createMyMerchant = async (payload: MerchantCreatePayload): Promise<Merchant> => {
   const response = await apiClient.post<Merchant>('/merchants/me', payload);
+  return response.data;
+};
+
+export type MerchantUpdatePayload = {
+  merchant_name?: string | null;
+  location?: string | null;
+  contact_number?: string | null;
+  operating_hours?: string | null;
+  delivery_price?: number | null;
+  delivery_time?: number | null;
+};
+
+export const updateMyMerchant = async (payload: MerchantUpdatePayload): Promise<Merchant> => {
+  const response = await apiClient.patch<Merchant>('/merchants/me', payload);
   return response.data;
 };
 

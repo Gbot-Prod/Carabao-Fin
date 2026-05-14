@@ -13,6 +13,7 @@ from app.models.produce import Produce
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.order import CurrentOrderResponse, OrderItemResponse, PlaceOrderRequest, PlaceOrderResponse
+from app.services.sms_service import notify_order_shipped
 
 from ._order_helpers import (
     get_or_create_cart,
@@ -232,5 +233,16 @@ async def update_order_status(
         order.current_order.status = status
 
     db.commit()
+
+    order_history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
+    buyer = db.query(User).filter(User.id == order_history.user_id).first() if order_history else None
+    merchant_name = order.merchant.merchant_name if order.merchant else "Merchant"
+    notify_order_shipped(
+        phone_number=buyer.phone_number if buyer else None,
+        merchant_name=merchant_name,
+        order_ref=f"CB-{order.ordered_at.year if order.ordered_at else 'XXXX'}-{order.id:04d}",
+        status=status,
+    )
+
     return {"order_id": order_id, "status": status}
 

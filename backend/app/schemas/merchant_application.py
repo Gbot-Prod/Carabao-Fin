@@ -24,7 +24,7 @@ class MerchantOnboardingPayload(BaseModel):
     # Step 2
     address_line: str = Field(min_length=1)
     city: str = Field(min_length=1)
-    province: str = Field(min_length=1)
+    province: Optional[str] = None
     region: Optional[str] = None
     postal_code: Optional[str] = None
     price_range_min: int = Field(ge=0)
@@ -52,7 +52,6 @@ class MerchantApplicationResponse(BaseModel):
 
     address_line: str
     city: str
-    province: str
     region: Optional[str] = None
     postal_code: Optional[str] = None
     price_range_min: int

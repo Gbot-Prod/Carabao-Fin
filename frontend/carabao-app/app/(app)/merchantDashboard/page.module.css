@@ -644,6 +644,112 @@
   line-height: 1.5;
 }
 
+/* ── Store details panel ─────────────────────────────────────────────────── */
+.shopDetailsSection {
+  background: #fff;
+  border: 1px solid rgba(23,61,37,0.10);
+  border-radius: 16px;
+  padding: 20px 24px;
+}
+
+.shopDetailsSectionTitle {
+  margin: 0 0 14px;
+  font-size: 14px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #173d25;
+}
+
+.shopDetailsView {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.shopDetailRow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(23,61,37,0.06);
+}
+
+.shopDetailRow:last-of-type {
+  border-bottom: none;
+}
+
+.shopDetailLabel {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #7a8f7a;
+}
+
+.shopDetailValue {
+  font-size: 14px;
+  color: #1f2a1f;
+}
+
+.shopDetailValue em {
+  color: #aabdaa;
+  font-style: normal;
+}
+
+.shopDetailsForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shopDetailsLocRow {
+  display: contents;
+}
+
+.shopDetailsLocField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ── Phone input ─────────────────────────────────────────────────────────── */
+.phoneRow {
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(23,61,37,0.18);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f9fcf9;
+}
+
+.phonePrefix {
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #173d25;
+  background: rgba(23,61,37,0.06);
+  border-right: 1px solid rgba(23,61,37,0.12);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  line-height: 2.4;
+}
+
+.phoneInput {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #173d25;
+  font-family: inherit;
+  outline: none;
+}
+
 .shopInfoForm {
   flex: 1;
   min-width: 0;

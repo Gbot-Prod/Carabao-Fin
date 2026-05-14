@@ -65,27 +65,27 @@ function resolveNotifPrefs(raw: Partial<NotificationPrefs> | null | undefined): 
 }
 
 // ─── Address panel ────────────────────────────────────────────────────────────
-type AddressForm = { address: string; city: string; country: string; postal_code: string };
+type AddressForm = { address: string; barangay: string; city: string; country: string; postal_code: string };
 
 function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSaved: (p: UserProfile) => void }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<AddressForm>({ address: '', city: '', country: '', postal_code: '' });
+  const [form, setForm] = useState<AddressForm>({ address: '', barangay: '', city: '', country: '', postal_code: '' });
 
   useEffect(() => {
     if (profile) {
-      setForm({ address: profile.address ?? '', city: profile.city ?? '', country: profile.country ?? '', postal_code: profile.postal_code ?? '' });
+      setForm({ address: profile.address ?? '', barangay: profile.barangay ?? '', city: profile.city ?? '', country: profile.country ?? '', postal_code: profile.postal_code ?? '' });
     }
   }, [profile]);
 
   const startEdit = () => { setError(null); setEditing(true); };
-  const cancel = () => { if (profile) setForm({ address: profile.address ?? '', city: profile.city ?? '', country: profile.country ?? '', postal_code: profile.postal_code ?? '' }); setEditing(false); setError(null); };
+  const cancel = () => { if (profile) setForm({ address: profile.address ?? '', barangay: profile.barangay ?? '', city: profile.city ?? '', country: profile.country ?? '', postal_code: profile.postal_code ?? '' }); setEditing(false); setError(null); };
 
   const save = async () => {
     setSaving(true); setError(null);
     try {
-      const updated = await updateMyProfile({ address: form.address.trim() || null, city: form.city.trim() || null, country: form.country.trim() || null, postal_code: form.postal_code.trim() || null });
+      const updated = await updateMyProfile({ address: form.address.trim() || null, barangay: form.barangay.trim() || null, city: form.city.trim() || null, country: form.country.trim() || null, postal_code: form.postal_code.trim() || null });
       onSaved(updated);
       setEditing(false);
     } catch { setError('Failed to save. Please try again.'); }
@@ -99,8 +99,12 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
   return editing ? (
     <div className={styles.panelForm}>
       <div className={styles.panelFormField}>
-        <label className={styles.formLabel}>Street address</label>
-        <input className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave" />
+        <label className={styles.formLabel}>Street / House No.</label>
+        <input className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave, Unit 4B" />
+      </div>
+      <div className={styles.panelFormField}>
+        <label className={styles.formLabel}>Barangay</label>
+        <input className={styles.formInput} value={form.barangay} onChange={setField('barangay')} placeholder="Brgy. Poblacion" />
       </div>
       <LocationSelects
         value={form.city}
@@ -129,6 +133,7 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
     <div className={styles.panelView}>
       <div className={styles.panelRows}>
         <div className={styles.panelRow}><span className={styles.panelRowLabel}>Street</span><span className={styles.panelRowValue}>{profile.address ?? <em className={styles.noData}>No data</em>}</span></div>
+        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Barangay</span><span className={styles.panelRowValue}>{profile.barangay ?? <em className={styles.noData}>No data</em>}</span></div>
         <div className={styles.panelRow}><span className={styles.panelRowLabel}>City</span><span className={styles.panelRowValue}>{profile.city ?? <em className={styles.noData}>No data</em>}</span></div>
         <div className={styles.panelRow}><span className={styles.panelRowLabel}>Country</span><span className={styles.panelRowValue}>{profile.country ?? <em className={styles.noData}>No data</em>}</span></div>
         <div className={styles.panelRow}><span className={styles.panelRowLabel}>Postal</span><span className={styles.panelRowValue}>{profile.postal_code ?? <em className={styles.noData}>No data</em>}</span></div>
@@ -326,10 +331,10 @@ function PaymentPanel({ userEmail }: { userEmail: string | undefined }) {
 }
 
 // ─── Edit form type ───────────────────────────────────────────────────────────
-type EditForm = { first_name: string; last_name: string; phone_number: string; address: string; city: string; country: string; postal_code: string };
+type EditForm = { first_name: string; last_name: string; phone_number: string; address: string; barangay: string; city: string; country: string; postal_code: string };
 
 function profileToForm(p: UserProfile): EditForm {
-  return { first_name: p.first_name ?? '', last_name: p.last_name ?? '', phone_number: p.phone_number ?? '', address: p.address ?? '', city: p.city ?? '', country: p.country ?? '', postal_code: p.postal_code ?? '' };
+  return { first_name: p.first_name ?? '', last_name: p.last_name ?? '', phone_number: p.phone_number ?? '', address: p.address ?? '', barangay: p.barangay ?? '', city: p.city ?? '', country: p.country ?? '', postal_code: p.postal_code ?? '' };
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -341,7 +346,7 @@ export default function Profile() {
   const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<EditForm>({ first_name: '', last_name: '', phone_number: '', address: '', city: '', country: '', postal_code: '' });
+  const [form, setForm] = useState<EditForm>({ first_name: '', last_name: '', phone_number: '', address: '', barangay: '', city: '', country: '', postal_code: '' });
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -380,7 +385,7 @@ export default function Profile() {
   const handleSave = async () => {
     setIsSaving(true); setSaveError(null);
     try {
-      const updated = await updateMyProfile({ first_name: form.first_name.trim() || null, last_name: form.last_name.trim() || null, phone_number: form.phone_number.trim() || null, address: form.address.trim() || null, city: form.city.trim() || null, country: form.country.trim() || null, postal_code: form.postal_code.trim() || null });
+      const updated = await updateMyProfile({ first_name: form.first_name.trim() || null, last_name: form.last_name.trim() || null, phone_number: form.phone_number.trim() || null, address: form.address.trim() || null, barangay: form.barangay.trim() || null, city: form.city.trim() || null, country: form.country.trim() || null, postal_code: form.postal_code.trim() || null });
       setProfile(updated); setModalOpen(false);
     } catch { setSaveError('Failed to save. Please try again.'); }
     finally { setIsSaving(false); }
@@ -401,7 +406,7 @@ export default function Profile() {
   };
 
   const fullName = profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() || 'Carabao User' : null;
-  const addressLine = profile ? [profile.address, profile.city, profile.country, profile.postal_code].filter(Boolean).join(', ') : null;
+  const addressLine = profile ? [profile.address, profile.barangay, profile.city, profile.country, profile.postal_code].filter(Boolean).join(', ') : null;
   const hasMerchant = !!profile?.merchant?.id;
 
   return (
@@ -568,8 +573,12 @@ export default function Profile() {
                 </div>
               </div>
               <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
-                <label className={styles.formLabel}>Street address</label>
-                <input className={styles.formInput} value={form.address} onChange={set('address')} placeholder="123 Rizal Ave" />
+                <label className={styles.formLabel}>Street / House No.</label>
+                <input className={styles.formInput} value={form.address} onChange={set('address')} placeholder="123 Rizal Ave, Unit 4B" />
+              </div>
+              <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
+                <label className={styles.formLabel}>Barangay</label>
+                <input className={styles.formInput} value={form.barangay} onChange={set('barangay')} placeholder="Brgy. Poblacion" />
               </div>
               <LocationSelects
                 value={form.city}

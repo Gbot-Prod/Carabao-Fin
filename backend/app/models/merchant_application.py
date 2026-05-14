@@ -32,7 +32,6 @@ class MerchantApplication(Base):
     # Step 2: Location / availability / price range
     address_line = Column(String, nullable=False)
     city = Column(String, nullable=False)
-    province = Column(String, nullable=False)
     region = Column(String, nullable=True)
     postal_code = Column(String, nullable=True)
     price_range_min = Column(Integer, nullable=False)

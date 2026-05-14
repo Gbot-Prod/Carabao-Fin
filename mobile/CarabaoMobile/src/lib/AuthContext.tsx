@@ -96,9 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ]);
   };
 
-  const persist = async (t: string, u: User, expiresIn: number) => {
-    const expiry = Date.now() + expiresIn * 1000;
-    setTokenExpiry(expiry);
+  const persist = async (t: string, u: User, expiry: number) => {
     await Promise.all([
       AsyncStorage.setItem(TOKEN_KEY, t),
       AsyncStorage.setItem(USER_KEY, JSON.stringify(u)),
@@ -125,10 +123,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const data = await res.json() as MobileAuthResponse;
     const u = buildUser(data);
+    const expiry = Date.now() + (data.expires_in ?? 3600) * 1000;
+    // Set all three together so isAuthenticated becomes true in one render
     setToken(data.access_token);
     setUser(u);
-    const expiresIn = data.expires_in ?? 3600;
-    await persist(data.access_token, u, expiresIn);
+    setTokenExpiry(expiry);
+    await persist(data.access_token, u, expiry);
   };
 
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
@@ -143,10 +143,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const data = await res.json() as MobileAuthResponse;
     const u = buildUser(data);
+    const expiry = Date.now() + (data.expires_in ?? 3600) * 1000;
     setToken(data.access_token);
     setUser(u);
-    const expiresIn = data.expires_in ?? 3600;
-    await persist(data.access_token, u, expiresIn);
+    setTokenExpiry(expiry);
+    await persist(data.access_token, u, expiry);
   };
 
   const signOut = async () => {

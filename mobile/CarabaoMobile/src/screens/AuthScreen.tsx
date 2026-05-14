@@ -3,8 +3,9 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Image, Dimensions,
+  Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
@@ -28,12 +29,20 @@ export default function AuthScreen() {
 
   const handleSubmit = async () => {
     setError('');
-    if (mode === 'signup' && form.password !== form.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
     if (!form.email || !form.password) {
       setError('Please fill in all required fields');
+      return;
+    }
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+    if (new TextEncoder().encode(form.password).length > 72) {
+      setError('Password must be 72 characters or fewer');
+      return;
+    }
+    if (mode === 'signup' && form.password !== form.confirmPassword) {
+      setError('Passwords do not match');
       return;
     }
     setLoading(true);
@@ -63,7 +72,7 @@ export default function AuthScreen() {
           <View style={styles.heroOrb2} />
           <View style={styles.heroContent}>
             <View style={styles.logoWrap}>
-              <Text style={styles.logoEmoji}>🌿</Text>
+              <Ionicons name="leaf" size={26} color={Colors.white} />
             </View>
             <Text style={styles.heroTitle}>Carabao</Text>
             <Text style={styles.heroSub}>
@@ -95,7 +104,7 @@ export default function AuthScreen() {
           </View>
 
           <Text style={styles.formTitle}>
-            {mode === 'signin' ? 'Welcome back 👋' : 'Create account 🌱'}
+            {mode === 'signin' ? 'Welcome back' : 'Create account'}
           </Text>
           <Text style={styles.formSub}>
             {mode === 'signin'
@@ -106,7 +115,8 @@ export default function AuthScreen() {
           {/* Error */}
           {error ? (
             <View style={styles.errorBox}>
-              <Text style={styles.errorText}>⚠️  {error}</Text>
+              <Ionicons name="warning-outline" size={15} color={Colors.error} style={{ marginRight: 6 }} />
+              <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
 
@@ -150,6 +160,7 @@ export default function AuthScreen() {
             onChangeText={(v) => handleChange('password', v)}
             secureTextEntry
             autoComplete="password"
+            maxLength={72}
           />
           {mode === 'signup' && (
             <TextInput
@@ -159,6 +170,7 @@ export default function AuthScreen() {
               value={form.confirmPassword}
               onChangeText={(v) => handleChange('confirmPassword', v)}
               secureTextEntry
+              maxLength={72}
             />
           )}
 
@@ -216,7 +228,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md,
   },
-  logoEmoji: { fontSize: 26 },
   heroTitle: {
     fontSize: FontSize.display, fontWeight: '800', color: Colors.white,
     letterSpacing: -1, marginBottom: Spacing.sm,
@@ -264,6 +275,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     padding: Spacing.md,
     marginBottom: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   errorText: { fontSize: FontSize.sm, color: Colors.error, fontWeight: '500' },
 

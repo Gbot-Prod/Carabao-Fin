@@ -24,6 +24,7 @@ from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
 from app.services.merchant_service import create_merchant
 from app.services import r2_service
+from app.services.sms_service import notify_order_shipped
 
 router = APIRouter(tags=["merchants"])
 
@@ -547,8 +548,7 @@ async def get_my_merchant_orders(
 
     rows = (
         db.query(Order, User, CurrentOrder)
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
-        .join(User, User.id == OrderHistory.user_id)
+        .outerjoin(User, User.id == Order.user_id)
         .outerjoin(CurrentOrder, CurrentOrder.order_id == Order.id)
         .filter(Order.merchant_id == merchant.id)
         .order_by(Order.ordered_at.desc())
@@ -558,7 +558,9 @@ async def get_my_merchant_orders(
 
     result = []
     for order, user, current in rows:
-        buyer_name = " ".join(filter(None, [user.first_name, user.last_name])) or None
+        buyer_name = None
+        if user:
+            buyer_name = " ".join(filter(None, [user.first_name, user.last_name])) or None
         result.append(MerchantOrderResponse(
             id=order.id,
             status=order.status,
@@ -567,8 +569,8 @@ async def get_my_merchant_orders(
             delivery_address=order.delivery_address,
             ordered_at=order.ordered_at,
             buyer_name=buyer_name,
-            buyer_email=user.email,
-            buyer_phone=user.phone_number,
+            buyer_email=user.email if user else None,
+            buyer_phone=user.phone_number if user else None,
             shipped=current.shipped if current else False,
             time_of_arrival=current.time_of_arrival if current else None,
         ))
@@ -604,6 +606,13 @@ async def update_my_merchant_order_status(
     order_history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
     user = db.query(User).filter(User.id == order_history.user_id).first() if order_history else None
     buyer_name = " ".join(filter(None, [user.first_name, user.last_name])) if user else None
+
+    notify_order_shipped(
+        phone_number=user.phone_number if user else None,
+        merchant_name=merchant.merchant_name or "Merchant",
+        order_ref=f"CB-{order.ordered_at.year if order.ordered_at else 'XXXX'}-{order.id:04d}",
+        status=status,
+    )
 
     return MerchantOrderResponse(
         id=order.id,

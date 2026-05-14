@@ -12,9 +12,8 @@ export default function CheckoutPage() {
   const [isLoadingCart, setIsLoadingCart] = useState(true);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deliveryDate, setDeliveryDate] = useState("");
-  const [deliveryTime, setDeliveryTime] = useState("08:00-10:00");
   const [street, setStreet] = useState("");
+  const [barangay, setBarangay] = useState("");
   const [city, setCity] = useState("");
   const [postal, setPostal] = useState("");
   const [paymentMethod] = useState("online");
@@ -36,6 +35,7 @@ export default function CheckoutPage() {
       try {
         const profile = await fetchMyProfile();
         if (profile.address) setStreet(profile.address);
+        if (profile.barangay) setBarangay(profile.barangay);
         if (profile.city) setCity(profile.city);
         if (profile.postal_code) setPostal(profile.postal_code);
       } catch {
@@ -69,10 +69,10 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
-      const deliveryAddress = [street, city, postal, 'Philippines'].filter(Boolean).join(', ') || null;
+      const deliveryAddress = [street, barangay, city, postal, 'Philippines'].filter(Boolean).join(', ') || null;
       const result = await placeOrderFromCart({
-        delivery_date: deliveryDate || null,
-        delivery_time: deliveryTime,
+        delivery_date: null,
+        delivery_time: null,
         delivery_address: deliveryAddress,
         payment_method: paymentMethod,
         notes: notes || null,
@@ -111,41 +111,32 @@ export default function CheckoutPage() {
         <section className={styles.formCard}>
           <div className={styles.block}>
             <h2>Delivery Information</h2>
-            <div className={styles.gridTwo}>
-              <label>
-                Delivery date (optional)
-                <input
-                  type="date"
-                  value={deliveryDate}
-                  onChange={(event) => setDeliveryDate(event.target.value)}
-                />
-              </label>
-              <label>
-                Time window
-                <select
-                  value={deliveryTime}
-                  onChange={(event) => setDeliveryTime(event.target.value)}
-                >
-                  <option value="08:00-10:00">08:00 - 10:00</option>
-                  <option value="10:00-12:00">10:00 - 12:00</option>
-                  <option value="13:00-15:00">13:00 - 15:00</option>
-                  <option value="16:00-18:00">16:00 - 18:00</option>
-                </select>
-              </label>
-            </div>
-
             <label>
-              Street address
+              Street / House No.
               <input
                 type="text"
                 value={street}
                 onChange={(e) => setStreet(e.target.value)}
-                placeholder="123 Rizal Ave, Brgy. Poblacion"
+                placeholder="123 Rizal Ave, Unit 4B"
               />
             </label>
 
-            <div className={styles.gridTwo}>
-              <LocationSelects value={city} onChange={setCity} />
+            <label>
+              Barangay
+              <input
+                type="text"
+                value={barangay}
+                onChange={(e) => setBarangay(e.target.value)}
+                placeholder="Brgy. Poblacion"
+              />
+            </label>
+
+            <div className={styles.locationGrid}>
+              <LocationSelects
+                value={city}
+                onChange={setCity}
+                wrapClassName={styles.locationField}
+              />
             </div>
 
             <label>
