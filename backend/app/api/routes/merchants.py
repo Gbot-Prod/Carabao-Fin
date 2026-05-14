@@ -140,15 +140,28 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
         depot_lng=origin_coords[1],
     )
 
-    # Store the waypoints (excluding pickup point, will be added client-side)
+    merchant_name = order.merchant.merchant_name if order.merchant else "Merchant"
     order.route_waypoints = [
         {
+            "sequence": 0,
+            "order_id": None,
+            "lat": origin_coords[0],
+            "lng": origin_coords[1],
+            "label": f"Pickup: {merchant_name}",
+            "type": "pickup",
+            "status": "pickup",
+        }
+    ] + [
+        {
+            "sequence": i + 1,
+            "order_id": order.id,
             "lat": s.lat,
             "lng": s.lng,
             "label": "Your Location",
             "type": "delivery",
+            "status": "in_transit",
         }
-        for s in ordered_stops
+        for i, s in enumerate(ordered_stops)
     ]
     print(f"[route] Computed and stored route for order {order.id} with {len(ordered_stops)} stops")
 
@@ -697,6 +710,7 @@ async def get_my_merchant_orders(
             buyer_phone=user.phone_number if user else None,
             shipped=current.shipped if current else False,
             time_of_arrival=current.time_of_arrival if current else None,
+            shipment_id=order.shipment_id,
         ))
     return result
 
@@ -754,6 +768,7 @@ async def update_my_merchant_order_status(
         buyer_phone=user.phone_number if user else None,
         shipped=current.shipped if current else False,
         time_of_arrival=current.time_of_arrival if current else None,
+        shipment_id=order.shipment_id,
     )
 
 

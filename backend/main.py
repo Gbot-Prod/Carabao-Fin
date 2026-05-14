@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from app.core.database import engine
 from app.core.database import Base
 from app.core.migrations import run_migrations
-from app.models import cart, current_orders, merchant, merchant_application, merchant_payout, mobile_credential, order, order_history, payout_batch, produce, shopPage, transaction, user  # noqa: F401
+from app.models import cart, current_orders, merchant, merchant_application, merchant_payout, mobile_credential, order, order_history, payout_batch, produce, shopPage, shipment, transaction, user  # noqa: F401
 from app.api.routes.router import router
 
 logging.basicConfig(level=logging.INFO)

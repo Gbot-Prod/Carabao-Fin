@@ -231,6 +231,7 @@ export type MerchantOrder = {
   buyer_phone: string | null;
   shipped: boolean;
   time_of_arrival: string | null;
+  shipment_id?: number | null;
 };
 
 export const fetchMyMerchantOrders = async (): Promise<MerchantOrder[]> => {
@@ -241,4 +242,63 @@ export const fetchMyMerchantOrders = async (): Promise<MerchantOrder[]> => {
 export const updateMerchantOrderStatus = async (orderId: number, status: string): Promise<MerchantOrder> => {
   const response = await apiClient.patch<MerchantOrder>(`/merchants/me/orders/${orderId}/status`, null, { params: { status } });
   return response.data;
+};
+
+export type MerchantShipmentWaypoint = {
+  lat: number;
+  lng: number;
+  label: string;
+  type: 'pickup' | 'delivery';
+  sequence: number;
+  order_id?: number | null;
+  status?: string | null;
+};
+
+export type MerchantShipmentStop = {
+  sequence: number;
+  order_id: number;
+  buyer_name: string | null;
+  delivery_address: string | null;
+  lat: number;
+  lng: number;
+  label: string;
+  status: string;
+};
+
+export type MerchantShipmentTracking = {
+  shipment_id: number;
+  order_id: number;
+  merchant_name: string;
+  status: string;
+  order_ids: number[];
+  waypoints: MerchantShipmentWaypoint[];
+  stops: MerchantShipmentStop[];
+  origin: { lat: number; lng: number };
+  destination: { lat: number; lng: number };
+  progress: number;
+  eta_minutes: number;
+  active_stop_index: number;
+};
+
+export const createMerchantShipment = async (orderIds: number[]): Promise<MerchantShipmentTracking> => {
+  const response = await apiClient.post<MerchantShipmentTracking>('/merchants/me/shipments', { order_ids: orderIds });
+  return response.data;
+};
+
+export type MerchantShipmentSummary = {
+  id: number;
+  status: string;
+  stop_count: number;
+  created_at: string;
+  shipped_at: string | null;
+};
+
+export const fetchMyShipments = async (): Promise<MerchantShipmentSummary[]> => {
+  const response = await apiClient.get<MerchantShipmentSummary[]>('/merchants/me/shipments');
+  return response.data;
+};
+
+export const fetchShipmentTracking = async (shipmentId: number) => {
+  const response = await apiClient.get<MerchantShipmentTracking | null>(`/shipments/${shipmentId}`);
+  return response.data as MerchantShipmentTracking;
 };
