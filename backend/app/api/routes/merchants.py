@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import asyncio
+import os
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
+import requests as _requests
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.current_orders import CurrentOrder
@@ -17,6 +20,8 @@ from app.models.produce import Produce
 from app.models.shopPage import ShopPage
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.routing.service import compute_route
+from app.routing.state import Stop
 from app.schemas.merchant import MerchantBase, MerchantPageBase, MerchantResponse, MerchantUpdate
 from app.schemas.merchant_performance import MerchantPerformanceResponse
 from app.schemas.payout import MerchantOrderResponse, PayoutBatchResponse, PayoutInfoResponse, PayoutInfoUpdate, TransactionSummary
@@ -25,8 +30,127 @@ from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdat
 from app.services.merchant_service import create_merchant
 from app.services import r2_service
 from app.services.sms_service import notify_order_shipped
+from urllib.parse import quote
 
 router = APIRouter(tags=["merchants"])
+
+# Bounding box for the Philippines so Mapbox never returns a result outside the country.
+_PH_BBOX = "116.928,4.587,126.604,21.321"
+# Proximity bias toward Metro Manila — pulls ambiguous results toward the delivery region.
+_METRO_MANILA_PROXIMITY = "120.9842,14.5995"
+_geocode_cache: dict[str, tuple[float, float]] = {}
+
+
+def _normalise_address(address: str) -> str:
+    """Append ', Philippines' if the address doesn't already reference the country."""
+    cleaned = address.strip()
+    lower = cleaned.lower()
+    if "philippines" not in lower and ", ph" not in lower:
+        cleaned = f"{cleaned}, Philippines"
+    return cleaned
+
+
+def _geocode_sync(address: str) -> tuple[float, float] | None:
+    token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
+    if not token or not address.strip():
+        return None
+
+    normalised = _normalise_address(address)
+    url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{quote(normalised)}.json"
+    try:
+        resp = _requests.get(
+            url,
+            params={
+                "country": "PH",
+                "bbox": _PH_BBOX,
+                "proximity": _METRO_MANILA_PROXIMITY,
+                "types": "address,poi,place,locality,neighborhood",
+                "limit": 1,
+                "access_token": token,
+            },
+            timeout=5,
+        )
+        if not resp.ok:
+            print(f"[geocode] Mapbox error {resp.status_code} for address: {normalised!r}")
+            return None
+
+        body = resp.json()
+        features = body.get("features", [])
+        if not features:
+            print(f"[geocode] No results for address: {normalised!r}")
+            return None
+
+        feature = features[0]
+        relevance = feature.get("relevance", 1.0)
+        if relevance < 0.4:
+            print(f"[geocode] Low-confidence result (relevance={relevance:.2f}) for: {normalised!r} → {feature.get('place_name')}")
+
+        lng, lat = feature["center"]
+        print(f"[geocode] {normalised!r} → ({lat:.5f}, {lng:.5f})  place={feature.get('place_name')!r}  relevance={relevance:.2f}")
+        return (lat, lng)
+    except Exception as exc:
+        print(f"[geocode] Exception for address {normalised!r}: {exc}")
+        return None
+
+
+def _compute_and_store_route(db: Session, order: Order) -> None:
+    """Compute ALNS route for order and store waypoints. Called when marking for shipping."""
+    if not order.merchant or not order.merchant.location:
+        print(f"[route] Skipping route computation for order {order.id}: no merchant location")
+        return
+
+    merchant_address = order.merchant.location
+    delivery_address = order.delivery_address
+
+    if not delivery_address:
+        # Try to get from order history user
+        order_history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
+        if order_history:
+            user = db.query(User).filter(User.id == order_history.user_id).first()
+            if user:
+                parts = [p for p in [user.address, user.city] if p]
+                delivery_address = ", ".join(parts) if parts else None
+
+    if not delivery_address:
+        print(f"[route] Skipping route computation for order {order.id}: no delivery address")
+        return
+
+    origin_coords = _geocode_sync(merchant_address)
+    dest_coords = _geocode_sync(delivery_address)
+
+    if not origin_coords:
+        print(f"[route] Could not geocode merchant address for order {order.id}: {merchant_address!r}")
+        return
+
+    if not dest_coords:
+        print(f"[route] Could not geocode delivery address for order {order.id}: {delivery_address!r}")
+        return
+
+    # Build stop and run ALNS
+    customer_stop = Stop(
+        order_id=order.id,
+        merchant_id=order.merchant_id or -1,
+        lat=dest_coords[0],
+        lng=dest_coords[1],
+    )
+
+    ordered_stops = compute_route(
+        stops=[customer_stop],
+        depot_lat=origin_coords[0],
+        depot_lng=origin_coords[1],
+    )
+
+    # Store the waypoints (excluding pickup point, will be added client-side)
+    order.route_waypoints = [
+        {
+            "lat": s.lat,
+            "lng": s.lng,
+            "label": "Your Location",
+            "type": "delivery",
+        }
+        for s in ordered_stops
+    ]
+    print(f"[route] Computed and stored route for order {order.id} with {len(ordered_stops)} stops")
 
 
 @router.post("/merchants/me", response_model=MerchantResponse)
@@ -599,6 +723,10 @@ async def update_my_merchant_order_status(
     order.status = status
     if order.current_order:
         order.current_order.status = status
+
+    # Compute and store ALNS route when order is marked for shipping (first time only)
+    if status == "shipped" and not order.route_waypoints:
+        _compute_and_store_route(db, order)
 
     db.commit()
 

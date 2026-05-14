@@ -146,6 +146,7 @@ def to_current_order_item_from_order(order: Order) -> dict[str, Any]:
         "delivery_fee": int(first_item.get("deliveryFee", 0) if isinstance(first_item, dict) else 0),
         "image": first_item.get("image") if isinstance(first_item, dict) else None,
         "status": order.status,
+        "items": items,
     }
 
 
@@ -166,6 +167,7 @@ def to_current_order_item(current_order: CurrentOrder) -> dict[str, Any]:
         "delivery_fee": current_order.delivery_fee,
         "image": current_order.image or (first_item.get("image") if isinstance(first_item, dict) else None),
         "status": current_order.status,
+        "items": items,
     }
 
 

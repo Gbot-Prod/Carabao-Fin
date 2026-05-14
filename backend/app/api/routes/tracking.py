@@ -151,40 +151,32 @@ async def get_order_tracking(
     if not dest_coords:
         raise HTTPException(status_code=422, detail=f"Could not geocode delivery address: {delivery_address!r}")
 
-    # Build stop list and run ALNS.
-    # Depot = merchant (pickup point). Stop = customer delivery address.
-    # For a single order this is trivially solved; structure is ready for batching.
-    customer_stop = Stop(
-        order_id=order_id,
-        merchant_id=order.merchant_id or -1,
-        lat=dest_coords[0],
-        lng=dest_coords[1],
-    )
-
-    ordered_stops = compute_route(
-        stops=[customer_stop],
-        depot_lat=origin_coords[0],
-        depot_lng=origin_coords[1],
-    )
-
     merchant_name = order.merchant.merchant_name if order.merchant else "Merchant"
 
-    waypoints = [
-        Waypoint(
-            lat=origin_coords[0],
-            lng=origin_coords[1],
-            label=f"Pickup: {merchant_name}",
-            type="pickup",
+    # Use pre-computed ALNS route if available; otherwise return error (route only computed when marked for shipping)
+    if order.route_waypoints:
+        # Reconstruct waypoints from stored JSON
+        waypoints = [
+            Waypoint(
+                lat=origin_coords[0],
+                lng=origin_coords[1],
+                label=f"Pickup: {merchant_name}",
+                type="pickup",
+            )
+        ] + [
+            Waypoint(
+                lat=w["lat"],
+                lng=w["lng"],
+                label=w.get("label", "Your Location"),
+                type=w.get("type", "delivery"),
+            )
+            for w in order.route_waypoints
+        ]
+    else:
+        raise HTTPException(
+            status_code=412,
+            detail="Route not yet computed. Merchant must mark order for shipping first."
         )
-    ] + [
-        Waypoint(
-            lat=s.lat,
-            lng=s.lng,
-            label="Your Location",
-            type="delivery",
-        )
-        for s in ordered_stops
-    ]
 
     elapsed = time.time() % _CYCLE_SECONDS
     progress = round(elapsed / _CYCLE_SECONDS, 4)

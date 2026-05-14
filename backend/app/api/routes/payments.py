@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
+from app.models.current_orders import CurrentOrder
 from app.models.merchant import Merchant
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
@@ -325,3 +326,21 @@ def release_payout_batch(
     db.commit()
     db.refresh(batch)
     return batch
+
+
+@router.post("/admin/sync-current-order-statuses")
+def sync_current_order_statuses(
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """One-shot fix: copy Order.status -> CurrentOrder.status where they're out of sync."""
+    stale = (
+        db.query(CurrentOrder)
+        .join(Order, CurrentOrder.order_id == Order.id)
+        .filter(CurrentOrder.status != Order.status)
+        .all()
+    )
+    for co in stale:
+        co.status = co.order.status
+    db.commit()
+    return {"synced": len(stale)}

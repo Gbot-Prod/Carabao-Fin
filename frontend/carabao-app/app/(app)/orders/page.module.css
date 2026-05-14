@@ -110,6 +110,16 @@
   text-decoration: underline;
 }
 
+.itemSummary {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: #4e6155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
 .badge {
   padding: 0.25rem 0.7rem;
   border-radius: 999px;

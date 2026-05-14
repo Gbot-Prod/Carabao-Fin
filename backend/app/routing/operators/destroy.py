@@ -5,7 +5,7 @@ some stops moved from `stops` into `unassigned`. Never mutate the original.
 
 import math
 import numpy as np
-from app.routing.state import RouteState, Stop, _distance
+from app.routing.state import RouteState, Stop, _haversine_distance
 
 
 def random_removal(state: RouteState, rng: np.random.Generator) -> RouteState:
@@ -39,23 +39,26 @@ def worst_removal(state: RouteState, rng: np.random.Generator) -> RouteState:
 
     n = max(1, int(len(result.stops) * rng.uniform(0.1, 0.3)))
 
-    def removal_cost(idx: int) -> float:
-        route = [result._depot()] + result.stops + [result._depot()]
-        prev_stop = route[idx]
-        curr_stop = route[idx + 1]
-        next_stop = route[idx + 2]
-        before = _distance(prev_stop, curr_stop) + _distance(curr_stop, next_stop)
-        after = _distance(prev_stop, next_stop)
-        return before - after
+    # Compute removal costs once (O(N)) instead of recomputing after each removal.
+    # This reduces the operator from ~O(N^3) to ~O(N log N) for large N.
+    route = [result._depot()] + result.stops + [result._depot()]
+    costs: list[float] = []
+    for i in range(1, len(route) - 1):
+        prev_stop = route[i - 1]
+        curr_stop = route[i]
+        next_stop = route[i + 1]
+        before = _haversine_distance(prev_stop, curr_stop) + _haversine_distance(
+            curr_stop, next_stop
+        )
+        after = _haversine_distance(prev_stop, next_stop)
+        costs.append(before - after)
 
-    for _ in range(n):
-        if not result.stops:
-            break
-        costs = [removal_cost(i) for i in range(len(result.stops))]
-        # Randomise selection slightly so the operator isn't fully deterministic.
-        noise = rng.uniform(0.9, 1.1, size=len(costs))
-        noisy_costs = [c * w for c, w in zip(costs, noise)]
-        worst_idx = int(np.argmax(noisy_costs))
-        result.unassigned.append(result.stops.pop(worst_idx))
+    noise = rng.uniform(0.9, 1.1, size=len(costs))
+    noisy_costs = [c * w for c, w in zip(costs, noise)]
+
+    n = min(n, len(result.stops))
+    remove_indices = sorted(np.argsort(noisy_costs)[-n:].tolist(), reverse=True)
+    for idx in remove_indices:
+        result.unassigned.append(result.stops.pop(int(idx)))
 
     return result

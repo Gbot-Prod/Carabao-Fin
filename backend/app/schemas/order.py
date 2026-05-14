@@ -32,6 +32,7 @@ class CurrentOrderResponse(BaseModel):
     delivery_fee: int
     image: Optional[str] = None
     status: str
+    items: list[dict[str, Any]] = []
 
     model_config = ConfigDict(from_attributes=True)
 

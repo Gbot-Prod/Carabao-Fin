@@ -96,6 +96,8 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
     order = db.query(Order).filter(Order.id == txn.order_id).first()
     if order:
         order.status = "processing"
+        if order.current_order:
+            order.current_order.status = "processing"
         if order.order_history_id:
             history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
             if history:

@@ -34,14 +34,18 @@ function OrderCard({ order }: { order: CurrentOrderItem }) {
       })
     : null;
 
+  const itemSummary = order.items.length > 0
+    ? order.items.map((item) => `${item.produce}${item.quantity > 1 ? ` ×${item.quantity}` : ''}`).join(', ')
+    : null;
+
   return (
     <li className={styles.card}>
       <div className={styles.cardTop}>
         <div>
-          <p className={styles.orderId}>Order #{order.order_id}</p>
           <h3 className={styles.merchant}>
             {merchantHref ? <Link href={merchantHref}>{order.merchant}</Link> : order.merchant}
           </h3>
+          {itemSummary && <p className={styles.itemSummary}>{itemSummary}</p>}
         </div>
         <StatusBadge shipped={order.shipped} status={order.status} />
       </div>

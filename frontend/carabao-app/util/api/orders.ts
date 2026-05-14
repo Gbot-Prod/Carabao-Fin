@@ -25,6 +25,7 @@ export type CurrentOrderItem = {
   delivery_fee: number;
   image: string | null;
   status: string;
+  items: CartItem[];
 };
 
 export type PlaceOrderPayload = {

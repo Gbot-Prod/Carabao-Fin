@@ -25,6 +25,8 @@ _MIGRATIONS: list[str] = [
     "ALTER TABLE merchant_applications DROP COLUMN IF EXISTS province",
     # 2026-05-14 — barangay for geocoding-quality address storage
     "ALTER TABLE backend_users ADD COLUMN IF NOT EXISTS barangay VARCHAR",
+    # 2026-05-14 — pre-computed ALNS route stored when order is marked for shipping
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS route_waypoints JSONB",
 ]
 
 

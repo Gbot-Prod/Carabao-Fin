@@ -4,7 +4,7 @@ all stops from `unassigned` reinserted into `stops`. Never mutate the original.
 """
 
 import numpy as np
-from app.routing.state import RouteState, Stop, _distance
+from app.routing.state import RouteState, Stop, _haversine_distance
 
 
 def greedy_insert(state: RouteState, rng: np.random.Generator) -> RouteState:
@@ -45,7 +45,10 @@ def random_insert(state: RouteState, rng: np.random.Generator) -> RouteState:
 # ---------------------------------------------------------------------------
 
 def _best_insertion(stops: list[Stop], candidate: Stop, depot: Stop) -> tuple[int, float]:
-    """Return (position, delta_cost) for the cheapest insertion of candidate."""
+    """Return (position, delta_cost) for the cheapest insertion of candidate.
+    
+    Uses Haversine distance for realistic lat/lng calculations.
+    """
     route = [depot] + stops + [depot]
     best_pos = 1
     best_delta = float("inf")
@@ -53,9 +56,9 @@ def _best_insertion(stops: list[Stop], candidate: Stop, depot: Stop) -> tuple[in
     for i in range(1, len(route)):
         prev, nxt = route[i - 1], route[i]
         delta = (
-            _distance(prev, candidate)
-            + _distance(candidate, nxt)
-            - _distance(prev, nxt)
+            _haversine_distance(prev, candidate)
+            + _haversine_distance(candidate, nxt)
+            - _haversine_distance(prev, nxt)
         )
         if delta < best_delta:
             best_delta = delta

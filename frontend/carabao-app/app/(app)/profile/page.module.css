@@ -348,7 +348,7 @@
 
 .panelRow {
   display: flex;
-  gap: 10px;
+  gap: 14px;
   align-items: baseline;
 }
 
@@ -358,7 +358,7 @@
   color: #5c6a5e;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  width: 50px;
+  min-width: 72px;
   flex-shrink: 0;
 }
 

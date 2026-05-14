@@ -194,7 +194,7 @@ export default function MerchantDashboardPage() {
 
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [locationEditing, setLocationEditing] = useState(false);
-  const [locationDraft, setLocationDraft] = useState({ address_line: "", city: "", contact_number: "", available_days: [] as string[] });
+  const [locationDraft, setLocationDraft] = useState({ address_line: "", barangay: "", city: "", contact_number: "", available_days: [] as string[] });
   const [locationSaving, setLocationSaving] = useState(false);
 
   const [deletingMerchant, setDeletingMerchant] = useState(false);
@@ -351,7 +351,7 @@ export default function MerchantDashboardPage() {
   const handleSaveLocation = async () => {
     setLocationSaving(true);
     try {
-      const location = [locationDraft.address_line, locationDraft.city]
+      const location = [locationDraft.address_line, locationDraft.barangay, locationDraft.city]
         .map((s) => s.trim()).filter(Boolean).join(", ") || null;
       const localDigits = locationDraft.contact_number.replace(/\s/g, "");
       const contact_number = localDigits ? `+63 ${formatLocalPhone(localDigits)}` : undefined;
@@ -809,12 +809,22 @@ export default function MerchantDashboardPage() {
                 <div className={styles.shopDetailsForm}>
                   {/* Address line */}
                   <label className={styles.formLabel}>
-                    Street / Barangay
+                    Street / House No.
                     <input
                       className={styles.formInput}
                       value={locationDraft.address_line}
                       onChange={(e) => setLocationDraft((d) => ({ ...d, address_line: e.target.value }))}
-                      placeholder="e.g. 123 Rizal St., Brgy. Sta. Cruz"
+                      placeholder="e.g. 123 Rizal St., Unit 4B"
+                    />
+                  </label>
+
+                  <label className={styles.formLabel}>
+                    Barangay
+                    <input
+                      className={styles.formInput}
+                      value={locationDraft.barangay}
+                      onChange={(e) => setLocationDraft((d) => ({ ...d, barangay: e.target.value }))}
+                      placeholder="e.g. Brgy. Sta. Cruz"
                     />
                   </label>
 
@@ -906,6 +916,7 @@ export default function MerchantDashboardPage() {
                       const savedDays = ohStr.split(",").map((s) => s.trim()).filter((s) => DAYS.includes(s as typeof DAYS[number]));
                       setLocationDraft({
                         address_line: merchant?.location ?? "",
+                        barangay: "",
                         city: "",
                         contact_number: formatLocalPhone(localPart),
                         available_days: savedDays,
