@@ -298,7 +298,7 @@ export const fetchMyShipments = async (): Promise<MerchantShipmentSummary[]> => 
   return response.data;
 };
 
-export const fetchShipmentTracking = async (shipmentId: number) => {
+export const fetchmMerchantShipmentTracking = async (shipmentId: number) => {
   const response = await apiClient.get<MerchantShipmentTracking | null>(`/shipments/${shipmentId}`);
   return response.data as MerchantShipmentTracking;
 };
