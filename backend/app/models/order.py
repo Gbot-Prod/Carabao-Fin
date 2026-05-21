@@ -17,9 +17,11 @@ class Order(Base):
 	items = Column(JSON, nullable=False, default=list)
 	delivery_address = Column(String, nullable=True)
 	ordered_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+	shipment_id = Column(Integer, ForeignKey("shipments.id"), nullable=True, index=True)
 	route_waypoints = Column(JSON, nullable=True)  # Pre-computed ALNS route stored when marked for shipping
 
 	order_history = relationship("OrderHistory", back_populates="orders")
 	user = relationship("User")
 	merchant = relationship("Merchant", back_populates="orders")
+	shipment = relationship("Shipment", back_populates="orders")
 	current_order = relationship("CurrentOrder", back_populates="order", uselist=False, cascade="all, delete-orphan")

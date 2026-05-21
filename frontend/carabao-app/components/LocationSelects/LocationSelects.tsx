@@ -1,7 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { fetchRegions, fetchCitiesByRegion, type PsgcRegion, type PsgcCity } from '@/util/psgc';
+import {
+  fetchRegions,
+  fetchCitiesByRegion,
+  fetchProvincesByRegion,
+  fetchCitiesByProvince,
+  type PsgcRegion,
+  type PsgcCity,
+} from '@/util/psgc';
 
 interface LocationSelectsProps {
   value: string;
@@ -44,10 +51,27 @@ export default function LocationSelects({
     onRegionChange?.(regions.find((r) => r.code === code)?.name ?? '');
     setLoadingCities(true);
     try {
-      const data = await fetchCitiesByRegion(code);
+      let data = await fetchCitiesByRegion(code);
+
+      // Some regions in the PSGC API expose cities under provinces only.
+      // If the region-level cities array is empty, try fetching provinces
+      // then aggregate cities per-province as a fallback.
+      if ((!data || data.length === 0)) {
+        try {
+          const provinces = await fetchProvincesByRegion(code);
+          const cityLists = await Promise.all(
+            provinces.map((p) => fetchCitiesByProvince(p.code).catch(() => [])),
+          );
+          data = cityLists.flat();
+        } catch (provErr) {
+          console.error('Failed to fetch provinces fallback for region', code, provErr);
+        }
+      }
+
       setCities(data);
     } catch {
       setCities([]);
+      console.error('Failed to fetch cities for region', code);
     } finally {
       setLoadingCities(false);
     }

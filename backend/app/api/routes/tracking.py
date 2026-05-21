@@ -1,121 +1,85 @@
 from __future__ import annotations
 
-import asyncio
 import math
-import os
 import time
-from urllib.parse import quote
 
-import requests as _requests
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.order import Order
 from app.models.order_history import OrderHistory
+from app.models.shipment import Shipment
 from app.models.user import User
-from app.routing.service import compute_route
-from app.routing.state import Stop
+from app.schemas.shipment import ShipmentStop, ShipmentTrackingResponse, TrackingPosition, Waypoint
 
 router = APIRouter(tags=["tracking"])
 
 _CYCLE_SECONDS = 120
 
-_geocode_cache: dict[str, tuple[float, float]] = {}
+
+def _current_progress() -> tuple[float, int]:
+    elapsed = time.time() % _CYCLE_SECONDS
+    progress = round(elapsed / _CYCLE_SECONDS, 4)
+    eta_minutes = math.ceil((1.0 - progress) * _CYCLE_SECONDS / 60)
+    return progress, eta_minutes
 
 
-class TrackingPosition(BaseModel):
-    lat: float
-    lng: float
+def _response_from_stored_route(
+    route_waypoints: list[dict],
+    *,
+    shipment_id: int,
+    order_id: int,
+    merchant_name: str,
+    status: str,
+    progress: float,
+    eta_minutes: int,
+    highlight_order_id: int | None = None,
+) -> ShipmentTrackingResponse:
+    if not route_waypoints:
+        raise HTTPException(status_code=412, detail="Route not ready yet")
 
-
-class Waypoint(BaseModel):
-    lat: float
-    lng: float
-    label: str
-    type: str  # "pickup" | "delivery"
-
-
-class TrackingResponse(BaseModel):
-    order_id: int
-    waypoints: list[Waypoint]
-    origin: TrackingPosition
-    destination: TrackingPosition
-    progress: float
-    eta_minutes: int
-
-
-# Bounding box for the Philippines so Mapbox never returns a result outside the country.
-_PH_BBOX = "116.928,4.587,126.604,21.321"
-# Proximity bias toward Metro Manila — pulls ambiguous results toward the delivery region.
-_METRO_MANILA_PROXIMITY = "120.9842,14.5995"
-
-
-def _normalise_address(address: str) -> str:
-    """Append ', Philippines' if the address doesn't already reference the country."""
-    cleaned = address.strip()
-    lower = cleaned.lower()
-    if "philippines" not in lower and ", ph" not in lower:
-        cleaned = f"{cleaned}, Philippines"
-    return cleaned
-
-
-def _geocode_sync(address: str) -> tuple[float, float] | None:
-    token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
-    if not token or not address.strip():
-        return None
-
-    normalised = _normalise_address(address)
-    url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{quote(normalised)}.json"
-    try:
-        resp = _requests.get(
-            url,
-            params={
-                "country": "PH",
-                "bbox": _PH_BBOX,
-                "proximity": _METRO_MANILA_PROXIMITY,
-                "types": "address,poi,place,locality,neighborhood",
-                "limit": 1,
-                "access_token": token,
-            },
-            timeout=5,
+    waypoints = [Waypoint(**p) for p in route_waypoints]
+    stop_points = [p for p in route_waypoints if p.get("type") != "pickup" and p.get("order_id") is not None]
+    stops = [
+        ShipmentStop(
+            sequence=int(p.get("sequence", i + 1)),
+            order_id=int(p["order_id"]),
+            buyer_name=p.get("buyer_name"),
+            delivery_address=p.get("delivery_address"),
+            lat=float(p["lat"]),
+            lng=float(p["lng"]),
+            label=p.get("label", "Stop"),
+            status=p.get("status", "in_transit"),
         )
-        if not resp.ok:
-            print(f"[geocode] Mapbox error {resp.status_code} for address: {normalised!r}")
-            return None
+        for i, p in enumerate(stop_points)
+    ]
 
-        body = resp.json()
-        features = body.get("features", [])
-        if not features:
-            print(f"[geocode] No results for address: {normalised!r}")
-            return None
+    active_idx = min(int(progress * max(len(stops), 1)), max(len(stops) - 1, 0))
+    if highlight_order_id is not None:
+        buyer_idx = next((i for i, s in enumerate(stops) if s.order_id == highlight_order_id), active_idx)
+    else:
+        buyer_idx = active_idx
 
-        feature = features[0]
-        relevance = feature.get("relevance", 1.0)
-        if relevance < 0.4:
-            print(f"[geocode] Low-confidence result (relevance={relevance:.2f}) for: {normalised!r} → {feature.get('place_name')}")
+    dest = stops[buyer_idx] if stops else waypoints[-1]
 
-        lng, lat = feature["center"]
-        print(f"[geocode] {normalised!r} → ({lat:.5f}, {lng:.5f})  place={feature.get('place_name')!r}  relevance={relevance:.2f}")
-        return (lat, lng)
-    except Exception as exc:
-        print(f"[geocode] Exception for address {normalised!r}: {exc}")
-        return None
-
-
-async def _geocode(address: str) -> tuple[float, float] | None:
-    key = address.strip().lower()
-    if key in _geocode_cache:
-        return _geocode_cache[key]
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, _geocode_sync, address)
-    if result:
-        _geocode_cache[key] = result
-    return result
+    return ShipmentTrackingResponse(
+        shipment_id=shipment_id,
+        order_id=order_id,
+        merchant_name=merchant_name,
+        status=status,
+        order_ids=[s.order_id for s in stops],
+        waypoints=waypoints,
+        stops=stops,
+        origin=TrackingPosition(lat=waypoints[0].lat, lng=waypoints[0].lng),
+        destination=TrackingPosition(lat=dest.lat, lng=dest.lng),
+        progress=progress,
+        eta_minutes=eta_minutes,
+        active_stop_index=buyer_idx,
+    )
 
 
-@router.get("/tracking/{order_id}", response_model=TrackingResponse)
+@router.get("/tracking/{order_id}", response_model=ShipmentTrackingResponse)
 async def get_order_tracking(
     order_id: int,
     db: Session = Depends(get_db),
@@ -130,63 +94,39 @@ async def get_order_tracking(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    merchant_address = order.merchant.location if order.merchant else None
-    if not merchant_address:
-        raise HTTPException(status_code=422, detail="Merchant has no location set")
-
-    delivery_address = order.delivery_address
-    if not delivery_address:
-        parts = [p for p in [current_user.address, current_user.city] if p]
-        delivery_address = ", ".join(parts) if parts else None
-    if not delivery_address:
-        raise HTTPException(status_code=422, detail="No delivery address on file")
-
-    origin_coords, dest_coords = await asyncio.gather(
-        _geocode(merchant_address),
-        _geocode(delivery_address),
-    )
-
-    if not origin_coords:
-        raise HTTPException(status_code=422, detail=f"Could not geocode merchant address: {merchant_address!r}")
-    if not dest_coords:
-        raise HTTPException(status_code=422, detail=f"Could not geocode delivery address: {delivery_address!r}")
-
     merchant_name = order.merchant.merchant_name if order.merchant else "Merchant"
+    progress, eta_minutes = _current_progress()
 
-    # Use pre-computed ALNS route if available; otherwise return error (route only computed when marked for shipping)
-    if order.route_waypoints:
-        # Reconstruct waypoints from stored JSON
-        waypoints = [
-            Waypoint(
-                lat=origin_coords[0],
-                lng=origin_coords[1],
-                label=f"Pickup: {merchant_name}",
-                type="pickup",
-            )
-        ] + [
-            Waypoint(
-                lat=w["lat"],
-                lng=w["lng"],
-                label=w.get("label", "Your Location"),
-                type=w.get("type", "delivery"),
-            )
-            for w in order.route_waypoints
-        ]
-    else:
-        raise HTTPException(
-            status_code=412,
-            detail="Route not yet computed. Merchant must mark order for shipping first."
+    # Batch shipment — read the pre-computed multi-stop route, no geocoding needed
+    if order.shipment_id:
+        shipment = db.query(Shipment).filter(Shipment.id == order.shipment_id).first()
+        if not shipment or not shipment.route_waypoints:
+            raise HTTPException(status_code=412, detail="Shipment route not ready yet")
+        return _response_from_stored_route(
+            shipment.route_waypoints,
+            shipment_id=shipment.id,
+            order_id=order_id,
+            merchant_name=merchant_name,
+            status=shipment.status,
+            progress=progress,
+            eta_minutes=eta_minutes,
+            highlight_order_id=order_id,
         )
 
-    elapsed = time.time() % _CYCLE_SECONDS
-    progress = round(elapsed / _CYCLE_SECONDS, 4)
-    eta_minutes = math.ceil((1.0 - progress) * _CYCLE_SECONDS / 60)
+    # Single-order manual dispatch — route stored when merchant marked it shipped
+    if order.route_waypoints:
+        return _response_from_stored_route(
+            order.route_waypoints,
+            shipment_id=0,
+            order_id=order_id,
+            merchant_name=merchant_name,
+            status=order.status,
+            progress=progress,
+            eta_minutes=eta_minutes,
+            highlight_order_id=order_id,
+        )
 
-    return TrackingResponse(
-        order_id=order_id,
-        waypoints=waypoints,
-        origin=TrackingPosition(lat=origin_coords[0], lng=origin_coords[1]),
-        destination=TrackingPosition(lat=dest_coords[0], lng=dest_coords[1]),
-        progress=progress,
-        eta_minutes=eta_minutes,
+    raise HTTPException(
+        status_code=412,
+        detail="Order has not been dispatched yet",
     )

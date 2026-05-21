@@ -4,9 +4,11 @@ import Link from 'next/link';
 import styles from './page.module.css';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import mapboxgl from 'mapbox-gl';
 import OrderCard from './components/orderCard';
 import { fetchCurrentOrders, fetchTracking, type TrackingData, type Waypoint } from '@/util/api';
+import { fetchShipmentTracking } from '@/util/api';
 import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
 
 type TrackOrder = {
@@ -50,7 +52,9 @@ function Track() {
   const routeRef = useRef<RouteGeoJSON | null>(null);
   const pendingRouteRef = useRef<RouteGeoJSON | null>(null);
   const stopMarkersPlacedRef = useRef(false);
+  const activeStopOrderIdRef = useRef<number | null>(null);
   const [tracking, setTracking] = useState<TrackingData | null>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
   const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>([]);
   const [selectedOrderIndex, setSelectedOrderIndex] = useState(0);
 
@@ -93,14 +97,18 @@ function Track() {
     }
   }, []);
 
-  const placeStopMarkers = useCallback((map: mapboxgl.Map, waypoints: Waypoint[]) => {
+  const placeStopMarkers = useCallback((map: mapboxgl.Map, waypoints: Waypoint[], activeOrderId: number | null) => {
     if (!map.getContainer()) return;
 
     stopMarkersRef.current.forEach(m => m.remove());
     stopMarkersRef.current = [];
 
     waypoints.forEach(wp => {
-      const color = wp.type === 'pickup' ? '#3b82f6' : '#ef4444';
+      const color = wp.type === 'pickup'
+        ? '#3b82f6'
+        : wp.order_id && wp.order_id === activeOrderId
+          ? '#f59e0b'
+          : '#ef4444';
       const marker = new mapboxgl.Marker({ color })
         .setLngLat([wp.lng, wp.lat])
         .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(wp.label))
@@ -123,10 +131,16 @@ function Track() {
   }, []);
 
   const updateTracking = useCallback(async (data: TrackingData, map: mapboxgl.Map) => {
+    const activeOrderId = data.stops[data.active_stop_index]?.order_id ?? null;
+
     // Place stop markers once per order — markers are DOM elements and work
     // regardless of whether the map style is ready.
+    if (data.waypoints.length > 0 && activeStopOrderIdRef.current !== activeOrderId) {
+      placeStopMarkers(map, data.waypoints, activeOrderId);
+      activeStopOrderIdRef.current = activeOrderId;
+    }
+
     if (!stopMarkersPlacedRef.current && data.waypoints.length > 0) {
-      placeStopMarkers(map, data.waypoints);
       stopMarkersPlacedRef.current = true;
       map.fitBounds(buildBounds(data.waypoints), { padding: 80, maxZoom: 14 });
     }
@@ -162,12 +176,55 @@ function Track() {
     updateDriverMarker(map, driverLngLat);
   }, [drawRouteLayer, placeStopMarkers, updateDriverMarker]);
 
+  const searchParams = useSearchParams();
+
   useEffect(() => {
+    const shipmentIdParam = searchParams.get('shipment_id');
+    const shipmentId = shipmentIdParam ? Number(shipmentIdParam) : null;
     const orderId = selectedOrder?.orderId;
+
+    // If a shipment_id is present in the URL, poll shipment endpoint instead
+    if (shipmentId) {
+      const pollShipment = async () => {
+        try {
+          setTrackingError(null);
+          const data = await fetchShipmentTracking(shipmentId);
+          setTracking(data);
+          const map = mapRef.current;
+          if (map) await updateTracking(data, map);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Tracking data is not ready yet.';
+          setTrackingError(message);
+          console.error('[tracking] fetch failed:', err);
+        }
+      };
+
+      void pollShipment();
+      const intervalId = setInterval(() => void pollShipment(), 3000);
+
+      return () => {
+        clearInterval(intervalId);
+        const map = mapRef.current;
+        if (map?.getLayer('driver-route-line')) map.removeLayer('driver-route-line');
+        if (map?.getSource('driver-route')) map.removeSource('driver-route');
+        routeRef.current = null;
+        pendingRouteRef.current = null;
+        stopMarkersPlacedRef.current = false;
+        activeStopOrderIdRef.current = null;
+        driverMarkerRef.current?.remove();
+        driverMarkerRef.current = null;
+        stopMarkersRef.current.forEach(m => m.remove());
+        stopMarkersRef.current = [];
+        setTracking(null);
+        setTrackingError(null);
+      };
+    }
+
     if (!orderId) return;
 
     const poll = async () => {
       try {
+        setTrackingError(null);
         const data = await fetchTracking(orderId);
         setTracking(data);
         // Read mapRef AFTER the await — if the map was removed while fetching
@@ -175,6 +232,8 @@ function Track() {
         const map = mapRef.current;
         if (map) await updateTracking(data, map);
       } catch (err) {
+        const message = err instanceof Error ? err.message : 'Tracking data is not ready yet.';
+        setTrackingError(message);
         console.error('[tracking] fetch failed:', err);
       }
     };
@@ -190,13 +249,15 @@ function Track() {
       routeRef.current = null;
       pendingRouteRef.current = null;
       stopMarkersPlacedRef.current = false;
+      activeStopOrderIdRef.current = null;
       driverMarkerRef.current?.remove();
       driverMarkerRef.current = null;
       stopMarkersRef.current.forEach(m => m.remove());
       stopMarkersRef.current = [];
       setTracking(null);
+      setTrackingError(null);
     };
-  }, [selectedOrder?.orderId, updateTracking]);
+  }, [selectedOrder?.orderId, updateTracking, searchParams]);
 
   const formattedDeliveryFee = new Intl.NumberFormat('en-PH', {
     style: 'currency',
@@ -257,9 +318,19 @@ function Track() {
                   <p className={styles.detailValue}>{selectedOrder.shipped ? 'Shipped' : 'Not Shipped Yet'}</p>
                 </div>
                 <div className={styles.detailItem}>
+                  <span className={styles.detailLabel}>Shipment</span>
+                  <p className={styles.detailValue}>{tracking ? `#${tracking.shipment_id}` : 'Pending shipment'}</p>
+                </div>
+                <div className={styles.detailItem}>
                   <span className={styles.detailLabel}>Estimated Arrival</span>
                   <p className={styles.detailValue}>{selectedOrder.shipped ? selectedOrder.timeOfArrival : 'Pending shipment'}</p>
                 </div>
+                {tracking && (
+                  <div className={styles.detailItem}>
+                    <span className={styles.detailLabel}>Stops</span>
+                    <p className={styles.detailValue}>{tracking.stops.length} stop{tracking.stops.length === 1 ? '' : 's'}</p>
+                  </div>
+                )}
                 <div className={styles.detailItem}>
                   <span className={styles.detailLabel}>Delivery Fee</span>
                   <p className={styles.detailValue}>{formattedDeliveryFee}</p>
@@ -271,6 +342,50 @@ function Track() {
                   </div>
                 )}
               </div>
+
+              {tracking && (
+                <div className={styles.shipmentPanel}>
+                  <div className={styles.shipmentPanelHeader}>
+                    <div>
+                      <span className={styles.detailLabel}>Shipment route</span>
+                      <h3 className={styles.shipmentTitle}>{tracking.merchant_name}</h3>
+                    </div>
+                    <span className={styles.shipmentStatus}>{tracking.status.replaceAll('_', ' ')}</span>
+                  </div>
+
+                  <div className={styles.shipmentSummaryRow}>
+                    <div>
+                      <span className={styles.shipmentSummaryLabel}>Shipment #</span>
+                      <strong>{tracking.shipment_id}</strong>
+                    </div>
+                    <div>
+                      <span className={styles.shipmentSummaryLabel}>Active stop</span>
+                      <strong>{Math.min(tracking.active_stop_index + 1, tracking.stops.length)}/{tracking.stops.length || 1}</strong>
+                    </div>
+                    <div>
+                      <span className={styles.shipmentSummaryLabel}>Live ETA</span>
+                      <strong>{tracking.eta_minutes} min</strong>
+                    </div>
+                  </div>
+
+                  <ol className={styles.shipmentStopList}>
+                    {tracking.stops.map((stop, index) => (
+                      <li key={`${stop.order_id}-${stop.sequence}`} className={`${styles.shipmentStopItem} ${index === tracking.active_stop_index ? styles.shipmentStopActive : ''}`}>
+                        <div className={styles.shipmentStopHeader}>
+                          <span className={styles.shipmentStopBadge}>Stop {stop.sequence}</span>
+                          <span className={styles.shipmentStopStatus}>{index === tracking.active_stop_index ? 'Active' : stop.status.replaceAll('_', ' ')}</span>
+                        </div>
+                        <p className={styles.shipmentStopName}>{stop.buyer_name ?? stop.label}</p>
+                        <p className={styles.shipmentStopAddress}>{stop.delivery_address ?? 'Delivery address unavailable'}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {trackingError && !tracking && (
+                <p className={styles.shipmentError}>{trackingError}</p>
+              )}
             </div>
           </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 import { useRouter } from "next/navigation";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
@@ -16,6 +16,8 @@ import {
   fetchMyTransactions,
   fetchMyMerchantOrders,
   updateMerchantOrderStatus,
+  createMerchantShipment,
+  fetchMyShipments,
   updateMyPayoutInfo,
   requestPayout,
   createMyShopPage,
@@ -191,6 +193,12 @@ export default function MerchantDashboardPage() {
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
   const [orderFilter, setOrderFilter] = useState<string>("all");
+  const [selectedShipmentOrderIds, setSelectedShipmentOrderIds] = useState<Set<number>>(new Set());
+  const [shipmentCreating, setShipmentCreating] = useState(false);
+  const [shipmentMessage, setShipmentMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [shipments, setShipments] = useState<import('@/util/api/merchants').MerchantShipmentSummary[]>([]);
+  const [shipmentsLoading, setShipmentsLoading] = useState(false);
+  const [shipmentsError, setShipmentsError] = useState<string | null>(null);
 
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [locationEditing, setLocationEditing] = useState(false);
@@ -255,21 +263,24 @@ export default function MerchantDashboardPage() {
     void loadEarnings();
   }, [activeTab, earningsLoaded]);
 
+  const reloadOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    setOrdersError(null);
+    try {
+      const data = await fetchMyMerchantOrders();
+      setOrders(data);
+      setOrdersLoaded(true);
+    } catch {
+      setOrdersError("Failed to load orders. Please refresh the tab.");
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (activeTab !== "orders" || ordersLoaded) return;
-    const loadOrders = async () => {
-      setOrdersLoading(true);
-      setOrdersError(null);
-      try {
-        const data = await fetchMyMerchantOrders();
-        setOrders(data);
-        setOrdersLoaded(true);
-      } catch {
-        setOrdersError("Failed to load orders. Please refresh the tab.");
-      } finally { setOrdersLoading(false); }
-    };
-    void loadOrders();
-  }, [activeTab, ordersLoaded]);
+    void reloadOrders();
+  }, [activeTab, ordersLoaded, reloadOrders]);
 
   const merchantName = performance?.merchant_name ?? "Your Shop";
 
@@ -288,10 +299,42 @@ export default function MerchantDashboardPage() {
     return { totalPaid, totalReleased, available, pendingBatch: pending ?? null };
   }, [transactions, payouts]);
 
+  const shipmentCandidates = useMemo(
+    () => orders.filter((o) => ["pending", "processing"].includes(o.status) && !o.shipped),
+    [orders],
+  );
+
+  const selectedShipmentOrders = useMemo(
+    () => shipmentCandidates.filter((order) => selectedShipmentOrderIds.has(order.id)),
+    [shipmentCandidates, selectedShipmentOrderIds],
+  );
+
   const ratingLabel = useMemo(() => {
     const r = performance?.rating;
     return r == null ? "—" : `${Number(r).toFixed(1)} / 5`;
   }, [performance?.rating]);
+
+  const reloadShipments = useCallback(async () => {
+    setShipmentsLoading(true);
+    setShipmentsError(null);
+    try {
+      const data = await fetchMyShipments();
+      setShipments(data);
+    } catch {
+      setShipmentsError('Failed to load shipments.');
+    } finally {
+      setShipmentsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "orders" || shipments.length > 0) return;
+    void reloadShipments();
+  }, [activeTab, shipments.length, reloadShipments]);
+
+  const viewShipment = (id: number) => {
+    router.push(`/track?shipment_id=${id}`);
+  };
 
   // ── Produce handlers ────────────────────────────────────────────────────────
 
@@ -437,6 +480,42 @@ export default function MerchantDashboardPage() {
       setPayoutMessage({ type: "error", text: err?.response?.data?.detail ?? "Could not submit cash out request." });
     } finally {
       setRequestingPayout(false);
+    }
+  };
+
+  const toggleShipmentOrder = (orderId: number) => {
+    setShipmentMessage(null);
+    setSelectedShipmentOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
+
+  const handleCreateShipment = async () => {
+    const orderIds = Array.from(selectedShipmentOrderIds);
+    if (orderIds.length === 0) return;
+
+    setShipmentCreating(true);
+    setShipmentMessage(null);
+    try {
+      await createMerchantShipment(orderIds);
+      setShipmentMessage({
+        type: "success",
+        text: `Created a shipment for ${orderIds.length} order${orderIds.length === 1 ? "" : "s"}.`,
+      });
+      setSelectedShipmentOrderIds(new Set());
+      await reloadOrders();
+      await reloadShipments();
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } } };
+      setShipmentMessage({
+        type: "error",
+        text: err?.response?.data?.detail ?? "Could not create shipment.",
+      });
+    } finally {
+      setShipmentCreating(false);
     }
   };
 
@@ -950,6 +1029,58 @@ export default function MerchantDashboardPage() {
               </div>
             </div>
 
+            <div className={styles.shipmentComposer}>
+              <div>
+                <h3 className={styles.shipmentComposerTitle}>Batch shipment</h3>
+                <p className={styles.shipmentComposerText}>
+                  Select processing orders from the same merchant run, then create one shipment with a computed stop sequence.
+                </p>
+              </div>
+              <div className={styles.shipmentComposerActions}>
+                <span className={styles.shipmentCounter}>
+                  {selectedShipmentOrders.length} selected / {shipmentCandidates.length} eligible
+                </span>
+                <button
+                  className={styles.primaryBtn}
+                  disabled={shipmentCreating || selectedShipmentOrders.length === 0}
+                  onClick={() => void handleCreateShipment()}
+                >
+                  {shipmentCreating ? "Creating shipment…" : "Create shipment"}
+                </button>
+              </div>
+            </div>
+
+            {shipmentMessage && (
+              <div className={`${styles.payoutMessage} ${shipmentMessage.type === "success" ? styles.payoutMessageSuccess : styles.payoutMessageError}`}>
+                {shipmentMessage.text}
+              </div>
+            )}
+
+            <div className={styles.panel} style={{ marginBottom: 12 }}>
+              <h3 className={styles.sectionTitle} style={{ margin: 0 }}>Shipments</h3>
+              {shipmentsLoading ? (
+                <p className={styles.emptyText}>Loading shipments…</p>
+              ) : shipmentsError ? (
+                <p className={styles.emptyText} style={{ color: '#b91c1c' }}>{shipmentsError}</p>
+              ) : shipments.length === 0 ? (
+                <p className={styles.emptyText}>No shipments yet.</p>
+              ) : (
+                <ul className={styles.shipmentList}>
+                  {shipments.map(s => (
+                    <li key={s.id} className={styles.shipmentRow}>
+                      <div>
+                        <strong>Shipment #{s.id}</strong>
+                        <div className={styles.shipmentMeta}>{s.stop_count} stops • {new Date(s.created_at).toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <button className={styles.secondaryBtn} onClick={() => viewShipment(s.id)}>View</button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             {ordersLoading && <p className={styles.emptyText}>Loading orders…</p>}
             {!ordersLoading && ordersError && <p className={styles.emptyText} style={{ color: "#b91c1c" }}>{ordersError}</p>}
             {!ordersLoading && !ordersError && orders.length === 0 && (
@@ -960,7 +1091,10 @@ export default function MerchantDashboardPage() {
               {orders
                 .filter((o) => orderFilter === "all" || o.status === orderFilter)
                 .map((order) => (
-                  <div key={order.id} className={styles.orderCard}>
+                  <div
+                    key={order.id}
+                    className={`${styles.orderCard} ${selectedShipmentOrderIds.has(order.id) ? styles.orderCardSelected : ""}`}
+                  >
                     <div className={styles.orderCardHeader}>
                       <div className={styles.orderCardMeta}>
                         <span className={styles.orderIdLabel}>Order #{order.id}</span>
@@ -971,6 +1105,17 @@ export default function MerchantDashboardPage() {
                       </div>
                       <strong className={styles.orderTotal}>{formatPeso(order.total_price)}</strong>
                     </div>
+
+                    {shipmentCandidates.some((candidate) => candidate.id === order.id) && (
+                      <label className={styles.orderSelectRow}>
+                        <input
+                          type="checkbox"
+                          checked={selectedShipmentOrderIds.has(order.id)}
+                          onChange={() => toggleShipmentOrder(order.id)}
+                        />
+                        <span>Select for shipment</span>
+                      </label>
+                    )}
 
                     {/* Buyer info */}
                     <div className={styles.orderBuyer}>
@@ -1007,13 +1152,8 @@ export default function MerchantDashboardPage() {
                             {updatingOrderId === order.id ? "…" : "Confirm Order"}
                           </button>
                         )}
-                        {order.status === "processing" && (
-                          <button className={styles.orderActionBtn} disabled={updatingOrderId === order.id} onClick={() => void handleUpdateOrderStatus(order.id, "shipped")}>
-                            {updatingOrderId === order.id ? "…" : "Mark as Shipped"}
-                          </button>
-                        )}
-                        {order.status === "shipped" && (
-                          <button className={styles.orderActionBtn} disabled={updatingOrderId === order.id} onClick={() => void handleUpdateOrderStatus(order.id, "delivered")}>
+                        {order.status === 'shipped' && (
+                          <button className={styles.orderActionBtn} disabled={updatingOrderId === order.id} onClick={() => void handleUpdateOrderStatus(order.id, 'delivered')}>
                             {updatingOrderId === order.id ? "…" : "Mark as Delivered"}
                           </button>
                         )}

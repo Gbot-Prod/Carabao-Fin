@@ -25,7 +25,10 @@ _MIGRATIONS: list[str] = [
     "ALTER TABLE merchant_applications DROP COLUMN IF EXISTS province",
     # 2026-05-14 — barangay for geocoding-quality address storage
     "ALTER TABLE backend_users ADD COLUMN IF NOT EXISTS barangay VARCHAR",
-    # 2026-05-14 — pre-computed ALNS route stored when order is marked for shipping
+    # 2026-05-14 — shipment batches for merchant multi-stop routing
+    "CREATE TABLE IF NOT EXISTS shipments (id SERIAL PRIMARY KEY, merchant_id INTEGER NOT NULL REFERENCES merchants(id), status VARCHAR NOT NULL DEFAULT 'in_transit', stop_count INTEGER NOT NULL DEFAULT 0, route_waypoints JSONB NOT NULL DEFAULT '[]'::jsonb, shipped_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipment_id INTEGER REFERENCES shipments(id)",
+    # 2026-05-14 — pre-computed ALNS route stored when order is marked for shipping (legacy single-order fallback)
     "ALTER TABLE orders ADD COLUMN IF NOT EXISTS route_waypoints JSONB",
 ]
 
