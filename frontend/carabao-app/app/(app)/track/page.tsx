@@ -31,7 +31,9 @@ const toTrackOrder = (order: Awaited<ReturnType<typeof fetchCurrentOrders>>[numb
   merchantId: order.merchant_id ?? null,
   shipped: order.shipped,
   dateBought: new Date(order.date_bought).toLocaleDateString(),
-  timeOfArrival: order.time_of_arrival ? new Date(order.time_of_arrival).toLocaleDateString() : 'N/A',
+  timeOfArrival: order.time_of_arrival
+    ? new Date(order.time_of_arrival).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'N/A',
   deliveryFee: order.delivery_fee,
   image: order.image ?? '',
   status: order.status,
@@ -178,6 +180,23 @@ function Track() {
 
   const searchParams = useSearchParams();
 
+  const cleanupMap = useCallback((intervalId: ReturnType<typeof setInterval>) => {
+    clearInterval(intervalId);
+    const map = mapRef.current;
+    if (map?.getLayer('driver-route-line')) map.removeLayer('driver-route-line');
+    if (map?.getSource('driver-route')) map.removeSource('driver-route');
+    routeRef.current = null;
+    pendingRouteRef.current = null;
+    stopMarkersPlacedRef.current = false;
+    activeStopOrderIdRef.current = null;
+    driverMarkerRef.current?.remove();
+    driverMarkerRef.current = null;
+    stopMarkersRef.current.forEach(m => m.remove());
+    stopMarkersRef.current = [];
+    setTracking(null);
+    setTrackingError(null);
+  }, []);
+
   useEffect(() => {
     const shipmentIdParam = searchParams.get('shipment_id');
     const shipmentId = shipmentIdParam ? Number(shipmentIdParam) : null;
@@ -201,23 +220,7 @@ function Track() {
 
       void pollShipment();
       const intervalId = setInterval(() => void pollShipment(), 3000);
-
-      return () => {
-        clearInterval(intervalId);
-        const map = mapRef.current;
-        if (map?.getLayer('driver-route-line')) map.removeLayer('driver-route-line');
-        if (map?.getSource('driver-route')) map.removeSource('driver-route');
-        routeRef.current = null;
-        pendingRouteRef.current = null;
-        stopMarkersPlacedRef.current = false;
-        activeStopOrderIdRef.current = null;
-        driverMarkerRef.current?.remove();
-        driverMarkerRef.current = null;
-        stopMarkersRef.current.forEach(m => m.remove());
-        stopMarkersRef.current = [];
-        setTracking(null);
-        setTrackingError(null);
-      };
+      return () => cleanupMap(intervalId);
     }
 
     if (!orderId) return;
@@ -240,24 +243,8 @@ function Track() {
 
     void poll();
     const intervalId = setInterval(() => void poll(), 3000);
-
-    return () => {
-      clearInterval(intervalId);
-      const map = mapRef.current;
-      if (map?.getLayer('driver-route-line')) map.removeLayer('driver-route-line');
-      if (map?.getSource('driver-route')) map.removeSource('driver-route');
-      routeRef.current = null;
-      pendingRouteRef.current = null;
-      stopMarkersPlacedRef.current = false;
-      activeStopOrderIdRef.current = null;
-      driverMarkerRef.current?.remove();
-      driverMarkerRef.current = null;
-      stopMarkersRef.current.forEach(m => m.remove());
-      stopMarkersRef.current = [];
-      setTracking(null);
-      setTrackingError(null);
-    };
-  }, [selectedOrder?.orderId, updateTracking, searchParams]);
+    return () => cleanupMap(intervalId);
+  }, [selectedOrder?.orderId, updateTracking, searchParams, cleanupMap]);
 
   const formattedDeliveryFee = new Intl.NumberFormat('en-PH', {
     style: 'currency',
@@ -323,7 +310,13 @@ function Track() {
                 </div>
                 <div className={styles.detailItem}>
                   <span className={styles.detailLabel}>Estimated Arrival</span>
-                  <p className={styles.detailValue}>{selectedOrder.shipped ? selectedOrder.timeOfArrival : 'Pending shipment'}</p>
+                  <p className={styles.detailValue}>
+                    {tracking
+                      ? new Date(Date.now() + tracking.eta_minutes * 60_000).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+                      : selectedOrder.shipped
+                      ? selectedOrder.timeOfArrival
+                      : 'Pending shipment'}
+                  </p>
                 </div>
                 {tracking && (
                   <div className={styles.detailItem}>

@@ -52,6 +52,24 @@ class RouteState:
         return Stop(order_id=-1, merchant_id=-1, lat=self.depot_lat, lng=self.depot_lng)
 
 
+@dataclass
+class MultiRouteState:
+    """
+    Represents multiple delivery routes (one per vehicle/rider).
+    The shared unassigned pool is used by cross-route operators.
+    """
+    routes: list[RouteState]
+    unassigned: list[Stop] = field(default_factory=list)
+
+    def objective(self) -> float:
+        total = sum(r.objective() for r in self.routes)
+        total += len(self.unassigned) * 1_000_000
+        return total
+
+    def copy(self) -> MultiRouteState:
+        return deepcopy(self)
+
+
 def _haversine_distance(a: Stop, b: Stop) -> float:
     """
     Calculate great-circle distance between two points in km using Haversine formula.

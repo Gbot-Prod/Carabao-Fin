@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import math
-import time
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -11,18 +10,10 @@ from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.shipment import Shipment
 from app.models.user import User
+from app.routing.eta import _eta_from_waypoints
 from app.schemas.shipment import ShipmentStop, ShipmentTrackingResponse, TrackingPosition, Waypoint
 
 router = APIRouter(tags=["tracking"])
-
-_CYCLE_SECONDS = 120
-
-
-def _current_progress() -> tuple[float, int]:
-    elapsed = time.time() % _CYCLE_SECONDS
-    progress = round(elapsed / _CYCLE_SECONDS, 4)
-    eta_minutes = math.ceil((1.0 - progress) * _CYCLE_SECONDS / 60)
-    return progress, eta_minutes
 
 
 def _response_from_stored_route(
@@ -32,8 +23,7 @@ def _response_from_stored_route(
     order_id: int,
     merchant_name: str,
     status: str,
-    progress: float,
-    eta_minutes: int,
+    shipped_at: datetime | None = None,
     highlight_order_id: int | None = None,
 ) -> ShipmentTrackingResponse:
     if not route_waypoints:
@@ -55,6 +45,8 @@ def _response_from_stored_route(
         for i, p in enumerate(stop_points)
     ]
 
+    target_id = highlight_order_id if highlight_order_id is not None else order_id
+    progress, eta_minutes = _eta_from_waypoints(shipped_at, route_waypoints, target_id)
     active_idx = min(int(progress * max(len(stops), 1)), max(len(stops) - 1, 0))
     if highlight_order_id is not None:
         buyer_idx = next((i for i, s in enumerate(stops) if s.order_id == highlight_order_id), active_idx)
@@ -63,19 +55,33 @@ def _response_from_stored_route(
 
     dest = stops[buyer_idx] if stops else waypoints[-1]
 
+    # Buyer-facing view: strip other buyers' names, addresses, and GPS coordinates.
+    # Merchants (highlight_order_id=None) legitimately see all stops.
+    if highlight_order_id is not None:
+        visible_stops = [s for s in stops if s.order_id == highlight_order_id]
+        visible_waypoints = [
+            w for w in waypoints
+            if w.type == "pickup" or w.order_id == highlight_order_id
+        ]
+        visible_active_idx = 0
+    else:
+        visible_stops = stops
+        visible_waypoints = waypoints
+        visible_active_idx = buyer_idx
+
     return ShipmentTrackingResponse(
         shipment_id=shipment_id,
         order_id=order_id,
         merchant_name=merchant_name,
         status=status,
-        order_ids=[s.order_id for s in stops],
-        waypoints=waypoints,
-        stops=stops,
+        order_ids=[s.order_id for s in visible_stops],
+        waypoints=visible_waypoints,
+        stops=visible_stops,
         origin=TrackingPosition(lat=waypoints[0].lat, lng=waypoints[0].lng),
         destination=TrackingPosition(lat=dest.lat, lng=dest.lng),
         progress=progress,
         eta_minutes=eta_minutes,
-        active_stop_index=buyer_idx,
+        active_stop_index=visible_active_idx,
     )
 
 
@@ -95,7 +101,6 @@ async def get_order_tracking(
         raise HTTPException(status_code=404, detail="Order not found")
 
     merchant_name = order.merchant.merchant_name if order.merchant else "Merchant"
-    progress, eta_minutes = _current_progress()
 
     # Batch shipment — read the pre-computed multi-stop route, no geocoding needed
     if order.shipment_id:
@@ -108,8 +113,7 @@ async def get_order_tracking(
             order_id=order_id,
             merchant_name=merchant_name,
             status=shipment.status,
-            progress=progress,
-            eta_minutes=eta_minutes,
+            shipped_at=shipment.shipped_at,
             highlight_order_id=order_id,
         )
 
@@ -121,8 +125,7 @@ async def get_order_tracking(
             order_id=order_id,
             merchant_name=merchant_name,
             status=order.status,
-            progress=progress,
-            eta_minutes=eta_minutes,
+            shipped_at=None,
             highlight_order_id=order_id,
         )
 

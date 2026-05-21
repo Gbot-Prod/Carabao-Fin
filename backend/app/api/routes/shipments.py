@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import math
 import os
-import time
-from datetime import datetime, timezone
-from urllib.parse import quote
+from datetime import datetime, timedelta, timezone
 
 import requests as _requests
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.current_orders import CurrentOrder
@@ -18,72 +15,13 @@ from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.shipment import Shipment
 from app.models.user import User
+from app.routing.eta import _eta_from_waypoints
 from app.routing.service import compute_route
 from app.routing.state import Stop
 from app.schemas.shipment import CreateShipmentRequest, ShipmentStop, ShipmentTrackingResponse, TrackingPosition, Waypoint
+from app.utils.geocoding import _geocode
 
 router = APIRouter(tags=["shipments"])
-
-_CYCLE_SECONDS = 120
-_PH_BBOX = "116.928,4.587,126.604,21.321"
-_METRO_MANILA_PROXIMITY = "120.9842,14.5995"
-_geocode_cache: dict[str, tuple[float, float]] = {}
-
-
-def _normalise_address(address: str) -> str:
-	cleaned = address.strip()
-	lower = cleaned.lower()
-	if "philippines" not in lower and ", ph" not in lower:
-		cleaned = f"{cleaned}, Philippines"
-	return cleaned
-
-
-def _geocode_sync(address: str) -> tuple[float, float] | None:
-	token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
-	if not token or not address.strip():
-		return None
-
-	normalised = _normalise_address(address)
-	url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{quote(normalised)}.json"
-	try:
-		resp = _requests.get(
-			url,
-			params={
-				"country": "PH",
-				"bbox": _PH_BBOX,
-				"proximity": _METRO_MANILA_PROXIMITY,
-				"types": "address,poi,place,locality,neighborhood",
-				"limit": 1,
-				"access_token": token,
-			},
-			timeout=5,
-		)
-		if not resp.ok:
-			print(f"[shipment-geocode] Mapbox error {resp.status_code} for address: {normalised!r}")
-			return None
-
-		body = resp.json()
-		features = body.get("features", [])
-		if not features:
-			print(f"[shipment-geocode] No results for address: {normalised!r}")
-			return None
-
-		lng, lat = features[0]["center"]
-		return (lat, lng)
-	except Exception as exc:
-		print(f"[shipment-geocode] Exception for address {normalised!r}: {exc}")
-		return None
-
-
-async def _geocode(address: str) -> tuple[float, float] | None:
-	key = address.strip().lower()
-	if key in _geocode_cache:
-		return _geocode_cache[key]
-	loop = asyncio.get_running_loop()
-	result = await loop.run_in_executor(None, _geocode_sync, address)
-	if result:
-		_geocode_cache[key] = result
-	return result
 
 
 def _resolve_delivery_address(order: Order, buyer: User | None) -> str | None:
@@ -93,11 +31,31 @@ def _resolve_delivery_address(order: Order, buyer: User | None) -> str | None:
 	return ", ".join(parts) if parts else None
 
 
-def _current_progress() -> tuple[float, int]:
-	elapsed = time.time() % _CYCLE_SECONDS
-	progress = round(elapsed / _CYCLE_SECONDS, 4)
-	eta_minutes = math.ceil((1.0 - progress) * _CYCLE_SECONDS / 60)
-	return progress, eta_minutes
+async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
+	"""Calls Mapbox Directions and returns cumulative driving duration (seconds) from coords[0] to each subsequent coord."""
+	token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
+	if not token or len(coords) < 2:
+		return None
+	coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
+	url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{coord_str}"
+	try:
+		loop = asyncio.get_running_loop()
+		resp = await loop.run_in_executor(
+			None,
+			lambda: _requests.get(url, params={"access_token": token, "overview": "false"}, timeout=10),
+		)
+		if not resp.ok:
+			print(f"[shipment-directions] Mapbox error {resp.status_code}")
+			return None
+		legs = resp.json().get("routes", [{}])[0].get("legs", [])
+		cumulative, total = [], 0.0
+		for leg in legs:
+			total += leg.get("duration", 0.0)
+			cumulative.append(total)
+		return cumulative
+	except Exception as exc:
+		print(f"[shipment-directions] Exception: {exc}")
+		return None
 
 
 def _shipment_response(
@@ -126,7 +84,7 @@ def _shipment_response(
 		for index, point in enumerate(stop_points)
 	]
 
-	progress, eta_minutes = _current_progress()
+	progress, eta_minutes = _eta_from_waypoints(shipment.shipped_at, route_waypoints, selected_order_id)
 	active_stop_index = min(max(int(progress * max(len(stops), 1)), 0), max(len(stops) - 1, 0))
 
 	return ShipmentTrackingResponse(
@@ -161,6 +119,7 @@ async def create_merchant_shipment(
 
 	orders = (
 		db.query(Order)
+		.options(joinedload(Order.order_history).joinedload(OrderHistory.user))
 		.filter(Order.id.in_(order_ids), Order.merchant_id == merchant.id)
 		.order_by(Order.id.asc())
 		.all()
@@ -181,8 +140,7 @@ async def create_merchant_shipment(
 
 	order_contexts: list[dict[str, object]] = []
 	for order in orders:
-		order_history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
-		buyer = db.query(User).filter(User.id == order_history.user_id).first() if order_history else None
+		buyer = order.order_history.user if order.order_history else None
 		delivery_address = _resolve_delivery_address(order, buyer)
 		if not delivery_address:
 			raise HTTPException(status_code=422, detail=f"Order {order.id} has no delivery address")
@@ -234,21 +192,35 @@ async def create_merchant_shipment(
 		ctx = next(context for context in order_contexts if context["order"].id == stop.order_id)
 		buyer = ctx["buyer"]
 		assert isinstance(ctx["order"], Order)
+		buyer_full_name = (
+			f"{buyer.first_name} {buyer.last_name}".strip()
+			if buyer and buyer.first_name and buyer.last_name
+			else None
+		)
 		waypoints.append({
 			"sequence": sequence,
 			"order_id": stop.order_id,
 			"lat": stop.lat,
 			"lng": stop.lng,
-			"label": getattr(buyer, "first_name", None) and getattr(buyer, "last_name", None)
-				and f"{buyer.first_name} {buyer.last_name}".strip()
-				or f"Order #{stop.order_id}",
+			"label": buyer_full_name or f"Order #{stop.order_id}",
 			"delivery_address": ctx["delivery_address"],
-			"buyer_name": getattr(buyer, "first_name", None) and getattr(buyer, "last_name", None)
-				and f"{buyer.first_name} {buyer.last_name}".strip()
-				or None,
+			"buyer_name": buyer_full_name,
 			"type": "delivery",
 			"status": "in_transit",
 		})
+
+	# Enrich waypoints with Mapbox road-based arrival times
+	all_coords = [(origin_coords[0], origin_coords[1])] + [(s.lat, s.lng) for s in ordered_stops]
+	durations = await _get_leg_durations(all_coords)
+	now = datetime.now(timezone.utc)
+	if durations:
+		total_duration = durations[-1]
+		waypoints[0]["total_duration_seconds"] = total_duration
+		for seq_idx, wp in enumerate(waypoints[1:]):
+			if seq_idx < len(durations):
+				arrival_dt = now + timedelta(seconds=durations[seq_idx])
+				wp["estimated_arrival_at"] = arrival_dt.isoformat()
+				wp["duration_seconds"] = durations[seq_idx]
 
 	shipment.route_waypoints = waypoints
 
@@ -259,6 +231,9 @@ async def create_merchant_shipment(
 		order.status = "shipped"
 		if order.current_order:
 			order.current_order.status = "shipped"
+			wp = next((w for w in waypoints if w.get("order_id") == order.id), None)
+			if wp and wp.get("estimated_arrival_at"):
+				order.current_order.time_of_arrival = datetime.fromisoformat(wp["estimated_arrival_at"])
 
 	db.commit()
 	db.refresh(shipment)
