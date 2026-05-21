@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import asyncio
+from datetime import datetime, timedelta, timezone
 
+import requests as _requests
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -32,7 +35,34 @@ from app.utils.geocoding import _geocode_sync
 router = APIRouter(tags=["merchants"])
 
 
-def _compute_and_store_route(db: Session, order: Order) -> None:
+async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
+    """Calls Mapbox Directions and returns cumulative driving duration (seconds) from coords[0] to each subsequent coord."""
+    token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
+    if not token or len(coords) < 2:
+        return None
+    coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
+    url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{coord_str}"
+    try:
+        loop = asyncio.get_running_loop()
+        resp = await loop.run_in_executor(
+            None,
+            lambda: _requests.get(url, params={"access_token": token, "overview": "false"}, timeout=10),
+        )
+        if not resp.ok:
+            print(f"[shipment-directions] Mapbox error {resp.status_code}")
+            return None
+        legs = resp.json().get("routes", [{}])[0].get("legs", [])
+        cumulative, total = [], 0.0
+        for leg in legs:
+            total += leg.get("duration", 0.0)
+            cumulative.append(total)
+        return cumulative
+    except Exception as exc:
+        print(f"[shipment-directions] Exception: {exc}")
+        return None
+
+
+async def _compute_and_store_route(db: Session, order: Order) -> None:
     """Compute ALNS route for order and store waypoints. Called when marking for shipping."""
     if not order.merchant or not order.merchant.location:
         print(f"[route] Skipping route computation for order {order.id}: no merchant location")
@@ -79,6 +109,13 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
         depot_lng=origin_coords[1],
     )
 
+    leg_durations = await _get_leg_durations([
+        (origin_coords[0], origin_coords[1]),
+        (ordered_stops[0].lat, ordered_stops[0].lng),
+    ]) if ordered_stops else None
+    now = datetime.now(timezone.utc)
+    arrival_at = now + timedelta(seconds=leg_durations[0]) if leg_durations else None
+
     merchant_name = order.merchant.merchant_name if order.merchant else "Merchant"
     order.route_waypoints = [
         {
@@ -89,6 +126,7 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
             "label": f"Pickup: {merchant_name}",
             "type": "pickup",
             "status": "pickup",
+            **({"total_duration_seconds": leg_durations[0]} if leg_durations else {}),
         }
     ] + [
         {
@@ -99,9 +137,12 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
             "label": "Your Location",
             "type": "delivery",
             "status": "in_transit",
+            **({"estimated_arrival_at": arrival_at.isoformat(), "duration_seconds": leg_durations[0]} if arrival_at and leg_durations else {}),
         }
         for i, s in enumerate(ordered_stops)
     ]
+    if order.current_order and arrival_at:
+        order.current_order.time_of_arrival = arrival_at
     print(f"[route] Computed and stored route for order {order.id} with {len(ordered_stops)} stops")
 
 
@@ -679,7 +720,7 @@ async def update_my_merchant_order_status(
 
     # Compute and store ALNS route when order is marked for shipping (first time only)
     if status == "shipped" and not order.route_waypoints:
-        _compute_and_store_route(db, order)
+        await _compute_and_store_route(db, order)
 
     db.commit()
 
