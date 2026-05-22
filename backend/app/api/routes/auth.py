@@ -183,36 +183,28 @@ def _find_better_auth_account(db: Session, email: str) -> Optional[tuple[str, Op
     ).mappings().first()
 
     if row is None:
-        print(f"[DEBUG] No BetterAuth account found for email: {email}")
         return None
 
     user_id = str(row["user_id"])
     name = row["name"]
     password_hash = str(row["password_hash"])
-    print(f"[DEBUG] Found BetterAuth account for {email}: user_id={user_id}, name={name}")
-    print(f"[DEBUG] Password hash format: {password_hash[:50]}...")
     return user_id, name, password_hash
 
 
 def _verify_better_auth_password(hash_value: str, password: str) -> bool:
     try:
         salt_hex, stored_key_hex = hash_value.split(":", 1)
-        print(f"[DEBUG] Salt (hex): {salt_hex[:30]}..., Key (hex): {stored_key_hex[:30]}...")
         # BetterAuth (@better-auth/utils) passes the hex salt string directly to scryptAsync
         # (noble-hashes converts it to UTF-8 bytes internally, so salt is 32 bytes not 16).
         # The key is hex-encoded output bytes.
         salt_bytes = salt_hex.encode("utf-8")
         stored_key_bytes = bytes.fromhex(stored_key_hex)
-        print(f"[DEBUG] Salt bytes length: {len(salt_bytes)}, key length: {len(stored_key_bytes)}")
-    except (ValueError, Exception) as e:
-        print(f"[DEBUG] Failed to decode hash: {e}")
+    except (ValueError, Exception):
         return False
 
     try:
         # BetterAuth normalizes the password with NFKC before hashing
         normalized_password = unicodedata.normalize("NFKC", password)
-        print(f"[DEBUG] Password received: {password[:20]}... (length: {len(password)})")
-        print(f"[DEBUG] Calling scrypt with params: n={BETTER_AUTH_SCRYPT_PARAMS['n']}, r={BETTER_AUTH_SCRYPT_PARAMS['r']}, p={BETTER_AUTH_SCRYPT_PARAMS['p']}, dklen={BETTER_AUTH_SCRYPT_PARAMS['dklen']}")
         derived_key = hashlib.scrypt(
             normalized_password.encode("utf-8"),
             salt=salt_bytes,
@@ -222,13 +214,8 @@ def _verify_better_auth_password(hash_value: str, password: str) -> bool:
             dklen=BETTER_AUTH_SCRYPT_PARAMS["dklen"],
             maxmem=256 * 1024 * 1024,
         )
-        print(f"[DEBUG] Derived key: {derived_key.hex()[:30]}...")
-        print(f"[DEBUG] Stored key:  {stored_key_hex[:30]}...")
-        match = hmac.compare_digest(derived_key, stored_key_bytes)
-        print(f"[DEBUG] Password match: {match}")
-        return match
-    except ValueError as e:
-        print(f"[DEBUG] Scrypt error: {e}")
+        return hmac.compare_digest(derived_key, stored_key_bytes)
+    except ValueError:
         return False
 
 
@@ -327,7 +314,6 @@ async def mobile_sign_in(
     payload: MobileSignInPayload,
     db: Session = Depends(get_db),
 ) -> AuthSyncResponse:
-    print(f"[DEBUG] mobile_sign_in called for email: {payload.email}")
     user = db.query(User).filter(User.email == payload.email).first()
 
     credential = None
@@ -347,20 +333,15 @@ async def mobile_sign_in(
                 await asyncio.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
         else:
-            print(f"[DEBUG] Checking BetterAuth for email: {payload.email}")
             better_auth_account = _find_better_auth_account(db, payload.email)
             if better_auth_account is None:
-                print(f"[DEBUG] BetterAuth account not found")
                 await asyncio.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
 
             better_auth_user_id, better_auth_name, better_auth_password_hash = better_auth_account
-            print(f"[DEBUG] Verifying password for BetterAuth user")
             if not _verify_better_auth_password(better_auth_password_hash, payload.password):
-                print(f"[DEBUG] Password verification failed")
                 await asyncio.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
-            print(f"[DEBUG] Password verified successfully, syncing user")
 
             user = _sync_backend_user_from_better_auth(
                 db,
@@ -373,12 +354,6 @@ async def mobile_sign_in(
     if user is None or not user.external_auth_id:
         await asyncio.sleep(1)
         raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    if user.external_auth_id.startswith("mobile:"):
-        stored_hash = user.external_auth_id[len("mobile:") :]
-        if not _bcrypt_verify(payload.password, stored_hash):
-            await asyncio.sleep(1)
-            raise HTTPException(status_code=401, detail="Invalid email or password")
 
     access_token = create_access_token(
         subject=user.external_auth_id,

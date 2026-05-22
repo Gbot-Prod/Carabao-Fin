@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -45,16 +47,20 @@ async def place_order_from_cart(
     history = get_or_create_order_history(db, current_user.id)
     merchant = resolve_merchant_from_items(db, cart_items)
     service_fee = max(_to_int(payload.service_fee, 40), 0)
-    total_price = max(_to_int(cart.total_price, 0), 0) + service_fee
 
+    order_items = []
+    fresh_total = 0
     for item in cart_items:
         if not isinstance(item, dict):
+            order_items.append(item)
             continue
         produce_id = _extract_item_int(item, "produce_id", "produceId", "id")
         if produce_id is None:
+            order_items.append(item)
             continue
         quantity = max(_to_int(item.get("quantity"), 0), 0)
         if quantity == 0:
+            order_items.append(item)
             continue
         produce = (
             db.query(Produce)
@@ -70,6 +76,10 @@ async def place_order_from_cart(
                 detail=f"Insufficient stock for '{produce.name}': {produce.stock_quantity} available, {quantity} requested",
             )
         produce.stock_quantity -= quantity
+        fresh_total += produce.price * quantity
+        order_items.append({**item, "price": produce.price})
+
+    total_price = fresh_total + service_fee
 
     order = Order(
         order_history_id=history.id,
@@ -77,7 +87,7 @@ async def place_order_from_cart(
         merchant_id=merchant.id if merchant is not None else None,
         status="pending",
         total_price=total_price,
-        items=cart_items,
+        items=order_items,
         delivery_address=payload.delivery_address,
     )
     db.add(order)
@@ -114,7 +124,7 @@ async def get_my_order_history(
     if history is None:
         return []
 
-    orders = sorted(history.orders, key=lambda order: order.ordered_at, reverse=True)
+    orders = sorted(history.orders, key=lambda order: order.ordered_at or datetime.min, reverse=True)
     return [to_order_history_item(order) for order in orders]
 
 
@@ -177,6 +187,15 @@ async def get_my_current_orders(
 ACTIVE_ORDER_STATUSES = {"pending", "processing", "shipped", "out_for_delivery"}
 VALID_ORDER_STATUSES = {"pending", "processing", "shipped", "out_for_delivery", "delivered", "cancelled"}
 
+_VALID_TRANSITIONS: dict[str, set[str]] = {
+    "pending":          {"processing", "cancelled"},
+    "processing":       {"shipped", "cancelled"},
+    "shipped":          {"out_for_delivery", "delivered", "cancelled"},
+    "out_for_delivery": {"delivered", "cancelled"},
+    "delivered":        set(),
+    "cancelled":        set(),
+}
+
 
 class OrderStatusUpdate(BaseModel):
     status: str
@@ -227,6 +246,24 @@ async def update_order_status(
     order = db.query(Order).filter(Order.id == order_id, Order.merchant_id == merchant.id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    allowed_next = _VALID_TRANSITIONS.get(order.status, set())
+    if status not in allowed_next:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot transition order from '{order.status}' to '{status}'",
+        )
+
+    if status == "cancelled":
+        for item in (order.items or []):
+            if not isinstance(item, dict):
+                continue
+            produce_id = _extract_item_int(item, "produce_id", "produceId", "id")
+            quantity = max(_to_int(item.get("quantity"), 0), 0)
+            if produce_id and quantity:
+                produce = db.query(Produce).filter(Produce.id == produce_id).with_for_update().first()
+                if produce:
+                    produce.stock_quantity += quantity
 
     order.status = status
     if order.current_order:

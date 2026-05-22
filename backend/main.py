@@ -19,18 +19,20 @@ app = FastAPI()
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     logger.error("Unhandled exception on %s %s: %s\n%s", request.method, request.url.path, exc, traceback.format_exc())
-    return JSONResponse(status_code=500, content={"detail": str(exc)})
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
 _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
-for dev_origin in (
-    "http://localhost:8081",
-    "http://localhost:19006",
-    "exp://localhost:8081",
-    "exp://127.0.0.1:8081",
-):
-    if dev_origin not in _allowed_origins:
-        _allowed_origins.append(dev_origin)
+_is_dev = os.getenv("APP_ENV", "development").lower() != "production"
+if _is_dev:
+    for dev_origin in (
+        "http://localhost:8081",
+        "http://localhost:19006",
+        "exp://localhost:8081",
+        "exp://127.0.0.1:8081",
+    ):
+        if dev_origin not in _allowed_origins:
+            _allowed_origins.append(dev_origin)
 
 app.add_middleware(
     CORSMiddleware,

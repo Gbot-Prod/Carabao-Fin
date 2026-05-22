@@ -1,7 +1,9 @@
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -30,6 +32,19 @@ from app.services.sms_service import notify_order_shipped
 from app.utils.geocoding import _geocode_sync
 
 router = APIRouter(tags=["merchants"])
+
+_VALID_TRANSITIONS: dict[str, set[str]] = {
+    "pending":          {"processing", "cancelled"},
+    "processing":       {"shipped", "cancelled"},
+    "shipped":          {"out_for_delivery", "delivered", "cancelled"},
+    "out_for_delivery": {"delivered", "cancelled"},
+    "delivered":        set(),
+    "cancelled":        set(),
+}
+
+
+class MerchantOrderStatusUpdate(BaseModel):
+    status: str
 
 
 def _compute_and_store_route(db: Session, order: Order) -> None:
@@ -657,10 +672,11 @@ async def get_my_merchant_orders(
 @router.patch("/merchants/me/orders/{order_id}/status", response_model=MerchantOrderResponse)
 async def update_my_merchant_order_status(
     order_id: int,
-    status: str,
+    body: MerchantOrderStatusUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    status = body.status
     merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
@@ -669,9 +685,23 @@ async def update_my_merchant_order_status(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    allowed = {"processing", "shipped", "delivered", "cancelled"}
-    if status not in allowed:
-        raise HTTPException(status_code=400, detail=f"Status must be one of: {', '.join(allowed)}")
+    allowed_next = _VALID_TRANSITIONS.get(order.status, set())
+    if status not in allowed_next:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot transition order from '{order.status}' to '{status}'",
+        )
+
+    if status == "cancelled":
+        for item in (order.items or []):
+            if not isinstance(item, dict):
+                continue
+            produce_id = item.get("produce_id") or item.get("produceId") or item.get("id")
+            quantity = item.get("quantity", 0)
+            if produce_id and quantity:
+                produce = db.query(Produce).filter(Produce.id == int(produce_id)).with_for_update().first()
+                if produce:
+                    produce.stock_quantity += int(quantity)
 
     order.status = status
     if order.current_order:

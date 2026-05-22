@@ -7,6 +7,7 @@ export type CartItem = {
   unit: string;
   quantity: number;
   price: number;
+  stock_quantity?: number;
 };
 
 export type Cart = {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 import { createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
+import { SERVICE_FEE } from "@/lib/constants";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 
 export default function CheckoutPage() {
@@ -52,7 +53,7 @@ export default function CheckoutPage() {
       checkoutItems.reduce((sum, item) => sum + item.quantity * item.price, 0),
     [checkoutItems],
   );
-  const serviceFee = 40;
+  const serviceFee = SERVICE_FEE;
   const grandTotal = subtotal + serviceFee;
 
   const handlePlaceOrder = async () => {
