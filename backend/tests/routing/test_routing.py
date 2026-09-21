@@ -7,6 +7,7 @@ and orderings are predictable without floating-point surprises.
 
 import pytest
 import numpy as np
+from datetime import datetime, timedelta, timezone
 
 from app.routing.state import Stop, RouteState, MultiRouteState, _haversine_distance
 from app.routing.operators.destroy import (
@@ -26,6 +27,7 @@ from app.routing.operators.repair import (
 )
 from app.routing.solver import solve, solve_multi, _two_opt
 from app.routing.service import compute_route, compute_routes
+from app.routing.eta import _eta_from_waypoints
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +260,25 @@ class TestRepairMulti:
         multi = make_multi_state([[] for _ in range(n_routes)])
         multi.unassigned = make_linear_stops(n_unassigned)
         return multi
+
+
+class TestEtaHelper:
+    def test_uses_estimated_arrival_without_shipped_at(self):
+        now = datetime.now(timezone.utc)
+        route_waypoints = [
+            {"type": "pickup", "order_id": None, "total_duration_seconds": 600},
+            {
+                "type": "delivery",
+                "order_id": 7,
+                "estimated_arrival_at": (now + timedelta(minutes=8)).isoformat(),
+                "duration_seconds": 600,
+            },
+        ]
+
+        progress, eta_minutes = _eta_from_waypoints(None, route_waypoints, 7)
+
+        assert eta_minutes == 8
+        assert 0.0 <= progress <= 1.0
 
     def test_cross_route_insert_reinserts_all(self):
         multi = self._make_state_with_unassigned(2, 6)
