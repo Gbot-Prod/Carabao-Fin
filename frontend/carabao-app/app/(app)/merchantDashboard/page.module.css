@@ -7,6 +7,52 @@
   background: #f2f7f3;
 }
 
+@media (max-width: 768px) {
+  .page {
+    margin: -1rem;
+  }
+
+  .dashHeader,
+  .tabContent {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .dashHeaderRight,
+  .quickStats {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .kpiGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overviewRow {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    padding: 16px;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpiGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashHeaderLeft {
+    width: 100%;
+  }
+
+  .quickStat {
+    align-items: flex-start;
+  }
+}
+
 /* ── Top header bar ──────────────────────────────────────────────────────── */
 .dashHeader {
   background: #173d25;

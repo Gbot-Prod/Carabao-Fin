@@ -3,6 +3,7 @@
   height: 100%;
   overflow: auto;
   padding: 2rem;
+  min-width: 0;
 }
 
 .header h1 {
@@ -23,6 +24,7 @@
 
 .itemsCard,
 .summaryCard {
+  min-width: 0;
   background: #ffffff;
   border-radius: 16px;
   border: 1px solid #e9e9e9;
@@ -58,6 +60,7 @@
 .itemMeta h3 {
   margin: 0;
   font-size: 1.05rem;
+  overflow-wrap: anywhere;
 }
 
 .priceLine {
@@ -85,6 +88,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.qtyControl button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.qtyControl span {
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .qtyControl button {
@@ -190,6 +203,44 @@
 
 @media (max-width: 640px) {
   .page {
+    padding: 1rem 0.75rem 1.5rem;
+  }
+
+  .header h1 {
+    font-size: 1.75rem;
+  }
+
+  .header p {
+    font-size: 0.95rem;
+  }
+
+  .itemsCard,
+  .summaryCard {
+    border-radius: 12px;
     padding: 1rem;
+  }
+
+  .itemRow {
+    padding: 0.8rem;
+  }
+
+  .itemActions {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .qtyControl {
+    justify-self: start;
+  }
+
+  .lineTotal {
+    justify-self: end;
+  }
+
+  .removeButton {
+    grid-column: 1 / -1;
+    justify-self: start;
+    min-height: 44px;
+    padding: 0 0.25rem;
   }
 }
