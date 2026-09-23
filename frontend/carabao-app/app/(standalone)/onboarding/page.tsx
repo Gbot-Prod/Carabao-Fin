@@ -106,7 +106,7 @@ export default function OnboardingPage() {
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
           {/* Name row */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
             <div>
               <label style={labelStyle}>First name</label>
               <input name="firstName" value={formData.firstName} onChange={handleChange} placeholder="Juan" style={inputStyle} />
@@ -127,7 +127,7 @@ export default function OnboardingPage() {
             <input type="text" name="streetAddress" value={formData.streetAddress} onChange={handleChange} placeholder="123 Rizal Ave" style={inputStyle} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
             <div>
               <label style={labelStyle}>City</label>
               <input type="text" name="city" value={formData.city} onChange={handleChange} placeholder="Taguig" style={inputStyle} />

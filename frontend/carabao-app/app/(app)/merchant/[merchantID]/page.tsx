@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
@@ -39,9 +39,11 @@ export default function MerchantDetailPage() {
 
   const [addingId, setAddingId] = useState<number | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  const addingRef = useRef(false);
 
   const handleAddToCart = async (produce: Produce) => {
-    if (addingId !== null) return;
+    if (addingRef.current) return;
+    addingRef.current = true;
     setAddingId(produce.id);
 
     try {
@@ -64,6 +66,7 @@ export default function MerchantDetailPage() {
                 unit: produce.unit,
                 quantity: 1,
                 price: produce.price,
+                stock_quantity: produce.stock_quantity,
               },
             ];
 
@@ -73,6 +76,7 @@ export default function MerchantDetailPage() {
     } catch {
       // silently fail — cart page will show current state
     } finally {
+      addingRef.current = false;
       setAddingId(null);
     }
   };

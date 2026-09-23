@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import "./sidebar.css";
@@ -107,6 +107,18 @@ export default function Sidebar() {
 
   const [shopsOpen, setShopsOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(true);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMobileOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, []);
 
   const renderNavLink = (
     href: string,
@@ -121,7 +133,7 @@ export default function Sidebar() {
         <Link
           href={blocked ? "#" : href}
           className={`sidebar__nav-link${isActive ? " sidebar__nav-link--active" : ""}`}
-          onClick={blocked ? (e) => { e.preventDefault(); showPrompt(); } : undefined}
+          onClick={blocked ? (e) => { e.preventDefault(); showPrompt(); } : () => setIsMobileOpen(false)}
         >
           <span className="sidebar__nav-icon">{icon}</span>
           <span className="sidebar__nav-label">{label}</span>
@@ -131,74 +143,104 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar__brand">
-        <img src={Logo.src} alt="Carabao Logo" className="sidebar__brand-icon" />
-        <span className="sidebarBrandName">Carabao</span>
-      </div>
+    <>
+      <button
+        type="button"
+        className="sidebar__mobile-toggle"
+        onClick={() => setIsMobileOpen(true)}
+        aria-label="Open navigation menu"
+        aria-expanded={isMobileOpen}
+      >
+        <span />
+        <span />
+        <span />
+      </button>
 
-      <nav className="sidebar__nav">
-        <div className="sidebar__section">
-          <button
-            className="sidebar__section-header"
-            onClick={() => setShopsOpen((o) => !o)}
-            aria-expanded={shopsOpen}
-          >
-            <span className="sidebar__section-icon sidebar__section-icon--shops"><StoreIcon /></span>
-            <span className="sidebar__section-title">Shops</span>
-            <ChevronIcon open={shopsOpen} />
-          </button>
-          <div className={`sidebar__section-body${shopsOpen ? " sidebar__section-body--open" : ""}`}>
-            <div className="sidebar__section-inner">
-              <ul className="sidebar__nav-list">
-                {renderNavLink("/order", "Browse Shops", <ShopIcon />)}
-                {renderNavLink("/cart", "Cart", <CartIcon />)}
-              </ul>
-              <SidebarFilterChips />
-            </div>
-          </div>
+      <button
+        type="button"
+        className={`sidebar__backdrop${isMobileOpen ? " sidebar__backdrop--visible" : ""}`}
+        onClick={() => setIsMobileOpen(false)}
+        aria-label="Close navigation menu"
+        tabIndex={isMobileOpen ? 0 : -1}
+      />
+
+      <aside className={`sidebar${isMobileOpen ? " sidebar--mobile-open" : ""}`}>
+        <button
+          type="button"
+          className="sidebar__mobile-close"
+          onClick={() => setIsMobileOpen(false)}
+          aria-label="Close navigation menu"
+        >
+          &times;
+        </button>
+        <div className="sidebar__brand">
+          <img src={Logo.src} alt="Carabao Logo" className="sidebar__brand-icon" />
+          <span className="sidebarBrandName">Carabao</span>
         </div>
 
-        <div className="sidebar__section sidebar__section--divided">
-          <button
-            className="sidebar__section-header"
-            onClick={() => setProfileOpen((o) => !o)}
-            aria-expanded={profileOpen}
-          >
-            <span className="sidebar__section-icon sidebar__section-icon--profile"><UserIcon /></span>
-            <span className="sidebar__section-title">Profile</span>
-            <ChevronIcon open={profileOpen} />
-          </button>
-          <div className={`sidebar__section-body${profileOpen ? " sidebar__section-body--open" : ""}`}>
-            <div className="sidebar__section-inner">
-              <ul className="sidebar__nav-list">
-                {renderNavLink("/profile", "Settings", <SettingsIcon />, true)}
-                {renderNavLink("/track", "Track", <TrackIcon />, true)}
-                {renderNavLink("/orders", "Orders", <ReceiptIcon />, true)}
-              </ul>
+        <nav className="sidebar__nav">
+          <div className="sidebar__section">
+            <button
+              className="sidebar__section-header"
+              onClick={() => setShopsOpen((o) => !o)}
+              aria-expanded={shopsOpen}
+            >
+              <span className="sidebar__section-icon sidebar__section-icon--shops"><StoreIcon /></span>
+              <span className="sidebar__section-title">Shops</span>
+              <ChevronIcon open={shopsOpen} />
+            </button>
+            <div className={`sidebar__section-body${shopsOpen ? " sidebar__section-body--open" : ""}`}>
+              <div className="sidebar__section-inner">
+                <ul className="sidebar__nav-list">
+                  {renderNavLink("/order", "Browse Shops", <ShopIcon />)}
+                  {renderNavLink("/cart", "Cart", <CartIcon />)}
+                </ul>
+                <SidebarFilterChips />
+              </div>
             </div>
           </div>
-        </div>
-      </nav>
 
-      <div className="sidebar__footer">
-        {!isLoading && (
-          isAuthenticated ? (
-            <LogoutButton className="sidebar__logout sidebar__logout-button">
-              <span className="sidebar__nav-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-              </span>
-              <span>Sign Out</span>
-            </LogoutButton>
-          ) : (
-            <Link href="/auth" className="sidebar__nav-link">Sign In</Link>
-          )
-        )}
-      </div>
-    </aside>
+          <div className="sidebar__section sidebar__section--divided">
+            <button
+              className="sidebar__section-header"
+              onClick={() => setProfileOpen((o) => !o)}
+              aria-expanded={profileOpen}
+            >
+              <span className="sidebar__section-icon sidebar__section-icon--profile"><UserIcon /></span>
+              <span className="sidebar__section-title">Profile</span>
+              <ChevronIcon open={profileOpen} />
+            </button>
+            <div className={`sidebar__section-body${profileOpen ? " sidebar__section-body--open" : ""}`}>
+              <div className="sidebar__section-inner">
+                <ul className="sidebar__nav-list">
+                  {renderNavLink("/profile", "Settings", <SettingsIcon />, true)}
+                  {renderNavLink("/track", "Track", <TrackIcon />, true)}
+                  {renderNavLink("/orders", "Orders", <ReceiptIcon />, true)}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <div className="sidebar__footer">
+          {!isLoading && (
+            isAuthenticated ? (
+              <LogoutButton className="sidebar__logout sidebar__logout-button">
+                <span className="sidebar__nav-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                  </svg>
+                </span>
+                <span>Sign Out</span>
+              </LogoutButton>
+            ) : (
+              <Link href="/auth" className="sidebar__nav-link">Sign In</Link>
+            )
+          )}
+        </div>
+      </aside>
+    </>
   );
 }

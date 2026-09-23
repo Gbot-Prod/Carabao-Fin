@@ -115,11 +115,25 @@
   flex-shrink: 0;
 }
 
-.dot_pending   { background: #fbbf24; }
-.dot_approved  { background: #34d399; }
-.dot_processing { background: #60a5fa; }
-.dot_released  { background: #31925d; }
-.dot_failed    { background: #f87171; }
+.dot_pending {
+  background: #fbbf24;
+}
+
+.dot_approved {
+  background: #34d399;
+}
+
+.dot_processing {
+  background: #60a5fa;
+}
+
+.dot_released {
+  background: #31925d;
+}
+
+.dot_failed {
+  background: #f87171;
+}
 
 .payoutStatus {
   font-size: 13px;
@@ -172,4 +186,22 @@
   padding: 40px 32px;
   color: #b91c1c;
   font-size: 14px;
+}
+
+@media (max-width: 640px) {
+
+  .page,
+  .state,
+  .stateError {
+    padding: 24px 16px;
+  }
+
+  .kpiGrid,
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+  .section {
+    padding: 16px;
+  }
 }

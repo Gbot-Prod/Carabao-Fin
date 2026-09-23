@@ -14,8 +14,7 @@ function ConfirmationContent() {
       <div className={styles.badge}>Order Confirmed</div>
       <h1>Thank you for your order</h1>
       <p className={styles.lead}>
-        Your request has been sent to partnered farms and is now queued for
-        processing.
+        Your request has been sent to partnered farms and is now queued for processing.
       </p>
 
       <div className={styles.details}>
@@ -53,7 +52,7 @@ function ConfirmationContent() {
           View Orders
         </Link>
         <Link href="/order" className={styles.secondaryButton}>
-          Place Another Order
+          Place Another Order.
         </Link>
       </div>
     </section>

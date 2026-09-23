@@ -179,7 +179,7 @@ def review_merchant_application(
     application.admin_note = payload.admin_note
 
     if payload.status == "approved" and application.merchant_id is None:
-        location = ", ".join([p for p in [application.address_line, application.city, application.province] if p])
+        location = ", ".join([p for p in [application.address_line, application.city, application.region] if p])
         operating_hours = (
             f"Available: {', '.join(application.available_days)}" if application.available_days else None
         )

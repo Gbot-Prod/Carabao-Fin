@@ -9,6 +9,7 @@ from .merchants import router as merchants_router
 from .misc import router as misc_router
 from .orders import router as orders_router
 from .payments import router as payments_router
+from .shipments import router as shipments_router
 from .sms import router as sms_router
 from .tracking import router as tracking_router
 from .users import router as users_router
@@ -27,6 +28,7 @@ router.include_router(carts_router)
 router.include_router(orders_router)
 router.include_router(auth_router)
 router.include_router(sms_router)
+router.include_router(shipments_router)
 router.include_router(tracking_router)
 router.include_router(payments_router)
 router.include_router(paymongo_webhook_router)

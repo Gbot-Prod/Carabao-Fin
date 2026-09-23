@@ -78,15 +78,20 @@ def create_payment_checkout(
         existing_pending
         and existing_pending.checkout_url
         and existing_pending.paymongo_session_id
+        and existing_pending.created_at is not None
     ):
-        return CheckoutResponse(
-            transaction_id=existing_pending.id,
-            order_id=order_id,
-            checkout_url=existing_pending.checkout_url,
-            paymongo_session_id=existing_pending.paymongo_session_id,
-            amount=existing_pending.amount,
-            status=existing_pending.status,
-        )
+        created_at = existing_pending.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        if (datetime.now(timezone.utc) - created_at).total_seconds() < 3600:
+            return CheckoutResponse(
+                transaction_id=existing_pending.id,
+                order_id=order_id,
+                checkout_url=existing_pending.checkout_url,
+                paymongo_session_id=existing_pending.paymongo_session_id,
+                amount=existing_pending.amount,
+                status=existing_pending.status,
+            )
 
     merchant = db.query(Merchant).filter(Merchant.id == order.merchant_id).first()
     if not merchant:
@@ -291,18 +296,6 @@ def generate_payout_batches(
     for b in batches:
         db.refresh(b)
     return batches
-
-
-@router.get("/admin/batches", response_model=list[PayoutBatchResponse])
-def list_payout_batches(
-    status: str | None = None,
-    db: Session = Depends(get_db),
-    admin: User = Depends(_require_admin),
-):
-    q = db.query(PayoutBatch)
-    if status:
-        q = q.filter(PayoutBatch.status == status)
-    return q.order_by(PayoutBatch.period_date.desc()).all()
 
 
 @router.patch("/admin/batches/{batch_id}/release", response_model=PayoutBatchResponse)

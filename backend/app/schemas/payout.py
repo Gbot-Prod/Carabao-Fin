@@ -16,6 +16,7 @@ class MerchantOrderResponse(BaseModel):
     buyer_phone: Optional[str] = None
     shipped: bool = False
     time_of_arrival: Optional[datetime] = None
+    shipment_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

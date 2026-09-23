@@ -392,6 +392,31 @@
   border-top: 1px solid rgba(23, 61, 37, 0.08);
 }
 
+@media (max-width: 640px) {
+  .page {
+    padding: 1rem 0.75rem 2rem;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .stepper,
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .footer {
+    flex-direction: column-reverse;
+  }
+
+  .primaryBtn,
+  .secondaryBtn {
+    width: 100%;
+  }
+}
+
 .primaryBtn,
 .secondaryBtn {
   padding: 11px 14px;
@@ -597,6 +622,7 @@
   .stepper {
     grid-template-columns: 1fr 1fr;
   }
+
   .grid {
     grid-template-columns: 1fr;
   }

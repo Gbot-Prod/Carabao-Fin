@@ -15,6 +15,10 @@ dependencies = [
     "uvicorn>=0.41.0",
     "resend>=2.29.0",
     "boto3>=1.35.0",
-    "alns>=5.0.0",
     "numpy>=1.26.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
 ]

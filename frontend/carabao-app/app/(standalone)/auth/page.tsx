@@ -4,6 +4,7 @@ import { signIn, signUp } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Logo from "@/public/images/icons/carabaoLogo.png";
+import TermsModal from "@/components/TermsModal/TermsModal";
 import "./page.css";
 
 export default function SignupPage() {
@@ -18,6 +19,8 @@ export default function SignupPage() {
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -33,6 +36,12 @@ export default function SignupPage() {
 
     if (mode === "signup" && formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
+      setIsLoading(false);
+      return;
+    }
+
+    if (mode === "signup" && !termsAccepted) {
+      setError("You must agree to the Terms of Service to create an account.");
       setIsLoading(false);
       return;
     }
@@ -62,6 +71,15 @@ export default function SignupPage() {
 
   return (
     <div className="auth-page">
+      {showTerms && (
+        <TermsModal
+          onClose={() => setShowTerms(false)}
+          onAgree={() => {
+            setTermsAccepted(true);
+            setShowTerms(false);
+          }}
+        />
+      )}
       <section className="auth-brand-panel">
         <div className="auth-brand-content">
           <img src={Logo.src} alt="Carabao Logo" className="auth-brand-logo" />
@@ -86,14 +104,14 @@ export default function SignupPage() {
               <button
                 type="button"
                 className={`auth-switch-btn ${mode === "signin" ? "active" : ""}`}
-                onClick={() => setMode("signin")}
+                onClick={() => { setMode("signin"); setTermsAccepted(false); setError(""); }}
               >
                 Sign in
               </button>
               <button
                 type="button"
                 className={`auth-switch-btn ${mode === "signup" ? "active" : ""}`}
-                onClick={() => setMode("signup")}
+                onClick={() => { setMode("signup"); setError(""); }}
               >
                 Sign up
               </button>
@@ -169,6 +187,27 @@ export default function SignupPage() {
                 />
               )}
             </div>
+
+            {mode === "signup" && (
+              <label className="auth-terms-label">
+                <input
+                  type="checkbox"
+                  className="auth-terms-checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                />
+                <span>
+                  I agree to the{" "}
+                  <button
+                    type="button"
+                    className="auth-terms-link"
+                    onClick={() => setShowTerms(true)}
+                  >
+                    Terms of Service
+                  </button>
+                </span>
+              </label>
+            )}
 
             <button type="submit" disabled={isLoading} className="auth-submit">
               {isLoading ? "Please wait..." : mode === "signup" ? "Sign up" : "Sign in"}

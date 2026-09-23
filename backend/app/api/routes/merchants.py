@@ -1,12 +1,14 @@
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import asyncio
-import os
+from datetime import datetime, timedelta, timezone
 
+import requests as _requests
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
-import requests as _requests
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.current_orders import CurrentOrder
@@ -30,70 +32,52 @@ from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdat
 from app.services.merchant_service import create_merchant
 from app.services import r2_service
 from app.services.sms_service import notify_order_shipped
-from urllib.parse import quote
+from app.utils.geocoding import _geocode_sync
 
 router = APIRouter(tags=["merchants"])
 
-# Bounding box for the Philippines so Mapbox never returns a result outside the country.
-_PH_BBOX = "116.928,4.587,126.604,21.321"
-# Proximity bias toward Metro Manila — pulls ambiguous results toward the delivery region.
-_METRO_MANILA_PROXIMITY = "120.9842,14.5995"
-_geocode_cache: dict[str, tuple[float, float]] = {}
+_VALID_TRANSITIONS: dict[str, set[str]] = {
+    "pending":          {"processing", "cancelled"},
+    "processing":       {"shipped", "cancelled"},
+    "shipped":          {"out_for_delivery", "delivered", "cancelled"},
+    "out_for_delivery": {"delivered", "cancelled"},
+    "delivered":        set(),
+    "cancelled":        set(),
+}
 
 
-def _normalise_address(address: str) -> str:
-    """Append ', Philippines' if the address doesn't already reference the country."""
-    cleaned = address.strip()
-    lower = cleaned.lower()
-    if "philippines" not in lower and ", ph" not in lower:
-        cleaned = f"{cleaned}, Philippines"
-    return cleaned
+class MerchantOrderStatusUpdate(BaseModel):
+    status: str
 
 
-def _geocode_sync(address: str) -> tuple[float, float] | None:
+async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
+    """Calls Mapbox Directions and returns cumulative driving duration (seconds) from coords[0] to each subsequent coord."""
     token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
-    if not token or not address.strip():
+    if not token or len(coords) < 2:
         return None
-
-    normalised = _normalise_address(address)
-    url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{quote(normalised)}.json"
+    coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
+    url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{coord_str}"
     try:
-        resp = _requests.get(
-            url,
-            params={
-                "country": "PH",
-                "bbox": _PH_BBOX,
-                "proximity": _METRO_MANILA_PROXIMITY,
-                "types": "address,poi,place,locality,neighborhood",
-                "limit": 1,
-                "access_token": token,
-            },
-            timeout=5,
+        loop = asyncio.get_running_loop()
+        resp = await loop.run_in_executor(
+            None,
+            lambda: _requests.get(url, params={"access_token": token, "overview": "false"}, timeout=10),
         )
         if not resp.ok:
-            print(f"[geocode] Mapbox error {resp.status_code} for address: {normalised!r}")
+            print(f"[shipment-directions] Mapbox error {resp.status_code}")
             return None
-
-        body = resp.json()
-        features = body.get("features", [])
-        if not features:
-            print(f"[geocode] No results for address: {normalised!r}")
-            return None
-
-        feature = features[0]
-        relevance = feature.get("relevance", 1.0)
-        if relevance < 0.4:
-            print(f"[geocode] Low-confidence result (relevance={relevance:.2f}) for: {normalised!r} → {feature.get('place_name')}")
-
-        lng, lat = feature["center"]
-        print(f"[geocode] {normalised!r} → ({lat:.5f}, {lng:.5f})  place={feature.get('place_name')!r}  relevance={relevance:.2f}")
-        return (lat, lng)
+        legs = resp.json().get("routes", [{}])[0].get("legs", [])
+        cumulative, total = [], 0.0
+        for leg in legs:
+            total += leg.get("duration", 0.0)
+            cumulative.append(total)
+        return cumulative
     except Exception as exc:
-        print(f"[geocode] Exception for address {normalised!r}: {exc}")
+        print(f"[shipment-directions] Exception: {exc}")
         return None
 
 
-def _compute_and_store_route(db: Session, order: Order) -> None:
+async def _compute_and_store_route(db: Session, order: Order) -> None:
     """Compute ALNS route for order and store waypoints. Called when marking for shipping."""
     if not order.merchant or not order.merchant.location:
         print(f"[route] Skipping route computation for order {order.id}: no merchant location")
@@ -140,16 +124,40 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
         depot_lng=origin_coords[1],
     )
 
-    # Store the waypoints (excluding pickup point, will be added client-side)
+    leg_durations = await _get_leg_durations([
+        (origin_coords[0], origin_coords[1]),
+        (ordered_stops[0].lat, ordered_stops[0].lng),
+    ]) if ordered_stops else None
+    now = datetime.now(timezone.utc)
+    arrival_at = now + timedelta(seconds=leg_durations[0]) if leg_durations else None
+
+    merchant_name = order.merchant.merchant_name if order.merchant else "Merchant"
     order.route_waypoints = [
         {
+            "sequence": 0,
+            "order_id": None,
+            "lat": origin_coords[0],
+            "lng": origin_coords[1],
+            "label": f"Pickup: {merchant_name}",
+            "type": "pickup",
+            "status": "pickup",
+            **({"total_duration_seconds": leg_durations[0]} if leg_durations else {}),
+        }
+    ] + [
+        {
+            "sequence": i + 1,
+            "order_id": order.id,
             "lat": s.lat,
             "lng": s.lng,
             "label": "Your Location",
             "type": "delivery",
+            "status": "in_transit",
+            **({"estimated_arrival_at": arrival_at.isoformat(), "duration_seconds": leg_durations[0]} if arrival_at and leg_durations else {}),
         }
-        for s in ordered_stops
+        for i, s in enumerate(ordered_stops)
     ]
+    if order.current_order and arrival_at:
+        order.current_order.time_of_arrival = arrival_at
     print(f"[route] Computed and stored route for order {order.id} with {len(ordered_stops)} stops")
 
 
@@ -697,6 +705,7 @@ async def get_my_merchant_orders(
             buyer_phone=user.phone_number if user else None,
             shipped=current.shipped if current else False,
             time_of_arrival=current.time_of_arrival if current else None,
+            shipment_id=order.shipment_id,
         ))
     return result
 
@@ -704,10 +713,11 @@ async def get_my_merchant_orders(
 @router.patch("/merchants/me/orders/{order_id}/status", response_model=MerchantOrderResponse)
 async def update_my_merchant_order_status(
     order_id: int,
-    status: str,
+    body: MerchantOrderStatusUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    status = body.status
     merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
@@ -716,9 +726,23 @@ async def update_my_merchant_order_status(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    allowed = {"processing", "shipped", "delivered", "cancelled"}
-    if status not in allowed:
-        raise HTTPException(status_code=400, detail=f"Status must be one of: {', '.join(allowed)}")
+    allowed_next = _VALID_TRANSITIONS.get(order.status, set())
+    if status not in allowed_next:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot transition order from '{order.status}' to '{status}'",
+        )
+
+    if status == "cancelled":
+        for item in (order.items or []):
+            if not isinstance(item, dict):
+                continue
+            produce_id = item.get("produce_id") or item.get("produceId") or item.get("id")
+            quantity = item.get("quantity", 0)
+            if produce_id and quantity:
+                produce = db.query(Produce).filter(Produce.id == int(produce_id)).with_for_update().first()
+                if produce:
+                    produce.stock_quantity += int(quantity)
 
     order.status = status
     if order.current_order:
@@ -726,7 +750,7 @@ async def update_my_merchant_order_status(
 
     # Compute and store ALNS route when order is marked for shipping (first time only)
     if status == "shipped" and not order.route_waypoints:
-        _compute_and_store_route(db, order)
+        await _compute_and_store_route(db, order)
 
     db.commit()
 
@@ -754,6 +778,7 @@ async def update_my_merchant_order_status(
         buyer_phone=user.phone_number if user else None,
         shipped=current.shipped if current else False,
         time_of_arrival=current.time_of_arrival if current else None,
+        shipment_id=order.shipment_id,
     )
 
 

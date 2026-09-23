@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
 import { fetchMyCart, replaceMyCart } from "@/util/api";
+import { SERVICE_FEE } from "@/lib/constants";
 
 type CartItem = {
   id: string;
@@ -12,6 +13,7 @@ type CartItem = {
   unit: string;
   quantity: number;
   price: number;
+  stock_quantity?: number;
 };
 
 export default function CartPage() {
@@ -70,17 +72,17 @@ export default function CartPage() {
     () => items.reduce((sum, item) => sum + item.quantity * item.price, 0),
     [items],
   );
-  const serviceFee = useMemo(() => (itemTotal > 0 ? 40 : 0), [itemTotal]);
+  const serviceFee = itemTotal > 0 ? SERVICE_FEE : 0;
   const grandTotal = itemTotal + serviceFee;
 
   const updateQuantity = (id: string, nextQuantity: number) => {
-    if (nextQuantity < 1) {
-      return;
-    }
+    if (nextQuantity < 1) return;
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, quantity: nextQuantity } : item,
-      ),
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const max = item.stock_quantity ?? Infinity;
+        return { ...item, quantity: Math.min(nextQuantity, max) };
+      }),
     );
   };
 
@@ -131,6 +133,7 @@ export default function CartPage() {
                         type="button"
                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
                         aria-label={`Increase quantity for ${item.produce}`}
+                        disabled={item.stock_quantity !== undefined && item.quantity >= item.stock_quantity}
                       >
                         +
                       </button>

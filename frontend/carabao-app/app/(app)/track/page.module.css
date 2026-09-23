@@ -48,6 +48,135 @@
   gap: 12px;
 }
 
+.shipmentPanel {
+  margin-top: 16px;
+  border: 1px solid #dbe7dd;
+  border-radius: 16px;
+  padding: 14px;
+  background: linear-gradient(180deg, #f7fbf8 0%, #ffffff 100%);
+}
+
+.shipmentPanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.shipmentTitle {
+  margin: 2px 0 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #173d25;
+}
+
+.shipmentStatus {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e9f4ec;
+  color: #245033;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.shipmentSummaryRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.shipmentSummaryRow>div {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2ece2;
+}
+
+.shipmentSummaryLabel {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+  color: #5d6b5d;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+.shipmentStopList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shipmentStopItem {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #e2ece2;
+  background: #fff;
+}
+
+.shipmentStopActive {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.15);
+}
+
+.shipmentStopHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.shipmentStopBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eff7f1;
+  color: #245033;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.shipmentStopStatus {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #5d6b5d;
+  text-transform: capitalize;
+}
+
+.shipmentStopName {
+  margin: 8px 0 4px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #173d25;
+}
+
+.shipmentStopAddress {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #5d6b5d;
+}
+
+.shipmentError {
+  margin: 12px 0 0;
+  font-size: 0.95rem;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
 .detailItem {
   background-color: #f7faf7;
   border: 1px solid #e2ece2;
@@ -112,5 +241,15 @@
 
   .detailGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .shipmentSummaryRow {
+    grid-template-columns: 1fr;
+  }
+
+  .shipmentPanelHeader {
+    flex-direction: column;
   }
 }
