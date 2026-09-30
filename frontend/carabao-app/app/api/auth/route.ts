@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
         first_name: firstName || null,
         last_name: lastName || null,
         role: session.user.role ?? null,
+        verification_token: req.cookies.get("pending_signup_verification")?.value ?? null,
       }),
     }
   );
