@@ -19,6 +19,25 @@ _OTP_RESEND_COOLDOWN = 60
 _OTP_MAX_ATTEMPTS = 5
 
 
+def _normalize_phone_number(value: str) -> str:
+    compact = (
+        value.strip()
+        .replace(" ", "")
+        .replace("-", "")
+        .replace("(", "")
+        .replace(")", "")
+    )
+    if compact.startswith("+"):
+        compact = compact[1:]
+    if compact.startswith("09") and len(compact) == 11:
+        compact = f"63{compact[1:]}"
+    if compact.startswith("9") and len(compact) == 10:
+        compact = f"63{compact}"
+    if not compact.startswith("63") or len(compact) != 12 or not compact.isdigit():
+        raise HTTPException(status_code=400, detail="Use a valid Philippine mobile number, e.g. +63 912 345 6789")
+    return compact
+
+
 # ── Raw send endpoints ────────────────────────────────────────────────────────
 
 class SemaphoreSendRequest(BaseModel):
@@ -124,8 +143,8 @@ async def request_signup_verification(body: SignupVerificationRequest):
         raise HTTPException(status_code=400, detail="A valid signup identifier is required")
     if channel == "email" and ("@" not in identifier or len(identifier) > 254):
         raise HTTPException(status_code=400, detail="A valid email address is required")
-    if channel == "phone" and (len(identifier) > 20 or not identifier.replace("+", "").replace(" ", "").isdigit()):
-        raise HTTPException(status_code=400, detail="A valid phone number is required")
+    if channel == "phone":
+        identifier = _normalize_phone_number(identifier)
 
     otp = "".join(secrets.choice("0123456789") for _ in range(6))
     message = f"Your Carabao verification code is {otp}. Valid for 10 minutes. Do not share this with anyone."
@@ -142,6 +161,8 @@ async def request_signup_verification(body: SignupVerificationRequest):
     except Exception as exc:
         if isinstance(exc, HTTPException):
             raise
+        import logging
+        logging.getLogger(__name__).exception("Signup verification delivery failed for channel=%s", channel)
         raise HTTPException(status_code=502, detail="Verification message could not be sent") from exc
 
     with _otp_lock:
@@ -158,6 +179,8 @@ async def request_signup_verification(body: SignupVerificationRequest):
 async def verify_signup_verification(body: SignupVerificationVerifyRequest):
     channel = body.channel.strip().lower()
     identifier = body.identifier.strip()
+    if channel == "phone":
+        identifier = _normalize_phone_number(identifier)
     key = f"signup:{channel}:{identifier}"
     with _otp_lock:
         record = _otp_store.get(key)

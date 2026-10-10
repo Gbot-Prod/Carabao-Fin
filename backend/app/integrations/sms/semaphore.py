@@ -24,7 +24,7 @@ def load_semaphore_config() -> SemaphoreConfig:
     api_key = os.getenv("SEMAPHORE_KEY") or os.getenv("SEMAPHORE_API_KEY")
     if not api_key:
         raise SemaphoreError("Semaphore API key is not configured (SEMAPHORE_KEY)")
-    sendername = os.getenv("SEMAPHORE_SENDERNAME")
+    sendername = os.getenv("SEMAPHORE_SENDERNAME") or os.getenv("SEMAPHORE_SENDER_NAME")
     base_url = os.getenv("SEMAPHORE_BASE_URL") or _DEFAULT_BASE_URL
     return SemaphoreConfig(api_key=api_key, sendername=sendername, base_url=base_url)
 
