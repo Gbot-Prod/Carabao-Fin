@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import hmac
+import json
 import os
+import time
 import unicodedata
 from typing import Optional
 from uuid import uuid4
@@ -30,6 +33,30 @@ def _bcrypt_verify(password: str, hashed: str) -> bool:
     return _bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
+def _verified_signup_identifier(token: Optional[str]) -> tuple[str, str] | None:
+    if not token:
+        return None
+    secret = os.getenv("AUTH_SYNC_SHARED_SECRET")
+    if not secret or "." not in token:
+        return None
+    payload, signature = token.rsplit(".", 1)
+    expected = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        return None
+    try:
+        padded = payload + "=" * (-len(payload) % 4)
+        data = json.loads(base64.urlsafe_b64decode(padded).decode())
+        if int(data["exp"]) < int(time.time()):
+            return None
+        channel = str(data["channel"])
+        identifier = str(data["identifier"])
+        if channel not in {"email", "phone"} or not identifier:
+            return None
+        return channel, identifier
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return None
+
+
 BETTER_AUTH_SCRYPT_PARAMS = {
     "n": 16384,
     "r": 16,  # @better-auth/utils uses r=16
@@ -45,6 +72,7 @@ class AuthSyncPayload(BaseModel):
     last_name: Optional[str] = None
     phone_number: Optional[str] = None
     role: Optional[str] = None
+    verification_token: Optional[str] = None
 
 
 class AuthSyncResponse(BaseModel):
@@ -82,6 +110,16 @@ async def sync_auth(
     # Fallback by email so existing users can be linked to Better Auth without duplicates.
     if user is None:
         user = db.query(User).filter(User.email == payload.email).first()
+
+    verified_identifier = _verified_signup_identifier(payload.verification_token)
+    if user is None and verified_identifier is None:
+        raise HTTPException(status_code=403, detail="Signup identifier has not been verified")
+    if verified_identifier is not None:
+        channel, identifier = verified_identifier
+        if channel == "email" and identifier.lower() != payload.email.lower():
+            raise HTTPException(status_code=403, detail="Verified email does not match signup email")
+        if channel == "phone":
+            payload.phone_number = identifier
 
     is_admin = payload.role == "admin"
 

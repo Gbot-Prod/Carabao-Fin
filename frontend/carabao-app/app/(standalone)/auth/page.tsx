@@ -1,26 +1,29 @@
 "use client";
 
-import { signIn, signUp } from "@/lib/auth-client";
+import { signIn } from "@/lib/auth-client";
+import { apiClient } from "@/util/api";
+import { Mail, Phone } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Logo from "@/public/images/icons/carabaoLogo.png";
-import TermsModal from "@/components/TermsModal/TermsModal";
 import "./page.css";
 
 export default function SignupPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [authMode, setMode] = useState<"signin" | "signup">("signin");
+  const [signUpMode, setSignUpMode] = useState<"number" | "email">("number");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     confirmPassword: "",
     firstname: "",
     lastName: "",
+    phoneNumber: "",
+    verificationCode: "",
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [showTerms, setShowTerms] = useState(false);
+  const [verificationStep, setVerificationStep] = useState<"identifier" | "code">("identifier");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -34,26 +37,26 @@ export default function SignupPage() {
     setError("");
     setIsLoading(true);
 
-    if (mode === "signup" && formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
-      setIsLoading(false);
-      return;
-    }
-
-    if (mode === "signup" && !termsAccepted) {
-      setError("You must agree to the Terms of Service to create an account.");
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      if (mode === "signup") {
-        await signUp.email({
-          email: formData.email,
-          password: formData.password,
-          name: `${formData.firstname} ${formData.lastName}`.trim(),
-        });
-        router.push(`/verify-email?email=${encodeURIComponent(formData.email)}`);
+      if (authMode === "signup") {
+        const channel = signUpMode === "email" ? "email" : "phone";
+        const identifier = signUpMode === "email" ? formData.email.trim() : formData.phoneNumber.trim();
+        if (verificationStep === "identifier") {
+          await apiClient.post("/auth/signup-verification/request", {
+            channel,
+            identifier,
+          });
+          setVerificationStep("code");
+          return;
+        }
+
+        const response = await apiClient.post<{ verification_token: string }>(
+          "/auth/signup-verification/verify",
+          { channel, identifier, otp: formData.verificationCode }
+        );
+        document.cookie = `pending_signup_verification=${encodeURIComponent(response.data.verification_token)}; Path=/; Max-Age=1800; SameSite=Lax`;
+        sessionStorage.setItem("pending_signup", JSON.stringify({ channel, identifier }));
+        router.push("/onboarding?signup=1");
       } else {
         await signIn.email({
           email: formData.email,
@@ -71,15 +74,6 @@ export default function SignupPage() {
 
   return (
     <div className="auth-page">
-      {showTerms && (
-        <TermsModal
-          onClose={() => setShowTerms(false)}
-          onAgree={() => {
-            setTermsAccepted(true);
-            setShowTerms(false);
-          }}
-        />
-      )}
       <section className="auth-brand-panel">
         <div className="auth-brand-content">
           <img src={Logo.src} alt="Carabao Logo" className="auth-brand-logo" />
@@ -99,22 +93,58 @@ export default function SignupPage() {
         <div className="auth-form-shell">
           <div className="auth-header">
             <p className="auth-kicker">Welcome</p>
-            <h2>{mode === "signup" ? "Create your Carabao account" : "Sign in to Carabao"}</h2>
-            <div className="auth-switch" role="tablist" aria-label="Authentication mode">
-              <button
-                type="button"
-                className={`auth-switch-btn ${mode === "signin" ? "active" : ""}`}
-                onClick={() => { setMode("signin"); setTermsAccepted(false); setError(""); }}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                className={`auth-switch-btn ${mode === "signup" ? "active" : ""}`}
-                onClick={() => { setMode("signup"); setError(""); }}
-              >
-                Sign up
-              </button>
+            <h2>{authMode === "signup" ? "Create your Carabao account" : "Sign in to Carabao"}</h2>
+            <div className="auth-header-buttons">
+              <div className="auth-switch" role="tablist" aria-label="Authentication mode">
+                <button
+                  type="button"
+                  className={`auth-switch-btn ${authMode === "signin" ? "active" : ""}`}
+                  onClick={() => { setMode("signin"); setVerificationStep("identifier"); setError(""); }}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  className={`auth-switch-btn ${authMode === "signup" ? "active" : ""}`}
+                  onClick={() => { setMode("signup"); setVerificationStep("identifier"); setError(""); }}
+                >
+                  Sign up
+                </button>
+              </div>
+
+              {authMode === "signup" && (
+                <div
+                  className="signup-mode-switch"
+                  role="tablist"
+                  aria-label="Signup mode"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-label="Sign up with phone number"
+                    aria-selected={signUpMode === "number"}
+                    title="Sign up with phone number"
+                    className={`signup-mode-btn ${signUpMode === "number" ? "active" : ""
+                      }`}
+                    onClick={() => setSignUpMode("number")}
+                  >
+                    <Phone aria-hidden="true" size={18} />
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-label="Sign up with email"
+                    aria-selected={signUpMode === "email"}
+                    title="Sign up with email"
+                    className={`signup-mode-btn ${signUpMode === "email" ? "active" : ""
+                      }`}
+                    onClick={() => setSignUpMode("email")}
+                  >
+                    <Mail aria-hidden="true" size={18} />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -126,31 +156,39 @@ export default function SignupPage() {
             )}
 
             <div className="auth-fields">
-              {mode === "signup" && (
-                <div className="auth-name-row">
+              {authMode === "signup" ? (
+                <>
                   <input
-                    id="firstname"
-                    name="firstname"
-                    type="text"
+                    id={signUpMode === "email" ? "email" : "phoneNumber"}
+                    name={signUpMode === "email" ? "email" : "phoneNumber"}
+                    type={signUpMode === "email" ? "email" : "tel"}
+                    autoComplete={signUpMode === "email" ? "email" : "tel"}
                     required
                     className="auth-input"
-                    placeholder="First name"
-                    value={formData.firstname}
+                    placeholder={signUpMode === "email" ? "Email address" : "+63 912 345 6789"}
+                    value={signUpMode === "email" ? formData.email : formData.phoneNumber}
                     onChange={handleChange}
+                    disabled={verificationStep === "code"}
                   />
-                  <input
-                    id="lastName"
-                    name="lastName"
-                    type="text"
-                    required
-                    className="auth-input"
-                    placeholder="Last name"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                  />
-                </div>
-              )}
-
+                  {verificationStep === "code" && (
+                    <input
+                      id="verificationCode"
+                      name="verificationCode"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      required
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      className="auth-input"
+                      placeholder="6-digit verification code"
+                      value={formData.verificationCode}
+                      onChange={handleChange}
+                    />
+                  )}
+                </>
+              ) : (
+                <>
               <input
                 id="email"
                 name="email"
@@ -162,55 +200,24 @@ export default function SignupPage() {
                 value={formData.email}
                 onChange={handleChange}
               />
-
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="auth-input"
-                placeholder="Password"
-                value={formData.password}
-                onChange={handleChange}
-              />
-
-              {mode === "signup" && (
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  className="auth-input"
-                  placeholder="Confirm password"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                />
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    required
+                    className="auth-input"
+                    placeholder="Password"
+                    value={formData.password}
+                    onChange={handleChange}
+                  />
+                </>
               )}
             </div>
 
-            {mode === "signup" && (
-              <label className="auth-terms-label">
-                <input
-                  type="checkbox"
-                  className="auth-terms-checkbox"
-                  checked={termsAccepted}
-                  onChange={(e) => setTermsAccepted(e.target.checked)}
-                />
-                <span>
-                  I agree to the{" "}
-                  <button
-                    type="button"
-                    className="auth-terms-link"
-                    onClick={() => setShowTerms(true)}
-                  >
-                    Terms of Service
-                  </button>
-                </span>
-              </label>
-            )}
-
             <button type="submit" disabled={isLoading} className="auth-submit">
-              {isLoading ? "Please wait..." : mode === "signup" ? "Sign up" : "Sign in"}
+              {isLoading ? "Please wait..." : authMode === "signup"
+                ? verificationStep === "identifier" ? "Send verification code" : "Verify and continue"
+                : "Sign in"}
             </button>
 
           </form>

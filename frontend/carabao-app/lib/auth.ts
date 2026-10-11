@@ -78,7 +78,8 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET || "your-secret-key",
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: true,
+    // Signup identifiers are verified by the pre-account OTP flow.
+    requireEmailVerification: false,
   },
   emailVerification: {
     sendOnSignUp: true,
