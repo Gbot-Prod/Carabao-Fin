@@ -23,6 +23,7 @@ export default function SignupPage() {
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [verificationStep, setVerificationStep] = useState<"identifier" | "code">("identifier");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -158,33 +159,62 @@ export default function SignupPage() {
             <div className="auth-fields">
               {authMode === "signup" ? (
                 <>
-                  <input
-                    id={signUpMode === "email" ? "email" : "phoneNumber"}
-                    name={signUpMode === "email" ? "email" : "phoneNumber"}
-                    type={signUpMode === "email" ? "email" : "tel"}
-                    autoComplete={signUpMode === "email" ? "email" : "tel"}
-                    required
-                    className="auth-input"
-                    placeholder={signUpMode === "email" ? "Email address" : "+63 912 345 6789"}
-                    value={signUpMode === "email" ? formData.email : formData.phoneNumber}
-                    onChange={handleChange}
-                    disabled={verificationStep === "code"}
-                  />
+                  {signUpMode === "email" && (
+                    <>
+                      <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        required
+                        className="auth-input"
+                        placeholder="Email address"
+                        value={formData.email}
+                        onChange={handleChange}
+                        disabled={verificationStep === "code"}
+                      />
+                    </>
+                  ) }
+                  {signUpMode === "number" && (
+                    <div className="phone-input-wrapper flex items-center gap-2">
+                      <p className="auth-input w-2/12 bold">+63</p>
+                      <input
+                          id="phoneNumber"
+                          name="phoneNumber"
+                          type="tel"
+                          autoComplete="number"
+                          required
+                          className="auth-input w-10/12"
+                          placeholder="912 345 6789"
+                          value={formData.phoneNumber}
+                          onChange={handleChange}
+                          disabled={verificationStep === "code"}
+                          maxLength={10}
+                      />
+                    </div>
+                  )}
                   {verificationStep === "code" && (
-                    <input
-                      id="verificationCode"
-                      name="verificationCode"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      required
-                      pattern="[0-9]{6}"
-                      maxLength={6}
-                      className="auth-input"
-                      placeholder="6-digit verification code"
-                      value={formData.verificationCode}
-                      onChange={handleChange}
-                    />
+                    <>
+                      <input
+                        id="verificationCode"
+                        name="verificationCode"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        required
+                        pattern="[0-9]{6}"
+                        maxLength={6}
+                        className="auth-input"
+                        placeholder="6-digit verification code"
+                        value={formData.verificationCode}
+                        onChange={handleChange}
+                      />
+                      <button type="button" className="code-resend" onClick={() => setIsResending(true)}>
+                        {isResending ? "Please wait before sending another code" : "Resend Code"
+                        
+                        }
+                      </button>
+                    </>
                   )}
                 </>
               ) : (

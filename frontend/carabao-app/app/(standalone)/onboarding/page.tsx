@@ -6,18 +6,21 @@ import Link from "next/link";
 import { fetchMyProfile, updateMyProfile } from "@/util/api";
 import { signUp } from "@/lib/auth-client";
 import TermsModal from "@/components/TermsModal/TermsModal";
+import LocationSelects from "@/components/LocationSelects/LocationSelects";
 
 type FormData = {
   firstName: string;
   lastName: string;
   phoneNumber: string;
   streetAddress: string;
-  city: string;
+  region: string;
   province: string;
+  city: string;
+  barangay: string;
   zipCode: string;
 };
 
-const EMPTY: FormData = { firstName: "", lastName: "", phoneNumber: "", streetAddress: "", city: "", province: "", zipCode: "" };
+const EMPTY: FormData = { firstName: "", lastName: "", phoneNumber: "", streetAddress: "", region: "", province: "", city: "", barangay: "", zipCode: "" };
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -55,8 +58,10 @@ export default function OnboardingPage() {
           lastName: p.last_name ?? "",
           phoneNumber: p.phone_number ?? "",
           streetAddress: p.address ?? "",
+          region: p.region ?? "",
+          province: p.province ?? "",
           city: p.city ?? "",
-          province: p.country ?? "",
+          barangay: p.barangay ?? "",
           zipCode: p.postal_code ?? "",
         });
       } catch {
@@ -104,8 +109,10 @@ export default function OnboardingPage() {
         last_name: formData.lastName.trim() || null,
         phone_number: formData.phoneNumber.trim() || null,
         address: formData.streetAddress.trim() || null,
+        region: formData.region.trim() || null,
+        province: formData.province.trim() || null,
         city: formData.city.trim() || null,
-        country: formData.province.trim() || null,
+        barangay: formData.barangay.trim() || null,
         postal_code: formData.zipCode.trim() || null,
       });
       sessionStorage.removeItem("pending_signup");
@@ -216,25 +223,31 @@ export default function OnboardingPage() {
             <input type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} placeholder="+63 912 345 6789" style={inputStyle} />
           </div>
 
+          <LocationSelects
+              value={{
+                region: formData.region,
+                province: formData.province,
+                city: formData.city,
+                barangay: formData.barangay,
+              }}
+              onChange={(location) => 
+                setFormData((previous) => ({ 
+                  ...previous,
+                  ...location
+                }))
+              }
+              selectStyle={inputStyle}
+              labelStyle={labelStyle}
+          />
+          
           <div>
             <label style={labelStyle}>Street address</label>
             <input type="text" name="streetAddress" value={formData.streetAddress} onChange={handleChange} placeholder="123 Rizal Ave" style={inputStyle} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-            <div>
-              <label style={labelStyle}>City</label>
-              <input type="text" name="city" value={formData.city} onChange={handleChange} placeholder="Taguig" style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>ZIP code</label>
-              <input type="text" name="zipCode" value={formData.zipCode} onChange={handleChange} placeholder="1634" style={inputStyle} />
-            </div>
-          </div>
-
           <div>
-            <label style={labelStyle}>Province / Country</label>
-            <input type="text" name="province" value={formData.province} onChange={handleChange} placeholder="Metro Manila" style={inputStyle} />
+            <label style={labelStyle}>ZIP code</label>
+            <input type="text" name="zipCode" value={formData.zipCode} onChange={handleChange} placeholder="1634" style={inputStyle} />
           </div>
 
           {saveError && (

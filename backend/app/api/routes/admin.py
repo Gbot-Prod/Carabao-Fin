@@ -143,7 +143,6 @@ def get_admin_stats(
         ],
     }
 
-
 @router.get("/admin/batches", response_model=list[PayoutBatchResponse])
 def list_payout_batches(
     status: str | None = None,
@@ -155,9 +154,7 @@ def list_payout_batches(
         q = q.filter(PayoutBatch.status == status)
     return q.order_by(PayoutBatch.period_date.desc()).all()
 
-
 _REVIEW_STATUSES = {"approved", "rejected", "clarification"}
-
 
 @router.patch("/admin/merchant-applications/{app_id}", response_model=MerchantApplicationResponse)
 def review_merchant_application(

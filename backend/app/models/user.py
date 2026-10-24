@@ -18,7 +18,8 @@ class User(Base):
     address = Column(String, index=True, nullable=True)
     barangay = Column(String, index=True, nullable=True)
     city = Column(String, index=True, nullable=True)
-    country = Column(String, index=True, nullable=True)
+    province = Column(String, index=True, nullable=True)
+    region = Column(String, index=True, nullable=True)
     postal_code = Column(String, index=True, nullable=True)
     notifications_preferences = Column(JSON, nullable=False, default=dict)
 
