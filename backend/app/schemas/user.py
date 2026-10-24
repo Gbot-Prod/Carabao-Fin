@@ -13,7 +13,8 @@ class UserBase(BaseModel):
     address: Optional[str] = None
     barangay: Optional[str] = None
     city: Optional[str] = None
-    country: Optional[str] = None
+    province: Optional[str] = None
+    region: Optional[str] = None
     postal_code: Optional[str] = None
     created_at: Optional[datetime] = None
     profile_picture_url: Optional[str] = None

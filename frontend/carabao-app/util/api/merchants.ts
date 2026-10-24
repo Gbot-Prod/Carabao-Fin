@@ -34,6 +34,7 @@ export type MerchantOnboardingPayload = {
   contact_email: string;
   contact_number: string;
   address_line: string;
+  barangay: string | null;
   city: string;
   province?: string | null;
   region?: string | null;

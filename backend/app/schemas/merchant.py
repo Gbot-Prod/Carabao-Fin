@@ -14,10 +14,14 @@ class MerchantBase(BaseModel):
     delivery_time: Optional[int] = None
     rating: Optional[float] = None
 
-
 class MerchantCreate(MerchantBase):
     user_id: int
-
+    address: Optional[str] = None
+    barangay: Optional[str] = None
+    city: Optional[str] = None
+    province: Optional[str] = None
+    region: Optional[str] = None
+    postal_code: Optional[str] = None
 
 class MerchantUpdate(BaseModel):
     merchant_name: Optional[str] = None
@@ -27,7 +31,6 @@ class MerchantUpdate(BaseModel):
     delivery_price: Optional[int] = None
     delivery_time: Optional[int] = None
     rating: Optional[float] = None
-
 
 class MerchantShopPageInfo(BaseModel):
     id: int

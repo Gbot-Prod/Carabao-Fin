@@ -46,7 +46,7 @@ const pool = (() => {
       database: u.pathname.replace(/^\//, ""),
       user: decodeURIComponent(u.username),
       password: decodeURIComponent(u.password),
-      ssl: { rejectUnauthorized: false },
+      ssl: { rejectUnauthorized: true },
     });
   } catch {
     return new Pool({ connectionString: postgresUrl, ssl: { rejectUnauthorized: false } });
@@ -75,7 +75,7 @@ export const auth = betterAuth({
     process.env.BETTER_AUTH_URL ||
     "http://localhost:3000",
   basePath: "/api/auth",
-  secret: process.env.BETTER_AUTH_SECRET || "your-secret-key",
+  secret: process.env.BETTER_AUTH_SECRET,
   emailAndPassword: {
     enabled: true,
     // Signup identifiers are verified by the pre-account OTP flow.

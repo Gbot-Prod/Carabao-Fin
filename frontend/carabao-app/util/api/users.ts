@@ -17,7 +17,8 @@ export type UserProfile = {
   address: string | null;
   barangay: string | null;
   city: string | null;
-  country: string | null;
+  province: string | null;
+  region: string | null;
   postal_code: string | null;
   created_at: string | null;
   profile_picture_url: string | null;
@@ -41,7 +42,8 @@ export type UserProfileUpdatePayload = {
   address?: string | null;
   barangay?: string | null;
   city?: string | null;
-  country?: string | null;
+  province?: string | null;
+  region?: string | null;
   postal_code?: string | null;
   notifications_preferences?: Partial<NotificationPrefs> | null;
 };

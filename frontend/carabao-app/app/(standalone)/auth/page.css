@@ -218,14 +218,13 @@
 }
 
 .auth-fields {
+  width: 100%;
   display: grid;
   gap: 0.68rem;
 }
 
 
-
 .auth-input {
-  width: 100%;
   appearance: none;
   border-radius: 0.75rem;
   border: 1px solid #cddfce;
@@ -234,6 +233,12 @@
   padding: 0.72rem 0.84rem;
   font-size: 0.94rem;
   transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.auth-input::-webkit-outer-spin-button,
+.auth-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .auth-input::placeholder {

@@ -18,7 +18,6 @@ _OTP_TTL = 600  # 10 minutes
 _OTP_RESEND_COOLDOWN = 60
 _OTP_MAX_ATTEMPTS = 5
 
-
 def _normalize_phone_number(value: str) -> str:
     compact = (
         value.strip()
@@ -38,8 +37,7 @@ def _normalize_phone_number(value: str) -> str:
     return compact
 
 
-# ── Raw send endpoints ────────────────────────────────────────────────────────
-
+# Raw Send Endpoint
 class SemaphoreSendRequest(BaseModel):
     number: str
     message: str
