@@ -85,6 +85,10 @@ async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] |
 
 async def _compute_and_store_route(db: Session, order: Order) -> None:
     """Compute ALNS route for order and store waypoints. Called when marking for shipping."""
+    if not order.merchant:
+        print(f"[route] Skipping route computation for order {order.id}: no merchant")
+        return
+
     whole_address = [
         order.merchant.region,
         order.merchant.province,
@@ -93,10 +97,6 @@ async def _compute_and_store_route(db: Session, order: Order) -> None:
         order.merchant.address,
         order.merchant.postal_code,
     ]
-
-    if not order.merchant:
-        print(f"[route] Skipping route computation for order {order.id}: no merchant")
-        return
 
     if whole_address == [None, None, None, None, None, None]:
         print(

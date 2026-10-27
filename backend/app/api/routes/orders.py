@@ -51,7 +51,11 @@ async def place_order_from_cart(
 
     history = get_or_create_order_history(db, current_user.id)
     merchant = resolve_merchant_from_items(db, cart_items)
-    service_fee = max(_to_int(payload.service_fee, 40), 0)
+    if not merchant:
+        raise HTTPException(
+            status_code=400, detail="Cannot determine merchant from cart items"
+        )
+    service_fee = merchant.delivery_price  
 
     order_items = []
     fresh_total = 0
