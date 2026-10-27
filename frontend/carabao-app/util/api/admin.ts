@@ -81,8 +81,26 @@ export type PayoutBatch = {
 
 export type { UserProfile, Merchant };
 
-export const fetchAdminUsers = async (): Promise<UserProfile[]> => {
-  const res = await apiClient.get<UserProfile[]>('/admin/users');
+export type Paginated<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export const ADMIN_PAGE_SIZE = 20;
+
+export const fetchAdminUsers = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Promise<Paginated<UserProfile>> => {
+  const res = await apiClient.get<Paginated<UserProfile>>('/admin/users', {
+    params: { page, page_size: pageSize },
+  });
+  return res.data;
+};
+
+export const fetchAdminMerchantsPage = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Promise<Paginated<Merchant>> => {
+  const res = await apiClient.get<Paginated<Merchant>>('/admin/merchants', {
+    params: { page, page_size: pageSize },
+  });
   return res.data;
 };
 

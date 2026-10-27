@@ -1,0 +1,42 @@
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.info {
+  font-size: 13px;
+  color: #647067;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #173d25;
+  background: #fff;
+  border: 1px solid #e0ece5;
+  border-radius: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  background: #f7fcf8;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
