@@ -63,11 +63,7 @@
 .locationField {
   display: grid;
   gap: 0.35rem;
-  font-weight: 600;
-}
-
-.locationField label {
-  margin-top: 0;
+  min-width: 0;
 }
 
 .formCard label {
@@ -77,15 +73,46 @@
   margin-top: 0.75rem;
 }
 
+.formCard .locationLabel {
+  margin-top: 0;
+  font-weight: 600;
+}
+
 .formCard input,
 .formCard select,
 .formCard textarea {
+  width: 100%;
+  min-width: 0;
   border: 1px solid #d9d9d9;
   border-radius: 10px;
   padding: 0.65rem 0.75rem;
   font: inherit;
   font-weight: 500;
+  color: inherit;
   background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.formCard textarea {
+  resize: vertical;
+}
+
+.formCard input:focus,
+.formCard select:focus,
+.formCard textarea:focus {
+  outline: none;
+  border-color: #079135;
+  box-shadow: 0 0 0 3px rgba(7, 145, 53, 0.15);
+}
+
+.formCard select:disabled {
+  background: #f4f4f4;
+  color: #9a9a9a;
+  cursor: not-allowed;
+}
+
+.locationSelect {
+  text-overflow: ellipsis;
 }
 
 .paymentChoices {

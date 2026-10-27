@@ -41,6 +41,10 @@ export const createPaymentCheckout = async (orderId: number): Promise<CheckoutSe
   return response.data;
 };
 
+export const cancelPaymentCheckout = async (orderId: number): Promise<void> => {
+  await apiClient.post(`/payments/checkout/${orderId}/cancel`);
+};
+
 export const fetchTransactionByOrder = async (orderId: number): Promise<TransactionStatusResponse> => {
   const response = await apiClient.get<TransactionStatusResponse>(`/payments/transactions/order/${orderId}`);
   return response.data;

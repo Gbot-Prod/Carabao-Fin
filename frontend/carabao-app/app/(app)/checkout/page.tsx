@@ -4,10 +4,9 @@ import axios from "axios";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
-import { createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
+import { cancelPaymentCheckout, createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
 import { SERVICE_FEE } from "@/lib/constants";
-import LocationSelects from "@/components/LocationSelects/LocationSelects";
-import { profile } from "console";
+import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
 
 export default function CheckoutPage() {
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
@@ -15,12 +14,10 @@ export default function CheckoutPage() {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [street, setStreet] = useState("");
-  const [barangay, setBarangay] = useState("");
-  const [city, setCity] = useState("");
   const [postal, setPostal] = useState("");
   const [paymentMethod] = useState("online");
   const [notes, setNotes] = useState("");
-  const [addressForm, setAddressForm] = useState({
+  const [addressForm, setAddressForm] = useState<LocationSelectsValue>({
     region: "",
     province: "",
     city: "",
@@ -43,9 +40,13 @@ export default function CheckoutPage() {
       try {
         const profile = await fetchMyProfile();
         if (profile.address) setStreet(profile.address);
-        if (profile.barangay) setBarangay(profile.barangay);
-        if (profile.city) setCity(profile.city);
         if (profile.postal_code) setPostal(profile.postal_code);
+        setAddressForm({
+          region: profile.region ?? "",
+          province: profile.province ?? "",
+          city: profile.city ?? "",
+          barangay: profile.barangay ?? "",
+        });
       } catch {
         // leave address blank if profile fetch fails
       }
@@ -53,6 +54,20 @@ export default function CheckoutPage() {
 
     void loadCart();
     void loadProfile();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = Number(params.get("order_id"));
+    if (params.get("payment_cancelled") !== "1" || !Number.isInteger(orderId) || orderId <= 0) {
+      return;
+    }
+
+    void cancelPaymentCheckout(orderId).catch(() => {
+      // The server-side expiry sweep will still release stock if this request fails.
+    });
+    setError("Payment was cancelled. Your items are available in your cart.");
+    window.history.replaceState({}, "", "/checkout");
   }, []);
 
   const subtotal = useMemo(
@@ -68,8 +83,8 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!street.trim() || !city.trim()) {
-      setError("Please enter your street address and city before placing an order.");
+    if (!street.trim() || !addressForm.city || !addressForm.barangay) {
+      setError("Please enter your street address, city, and barangay before placing an order.");
       return;
     }
 
@@ -77,7 +92,7 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
-      const deliveryAddress = [street, barangay, city, postal, 'Philippines'].filter(Boolean).join(', ') || null;
+      const deliveryAddress = [street, addressForm.barangay, addressForm.city, addressForm.province, postal, 'Philippines'].filter(Boolean).join(', ') || null;
       const result = await placeOrderFromCart({
         delivery_date: null,
         delivery_time: null,
@@ -129,28 +144,13 @@ export default function CheckoutPage() {
               />
             </label>
 
-            <label>
-              Barangay
-              <input
-                type="text"
-                value={barangay}
-                onChange={(e) => setBarangay(e.target.value)}
-                placeholder="Brgy. Poblacion"
-              />
-            </label>
-
             <div className={styles.locationGrid}>
               <LocationSelects
-                value={{
-                  region: addressForm.region,
-                  province: addressForm.province,
-                  city: addressForm.city,
-                  barangay: addressForm.barangay,
-                }}
+                value={addressForm}
                 onChange={(location) => setAddressForm(previous => ({ ...previous, ...location }))}
-                selectClassName={styles.formInput}
-                labelClassName={styles.formLabel}
-                wrapClassName={styles.panelFormField}
+                selectClassName={styles.locationSelect}
+                labelClassName={styles.locationLabel}
+                wrapClassName={styles.locationField}
               />
             </div>
 
