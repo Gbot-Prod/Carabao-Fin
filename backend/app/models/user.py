@@ -1,6 +1,7 @@
-from sqlalchemy import Boolean, Column, DateTime, Integer, JSON, String
-from sqlalchemy.sql import func
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+
 from app.core.database import Base
 
 
@@ -12,14 +13,21 @@ class User(Base):
     first_name = Column(String, index=True, nullable=True)
     last_name = Column(String, index=True, nullable=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
     phone_number = Column(String, unique=True, index=True, nullable=True)
-    address = Column(String, index=True, nullable=True)
-    barangay = Column(String, index=True, nullable=True)
-    city = Column(String, index=True, nullable=True)
-    province = Column(String, index=True, nullable=True)
     region = Column(String, index=True, nullable=True)
+    province = Column(String, index=True, nullable=True)
+    city = Column(String, index=True, nullable=True)
+    barangay = Column(String, index=True, nullable=True)
+    address = Column(String, index=True, nullable=True)
     postal_code = Column(String, index=True, nullable=True)
     notifications_preferences = Column(JSON, nullable=False, default=dict)
 
@@ -27,6 +35,15 @@ class User(Base):
     paymongo_customer_id = Column(String, unique=True, index=True, nullable=True)
     is_admin = Column(Boolean, nullable=False, default=False)
 
-    merchant = relationship("Merchant", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    cart = relationship("Cart", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    order_history = relationship("OrderHistory", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    merchant = relationship(
+        "Merchant", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    cart = relationship(
+        "Cart", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    order_history = relationship(
+        "OrderHistory",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

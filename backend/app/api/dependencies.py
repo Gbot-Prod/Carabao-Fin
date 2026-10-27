@@ -5,8 +5,8 @@ from app.core.database import SessionLocal
 from app.core.security import decode_access_token
 from app.models.user import User
 
-
 bearer_scheme = HTTPBearer(auto_error=False)
+
 
 def get_db():
     db = SessionLocal()

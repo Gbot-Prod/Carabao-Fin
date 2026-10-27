@@ -27,7 +27,6 @@ STEPS = [
         "backend_users: drop member_since",
         "ALTER TABLE backend_users DROP COLUMN IF EXISTS member_since",
     ),
-
     # ── carts ────────────────────────────────────────────────────────────────
     (
         "carts: drop total_items",
@@ -37,7 +36,6 @@ STEPS = [
         "carts: drop total_price",
         "ALTER TABLE carts DROP COLUMN IF EXISTS total_price",
     ),
-
     # ── orders ───────────────────────────────────────────────────────────────
     (
         "orders: add user_id column",
@@ -66,7 +64,6 @@ STEPS = [
         "orders: create ix_orders_user_id",
         "CREATE INDEX IF NOT EXISTS ix_orders_user_id ON orders(user_id)",
     ),
-
     # ── current_orders ───────────────────────────────────────────────────────
     (
         "current_orders: drop shipped",
@@ -76,7 +73,6 @@ STEPS = [
         "current_orders: drop merchant_name",
         "ALTER TABLE current_orders DROP COLUMN IF EXISTS merchant_name",
     ),
-
     # ── order_histories ──────────────────────────────────────────────────────
     (
         "order_histories: drop total_orders",
@@ -86,7 +82,6 @@ STEPS = [
         "order_histories: drop total_spent",
         "ALTER TABLE order_histories DROP COLUMN IF EXISTS total_spent",
     ),
-
     # ── merchants ────────────────────────────────────────────────────────────
     (
         "merchants: drop index on operating_hours (required before type change)",

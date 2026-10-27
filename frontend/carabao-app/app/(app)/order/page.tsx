@@ -23,7 +23,7 @@ const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]
   rating: merchant.rating ?? 0,
   time: merchant.delivery_time ? `${merchant.delivery_time} Days` : 'N/A',
   deliveryTimeDays: merchant.delivery_time ?? null,
-  category: merchant.location ?? 'Farm Goods',
+  category: merchant.category ?? 'Farm Goods',
   deliveryFee: merchant.delivery_price ?? 0,
   logoUrl,
 });

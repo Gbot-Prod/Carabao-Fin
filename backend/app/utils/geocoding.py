@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from urllib.parse import quote
 
 import requests as _requests
 
 _PH_BBOX = "116.928,4.587,126.604,21.321"
 _METRO_MANILA_PROXIMITY = "120.9842,14.5995"
+_GEOCODE_ATTEMPTS = 3
+_GEOCODE_TIMEOUT_SECONDS = 10
 _geocode_cache: dict[str, tuple[float, float]] = {}
 
 
@@ -26,21 +29,36 @@ def _geocode_sync(address: str) -> tuple[float, float] | None:
 
     normalised = _normalise_address(address)
     url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{quote(normalised)}.json"
+    params = {
+        "country": "PH",
+        "bbox": _PH_BBOX,
+        "proximity": _METRO_MANILA_PROXIMITY,
+        "types": "address,poi,place,locality,neighborhood",
+        "limit": 1,
+        "access_token": token,
+    }
+    for attempt in range(1, _GEOCODE_ATTEMPTS + 1):
+        try:
+            resp = _requests.get(
+                url,
+                params=params,
+                timeout=_GEOCODE_TIMEOUT_SECONDS,
+            )
+            break
+        except (_requests.exceptions.Timeout, _requests.exceptions.ConnectionError) as exc:
+            if attempt == _GEOCODE_ATTEMPTS:
+                print(
+                    f"[geocode] Mapbox unavailable after {_GEOCODE_ATTEMPTS} attempts "
+                    f"for {normalised!r}: {exc}"
+                )
+                return None
+            time.sleep(0.5 * attempt)
+            print(f"[geocode] Retrying Mapbox request ({attempt + 1}/{_GEOCODE_ATTEMPTS})")
     try:
-        resp = _requests.get(
-            url,
-            params={
-                "country": "PH",
-                "bbox": _PH_BBOX,
-                "proximity": _METRO_MANILA_PROXIMITY,
-                "types": "address,poi,place,locality,neighborhood",
-                "limit": 1,
-                "access_token": token,
-            },
-            timeout=5,
-        )
         if not resp.ok:
-            print(f"[geocode] Mapbox error {resp.status_code} for address: {normalised!r}")
+            print(
+                f"[geocode] Mapbox error {resp.status_code} for address: {normalised!r}"
+            )
             return None
 
         body = resp.json()
@@ -52,11 +70,25 @@ def _geocode_sync(address: str) -> tuple[float, float] | None:
         feature = features[0]
         relevance = feature.get("relevance", 1.0)
         if relevance < 0.4:
-            print(f"[geocode] Low-confidence result (relevance={relevance:.2f}) for: {normalised!r} → {feature.get('place_name')}")
+            print(
+                f"[geocode] Low-confidence result (relevance={relevance:.2f}) for: {
+                    normalised!r
+                } → {feature.get('place_name')}"
+            )
 
         lng, lat = feature["center"]
-        print(f"[geocode] {normalised!r} → ({lat:.5f}, {lng:.5f})  place={feature.get('place_name')!r}  relevance={relevance:.2f}")
+        print(
+            f"[geocode] {normalised!r} → ({lat:.5f}, {lng:.5f})  place={
+                feature.get('place_name')!r
+            }  relevance={relevance:.2f}"
+        )
         return (lat, lng)
+    except _requests.exceptions.RequestException as exc:
+        print(f"[geocode] Mapbox request failed for {normalised!r}: {exc}")
+        return None
+    except (KeyError, TypeError, ValueError) as exc:
+        print(f"[geocode] Invalid Mapbox response for {normalised!r}: {exc}")
+        return None
     except Exception as exc:
         print(f"[geocode] Exception for address {normalised!r}: {exc}")
         return None

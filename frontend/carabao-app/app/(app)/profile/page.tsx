@@ -65,27 +65,55 @@ function resolveNotifPrefs(raw: Partial<NotificationPrefs> | null | undefined): 
 }
 
 // ─── Address panel ────────────────────────────────────────────────────────────
-type AddressForm = { address: string; barangay: string; city: string; country: string; postal_code: string };
+type AddressForm = { address: string; barangay: string; city: string; province: string; region: string; postal_code: string };
 
 function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSaved: (p: UserProfile) => void }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<AddressForm>({ address: '', barangay: '', city: '', country: '', postal_code: '' });
+  const [form, setForm] = useState<AddressForm>({ 
+    address: '', 
+    barangay: '', 
+    city: '', 
+    province: '', 
+    region: '', 
+    postal_code: '' 
+  });
 
   useEffect(() => {
     if (profile) {
-      setForm({ address: profile.address ?? '', barangay: profile.barangay ?? '', city: profile.city ?? '', country: profile.country ?? '', postal_code: profile.postal_code ?? '' });
+      setForm({ 
+        address: profile.address ?? '', 
+        barangay: profile.barangay ?? '', 
+        province: profile.province ?? '', 
+        region: profile.region ?? '', 
+        city: profile.city ?? '', 
+        postal_code: profile.postal_code ?? '' 
+      });
     }
   }, [profile]);
 
   const startEdit = () => { setError(null); setEditing(true); };
-  const cancel = () => { if (profile) setForm({ address: profile.address ?? '', barangay: profile.barangay ?? '', city: profile.city ?? '', country: profile.country ?? '', postal_code: profile.postal_code ?? '' }); setEditing(false); setError(null); };
+  const cancel = () => { if (profile) setForm({ 
+        address: profile.address ?? '', 
+        barangay: profile.barangay ?? '', 
+        province: profile.province ?? '', 
+        region: profile.region ?? '', 
+        city: profile.city ?? '', 
+        postal_code: profile.postal_code ?? '' 
+      }); setEditing(false); setError(null); };
 
   const save = async () => {
     setSaving(true); setError(null);
     try {
-      const updated = await updateMyProfile({ address: form.address.trim() || null, barangay: form.barangay.trim() || null, city: form.city.trim() || null, country: form.country.trim() || null, postal_code: form.postal_code.trim() || null });
+      const updated = await updateMyProfile({ 
+        region: form.region.trim() || null,
+        province: form.province.trim() || null,
+        city: form.city.trim() || null,
+        barangay: form.barangay.trim() || null,
+        address: form.address.trim() || null,
+        postal_code: form.postal_code.trim() || null,
+      });
       onSaved(updated);
       setEditing(false);
     } catch { setError('Failed to save. Please try again.'); }
@@ -98,30 +126,25 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
 
   return editing ? (
     <div className={styles.panelForm}>
+      <LocationSelects
+        value={{
+          region: form.region,
+          province: form.province,
+          city: form.city,
+          barangay: form.barangay,
+        }}
+        onChange={(location) => setForm(previous => ({ ...previous, ...location }))}
+        selectClassName={styles.formInput}
+        labelClassName={styles.formLabel}
+        wrapClassName={styles.panelFormField}
+      />
       <div className={styles.panelFormField}>
         <label className={styles.formLabel}>Street / House No.</label>
         <input className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave, Unit 4B" />
       </div>
       <div className={styles.panelFormField}>
-        <label className={styles.formLabel}>Barangay</label>
-        <input className={styles.formInput} value={form.barangay} onChange={setField('barangay')} placeholder="Brgy. Poblacion" />
-      </div>
-      <LocationSelects
-        value={form.city}
-        onChange={(city) => setForm(p => ({ ...p, city }))}
-        selectClassName={styles.formInput}
-        labelClassName={styles.formLabel}
-        wrapClassName={styles.panelFormField}
-      />
-      <div className={styles.panelFormRow}>
-        <div className={styles.panelFormField}>
-          <label className={styles.formLabel}>Postal code</label>
-          <input className={styles.formInput} value={form.postal_code} onChange={setField('postal_code')} placeholder="1634" />
-        </div>
-        <div className={styles.panelFormField}>
-          <label className={styles.formLabel}>Country</label>
-          <input className={styles.formInput} value={form.country} onChange={setField('country')} placeholder="Philippines" />
-        </div>
+        <label className={styles.formLabel}>Postal code</label>
+        <input className={styles.formInput} value={form.postal_code} onChange={setField('postal_code')} placeholder="1634" />
       </div>
       {error && <p className={styles.panelError}>{error}</p>}
       <div className={styles.panelActions}>
@@ -132,17 +155,18 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
   ) : (
     <div className={styles.panelView}>
       <div className={styles.panelRows}>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Street</span><span className={styles.panelRowValue}>{profile.address ?? <em className={styles.noData}>No data</em>}</span></div>
+        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Region</span><span className={styles.panelRowValue}>{profile.region ?? <em className={styles.noData}>No data</em>}</span></div>
+        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Province</span><span className={styles.panelRowValue}>{profile.province ?? <em className={styles.noData}>No data</em>}</span></div>
+        <div className={styles.panelRow}><span className={styles.panelRowLabel}>City / Municipality</span><span className={styles.panelRowValue}>{profile.city ?? <em className={styles.noData}>No data</em>}</span></div>
         <div className={styles.panelRow}><span className={styles.panelRowLabel}>Barangay</span><span className={styles.panelRowValue}>{profile.barangay ?? <em className={styles.noData}>No data</em>}</span></div>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>City</span><span className={styles.panelRowValue}>{profile.city ?? <em className={styles.noData}>No data</em>}</span></div>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Country</span><span className={styles.panelRowValue}>{profile.country ?? <em className={styles.noData}>No data</em>}</span></div>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Postal</span><span className={styles.panelRowValue}>{profile.postal_code ?? <em className={styles.noData}>No data</em>}</span></div>
+        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Street / House No.</span><span className={styles.panelRowValue}>{profile.address ?? <em className={styles.noData}>No data</em>}</span></div>
+        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Postal code</span><span className={styles.panelRowValue}>{profile.postal_code ?? <em className={styles.noData}>No data</em>}</span></div>
       </div>
       <button className={styles.panelEditBtn} onClick={startEdit} type="button">Edit address</button>
     </div>
   );
 }
-
+  
 // ─── Notifications panel ──────────────────────────────────────────────────────
 const NOTIF_ITEMS: { key: keyof NotificationPrefs; label: string; desc: string }[] = [
   { key: 'order_updates', label: 'Order updates', desc: 'Status changes for your active orders' },
@@ -331,10 +355,10 @@ function PaymentPanel({ userEmail }: { userEmail: string | undefined }) {
 }
 
 // ─── Edit form type ───────────────────────────────────────────────────────────
-type EditForm = { first_name: string; last_name: string; phone_number: string; address: string; barangay: string; city: string; country: string; postal_code: string };
+type EditForm = { first_name: string; last_name: string; phone_number: string};
 
 function profileToForm(p: UserProfile): EditForm {
-  return { first_name: p.first_name ?? '', last_name: p.last_name ?? '', phone_number: p.phone_number ?? '', address: p.address ?? '', barangay: p.barangay ?? '', city: p.city ?? '', country: p.country ?? '', postal_code: p.postal_code ?? '' };
+  return { first_name: p.first_name ?? '', last_name: p.last_name ?? '', phone_number: p.phone_number ?? '' };
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -346,7 +370,7 @@ export default function Profile() {
   const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<EditForm>({ first_name: '', last_name: '', phone_number: '', address: '', barangay: '', city: '', country: '', postal_code: '' });
+  const [form, setForm] = useState<EditForm>({ first_name: '', last_name: '', phone_number: ''});
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -385,7 +409,11 @@ export default function Profile() {
   const handleSave = async () => {
     setIsSaving(true); setSaveError(null);
     try {
-      const updated = await updateMyProfile({ first_name: form.first_name.trim() || null, last_name: form.last_name.trim() || null, phone_number: form.phone_number.trim() || null, address: form.address.trim() || null, barangay: form.barangay.trim() || null, city: form.city.trim() || null, country: form.country.trim() || null, postal_code: form.postal_code.trim() || null });
+      const updated = await updateMyProfile({ 
+        first_name: form.first_name.trim() || null, 
+        last_name: form.last_name.trim() || null, 
+        phone_number: form.phone_number.trim() || null, 
+      });
       setProfile(updated); setModalOpen(false);
     } catch { setSaveError('Failed to save. Please try again.'); }
     finally { setIsSaving(false); }
@@ -402,11 +430,11 @@ export default function Profile() {
     } catch {
       setDeletingAccount(false);
       setConfirmDeleteAccount(false);
+      
     }
   };
 
   const fullName = profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() || 'Carabao User' : null;
-  const addressLine = profile ? [profile.address, profile.barangay, profile.city, profile.country, profile.postal_code].filter(Boolean).join(', ') : null;
   const hasMerchant = !!profile?.merchant?.id;
 
   return (
@@ -433,10 +461,6 @@ export default function Profile() {
               <div className={styles.metaRow}>
                 <span className={styles.metaLabel}>Phone</span>
                 <span className={styles.metaValue}>{isLoading ? '—' : (profile?.phone_number ?? 'No data')}</span>
-              </div>
-              <div className={styles.metaRow}>
-                <span className={styles.metaLabel}>Address</span>
-                <span className={styles.metaValue}>{isLoading ? '—' : (addressLine ?? 'No data')}</span>
               </div>
             </div>
 
@@ -571,25 +595,6 @@ export default function Profile() {
                   <span className={styles.phonePrefix}>+63</span>
                   <input className={`${styles.formInput} ${styles.phoneInput}`} value={form.phone_number} onChange={set('phone_number')} placeholder="912 345 6789" />
                 </div>
-              </div>
-              <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
-                <label className={styles.formLabel}>Street / House No.</label>
-                <input className={styles.formInput} value={form.address} onChange={set('address')} placeholder="123 Rizal Ave, Unit 4B" />
-              </div>
-              <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
-                <label className={styles.formLabel}>Barangay</label>
-                <input className={styles.formInput} value={form.barangay} onChange={set('barangay')} placeholder="Brgy. Poblacion" />
-              </div>
-              <LocationSelects
-                value={form.city}
-                onChange={(city) => setForm(p => ({ ...p, city }))}
-                selectClassName={`${styles.formInput} ${styles.locationSelect}`}
-                labelClassName={styles.formLabel}
-                wrapClassName={styles.formGroup}
-              />
-              <div className={styles.formGroup}>
-                <label className={styles.formLabel}>Postal code</label>
-                <input className={styles.formInput} value={form.postal_code} onChange={set('postal_code')} placeholder="1634" />
               </div>
             </div>
             {saveError && <p className={styles.saveError}>{saveError}</p>}

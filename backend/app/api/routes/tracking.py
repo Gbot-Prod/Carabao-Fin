@@ -11,7 +11,12 @@ from app.models.order_history import OrderHistory
 from app.models.shipment import Shipment
 from app.models.user import User
 from app.routing.eta import _eta_from_waypoints
-from app.schemas.shipment import ShipmentStop, ShipmentTrackingResponse, TrackingPosition, Waypoint
+from app.schemas.shipment import (
+    ShipmentStop,
+    ShipmentTrackingResponse,
+    TrackingPosition,
+    Waypoint,
+)
 
 router = APIRouter(tags=["tracking"])
 
@@ -30,7 +35,11 @@ def _response_from_stored_route(
         raise HTTPException(status_code=412, detail="Route not ready yet")
 
     waypoints = [Waypoint(**p) for p in route_waypoints]
-    stop_points = [p for p in route_waypoints if p.get("type") != "pickup" and p.get("order_id") is not None]
+    stop_points = [
+        p
+        for p in route_waypoints
+        if p.get("type") != "pickup" and p.get("order_id") is not None
+    ]
     stops = [
         ShipmentStop(
             sequence=int(p.get("sequence", i + 1)),
@@ -49,7 +58,10 @@ def _response_from_stored_route(
     progress, eta_minutes = _eta_from_waypoints(shipped_at, route_waypoints, target_id)
     active_idx = min(int(progress * max(len(stops), 1)), max(len(stops) - 1, 0))
     if highlight_order_id is not None:
-        buyer_idx = next((i for i, s in enumerate(stops) if s.order_id == highlight_order_id), active_idx)
+        buyer_idx = next(
+            (i for i, s in enumerate(stops) if s.order_id == highlight_order_id),
+            active_idx,
+        )
     else:
         buyer_idx = active_idx
 
@@ -60,7 +72,8 @@ def _response_from_stored_route(
     if highlight_order_id is not None:
         visible_stops = [s for s in stops if s.order_id == highlight_order_id]
         visible_waypoints = [
-            w for w in waypoints
+            w
+            for w in waypoints
             if w.type == "pickup" or w.order_id == highlight_order_id
         ]
         visible_active_idx = 0
@@ -102,7 +115,8 @@ async def get_order_tracking(
 
     merchant_name = order.merchant.merchant_name if order.merchant else "Merchant"
 
-    # Batch shipment — read the pre-computed multi-stop route, no geocoding needed
+    # Batch shipment — read the pre-computed multi-stop route, no geocoding
+    # needed
     if order.shipment_id:
         shipment = db.query(Shipment).filter(Shipment.id == order.shipment_id).first()
         if not shipment or not shipment.route_waypoints:

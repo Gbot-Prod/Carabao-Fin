@@ -14,7 +14,7 @@ import math
 import os
 import sys
 import time
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 import requests
@@ -35,19 +35,19 @@ DEPOT_NAME = "Legazpi Village, Makati"
 DEPOT = (14.5547, 121.0244)
 
 STOPS: list[tuple[str, tuple[float, float]]] = [
-    ("Rockwell, Makati",       (14.5637, 121.0311)),
-    ("BGC 5th Ave, Taguig",    (14.5501, 121.0506)),
-    ("Ortigas Center, Pasig",  (14.5876, 121.0577)),
+    ("Rockwell, Makati", (14.5637, 121.0311)),
+    ("BGC 5th Ave, Taguig", (14.5501, 121.0506)),
+    ("Ortigas Center, Pasig", (14.5876, 121.0577)),
     ("Shaw Blvd, Mandaluyong", (14.5810, 121.0331)),
-    ("Ermita, Manila",         (14.5775, 120.9815)),
-    ("Binondo, Manila",        (14.5993, 120.9728)),
-    ("Cubao, Quezon City",     (14.6192, 121.0522)),
-    ("Pasay Rotonda, Pasay",   (14.5345, 121.0013)),
+    ("Ermita, Manila", (14.5775, 120.9815)),
+    ("Binondo, Manila", (14.5993, 120.9728)),
+    ("Cubao, Quezon City", (14.6192, 121.0522)),
+    ("Pasay Rotonda, Pasay", (14.5345, 121.0013)),
 ]
 
-STOP_NAMES  = [s[0] for s in STOPS]
+STOP_NAMES = [s[0] for s in STOPS]
 STOP_COORDS = [s[1] for s in STOPS]
-ALL_COORDS  = [DEPOT] + STOP_COORDS
+ALL_COORDS = [DEPOT] + STOP_COORDS
 N = len(ALL_COORDS)
 
 
@@ -55,13 +55,16 @@ N = len(ALL_COORDS)
 # Matrix fetchers
 # ---------------------------------------------------------------------------
 
+
 def _osrm_coord_str(indices: list[int]) -> str:
     return ";".join(f"{ALL_COORDS[i][1]},{ALL_COORDS[i][0]}" for i in indices)
 
 
 def fetch_osrm(timeout: int = 20) -> tuple[list[list[float]], float]:
     """Returns (distance_matrix_km, latency_ms)."""
-    url = f"http://router.project-osrm.org/table/v1/driving/{_osrm_coord_str(list(range(N)))}"
+    url = f"http://router.project-osrm.org/table/v1/driving/{
+        _osrm_coord_str(list(range(N)))
+    }"
     t0 = time.perf_counter()
     resp = requests.get(url, params={"annotations": "distance"}, timeout=timeout)
     latency_ms = (time.perf_counter() - t0) * 1000
@@ -77,7 +80,9 @@ def _mapbox_coord_str(indices: list[int]) -> str:
     return ";".join(f"{ALL_COORDS[i][1]},{ALL_COORDS[i][0]}" for i in indices)
 
 
-def fetch_mapbox(profile: str = "driving", timeout: int = 20) -> tuple[list[list[float]], float]:
+def fetch_mapbox(
+    profile: str = "driving", timeout: int = 20
+) -> tuple[list[list[float]], float]:
     """Returns (distance_matrix_km, latency_ms). profile: 'driving' or 'driving-traffic'."""
     coords = _mapbox_coord_str(list(range(N)))
     url = f"https://api.mapbox.com/directions-matrix/v1/mapbox/{profile}/{coords}"
@@ -91,7 +96,9 @@ def fetch_mapbox(profile: str = "driving", timeout: int = 20) -> tuple[list[list
     resp.raise_for_status()
     data = resp.json()
     if data.get("code") != "Ok":
-        raise RuntimeError(f"Mapbox ({profile}): {data.get('code')} — {data.get('message', '')}")
+        raise RuntimeError(
+            f"Mapbox ({profile}): {data.get('code')} — {data.get('message', '')}"
+        )
     matrix = [[d / 1000.0 for d in row] for row in data["distances"]]
     return matrix, latency_ms
 
@@ -99,6 +106,7 @@ def fetch_mapbox(profile: str = "driving", timeout: int = 20) -> tuple[list[list
 # ---------------------------------------------------------------------------
 # Evaluation: actual road distance via Mapbox Directions
 # ---------------------------------------------------------------------------
+
 
 def route_km_mapbox(ordered_indices: list[int], profile: str = "driving") -> float:
     """Actual road distance in km for depot->stops->depot via Mapbox Directions."""
@@ -131,6 +139,7 @@ def route_km_osrm(ordered_indices: list[int]) -> float:
 # ALNS (same as benchmark_routing.py)
 # ---------------------------------------------------------------------------
 
+
 def _route_cost(order: list[int], dist: Callable) -> float:
     if not order:
         return 0.0
@@ -142,7 +151,9 @@ def _best_insert(order: list[int], stop: int, dist: Callable) -> tuple[int, floa
     best_pos, best_delta = 0, float("inf")
     full = [0] + order + [0]
     for i in range(1, len(full)):
-        delta = dist(full[i - 1], stop) + dist(stop, full[i]) - dist(full[i - 1], full[i])
+        delta = (
+            dist(full[i - 1], stop) + dist(stop, full[i]) - dist(full[i - 1], full[i])
+        )
         if delta < best_delta:
             best_delta = delta
             best_pos = i - 1
@@ -157,14 +168,16 @@ def _two_opt(order: list[int], dist: Callable) -> list[int]:
         for i in range(1, len(route) - 2):
             for j in range(i + 1, len(route) - 1):
                 before = dist(route[i - 1], route[i]) + dist(route[j], route[j + 1])
-                after  = dist(route[i - 1], route[j]) + dist(route[i], route[j + 1])
+                after = dist(route[i - 1], route[j]) + dist(route[i], route[j + 1])
                 if after < before - 1e-10:
                     route[i : j + 1] = route[i : j + 1][::-1]
                     improved = True
     return route[1:-1]
 
 
-def alns_solve(stop_indices: list[int], dist: Callable, seed: int = 42, iters: int = 2_000) -> list[int]:
+def alns_solve(
+    stop_indices: list[int], dist: Callable, seed: int = 42, iters: int = 2_000
+) -> list[int]:
     rng = np.random.default_rng(seed)
 
     remaining = list(stop_indices)
@@ -204,7 +217,11 @@ def alns_solve(stop_indices: list[int], dist: Callable, seed: int = 42, iters: i
         r_idx = roulette(r_w)
 
         n_rm = max(1, int(len(current) * rng.uniform(0.1, 0.3)))
-        rm = set(rng.choice(len(current), size=min(n_rm, len(current)), replace=False).tolist())
+        rm = set(
+            rng.choice(
+                len(current), size=min(n_rm, len(current)), replace=False
+            ).tolist()
+        )
         removed = [current[k] for k in sorted(rm)]
         partial = [s for k, s in enumerate(current) if k not in rm]
 
@@ -222,7 +239,9 @@ def alns_solve(stop_indices: list[int], dist: Callable, seed: int = 42, iters: i
                 for s in pool:
                     full = [0] + result + [0]
                     costs = sorted(
-                        dist(full[k - 1], s) + dist(s, full[k]) - dist(full[k - 1], full[k])
+                        dist(full[k - 1], s)
+                        + dist(s, full[k])
+                        - dist(full[k - 1], full[k])
                         for k in range(1, len(full))
                     )
                     reg = (costs[1] - costs[0]) if len(costs) > 1 else 0.0
@@ -267,7 +286,10 @@ def alns_solve(stop_indices: list[int], dist: Callable, seed: int = 42, iters: i
 # Matrix stats helpers
 # ---------------------------------------------------------------------------
 
-def matrix_stats(m1: list[list[float]], m2: list[list[float]], label1: str, label2: str) -> None:
+
+def matrix_stats(
+    m1: list[list[float]], m2: list[list[float]], label1: str, label2: str
+) -> None:
     diffs, ratios = [], []
     for i in range(N):
         for j in range(N):
@@ -279,7 +301,7 @@ def matrix_stats(m1: list[list[float]], m2: list[list[float]], label1: str, labe
                 ratios.append(d2 / d1)
 
     mean_diff = sum(diffs) / len(diffs)
-    max_diff  = max(diffs)
+    max_diff = max(diffs)
     mean_ratio = sum(ratios) / len(ratios)
 
     # Worst-case pair
@@ -303,6 +325,7 @@ def matrix_stats(m1: list[list[float]], m2: list[list[float]], label1: str, labe
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def fmt_route(order: list[int]) -> str:
     return " -> ".join(STOP_NAMES[i - 1] for i in order)
@@ -333,14 +356,15 @@ def main() -> None:
     def make_dist(matrix: list[list[float]]) -> Callable:
         def d(a: int, b: int) -> float:
             return matrix[a][b]
+
         return d
 
     t0 = time.perf_counter()
-    osrm_order  = alns_solve(stop_indices, make_dist(osrm_matrix),  seed=42)
+    osrm_order = alns_solve(stop_indices, make_dist(osrm_matrix), seed=42)
     osrm_ms = (time.perf_counter() - t0) * 1000
 
     t0 = time.perf_counter()
-    mb_order    = alns_solve(stop_indices, make_dist(mb_matrix),    seed=42)
+    mb_order = alns_solve(stop_indices, make_dist(mb_matrix), seed=42)
     mb_ms = (time.perf_counter() - t0) * 1000
 
     if has_traffic:
@@ -352,85 +376,107 @@ def main() -> None:
 
     # Evaluate every produced route with both evaluators for cross-checking
     osrm_road = route_km_osrm(osrm_order)
-    mb_road   = route_km_mapbox(mb_order, "driving")
+    mb_road = route_km_mapbox(mb_order, "driving")
 
     # Cross-evaluate: each route measured by the other source
-    osrm_vs_mb   = route_km_mapbox(osrm_order, "driving")
-    mb_vs_osrm   = route_km_osrm(mb_order)
+    osrm_vs_mb = route_km_mapbox(osrm_order, "driving")
+    mb_vs_osrm = route_km_osrm(mb_order)
 
     if has_traffic:
-        mbt_road     = route_km_mapbox(mbt_order, "driving-traffic")
-        mbt_vs_mb    = route_km_mapbox(mbt_order, "driving")
+        mbt_road = route_km_mapbox(mbt_order, "driving-traffic")
+        mbt_vs_mb = route_km_mapbox(mbt_order, "driving")
 
     # -----------------------------------------------------------------------
     print("\n" + "=" * WIDTH)
     print("  MAPBOX MATRIX vs OSRM — Metro Manila Benchmark")
     print("=" * WIDTH)
     print(f"\n  Depot : {DEPOT_NAME}   |   {N - 1} customer stops")
-    print(f"  ALNS  : 2 000 iterations, seed 42, identical operators")
+    print("  ALNS  : 2 000 iterations, seed 42, identical operators")
 
     # --- Latency ---
     print(f"\n  {'SOURCE':<32} {'FETCH LATENCY':>14}  {'SOLVE TIME':>10}")
-    print(f"  {'-'*32} {'-'*14}  {'-'*10}")
+    print(f"  {'-' * 32} {'-' * 14}  {'-' * 10}")
     print(f"  {'OSRM (public demo)':<32} {osrm_lat:>12.0f}ms  {osrm_ms:>8.0f}ms")
     print(f"  {'Mapbox driving (static)':<32} {mb_lat:>12.0f}ms  {mb_ms:>8.0f}ms")
     if has_traffic:
-        print(f"  {'Mapbox driving-traffic (live)':<32} {mbt_lat:>12.0f}ms  {mbt_ms:>8.0f}ms")
+        print(
+            f"  {'Mapbox driving-traffic (live)':<32} {mbt_lat:>12.0f}ms  {mbt_ms:>8.0f}ms"
+        )
 
     # --- Matrix divergence ---
     print(f"\n  MATRIX DIVERGENCE (element-wise, {N}x{N} grid, off-diagonal only)")
-    print(f"  {'-'*60}")
+    print(f"  {'-' * 60}")
     matrix_stats(osrm_matrix, mb_matrix, "OSRM", "Mapbox")
     if has_traffic:
         matrix_stats(mb_matrix, mbt_matrix, "Mapbox", "Mapbox-traffic")
 
     # --- Routes ---
-    print(f"\n  ROUTES")
-    print(f"  {'-'*60}")
+    print("\n  ROUTES")
+    print(f"  {'-' * 60}")
     print(f"\n  OSRM route  :  {fmt_route(osrm_order)}")
     print(f"  Mapbox route:  {fmt_route(mb_order)}")
     if has_traffic:
         print(f"  Mb-traffic  :  {fmt_route(mbt_order)}")
 
-    print(f"\n  {'ROUTE':<20} {'OSRM eval':>10} {'Mapbox eval':>12} {'same order?':>12}")
-    print(f"  {'-'*20} {'-'*10}  {'-'*12}  {'-'*12}")
+    print(
+        f"\n  {'ROUTE':<20} {'OSRM eval':>10} {'Mapbox eval':>12} {'same order?':>12}"
+    )
+    print(f"  {'-' * 20} {'-' * 10}  {'-' * 12}  {'-' * 12}")
     print(f"  {'OSRM route':<20} {osrm_road:>9.2f}km  {osrm_vs_mb:>11.2f}km  {'—':>12}")
-    print(f"  {'Mapbox route':<20} {mb_vs_osrm:>9.2f}km  {mb_road:>11.2f}km  {str(mb_order == osrm_order):>12}")
+    print(
+        f"  {'Mapbox route':<20} {mb_vs_osrm:>9.2f}km  {mb_road:>11.2f}km  {
+            str(mb_order == osrm_order):>12}"
+    )
     if has_traffic:
-        print(f"  {'Mb-traffic route':<20} {'—':>9}    {mbt_vs_mb:>11.2f}km  {str(mbt_order == mb_order):>12}")
+        print(
+            f"  {'Mb-traffic route':<20} {'—':>9}    {mbt_vs_mb:>11.2f}km  {
+                str(mbt_order == mb_order):>12}"
+        )
 
     # --- Verdict ---
     print(f"\n  {'=' * 60}")
     print("  VERDICT")
-    print(f"  {'-'*60}")
+    print(f"  {'-' * 60}")
 
     # Route quality gap
-    gap_km  = osrm_vs_mb - mb_road
+    gap_km = osrm_vs_mb - mb_road
     gap_pct = abs(gap_km) / mb_road * 100 if mb_road else 0
 
     if osrm_order == mb_order:
         print("  Ordering: identical — both sources agree on the optimal route.")
     else:
         if abs(gap_km) < 0.5:
-            print(f"  Ordering: different, but road distance gap is negligible ({gap_km:+.2f} km).")
+            print(
+                f"  Ordering: different, but road distance gap is negligible ({
+                    gap_km:+.2f} km)."
+            )
         else:
             better = "Mapbox" if gap_km > 0 else "OSRM"
-            print(f"  Ordering: different — {better} route is {abs(gap_km):.2f} km shorter ({gap_pct:.1f}%) by Mapbox eval.")
+            print(
+                f"  Ordering: different — {better} route is {
+                    abs(gap_km):.2f} km shorter ({gap_pct:.1f}%) by Mapbox eval."
+            )
 
     # Latency trade-off
     lat_diff = mb_lat - osrm_lat
     if lat_diff > 0:
-        print(f"  Latency : Mapbox is {lat_diff:.0f}ms slower to fetch (authentication + CDN overhead).")
+        print(
+            f"  Latency : Mapbox is {
+                lat_diff:.0f}ms slower to fetch (authentication + CDN overhead)."
+        )
     else:
         print(f"  Latency : Mapbox is {abs(lat_diff):.0f}ms faster to fetch.")
 
-    print( "  Cost    : OSRM public is free / self-hostable. Mapbox charges per")
-    print( "            matrix element (~$0.05/1 000 elements after free tier).")
-    print( "            A 9x9 matrix = 81 elements = $0.004 per shipment batch.")
+    print("  Cost    : OSRM public is free / self-hostable. Mapbox charges per")
+    print("            matrix element (~$0.05/1 000 elements after free tier).")
+    print("            A 9x9 matrix = 81 elements = $0.004 per shipment batch.")
 
     if has_traffic:
         traffic_gap = mbt_vs_mb - mb_road
-        print(f"  Traffic : driving-traffic route is {traffic_gap:+.2f} km vs static Mapbox —", end=" ")
+        print(
+            f"  Traffic : driving-traffic route is {traffic_gap:+.2f} km vs static Mapbox —",
+            end=" ",
+        )
         if abs(traffic_gap) < 0.3:
             print("negligible for this area at this time.")
         elif traffic_gap > 0:

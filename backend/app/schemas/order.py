@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -10,8 +10,8 @@ class OrderItemResponse(BaseModel):
     id: int
     order_id: int
     merchant: str
-    merchant_id: Optional[int] = None
-    merchant_page_slug: Optional[str] = None
+    merchant_id: int | None = None
+    merchant_page_slug: str | None = None
     total_amount: int
     order_date: datetime
     status: str
@@ -24,13 +24,13 @@ class CurrentOrderResponse(BaseModel):
     id: int
     order_id: int
     merchant: str
-    merchant_id: Optional[int] = None
-    merchant_page_slug: Optional[str] = None
+    merchant_id: int | None = None
+    merchant_page_slug: str | None = None
     shipped: bool
     date_bought: datetime
-    time_of_arrival: Optional[datetime] = None
+    time_of_arrival: datetime | None = None
     delivery_fee: int
-    image: Optional[str] = None
+    image: str | None = None
     status: str
     items: list[dict[str, Any]] = []
 
@@ -38,13 +38,13 @@ class CurrentOrderResponse(BaseModel):
 
 
 class PlaceOrderRequest(BaseModel):
-    delivery_date: Optional[str] = None
-    delivery_time: Optional[str] = None
-    delivery_address: Optional[str] = None
-    payment_method: Optional[str] = None
-    notes: Optional[str] = None
+    delivery_date: str | None = None
+    delivery_time: str | None = None
+    delivery_address: str | None = None
+    payment_method: str | None = None
+    notes: str | None = None
     service_fee: int = 40
-    image: Optional[str] = None
+    image: str | None = None
 
 
 class PlaceOrderResponse(BaseModel):

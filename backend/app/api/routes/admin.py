@@ -1,8 +1,8 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import cast, Date, func, text
+from sqlalchemy import Date, cast, func, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,11 +13,14 @@ from app.models.order import Order
 from app.models.payout_batch import PayoutBatch
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.schemas.merchant import MerchantPageBase
-from app.schemas.merchant_application import ApplicationReviewPayload, MerchantApplicationResponse
+from app.schemas.merchant_application import (
+    ApplicationReviewPayload,
+    MerchantApplicationResponse,
+)
 from app.schemas.payment import PayoutBatchResponse
 from app.schemas.user import UserResponse
-from app.services.merchant_service import create_merchant
+from app.services import r2_service
+from app.services.merchant_service import create_merchant_from_application
 
 router = APIRouter(tags=["admin"])
 
@@ -65,7 +68,9 @@ def list_all_users(
     return db.query(User).order_by(User.id.asc()).all()
 
 
-@router.get("/admin/merchant-applications", response_model=list[MerchantApplicationResponse])
+@router.get(
+    "/admin/merchant-applications", response_model=list[MerchantApplicationResponse]
+)
 def list_all_merchant_applications(
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
@@ -82,18 +87,29 @@ def get_admin_stats(
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
-    total_revenue = db.query(func.coalesce(func.sum(Transaction.amount), 0)).filter(Transaction.status == "paid").scalar() or 0
-    platform_fees = db.query(func.coalesce(func.sum(Transaction.platform_fee), 0)).filter(Transaction.status == "paid").scalar() or 0
+    total_revenue = (
+        db.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(Transaction.status == "paid")
+        .scalar()
+        or 0
+    )
+    platform_fees = (
+        db.query(func.coalesce(func.sum(Transaction.platform_fee), 0))
+        .filter(Transaction.status == "paid")
+        .scalar()
+        or 0
+    )
     total_orders = db.query(func.count(Order.id)).scalar() or 0
     total_users = db.query(func.count(User.id)).scalar() or 0
     active_merchants = db.query(func.count(Merchant.id)).scalar() or 0
     pending_applications = (
         db.query(func.count(MerchantApplication.id))
         .filter(MerchantApplication.status == "submitted")
-        .scalar() or 0
+        .scalar()
+        or 0
     )
 
-    since = datetime.now(timezone.utc) - timedelta(days=30)
+    since = datetime.now(UTC) - timedelta(days=30)
     daily_rows = (
         db.query(
             cast(func.date_trunc("day", Transaction.paid_at), Date).label("date"),
@@ -130,18 +146,26 @@ def get_admin_stats(
         "active_merchants": int(active_merchants),
         "pending_applications": int(pending_applications),
         "daily_revenue": [
-            {"date": str(r.date), "revenue": int(r.revenue), "platform_fee": int(r.platform_fee)}
+            {
+                "date": str(r.date),
+                "revenue": int(r.revenue),
+                "platform_fee": int(r.platform_fee),
+            }
             for r in daily_rows
         ],
         "order_breakdown": [
-            {"status": r.status, "count": int(r.count)}
-            for r in order_rows
+            {"status": r.status, "count": int(r.count)} for r in order_rows
         ],
         "payout_summary": [
-            {"status": r.status, "count": int(r.count), "total_amount": int(r.total_amount)}
+            {
+                "status": r.status,
+                "count": int(r.count),
+                "total_amount": int(r.total_amount),
+            }
             for r in payout_rows
         ],
     }
+
 
 @router.get("/admin/batches", response_model=list[PayoutBatchResponse])
 def list_payout_batches(
@@ -154,21 +178,19 @@ def list_payout_batches(
         q = q.filter(PayoutBatch.status == status)
     return q.order_by(PayoutBatch.period_date.desc()).all()
 
-_REVIEW_STATUSES = {"approved", "rejected", "clarification"}
 
-@router.patch("/admin/merchant-applications/{app_id}", response_model=MerchantApplicationResponse)
+@router.patch(
+    "/admin/merchant-applications/{app_id}", response_model=MerchantApplicationResponse
+)
 def review_merchant_application(
     app_id: int,
     payload: ApplicationReviewPayload,
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
-    if payload.status not in _REVIEW_STATUSES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Status must be one of: {', '.join(sorted(_REVIEW_STATUSES))}",
-        )
-    application = db.query(MerchantApplication).filter(MerchantApplication.id == app_id).first()
+    application = (
+        db.query(MerchantApplication).filter(MerchantApplication.id == app_id).first()
+    )
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found")
 
@@ -176,28 +198,54 @@ def review_merchant_application(
     application.admin_note = payload.admin_note
 
     if payload.status == "approved" and application.merchant_id is None:
-        location = ", ".join([p for p in [application.address_line, application.city, application.region] if p])
-        operating_hours = (
-            f"Available: {', '.join(application.available_days)}" if application.available_days else None
-        )
-        merchant_payload = MerchantPageBase(
-            user_id=application.user_id,
-            merchant_name=application.merchant_name,
-            location=location or None,
-            contact_number=application.contact_number,
-            operating_hours=operating_hours,
-            delivery_price=None,
-            delivery_time=None,
-            rating=None,
-        )
         try:
-            merchant = create_merchant(db, merchant_payload)
-            db.flush()
+            merchant = create_merchant_from_application(db, application)
             application.merchant_id = merchant.id
         except (ValueError, IntegrityError) as exc:
             db.rollback()
-            raise HTTPException(status_code=400, detail="Failed to create merchant profile") from exc
+            raise HTTPException(
+                status_code=400, detail="Failed to create merchant profile"
+            ) from exc
 
     db.commit()
     db.refresh(application)
     return application
+
+
+@router.get("/admin/merchant-applications/{app_id}/rsbsa-document")
+def get_rsbsa_document_url(
+    app_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(_require_admin),
+):
+    application = (
+        db.query(MerchantApplication).filter(MerchantApplication.id == app_id).first()
+    )
+
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    if not application.rsbsa_document_path:
+        raise HTTPException(status_code=404, detail="RSBSA document not found")
+
+    try:
+        url = r2_service.create_rsbsa_document_url(
+            application.rsbsa_document_path,
+            application.rsbsa_document_content_type,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to prepare RSBSA document",
+        ) from exc
+    if not url:
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to prepare RSBSA document",
+        )
+
+    return {
+        "url": url,
+        "filename": application.rsbsa_document_original_name,
+        "content_type": application.rsbsa_document_content_type,
+    }

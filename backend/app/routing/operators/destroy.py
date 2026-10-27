@@ -4,9 +4,10 @@ some stops moved from `stops` into `unassigned`. Never mutate the original.
 """
 
 import heapq
-import math
+
 import numpy as np
-from app.routing.state import RouteState, Stop, MultiRouteState, _haversine_distance
+
+from app.routing.state import MultiRouteState, RouteState, _haversine_distance
 
 
 def random_removal(state: RouteState, rng: np.random.Generator) -> RouteState:
@@ -95,14 +96,19 @@ def knearest_removal(state: RouteState, rng: np.random.Generator) -> RouteState:
 # Multi-vehicle destroy operators
 # ---------------------------------------------------------------------------
 
-def cross_route_removal(state: MultiRouteState, rng: np.random.Generator) -> MultiRouteState:
+
+def cross_route_removal(
+    state: MultiRouteState, rng: np.random.Generator
+) -> MultiRouteState:
     """
     Remove 10–30% of all stops drawn uniformly across every route,
     placing them in the shared unassigned pool.
     """
     result = state.copy()
 
-    all_stops = [(ri, si) for ri, r in enumerate(result.routes) for si in range(len(r.stops))]
+    all_stops = [
+        (ri, si) for ri, r in enumerate(result.routes) for si in range(len(r.stops))
+    ]
     if not all_stops:
         return result
 
@@ -123,7 +129,9 @@ def cross_route_removal(state: MultiRouteState, rng: np.random.Generator) -> Mul
     return result
 
 
-def random_removal_multi(state: MultiRouteState, rng: np.random.Generator) -> MultiRouteState:
+def random_removal_multi(
+    state: MultiRouteState, rng: np.random.Generator
+) -> MultiRouteState:
     """Apply random_removal independently to each route, pooling unassigned stops."""
     result = state.copy()
     for route in result.routes:

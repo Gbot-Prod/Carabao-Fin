@@ -151,8 +151,8 @@ export default function Orders() {
   const [orders, setOrders] = useState<CurrentOrderItem[]>([]);
   const [pastOrders, setPastOrders] = useState<OrderHistoryItem[]>([]);
   const [loadingCurrent, setLoadingCurrent] = useState(true);
-  const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyFetched, setHistoryFetched] = useState(false);
+  const loadingHistory = tab === "history" && !historyFetched;
 
   useEffect(() => {
     fetchCurrentOrders()
@@ -163,11 +163,10 @@ export default function Orders() {
 
   useEffect(() => {
     if (tab === "history" && !historyFetched) {
-      setLoadingHistory(true);
       fetchOrderHistory()
         .then(setPastOrders)
         .catch(() => setPastOrders([]))
-        .finally(() => { setLoadingHistory(false); setHistoryFetched(true); });
+        .finally(() => { setHistoryFetched(true); });
     }
   }, [tab, historyFetched]);
 

@@ -7,7 +7,8 @@ from threading import Lock
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.integrations.sms.semaphore import SemaphoreError, send_sms as semaphore_send_sms
+from app.integrations.sms.semaphore import SemaphoreError
+from app.integrations.sms.semaphore import send_sms as semaphore_send_sms
 from app.services.email import send_signup_otp_email
 
 router = APIRouter(tags=["sms"])
@@ -17,6 +18,7 @@ _otp_lock = Lock()
 _OTP_TTL = 600  # 10 minutes
 _OTP_RESEND_COOLDOWN = 60
 _OTP_MAX_ATTEMPTS = 5
+
 
 def _normalize_phone_number(value: str) -> str:
     compact = (
@@ -33,7 +35,10 @@ def _normalize_phone_number(value: str) -> str:
     if compact.startswith("9") and len(compact) == 10:
         compact = f"63{compact}"
     if not compact.startswith("63") or len(compact) != 12 or not compact.isdigit():
-        raise HTTPException(status_code=400, detail="Use a valid Philippine mobile number, e.g. +63 912 345 6789")
+        raise HTTPException(
+            status_code=400,
+            detail="Use a valid Philippine mobile number, e.g. +63 912 345 6789",
+        )
     return compact
 
 
@@ -47,7 +52,9 @@ class SemaphoreSendRequest(BaseModel):
 @router.post("/sms/semaphore/send")
 async def send_semaphore_sms(body: SemaphoreSendRequest):
     try:
-        return semaphore_send_sms(number=body.number, message=body.message, sendername=body.sendername)
+        return semaphore_send_sms(
+            number=body.number, message=body.message, sendername=body.sendername
+        )
     except SemaphoreError as exc:
         msg = str(exc)
         if "not configured" in msg:
@@ -57,7 +64,8 @@ async def send_semaphore_sms(body: SemaphoreSendRequest):
         raise HTTPException(status_code=502, detail=msg) from exc
 
 
-# ── Templated message endpoints ───────────────────────────────────────────────
+# ── Templated message endpoints ─────────────────────────────────────────
+
 
 class OTPSendRequest(BaseModel):
     number: str
@@ -138,7 +146,9 @@ async def request_signup_verification(body: SignupVerificationRequest):
     channel = body.channel.strip().lower()
     identifier = body.identifier.strip()
     if channel not in {"email", "phone"} or not identifier:
-        raise HTTPException(status_code=400, detail="A valid signup identifier is required")
+        raise HTTPException(
+            status_code=400, detail="A valid signup identifier is required"
+        )
     if channel == "email" and ("@" not in identifier or len(identifier) > 254):
         raise HTTPException(status_code=400, detail="A valid email address is required")
     if channel == "phone":
@@ -149,8 +159,13 @@ async def request_signup_verification(body: SignupVerificationRequest):
     key = f"signup:{channel}:{identifier}"
     with _otp_lock:
         previous = _otp_store.get(key)
-        if previous and time.monotonic() < float(previous["sent_at"]) + _OTP_RESEND_COOLDOWN:
-            raise HTTPException(status_code=429, detail="Please wait before requesting another code")
+        if (
+            previous
+            and time.monotonic() < float(previous["sent_at"]) + _OTP_RESEND_COOLDOWN
+        ):
+            raise HTTPException(
+                status_code=429, detail="Please wait before requesting another code"
+            )
     try:
         if channel == "email":
             send_signup_otp_email(to=identifier, otp=otp)
@@ -160,8 +175,13 @@ async def request_signup_verification(body: SignupVerificationRequest):
         if isinstance(exc, HTTPException):
             raise
         import logging
-        logging.getLogger(__name__).exception("Signup verification delivery failed for channel=%s", channel)
-        raise HTTPException(status_code=502, detail="Verification message could not be sent") from exc
+
+        logging.getLogger(__name__).exception(
+            "Signup verification delivery failed for channel=%s", channel
+        )
+        raise HTTPException(
+            status_code=502, detail="Verification message could not be sent"
+        ) from exc
 
     with _otp_lock:
         _otp_store[key] = {
@@ -186,15 +206,22 @@ async def verify_signup_verification(body: SignupVerificationVerifyRequest):
             del _otp_store[key]
             record = None
     if not record:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired verification code"
+        )
     if int(record["attempts"]) >= _OTP_MAX_ATTEMPTS:
         with _otp_lock:
             _otp_store.pop(key, None)
-        raise HTTPException(status_code=400, detail="Too many invalid attempts. Please request a new code.")
+        raise HTTPException(
+            status_code=400,
+            detail="Too many invalid attempts. Please request a new code.",
+        )
     if not secrets.compare_digest(str(record["otp"]), body.otp.strip()):
         with _otp_lock:
             record["attempts"] = int(record["attempts"]) + 1
-        raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired verification code"
+        )
     with _otp_lock:
         _otp_store.pop(key, None)
 
@@ -206,10 +233,23 @@ async def verify_signup_verification(body: SignupVerificationVerifyRequest):
 
     secret = os.getenv("AUTH_SYNC_SHARED_SECRET")
     if not secret:
-        raise HTTPException(status_code=500, detail="AUTH_SYNC_SHARED_SECRET is not configured")
-    payload = base64.urlsafe_b64encode(
-        json.dumps({"channel": channel, "identifier": identifier, "exp": int(time.time()) + 1800}, separators=(",", ":")).encode()
-    ).decode().rstrip("=")
+        raise HTTPException(
+            status_code=500, detail="AUTH_SYNC_SHARED_SECRET is not configured"
+        )
+    payload = (
+        base64.urlsafe_b64encode(
+            json.dumps(
+                {
+                    "channel": channel,
+                    "identifier": identifier,
+                    "exp": int(time.time()) + 1800,
+                },
+                separators=(",", ":"),
+            ).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
     signature = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return {"ok": True, "verification_token": f"{payload}.{signature}"}
 
@@ -224,7 +264,9 @@ class DeliveryNotificationRequest(BaseModel):
 @router.post("/sms/delivery-notification")
 async def send_delivery_notification(body: DeliveryNotificationRequest):
     message = (
-        f"Hi {body.buyer_name}! Your order of {body.produce_name} from Carabao is on its way. "
+        f"Hi {body.buyer_name}! Your order of {
+            body.produce_name
+        } from Carabao is on its way. "
         f"Estimated arrival: {body.estimated_arrival}. "
         "Track your delivery in the Carabao app."
     )

@@ -7,6 +7,7 @@ import styles from "./page.module.css";
 import { createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
 import { SERVICE_FEE } from "@/lib/constants";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
+import { profile } from "console";
 
 export default function CheckoutPage() {
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
@@ -19,6 +20,12 @@ export default function CheckoutPage() {
   const [postal, setPostal] = useState("");
   const [paymentMethod] = useState("online");
   const [notes, setNotes] = useState("");
+  const [addressForm, setAddressForm] = useState({
+    region: "",
+    province: "",
+    city: "",
+    barangay: "",
+  });
 
   useEffect(() => {
     const loadCart = async () => {
@@ -134,9 +141,16 @@ export default function CheckoutPage() {
 
             <div className={styles.locationGrid}>
               <LocationSelects
-                value={city}
-                onChange={setCity}
-                wrapClassName={styles.locationField}
+                value={{
+                  region: addressForm.region,
+                  province: addressForm.province,
+                  city: addressForm.city,
+                  barangay: addressForm.barangay,
+                }}
+                onChange={(location) => setAddressForm(previous => ({ ...previous, ...location }))}
+                selectClassName={styles.formInput}
+                labelClassName={styles.formLabel}
+                wrapClassName={styles.panelFormField}
               />
             </div>
 

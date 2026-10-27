@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlparse
 
 import boto3
 from botocore.config import Config
@@ -49,37 +50,59 @@ def _ext(filename: str | None, content_type: str | None) -> str:
     return _EXT_MAP.get(content_type or "", ".bin")
 
 
-def _put(key: str, data: bytes, content_type: str) -> str:
+def _put_object(key: str, data: bytes, content_type: str) -> str:
     _client().put_object(
         Bucket=_BUCKET,
         Key=key,
         Body=data,
         ContentType=content_type,
     )
+    return key
+
+
+def _put(key: str, data: bytes, content_type: str) -> str:
+    _put_object(key, data, content_type)
     return f"{_PUBLIC_URL}/{key}"
 
 
-def upload_shop_logo(merchant_id: int, data: bytes, content_type: str, filename: str) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    key = f"merchants/{merchant_id}/logo/{ts}_{uuid.uuid4().hex}{_ext(filename, content_type)}"
+def upload_shop_logo(
+    merchant_id: int, data: bytes, content_type: str, filename: str
+) -> str:
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    key = (
+        f"merchants/{merchant_id}/logo/{ts}_{uuid.uuid4().hex}"
+        f"{_ext(filename, content_type)}"
+    )
     return _put(key, data, content_type)
 
 
-def upload_banner(merchant_id: int, data: bytes, content_type: str, filename: str) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    key = f"merchants/{merchant_id}/banner/{ts}_{uuid.uuid4().hex}{_ext(filename, content_type)}"
+def upload_banner(
+    merchant_id: int, data: bytes, content_type: str, filename: str
+) -> str:
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    key = (
+        f"merchants/{merchant_id}/banner/{ts}_{uuid.uuid4().hex}"
+        f"{_ext(filename, content_type)}"
+    )
     return _put(key, data, content_type)
 
 
 def upload_avatar(user_id: int, data: bytes, content_type: str, filename: str) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    key = f"users/{user_id}/avatar/{ts}_{uuid.uuid4().hex}{_ext(filename, content_type)}"
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    key = (
+        f"users/{user_id}/avatar/{ts}_{uuid.uuid4().hex}{_ext(filename, content_type)}"
+    )
     return _put(key, data, content_type)
 
 
-def upload_produce_image(merchant_id: int, produce_id: int, data: bytes, content_type: str, filename: str) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    key = f"merchants/{merchant_id}/produce/{produce_id}/{ts}_{uuid.uuid4().hex}{_ext(filename, content_type)}"
+def upload_produce_image(
+    merchant_id: int, produce_id: int, data: bytes, content_type: str, filename: str
+) -> str:
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    key = (
+        f"merchants/{merchant_id}/produce/{produce_id}/{ts}_{uuid.uuid4().hex}"
+        f"{_ext(filename, content_type)}"
+    )
     return _put(key, data, content_type)
 
 
@@ -91,7 +114,34 @@ def _doc_ext(filename: str | None, content_type: str | None) -> str:
     return _DOC_EXT_MAP.get(content_type or "", ".bin")
 
 
-def upload_rsbsa_document(user_id: int, data: bytes, content_type: str, filename: str) -> str:
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+def upload_rsbsa_document(
+    user_id: int, data: bytes, content_type: str, filename: str
+) -> str:
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     key = f"rsbsa/{user_id}/{ts}_{uuid.uuid4().hex}{_doc_ext(filename, content_type)}"
-    return _put(key, data, content_type)
+    return _put_object(key, data, content_type)
+
+
+def _object_key(stored_path: str) -> str:
+    parsed = urlparse(stored_path)
+    return (
+        parsed.path.lstrip("/")
+        if parsed.scheme and parsed.netloc
+        else stored_path.lstrip("/")
+    )
+
+
+def create_rsbsa_document_url(
+    stored_path: str,
+    content_type: str | None = None,
+) -> str:
+    return _client().generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": _BUCKET,
+            "Key": _object_key(stored_path),
+            "ResponseContentDisposition": "inline",
+            "ResponseContentType": content_type or "application/octet-stream",
+        },
+        ExpiresIn=300,
+    )

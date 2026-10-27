@@ -159,14 +159,36 @@
 .docLink {
   display: inline-block;
   margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
   font-size: 13px;
   color: #31925d;
   font-weight: 500;
   text-decoration: underline;
+  cursor: pointer;
 }
 
 .docLink:hover {
   opacity: 0.75;
+}
+
+.docLink:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.documentPanel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.documentName {
+  font-size: 12px;
+  color: #647067;
 }
 
 /* Admin note */

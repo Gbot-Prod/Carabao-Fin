@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from app.api.webhooks.paymongo import router as paymongo_webhook_router
+
 from .admin import router as admin_router
 from .auth import router as auth_router
 from .carts import router as carts_router
@@ -13,7 +15,6 @@ from .shipments import router as shipments_router
 from .sms import router as sms_router
 from .tracking import router as tracking_router
 from .users import router as users_router
-from app.api.webhooks.paymongo import router as paymongo_webhook_router
 
 router = APIRouter()
 

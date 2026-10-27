@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   fetchAdminMerchantApplications,
+  fetchRsbsaDocumentUrl,
   reviewMerchantApplication,
   type MerchantApplication,
 } from "@/util/api/admin";
@@ -29,6 +30,8 @@ function ApplicationCard({
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
 
   const selectAction = (a: ReviewAction) => {
     setAction((prev) => (prev === a ? null : a));
@@ -62,6 +65,33 @@ function ApplicationCard({
       ? "Confirm Rejection"
       : "Send Clarification Request";
 
+  const handleViewDocument = async () => {
+    setDocumentLoading(true);
+    setDocumentError(null);
+    // Open synchronously so popup blockers do not reject the document after
+    // the asynchronous URL request completes.
+    const documentWindow = window.open("", "_blank");
+
+    try {
+      const { url } = await fetchRsbsaDocumentUrl(app.id);
+      if (!url || !/^https?:\/\//i.test(url)) {
+        throw new Error("The RSBSA document URL is invalid.");
+      }
+
+      if (documentWindow) {
+        documentWindow.opener = null;
+        documentWindow.location.replace(url);
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+    } catch {
+      documentWindow?.close();
+      setDocumentError("Unable to open the RSBSA document.");
+    } finally {
+      setDocumentLoading(false);
+    }
+  };
+
   return (
     <div className={styles.card}>
       <button className={styles.cardHeader} onClick={() => setOpen((v) => !v)}>
@@ -88,7 +118,7 @@ function ApplicationCard({
             <Field label="TIN" value={app.tin} />
             <Field label="Registration Type" value={app.registration_type} />
             <Field label="Registration No." value={app.registration_number} />
-            <Field label="Address" value={app.address_line} />
+            <Field label="Address" value={app.address} />
             <Field label="City / Province" value={`${app.city}, ${app.province}`} />
             <Field label="Region" value={app.region} />
             <Field label="Postal Code" value={app.postal_code} />
@@ -108,16 +138,24 @@ function ApplicationCard({
             />
           </div>
 
-          {app.rsbsa_document_path && (
-            <a
-              href={app.rsbsa_document_path}
-              target="_blank"
-              rel="noopener noreferrer"
+          <div className={styles.documentPanel}>
+            <button
+              type="button"
               className={styles.docLink}
+              onClick={handleViewDocument}
+              disabled={documentLoading}
             >
-              View RSBSA Document
-            </a>
-          )}
+              {documentLoading ? "Preparing document..." : "View RSBSA Document"}
+            </button>
+            {app.rsbsa_document_original_name && (
+              <span className={styles.documentName}>
+                {app.rsbsa_document_original_name}
+              </span>
+            )}
+            {documentError && (
+              <span className={styles.actionError}>{documentError}</span>
+            )}
+          </div>
 
           {app.admin_note && (
             <div className={styles.adminNote}>

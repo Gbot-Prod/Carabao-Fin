@@ -6,13 +6,23 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
+from app.core.database import Base
+
+from app.models import (  # noqa: F401
+    cart,
+    current_orders,
+    merchant,
+    order,
+    order_history,
+    produce,
+    shopPage,
+    user,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.models import cart, current_orders, merchant, order, order_history, produce, shopPage, user  # noqa: F401
-from app.core.database import Base
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -58,9 +68,7 @@ def main() -> None:
     args = parse_args()
 
     if not args.yes:
-        raise SystemExit(
-            "Refusing to reset without confirmation. Re-run with --yes."
-        )
+        raise SystemExit("Refusing to reset without confirmation. Re-run with --yes.")
 
     database_url = get_database_url()
     reset_public_schema(database_url)

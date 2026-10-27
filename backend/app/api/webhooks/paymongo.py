@@ -1,5 +1,5 @@
-﻿import logging
-from datetime import datetime, timezone
+import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -33,9 +33,7 @@ async def paymongo_webhook(request: Request, db: Session = Depends(get_db)):
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    event_type = (
-        payload.get("data", {}).get("attributes", {}).get("type", "")
-    )
+    event_type = payload.get("data", {}).get("attributes", {}).get("type", "")
 
     logger.info("PayMongo webhook received: %s", event_type)
 
@@ -74,9 +72,11 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
         logger.error("Malformed checkout_session.payment.paid payload: %s", e)
         return
 
-    txn = db.query(Transaction).filter(
-        Transaction.paymongo_session_id == session_id
-    ).first()
+    txn = (
+        db.query(Transaction)
+        .filter(Transaction.paymongo_session_id == session_id)
+        .first()
+    )
 
     if not txn:
         logger.warning("No transaction found for session %s", session_id)
@@ -87,7 +87,7 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
 
     txn.status = "paid"
     txn.paymongo_payment_id = payment_id
-    txn.paid_at = datetime.now(timezone.utc)
+    txn.paid_at = datetime.now(UTC)
 
     cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()
     if cart:
@@ -99,9 +99,15 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
         if order.current_order:
             order.current_order.status = "processing"
         if order.order_history_id:
-            history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
+            history = (
+                db.query(OrderHistory)
+                .filter(OrderHistory.id == order.order_history_id)
+                .first()
+            )
             if history:
-                history.last_order_at = datetime.now(timezone.utc)
+                history.last_order_at = datetime.now(UTC)
 
     db.commit()
-    logger.info("Transaction %s marked paid, order %s -> processing", txn.id, txn.order_id)
+    logger.info(
+        "Transaction %s marked paid, order %s -> processing", txn.id, txn.order_id
+    )

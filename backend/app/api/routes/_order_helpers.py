@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func
@@ -49,7 +49,7 @@ def get_or_create_order_history(db: Session, user_id: int) -> OrderHistory:
 
 
 def derive_merchant_name(items: list[dict[str, Any]] | None, fallback: str) -> str:
-    for item in (items or []):
+    for item in items or []:
         if isinstance(item, dict):
             merchant_name = item.get("farm") or item.get("merchant")
             if merchant_name:
@@ -68,7 +68,9 @@ def _extract_item_int(item: dict[str, Any], *keys: str) -> int | None:
     return None
 
 
-def resolve_merchant_from_items(db: Session, items: list[dict[str, Any]] | None) -> Merchant | None:
+def resolve_merchant_from_items(
+    db: Session, items: list[dict[str, Any]] | None
+) -> Merchant | None:
     if not items:
         return None
 
@@ -92,7 +94,9 @@ def resolve_merchant_from_items(db: Session, items: list[dict[str, Any]] | None)
         if isinstance(merchant_name, str) and merchant_name.strip():
             merchant = (
                 db.query(Merchant)
-                .filter(func.lower(Merchant.merchant_name) == merchant_name.strip().lower())
+                .filter(
+                    func.lower(Merchant.merchant_name) == merchant_name.strip().lower()
+                )
                 .first()
             )
             if merchant is not None:
@@ -143,7 +147,9 @@ def to_current_order_item_from_order(order: Order) -> dict[str, Any]:
         "shipped": order.status.lower() in {"shipped", "out_for_delivery", "delivered"},
         "date_bought": order.ordered_at,
         "time_of_arrival": None,
-        "delivery_fee": int(first_item.get("deliveryFee", 0) if isinstance(first_item, dict) else 0),
+        "delivery_fee": int(
+            first_item.get("deliveryFee", 0) if isinstance(first_item, dict) else 0
+        ),
         "image": first_item.get("image") if isinstance(first_item, dict) else None,
         "status": order.status,
         "items": items,
@@ -165,12 +171,12 @@ def to_current_order_item(current_order: CurrentOrder) -> dict[str, Any]:
         "date_bought": order.ordered_at,
         "time_of_arrival": current_order.time_of_arrival,
         "delivery_fee": current_order.delivery_fee,
-        "image": current_order.image or (first_item.get("image") if isinstance(first_item, dict) else None),
+        "image": current_order.image
+        or (first_item.get("image") if isinstance(first_item, dict) else None),
         "status": current_order.status,
         "items": items,
     }
 
 
 def now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
+    return datetime.now(UTC)

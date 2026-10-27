@@ -1,13 +1,14 @@
-import os
 import logging
+import os
+from datetime import UTC, date, datetime, timedelta
 from urllib.parse import urlparse
-from datetime import date, datetime, timedelta, timezone
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
+from app.models.cart import Cart
 from app.models.current_orders import CurrentOrder
 from app.models.merchant import Merchant
 from app.models.merchant_payout import MerchantPayoutInfo
@@ -23,7 +24,7 @@ from app.schemas.payment import (
     PayoutBatchResponse,
     TransactionResponse,
 )
-from app.services.paymongo import create_checkout_session
+from app.services.paymongo import create_checkout_session, retrieve_checkout_session
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -32,6 +33,58 @@ FRONTEND_URL = _raw_frontend.split(",")[0].strip()
 PLATFORM_FEE_RATE = 0.05
 
 logger = logging.getLogger(__name__)
+
+
+def _reconcile_transaction_from_paymongo(txn: Transaction, db: Session) -> None:
+    """Recover a missed webhook while keeping the client-facing status current."""
+    if txn.status != "pending" or not txn.paymongo_session_id:
+        return
+
+    try:
+        session = retrieve_checkout_session(txn.paymongo_session_id)
+    except requests.RequestException as exc:
+        logger.warning(
+            "Could not reconcile transaction %s with PayMongo: %s", txn.id, exc
+        )
+        return
+    except RuntimeError as exc:
+        logger.error("Payment configuration error during reconciliation: %s", exc)
+        return
+
+    attributes = session.get("attributes", {})
+    if attributes.get("status") != "paid":
+        return
+
+    payments = attributes.get("payments", [])
+    payment_id = payments[0].get("id") if payments else None
+    txn.status = "paid"
+    txn.paymongo_payment_id = payment_id
+    txn.paid_at = datetime.now(UTC)
+
+    order = db.query(Order).filter(Order.id == txn.order_id).first()
+    if order:
+        order.status = "processing"
+        if order.current_order:
+            order.current_order.status = "processing"
+        if order.order_history_id:
+            history = (
+                db.query(OrderHistory)
+                .filter(OrderHistory.id == order.order_history_id)
+                .first()
+            )
+            if history:
+                history.last_order_at = datetime.now(UTC)
+
+    user_cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()
+    if user_cart:
+        user_cart.items = []
+
+    db.commit()
+    logger.info(
+        "Reconciled transaction %s as paid, order %s -> processing",
+        txn.id,
+        txn.order_id,
+    )
 
 
 def _validate_frontend_url(frontend_url: str) -> None:
@@ -82,8 +135,8 @@ def create_payment_checkout(
     ):
         created_at = existing_pending.created_at
         if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
-        if (datetime.now(timezone.utc) - created_at).total_seconds() < 3600:
+            created_at = created_at.replace(tzinfo=UTC)
+        if (datetime.now(UTC) - created_at).total_seconds() < 3600:
             return CheckoutResponse(
                 transaction_id=existing_pending.id,
                 order_id=order_id,
@@ -116,14 +169,20 @@ def create_payment_checkout(
         response_text = ""
         if e.response is not None:
             response_text = e.response.text or ""
-        logger.warning("PayMongo HTTPError while creating checkout session: %s", response_text)
-        raise HTTPException(status_code=502, detail=f"PayMongo error: {response_text[:2000]}")
+        logger.warning(
+            "PayMongo HTTPError while creating checkout session: %s", response_text
+        )
+        raise HTTPException(
+            status_code=502, detail=f"PayMongo error: {response_text[:2000]}"
+        )
     except RuntimeError as e:
         logger.error("Payment configuration error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
     except Exception:
         logger.exception("Unexpected error while creating checkout session")
-        raise HTTPException(status_code=500, detail="Unexpected error creating checkout session")
+        raise HTTPException(
+            status_code=500, detail="Unexpected error creating checkout session"
+        )
 
     txn = Transaction(
         order_id=order_id,
@@ -159,12 +218,18 @@ def get_transaction_by_order(
 ):
     txn = (
         db.query(Transaction)
-        .filter(Transaction.order_id == order_id, Transaction.user_id == current_user.id)
+        .filter(
+            Transaction.order_id == order_id, Transaction.user_id == current_user.id
+        )
         .order_by(Transaction.created_at.desc())
         .first()
     )
     if not txn:
-        raise HTTPException(status_code=404, detail="No transaction found for this order")
+        raise HTTPException(
+            status_code=404, detail="No transaction found for this order"
+        )
+    _reconcile_transaction_from_paymongo(txn, db)
+    db.refresh(txn)
     return txn
 
 
@@ -174,10 +239,14 @@ def get_transaction(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    txn = db.query(Transaction).filter(
-        Transaction.id == transaction_id,
-        Transaction.user_id == current_user.id,
-    ).first()
+    txn = (
+        db.query(Transaction)
+        .filter(
+            Transaction.id == transaction_id,
+            Transaction.user_id == current_user.id,
+        )
+        .first()
+    )
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return txn
@@ -186,6 +255,7 @@ def get_transaction(
 # ---------------------------------------------------------------------------
 # Merchant payout info
 # ---------------------------------------------------------------------------
+
 
 @router.post("/merchant/payout-info", response_model=MerchantPayoutInfoResponse)
 def upsert_merchant_payout_info(
@@ -197,9 +267,11 @@ def upsert_merchant_payout_info(
     if not merchant:
         raise HTTPException(status_code=403, detail="Not a merchant account")
 
-    info = db.query(MerchantPayoutInfo).filter(
-        MerchantPayoutInfo.merchant_id == merchant.id
-    ).first()
+    info = (
+        db.query(MerchantPayoutInfo)
+        .filter(MerchantPayoutInfo.merchant_id == merchant.id)
+        .first()
+    )
 
     if info:
         for k, v in payload.model_dump(exclude_unset=True).items():
@@ -222,9 +294,11 @@ def get_merchant_payout_info(
     if not merchant:
         raise HTTPException(status_code=403, detail="Not a merchant account")
 
-    info = db.query(MerchantPayoutInfo).filter(
-        MerchantPayoutInfo.merchant_id == merchant.id
-    ).first()
+    info = (
+        db.query(MerchantPayoutInfo)
+        .filter(MerchantPayoutInfo.merchant_id == merchant.id)
+        .first()
+    )
     if not info:
         raise HTTPException(status_code=404, detail="No payout info configured")
     return info
@@ -233,6 +307,7 @@ def get_merchant_payout_info(
 # ---------------------------------------------------------------------------
 # Admin: payout batch management
 # ---------------------------------------------------------------------------
+
 
 def _require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:
@@ -248,7 +323,9 @@ def generate_payout_batches(
 ):
     """Groups all paid, unbatched transactions for the given date (defaults to today) into per-merchant batches."""
     target_date = period or date.today()
-    start_dt = datetime(target_date.year, target_date.month, target_date.day, tzinfo=timezone.utc)
+    start_dt = datetime(
+        target_date.year, target_date.month, target_date.day, tzinfo=UTC
+    )
     end_dt = start_dt + timedelta(days=1)
 
     unbatched = (
@@ -284,11 +361,13 @@ def generate_payout_batches(
         db.flush()
 
         for txn in txns:
-            db.add(PayoutBatchItem(
-                batch_id=batch.id,
-                transaction_id=txn.id,
-                amount=txn.merchant_amount,
-            ))
+            db.add(
+                PayoutBatchItem(
+                    batch_id=batch.id,
+                    transaction_id=txn.id,
+                    amount=txn.merchant_amount,
+                )
+            )
 
         batches.append(batch)
 
@@ -312,7 +391,7 @@ def release_payout_batch(
         raise HTTPException(status_code=400, detail="Batch already released")
 
     batch.status = "released"
-    batch.released_at = datetime.now(timezone.utc)
+    batch.released_at = datetime.now(UTC)
     if notes:
         batch.notes = notes
 

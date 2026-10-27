@@ -1,23 +1,23 @@
-from typing import Optional
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr
 
 
 class UserBase(BaseModel):
-    external_auth_id: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    external_auth_id: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     email: EmailStr
-    phone_number: Optional[str] = None
-    address: Optional[str] = None
-    barangay: Optional[str] = None
-    city: Optional[str] = None
-    province: Optional[str] = None
-    region: Optional[str] = None
-    postal_code: Optional[str] = None
-    created_at: Optional[datetime] = None
-    profile_picture_url: Optional[str] = None
+    phone_number: str | None = None
+    region: str | None = None
+    province: str | None = None
+    city: str | None = None
+    barangay: str | None = None
+    address: str | None = None
+    postal_code: str | None = None
+    created_at: datetime | None = None
+    profile_picture_url: str | None = None
+    notifications_preferences: dict | None = None
 
 
 class UserCreate(UserBase):
@@ -25,18 +25,19 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    external_auth_id: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    email: Optional[EmailStr] = None
-    phone_number: Optional[str] = None
-    address: Optional[str] = None
-    barangay: Optional[str] = None
-    city: Optional[str] = None
-    country: Optional[str] = None
-    postal_code: Optional[str] = None
-    created_at: Optional[datetime] = None
-    notifications_preferences: Optional[dict] = None
+    external_auth_id: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    email: EmailStr | None = None
+    phone_number: str | None = None
+    region: str | None = None
+    province: str | None = None
+    city: str | None = None
+    barangay: str | None = None
+    address: str | None = None
+    postal_code: str | None = None
+    created_at: datetime | None = None
+    notifications_preferences: dict | None = None
 
 
 class UserMerchantInfo(BaseModel):
@@ -59,9 +60,9 @@ class UserCartInfo(BaseModel):
 class UserResponse(UserBase):
     id: int
     is_admin: bool = False
-    notifications_preferences: Optional[dict] = None
-    merchant: Optional[UserMerchantInfo] = None
-    cart: Optional[UserCartInfo] = None
+    notifications_preferences: dict | None = None
+    merchant: UserMerchantInfo | None = None
+    cart: UserCartInfo | None = None
 
     class Config:
         from_attributes = True

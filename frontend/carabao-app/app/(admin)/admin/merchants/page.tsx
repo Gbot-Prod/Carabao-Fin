@@ -41,7 +41,7 @@ export default function AdminMerchantsPage() {
               <tr key={m.id}>
                 <td className={styles.mono}>{m.id}</td>
                 <td className={styles.bold}>{m.merchant_name}</td>
-                <td>{m.location ?? <span className={styles.empty}>—</span>}</td>
+                <td>{m.address ?? <span className={styles.empty}>—</span>}</td>
                 <td>{m.contact_number}</td>
                 <td>{m.operating_hours != null ? (typeof m.operating_hours === 'string' ? m.operating_hours : JSON.stringify(m.operating_hours)) : <span className={styles.empty}>—</span>}</td>
                 <td>

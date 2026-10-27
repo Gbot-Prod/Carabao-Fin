@@ -9,6 +9,7 @@ import requests
 _DEFAULT_BASE_URL = "https://api.semaphore.co"
 _SEND_MESSAGES_PATH = "/api/v4/messages"
 
+
 class SemaphoreError(RuntimeError):
     pass
 

@@ -4,8 +4,8 @@ Responsible for converting geocoded coordinates into Stop objects,
 running the solver, and returning the ordered stop list.
 """
 
-from app.routing.state import RouteState, Stop
 from app.routing.solver import solve, solve_multi
+from app.routing.state import Stop
 
 
 def compute_route(

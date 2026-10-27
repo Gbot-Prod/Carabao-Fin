@@ -6,7 +6,8 @@ all stops from `unassigned` reinserted into `stops`. Never mutate the original.
 import heapq
 
 import numpy as np
-from app.routing.state import RouteState, Stop, MultiRouteState, _haversine_distance
+
+from app.routing.state import MultiRouteState, RouteState, Stop, _haversine_distance
 
 
 def greedy_insert(state: RouteState, rng: np.random.Generator) -> RouteState:
@@ -78,7 +79,10 @@ def regret2_insert(state: RouteState, rng: np.random.Generator) -> RouteState:
 # Multi-vehicle repair operators
 # ---------------------------------------------------------------------------
 
-def cross_route_insert(state: MultiRouteState, rng: np.random.Generator) -> MultiRouteState:
+
+def cross_route_insert(
+    state: MultiRouteState, rng: np.random.Generator
+) -> MultiRouteState:
     """
     Stop-driven global greedy: for each unassigned stop find the cheapest
     (route, position) pair across all routes and insert it there.
@@ -104,7 +108,9 @@ def cross_route_insert(state: MultiRouteState, rng: np.random.Generator) -> Mult
     return result
 
 
-def greedy_insert_multi(state: MultiRouteState, rng: np.random.Generator) -> MultiRouteState:
+def greedy_insert_multi(
+    state: MultiRouteState, rng: np.random.Generator
+) -> MultiRouteState:
     """
     Route-driven greedy: each route pulls the cheapest available stop from
     the shared pool into itself, round-robin until the pool is empty.
@@ -139,13 +145,18 @@ def greedy_insert_multi(state: MultiRouteState, rng: np.random.Generator) -> Mul
 
 # ---------------------------------------------------------------------------
 
-def _best_insertion(stops: list[Stop], candidate: Stop, depot: Stop) -> tuple[int, float]:
+
+def _best_insertion(
+    stops: list[Stop], candidate: Stop, depot: Stop
+) -> tuple[int, float]:
     """Return (position, delta_cost) for the cheapest insertion of candidate."""
     cost, pos = min(_all_insertion_costs(stops, candidate, depot), key=lambda x: x[0])
     return pos, cost
 
 
-def _all_insertion_costs(stops: list[Stop], candidate: Stop, depot: Stop) -> list[tuple[float, int]]:
+def _all_insertion_costs(
+    stops: list[Stop], candidate: Stop, depot: Stop
+) -> list[tuple[float, int]]:
     """Return [(delta_cost, position), ...] for every possible insertion slot."""
     route = [depot] + stops + [depot]
     results: list[tuple[float, int]] = []

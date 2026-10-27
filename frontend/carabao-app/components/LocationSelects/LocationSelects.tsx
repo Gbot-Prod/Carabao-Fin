@@ -89,7 +89,6 @@ export default function LocationSelects({
   }
 
   const loadRegions = async () => {
-    setLoadingRegions(true);
     const regions = await fetchRegions();
     setRegions(regions);
     setLoadingRegions(false);
@@ -101,8 +100,8 @@ export default function LocationSelects({
       setProvinces([]);
       setLoadingProvinces(false);
     } else if (regionCode) {
-      setLoadingProvinces(true);
       const provinces = await fetchProvincesByRegion(regionCode);
+      setLoadingProvinces(true);
       setProvinces(provinces);
       setLoadingProvinces(false);
     } else {
@@ -114,13 +113,13 @@ export default function LocationSelects({
     const regionCode = regions.find((region) => region.name === value.region)?.code;
     const provinceCode = provinces.find((province) => province.name === value.province)?.code;
     if (regionCode === NCR_CODE) {
-      setLoadingCities(true);
       const cities = await fetchCitiesByRegion(regionCode);
+      setLoadingCities(true);
       setCities(cities);
       setLoadingCities(false);
     } else if (regionCode && provinceCode) {
-      setLoadingCities(true);
       const cities = await fetchCitiesByProvince(regionCode, provinceCode);
+      setLoadingCities(true);
       setCities(cities);
       setLoadingCities(false);
     } else {
@@ -131,8 +130,8 @@ export default function LocationSelects({
   const loadBarangays = async () => {
     const cityCode = cities.find((city) => city.name === value.city)?.code;
     if (cityCode) {
-      setLoadingBarangays(true);
       const barangays = await fetchBarangaysByCity(cityCode);
+      setLoadingBarangays(true);
       setBarangays(barangays);
       setLoadingBarangays(false);
     } else {
@@ -141,27 +140,34 @@ export default function LocationSelects({
   };
 
   useEffect(() => {
+    // The loader synchronizes this component with the PSGC service.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadRegions();
   }, []);
 
   useEffect(() => {
     if (value.region && regions.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadProvinces();
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProvinces([]);
     }
   }, [value.region, regions]);
 
   useEffect(() => {
     if (value.region && regions.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadCities();
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCities([]);
     }
   }, [value.region, value.province, regions, provinces]);
 
   useEffect(() => {
     if (value.city) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadBarangays();
     } else {
       setBarangays([]);
@@ -214,7 +220,7 @@ export default function LocationSelects({
           style={selectStyle}
           value={selectedCity?.code ?? ''}
           onChange={(e) => void handleCityChange(e.target.value)}
-          disabled={!value.province || loadingCities}
+          disabled={!value.region || loadingCities}
         >
           <option value="">
             {!value.province ? 'Select a province first' : loadingCities ? 'Loading…' : 'Select city'}

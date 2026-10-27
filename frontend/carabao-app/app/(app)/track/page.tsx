@@ -4,12 +4,13 @@ import Link from 'next/link';
 import styles from './page.module.css';
 
 import { useRef, useEffect, useState, useCallback, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import mapboxgl from 'mapbox-gl';
 import OrderCard from './components/orderCard';
 import { fetchCurrentOrders, fetchTracking, type TrackingData, type Waypoint } from '@/util/api';
 import { fetchShipmentTracking } from '@/util/api';
 import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
+import getApiErrorMessage, { getApiErrorStatus } from '@/util/errorHelper';
 
 type TrackOrder = {
   id: number;
@@ -59,8 +60,15 @@ function Track() {
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>([]);
   const [selectedOrderIndex, setSelectedOrderIndex] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
 
   const selectedOrder = currentOrders[selectedOrderIndex];
+
+  useEffect(() => {
+    // Capture the client clock once so the ETA display remains render-pure.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentTime(Date.now());
+  }, []);
 
   useEffect(() => {
     const loadCurrentOrders = async () => {
@@ -80,6 +88,8 @@ function Track() {
 
   useEffect(() => {
     if (selectedOrderIndex >= currentOrders.length) {
+      // Keep the selection valid when the loaded order list shrinks.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedOrderIndex(0);
     }
   }, [currentOrders.length, selectedOrderIndex]);
@@ -180,8 +190,8 @@ function Track() {
 
   const searchParams = useSearchParams();
 
-  const cleanupMap = useCallback((intervalId: ReturnType<typeof setInterval>) => {
-    clearInterval(intervalId);
+  const cleanupMap = useCallback((timerId: ReturnType<typeof setTimeout>) => {
+    clearTimeout(timerId);
     const map = mapRef.current;
     if (map?.getLayer('driver-route-line')) map.removeLayer('driver-route-line');
     if (map?.getSource('driver-route')) map.removeSource('driver-route');
@@ -204,47 +214,100 @@ function Track() {
 
     // If a shipment_id is present in the URL, poll shipment endpoint instead
     if (shipmentId) {
+      let attempts = 0;
+      let timerId: ReturnType<typeof setTimeout>;
+      let inFlight = false;
+      let active = true;
+      let hasTracking = false;
+      const maxAttempts = 5;
+
       const pollShipment = async () => {
+        if (!active || inFlight) return;
+        inFlight = true;
         try {
           setTrackingError(null);
           const data = await fetchShipmentTracking(shipmentId);
+          if (!active) return;
           setTracking(data);
+          hasTracking = true;
           const map = mapRef.current;
           if (map) await updateTracking(data, map);
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Tracking data is not ready yet.';
-          setTrackingError(message);
-          console.error('[tracking] fetch failed:', err);
+          if (getApiErrorStatus(err) === 412) {
+            setTrackingError('Shipment route is not ready yet. Tracking will appear after dispatch.');
+          } else {
+            setTrackingError(getApiErrorMessage(err, 'Tracking data is not ready yet.'));
+            console.error('[tracking] fetch failed:', err);
+          }
+        } finally {
+          inFlight = false;
+          attempts += 1;
+          if (active && attempts < maxAttempts) {
+            timerId = setTimeout(() => void pollShipment(), 3000);
+          } else if (active && !hasTracking) {
+            setTrackingError('Tracking is not available yet. Try again after the merchant dispatches this order.');
+          }
         }
       };
 
       void pollShipment();
-      const intervalId = setInterval(() => void pollShipment(), 3000);
-      return () => cleanupMap(intervalId);
+      return () => {
+        active = false;
+        cleanupMap(timerId);
+      };
     }
 
     if (!orderId) return;
 
+    if (!selectedOrder?.shipped) {
+      setTrackingError('Tracking will appear after the merchant dispatches this order.');
+      return;
+    }
+
+    let attempts = 0;
+    let timerId: ReturnType<typeof setTimeout>;
+    let inFlight = false;
+    let active = true;
+    let hasTracking = false;
+    const maxAttempts = 5;
+
     const poll = async () => {
+      if (!active || inFlight) return;
+      inFlight = true;
       try {
         setTrackingError(null);
         const data = await fetchTracking(orderId);
+        if (!active) return;
         setTracking(data);
+        hasTracking = true;
         // Read mapRef AFTER the await — if the map was removed while fetching
         // (order changed, component unmounted), mapRef.current will be null here.
         const map = mapRef.current;
         if (map) await updateTracking(data, map);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Tracking data is not ready yet.';
-        setTrackingError(message);
-        console.error('[tracking] fetch failed:', err);
+        if (getApiErrorStatus(err) === 412) {
+          setTrackingError('Shipment route is not ready yet. Tracking will appear after dispatch.');
+        } else {
+          setTrackingError(getApiErrorMessage(err, 'Tracking data is not ready yet.'));
+          console.error('[tracking] fetch failed:', err);
+        }
+      } finally {
+        inFlight = false;
+        attempts += 1;
+        if (active && attempts < maxAttempts) {
+          timerId = setTimeout(() => void poll(), 3000);
+        } else if (active && !hasTracking) {
+          setTrackingError('Tracking is not available yet. Try again after the merchant dispatches this order.');
+        }
       }
     };
 
     void poll();
-    const intervalId = setInterval(() => void poll(), 3000);
-    return () => cleanupMap(intervalId);
-  }, [selectedOrder?.orderId, updateTracking, searchParams, cleanupMap]);
+    return () => {
+      active = false;
+      cleanupMap(timerId);
+    };
+  }, [selectedOrder?.orderId, selectedOrder?.shipped, updateTracking, searchParams, cleanupMap]);
 
   const formattedDeliveryFee = new Intl.NumberFormat('en-PH', {
     style: 'currency',
@@ -312,8 +375,8 @@ function Track() {
                   <div className={styles.detailItem}>
                     <span className={styles.detailLabel}>Estimated Arrival</span>
                     <p className={styles.detailValue}>
-                      {tracking
-                        ? new Date(Date.now() + tracking.eta_minutes * 60_000).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+                      {tracking && currentTime
+                        ? new Date(currentTime + tracking.eta_minutes * 60_000).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
                         : selectedOrder.shipped
                         ? selectedOrder.timeOfArrival
                         : 'Pending shipment'}

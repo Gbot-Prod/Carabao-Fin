@@ -1,20 +1,18 @@
-from typing import Optional
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class CartItem(BaseModel):
-    id: Optional[str] = None
-    produce_id: Optional[int] = None
-    merchant_id: Optional[int] = None
-    name: Optional[str] = None
-    produce: Optional[str] = None
+    id: str | None = None
+    produce_id: int | None = None
+    merchant_id: int | None = None
+    name: str | None = None
+    produce: str | None = None
     price: float = 0
     quantity: int = 0
-    unit: Optional[str] = None
-    image: Optional[str] = None
-    farm: Optional[str] = None
-    merchant: Optional[str] = None
+    unit: str | None = None
+    image: str | None = None
+    farm: str | None = None
+    merchant: str | None = None
 
     model_config = ConfigDict(extra="allow")
 

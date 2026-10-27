@@ -1,8 +1,7 @@
-import os
-from datetime import datetime, timedelta, timezone
-from typing import Optional
 import asyncio
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import UTC, datetime, timedelta
+from typing import Optional
 
 import requests as _requests
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -24,25 +23,30 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.routing.service import compute_route
 from app.routing.state import Stop
-from app.schemas.merchant import MerchantBase, MerchantPageBase, MerchantResponse, MerchantUpdate
+from app.schemas.merchant import MerchantResponse, MerchantUpdate
 from app.schemas.merchant_performance import MerchantPerformanceResponse
-from app.schemas.payout import MerchantOrderResponse, PayoutBatchResponse, PayoutInfoResponse, PayoutInfoUpdate, TransactionSummary
+from app.schemas.payout import (
+    MerchantOrderResponse,
+    PayoutBatchResponse,
+    PayoutInfoResponse,
+    PayoutInfoUpdate,
+    TransactionSummary,
+)
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
-from app.services.merchant_service import create_merchant
 from app.services import r2_service
 from app.services.sms_service import notify_order_shipped
-from app.utils.geocoding import _geocode_sync
+from app.utils.geocoding import _geocode
 
 router = APIRouter(tags=["merchants"])
 
 _VALID_TRANSITIONS: dict[str, set[str]] = {
-    "pending":          {"processing", "cancelled"},
-    "processing":       {"shipped", "cancelled"},
-    "shipped":          {"out_for_delivery", "delivered", "cancelled"},
+    "pending": {"processing", "cancelled"},
+    "processing": {"shipped", "cancelled"},
+    "shipped": {"out_for_delivery", "delivered", "cancelled"},
     "out_for_delivery": {"delivered", "cancelled"},
-    "delivered":        set(),
-    "cancelled":        set(),
+    "delivered": set(),
+    "cancelled": set(),
 }
 
 
@@ -61,7 +65,9 @@ async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] |
         loop = asyncio.get_running_loop()
         resp = await loop.run_in_executor(
             None,
-            lambda: _requests.get(url, params={"access_token": token, "overview": "false"}, timeout=10),
+            lambda: _requests.get(
+                url, params={"access_token": token, "overview": "false"}, timeout=10
+            ),
         )
         if not resp.ok:
             print(f"[shipment-directions] Mapbox error {resp.status_code}")
@@ -79,16 +85,37 @@ async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] |
 
 async def _compute_and_store_route(db: Session, order: Order) -> None:
     """Compute ALNS route for order and store waypoints. Called when marking for shipping."""
-    if not order.merchant or not order.merchant.location:
-        print(f"[route] Skipping route computation for order {order.id}: no merchant location")
+    whole_address = [
+        order.merchant.region,
+        order.merchant.province,
+        order.merchant.city,
+        order.merchant.barangay,
+        order.merchant.address,
+        order.merchant.postal_code,
+    ]
+
+    if not order.merchant:
+        print(f"[route] Skipping route computation for order {order.id}: no merchant")
         return
 
-    merchant_address = order.merchant.location
+    if whole_address == [None, None, None, None, None, None]:
+        print(
+            f"[route] Skipping route computation for order {
+                order.id
+            }: no merchant location or address"
+        )
+        return
+
+    merchant_address = ", ".join(part for part in whole_address if part)
     delivery_address = order.delivery_address
 
     if not delivery_address:
         # Try to get from order history user
-        order_history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
+        order_history = (
+            db.query(OrderHistory)
+            .filter(OrderHistory.id == order.order_history_id)
+            .first()
+        )
         if order_history:
             user = db.query(User).filter(User.id == order_history.user_id).first()
             if user:
@@ -96,18 +123,30 @@ async def _compute_and_store_route(db: Session, order: Order) -> None:
                 delivery_address = ", ".join(parts) if parts else None
 
     if not delivery_address:
-        print(f"[route] Skipping route computation for order {order.id}: no delivery address")
+        print(
+            f"[route] Skipping route computation for order {
+                order.id
+            }: no delivery address"
+        )
         return
 
-    origin_coords = _geocode_sync(merchant_address)
-    dest_coords = _geocode_sync(delivery_address)
+    origin_coords = await _geocode(merchant_address)
+    dest_coords = await _geocode(delivery_address)
 
     if not origin_coords:
-        print(f"[route] Could not geocode merchant address for order {order.id}: {merchant_address!r}")
+        print(
+            f"[route] Could not geocode merchant address for order {order.id}: {
+                merchant_address!r
+            }"
+        )
         return
 
     if not dest_coords:
-        print(f"[route] Could not geocode delivery address for order {order.id}: {delivery_address!r}")
+        print(
+            f"[route] Could not geocode delivery address for order {order.id}: {
+                delivery_address!r
+            }"
+        )
         return
 
     # Build stop and run ALNS
@@ -124,11 +163,17 @@ async def _compute_and_store_route(db: Session, order: Order) -> None:
         depot_lng=origin_coords[1],
     )
 
-    leg_durations = await _get_leg_durations([
-        (origin_coords[0], origin_coords[1]),
-        (ordered_stops[0].lat, ordered_stops[0].lng),
-    ]) if ordered_stops else None
-    now = datetime.now(timezone.utc)
+    leg_durations = (
+        await _get_leg_durations(
+            [
+                (origin_coords[0], origin_coords[1]),
+                (ordered_stops[0].lat, ordered_stops[0].lng),
+            ]
+        )
+        if ordered_stops
+        else None
+    )
+    now = datetime.now(UTC)
     arrival_at = now + timedelta(seconds=leg_durations[0]) if leg_durations else None
 
     merchant_name = order.merchant.merchant_name if order.merchant else "Merchant"
@@ -152,26 +197,24 @@ async def _compute_and_store_route(db: Session, order: Order) -> None:
             "label": "Your Location",
             "type": "delivery",
             "status": "in_transit",
-            **({"estimated_arrival_at": arrival_at.isoformat(), "duration_seconds": leg_durations[0]} if arrival_at and leg_durations else {}),
+            **(
+                {
+                    "estimated_arrival_at": arrival_at.isoformat(),
+                    "duration_seconds": leg_durations[0],
+                }
+                if arrival_at and leg_durations
+                else {}
+            ),
         }
         for i, s in enumerate(ordered_stops)
     ]
     if order.current_order and arrival_at:
         order.current_order.time_of_arrival = arrival_at
-    print(f"[route] Computed and stored route for order {order.id} with {len(ordered_stops)} stops")
-
-
-@router.post("/merchants/me", response_model=MerchantResponse)
-async def create_my_merchant_route(
-    merchant: MerchantBase,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    payload = MerchantPageBase(user_id=current_user.id, **merchant.model_dump())
-    try:
-        return create_merchant(db, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    print(
+        f"[route] Computed and stored route for order {order.id} with {
+            len(ordered_stops)
+        } stops"
+    )
 
 
 @router.get("/merchants", response_model=list[MerchantResponse])
@@ -227,15 +270,19 @@ async def get_my_merchant_performance(
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
     active_statuses = {"pending", "processing", "shipped", "out_for_delivery"}
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     window_start = now - timedelta(days=30)
 
     total_products = (
-        db.query(func.count(Produce.id)).filter(Produce.merchant_id == merchant.id).scalar() or 0
+        db.query(func.count(Produce.id))
+        .filter(Produce.merchant_id == merchant.id)
+        .scalar()
+        or 0
     )
 
     total_orders = (
-        db.query(func.count(Order.id)).filter(Order.merchant_id == merchant.id).scalar() or 0
+        db.query(func.count(Order.id)).filter(Order.merchant_id == merchant.id).scalar()
+        or 0
     )
     active_orders = (
         db.query(func.count(Order.id))
@@ -263,7 +310,9 @@ async def get_my_merchant_performance(
         or 0
     )
     last_order_at = (
-        db.query(func.max(Order.ordered_at)).filter(Order.merchant_id == merchant.id).scalar()
+        db.query(func.max(Order.ordered_at))
+        .filter(Order.merchant_id == merchant.id)
+        .scalar()
     )
 
     last_30_days_orders = (
@@ -340,7 +389,11 @@ async def update_produce(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    produce = db.query(Produce).filter(Produce.id == produce_id, Produce.merchant_id == merchant.id).first()
+    produce = (
+        db.query(Produce)
+        .filter(Produce.id == produce_id, Produce.merchant_id == merchant.id)
+        .first()
+    )
     if not produce:
         raise HTTPException(status_code=404, detail="Produce item not found")
 
@@ -362,7 +415,11 @@ async def delete_produce(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    produce = db.query(Produce).filter(Produce.id == produce_id, Produce.merchant_id == merchant.id).first()
+    produce = (
+        db.query(Produce)
+        .filter(Produce.id == produce_id, Produce.merchant_id == merchant.id)
+        .first()
+    )
     if not produce:
         raise HTTPException(status_code=404, detail="Produce item not found")
 
@@ -394,9 +451,13 @@ async def create_my_shoppage(
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
     if merchant.shop_page:
-        raise HTTPException(status_code=400, detail="Shop page already exists — use PATCH to update")
+        raise HTTPException(
+            status_code=400, detail="Shop page already exists — use PATCH to update"
+        )
 
-    existing_slug = db.query(ShopPage).filter(ShopPage.slug == shop_page_in.slug).first()
+    existing_slug = (
+        db.query(ShopPage).filter(ShopPage.slug == shop_page_in.slug).first()
+    )
     if existing_slug:
         raise HTTPException(status_code=400, detail="Slug already taken")
 
@@ -419,11 +480,17 @@ async def update_my_shoppage(
 
     shop_page = merchant.shop_page
     if not shop_page:
-        raise HTTPException(status_code=404, detail="Shop page not found — create one first with POST")
+        raise HTTPException(
+            status_code=404, detail="Shop page not found — create one first with POST"
+        )
 
     updates = shop_page_update.model_dump(exclude_unset=True)
     if "slug" in updates:
-        existing = db.query(ShopPage).filter(ShopPage.slug == updates["slug"], ShopPage.id != shop_page.id).first()
+        existing = (
+            db.query(ShopPage)
+            .filter(ShopPage.slug == updates["slug"], ShopPage.id != shop_page.id)
+            .first()
+        )
         if existing:
             raise HTTPException(status_code=400, detail="Slug already taken")
 
@@ -447,7 +514,9 @@ async def upload_my_shoppage_logo(
 
     shop_page = merchant.shop_page
     if not shop_page:
-        raise HTTPException(status_code=404, detail="Shop page not found — create one first")
+        raise HTTPException(
+            status_code=404, detail="Shop page not found — create one first"
+        )
 
     if logo.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
         raise HTTPException(status_code=400, detail="Logo must be PNG, JPEG, or WebP")
@@ -456,7 +525,9 @@ async def upload_my_shoppage_logo(
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Logo must be under 5 MB")
     try:
-        url = r2_service.upload_shop_logo(merchant.id, data, logo.content_type or "image/jpeg", logo.filename or "")
+        url = r2_service.upload_shop_logo(
+            merchant.id, data, logo.content_type or "image/jpeg", logo.filename or ""
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Image upload failed") from exc
 
@@ -478,16 +549,28 @@ async def upload_my_shoppage_banner(
 
     shop_page = merchant.shop_page
     if not shop_page:
-        raise HTTPException(status_code=404, detail="Shop page not found — create one first")
+        raise HTTPException(
+            status_code=404, detail="Shop page not found — create one first"
+        )
 
-    if banner.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
+    if banner.content_type not in {
+        "image/png",
+        "image/jpeg",
+        "image/jpg",
+        "image/webp",
+    }:
         raise HTTPException(status_code=400, detail="Banner must be PNG, JPEG, or WebP")
 
     data = await banner.read()
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Banner must be under 5 MB")
     try:
-        url = r2_service.upload_banner(merchant.id, data, banner.content_type or "image/jpeg", banner.filename or "")
+        url = r2_service.upload_banner(
+            merchant.id,
+            data,
+            banner.content_type or "image/jpeg",
+            banner.filename or "",
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Image upload failed") from exc
 
@@ -508,7 +591,11 @@ async def upload_produce_image(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    produce = db.query(Produce).filter(Produce.id == produce_id, Produce.merchant_id == merchant.id).first()
+    produce = (
+        db.query(Produce)
+        .filter(Produce.id == produce_id, Produce.merchant_id == merchant.id)
+        .first()
+    )
     if not produce:
         raise HTTPException(status_code=404, detail="Produce item not found")
 
@@ -519,7 +606,13 @@ async def upload_produce_image(
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Image must be under 5 MB")
     try:
-        url = r2_service.upload_produce_image(merchant.id, produce_id, data, image.content_type or "image/jpeg", image.filename or "")
+        url = r2_service.upload_produce_image(
+            merchant.id,
+            produce_id,
+            data,
+            image.content_type or "image/jpeg",
+            image.filename or "",
+        )
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Image upload failed") from exc
 
@@ -542,7 +635,11 @@ async def get_my_payout_info(
     merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
-    return db.query(MerchantPayoutInfo).filter(MerchantPayoutInfo.merchant_id == merchant.id).first()
+    return (
+        db.query(MerchantPayoutInfo)
+        .filter(MerchantPayoutInfo.merchant_id == merchant.id)
+        .first()
+    )
 
 
 @router.put("/merchants/me/payout-info", response_model=PayoutInfoResponse)
@@ -555,7 +652,11 @@ async def update_my_payout_info(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    info = db.query(MerchantPayoutInfo).filter(MerchantPayoutInfo.merchant_id == merchant.id).first()
+    info = (
+        db.query(MerchantPayoutInfo)
+        .filter(MerchantPayoutInfo.merchant_id == merchant.id)
+        .first()
+    )
     if not info:
         info = MerchantPayoutInfo(merchant_id=merchant.id, **payload.model_dump())
         db.add(info)
@@ -610,9 +711,16 @@ async def request_my_payout(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    payout_info = db.query(MerchantPayoutInfo).filter(MerchantPayoutInfo.merchant_id == merchant.id).first()
+    payout_info = (
+        db.query(MerchantPayoutInfo)
+        .filter(MerchantPayoutInfo.merchant_id == merchant.id)
+        .first()
+    )
     if not payout_info:
-        raise HTTPException(status_code=400, detail="Set up your payout method before requesting a cash out")
+        raise HTTPException(
+            status_code=400,
+            detail="Set up your payout method before requesting a cash out",
+        )
 
     pending = (
         db.query(PayoutBatch)
@@ -623,12 +731,16 @@ async def request_my_payout(
         .first()
     )
     if pending:
-        raise HTTPException(status_code=400, detail="You already have a pending payout request")
+        raise HTTPException(
+            status_code=400, detail="You already have a pending payout request"
+        )
 
     already_batched_ids = (
         db.query(PayoutBatchItem.transaction_id)
         .join(PayoutBatch, PayoutBatch.id == PayoutBatchItem.batch_id)
-        .filter(PayoutBatch.status.in_(["released", "approved", "processing", "pending"]))
+        .filter(
+            PayoutBatch.status.in_(["released", "approved", "processing", "pending"])
+        )
         .scalar_subquery()
     )
 
@@ -648,7 +760,7 @@ async def request_my_payout(
     total = sum(t.merchant_amount for t in unpaid_txns)
     batch = PayoutBatch(
         merchant_id=merchant.id,
-        period_date=datetime.now(timezone.utc).date(),
+        period_date=datetime.now(UTC).date(),
         transaction_count=len(unpaid_txns),
         gross_amount=total,
         status="pending",
@@ -657,7 +769,11 @@ async def request_my_payout(
     db.flush()
 
     for txn in unpaid_txns:
-        db.add(PayoutBatchItem(batch_id=batch.id, transaction_id=txn.id, amount=txn.merchant_amount))
+        db.add(
+            PayoutBatchItem(
+                batch_id=batch.id, transaction_id=txn.id, amount=txn.merchant_amount
+            )
+        )
 
     db.commit()
     db.refresh(batch)
@@ -692,25 +808,31 @@ async def get_my_merchant_orders(
     for order, user, current in rows:
         buyer_name = None
         if user:
-            buyer_name = " ".join(filter(None, [user.first_name, user.last_name])) or None
-        result.append(MerchantOrderResponse(
-            id=order.id,
-            status=order.status,
-            total_price=order.total_price,
-            items=order.items or [],
-            delivery_address=order.delivery_address,
-            ordered_at=order.ordered_at,
-            buyer_name=buyer_name,
-            buyer_email=user.email if user else None,
-            buyer_phone=user.phone_number if user else None,
-            shipped=current.shipped if current else False,
-            time_of_arrival=current.time_of_arrival if current else None,
-            shipment_id=order.shipment_id,
-        ))
+            buyer_name = (
+                " ".join(filter(None, [user.first_name, user.last_name])) or None
+            )
+        result.append(
+            MerchantOrderResponse(
+                id=order.id,
+                status=order.status,
+                total_price=order.total_price,
+                items=order.items or [],
+                delivery_address=order.delivery_address,
+                ordered_at=order.ordered_at,
+                buyer_name=buyer_name,
+                buyer_email=user.email if user else None,
+                buyer_phone=user.phone_number if user else None,
+                shipped=current.shipped if current else False,
+                time_of_arrival=current.time_of_arrival if current else None,
+                shipment_id=order.shipment_id,
+            )
+        )
     return result
 
 
-@router.patch("/merchants/me/orders/{order_id}/status", response_model=MerchantOrderResponse)
+@router.patch(
+    "/merchants/me/orders/{order_id}/status", response_model=MerchantOrderResponse
+)
 async def update_my_merchant_order_status(
     order_id: int,
     body: MerchantOrderStatusUpdate,
@@ -722,7 +844,11 @@ async def update_my_merchant_order_status(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    order = db.query(Order).filter(Order.id == order_id, Order.merchant_id == merchant.id).first()
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.merchant_id == merchant.id)
+        .first()
+    )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
@@ -734,13 +860,20 @@ async def update_my_merchant_order_status(
         )
 
     if status == "cancelled":
-        for item in (order.items or []):
+        for item in order.items or []:
             if not isinstance(item, dict):
                 continue
-            produce_id = item.get("produce_id") or item.get("produceId") or item.get("id")
+            produce_id = (
+                item.get("produce_id") or item.get("produceId") or item.get("id")
+            )
             quantity = item.get("quantity", 0)
             if produce_id and quantity:
-                produce = db.query(Produce).filter(Produce.id == int(produce_id)).with_for_update().first()
+                produce = (
+                    db.query(Produce)
+                    .filter(Produce.id == int(produce_id))
+                    .with_for_update()
+                    .first()
+                )
                 if produce:
                     produce.stock_quantity += int(quantity)
 
@@ -748,16 +881,25 @@ async def update_my_merchant_order_status(
     if order.current_order:
         order.current_order.status = status
 
-    # Compute and store ALNS route when order is marked for shipping (first time only)
+    # Compute and store ALNS route when order is marked for shipping (first
+    # time only)
     if status == "shipped" and not order.route_waypoints:
         await _compute_and_store_route(db, order)
 
     db.commit()
 
     current = order.current_order
-    order_history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
-    user = db.query(User).filter(User.id == order_history.user_id).first() if order_history else None
-    buyer_name = " ".join(filter(None, [user.first_name, user.last_name])) if user else None
+    order_history = (
+        db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
+    )
+    user = (
+        db.query(User).filter(User.id == order_history.user_id).first()
+        if order_history
+        else None
+    )
+    buyer_name = (
+        " ".join(filter(None, [user.first_name, user.last_name])) if user else None
+    )
 
     notify_order_shipped(
         phone_number=user.phone_number if user else None,
@@ -791,7 +933,8 @@ async def delete_my_merchant(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    # Null out nullable merchant_id references on order records (preserves order history)
+    # Null out nullable merchant_id references on order records (preserves
+    # order history)
     db.query(Order).filter(Order.merchant_id == merchant.id).update(
         {"merchant_id": None}, synchronize_session=False
     )
@@ -801,18 +944,28 @@ async def delete_my_merchant(
 
     # Remove payout batch items before batches (FK: payout_batch_items.batch_id)
     batch_ids = [
-        row.id for row in
-        db.query(PayoutBatch.id).filter(PayoutBatch.merchant_id == merchant.id).all()
+        row.id
+        for row in db.query(PayoutBatch.id)
+        .filter(PayoutBatch.merchant_id == merchant.id)
+        .all()
     ]
     if batch_ids:
-        db.query(PayoutBatchItem).filter(PayoutBatchItem.batch_id.in_(batch_ids)).delete(synchronize_session=False)
-        db.query(PayoutBatch).filter(PayoutBatch.merchant_id == merchant.id).delete(synchronize_session=False)
+        db.query(PayoutBatchItem).filter(
+            PayoutBatchItem.batch_id.in_(batch_ids)
+        ).delete(synchronize_session=False)
+        db.query(PayoutBatch).filter(PayoutBatch.merchant_id == merchant.id).delete(
+            synchronize_session=False
+        )
 
     # Remove transactions (merchant_id is non-nullable, cannot be orphaned)
-    db.query(Transaction).filter(Transaction.merchant_id == merchant.id).delete(synchronize_session=False)
+    db.query(Transaction).filter(Transaction.merchant_id == merchant.id).delete(
+        synchronize_session=False
+    )
 
     # Remove payout configuration
-    db.query(MerchantPayoutInfo).filter(MerchantPayoutInfo.merchant_id == merchant.id).delete(synchronize_session=False)
+    db.query(MerchantPayoutInfo).filter(
+        MerchantPayoutInfo.merchant_id == merchant.id
+    ).delete(synchronize_session=False)
 
     db.delete(merchant)
     db.commit()

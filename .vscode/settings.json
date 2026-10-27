@@ -1,0 +1,35 @@
+{
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/.jj": true,
+    "**/__pycache__": true,
+    "**/.github": true,
+    "**/.mypy_cache": true,
+    "**/.next": true,
+    "**/.pytest_cache": true,
+    "**/.python-version": true,
+    "**/.ruff_cache": true,
+    "**/.venv": true,
+    "**/.vscode": true,
+    "**/node_modules": true,
+    "**/pyproject.toml": true,
+    "**/uv.lock": true
+  },
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "[python]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4
+  },
+  "[typescript]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  "[typescriptreact]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  "editor.formatOnSave": true
+}

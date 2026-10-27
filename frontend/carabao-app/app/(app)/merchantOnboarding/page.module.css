@@ -8,6 +8,7 @@
   --pad-y: clamp(16px, 3vw, 22px);
 
   width: 100%;
+  padding: var(--pad-y) var(--pad-x);
   max-width: 920px;
   margin: 0 auto;
   background: #ffffff;

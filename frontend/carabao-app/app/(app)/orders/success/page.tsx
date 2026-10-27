@@ -10,11 +10,12 @@ function PaymentSuccessContent() {
   const orderId = searchParams.get("order_id");
 
   const [transaction, setTransaction] = useState<TransactionStatusResponse | null>(null);
-  const [status, setStatus] = useState<"polling" | "paid" | "failed" | "not_found" | "timeout">("polling");
+  const [status, setStatus] = useState<"polling" | "paid" | "failed" | "not_found" | "timeout">(
+    orderId ? "polling" : "not_found",
+  );
 
   useEffect(() => {
     if (!orderId) {
-      setStatus("not_found");
       return;
     }
 

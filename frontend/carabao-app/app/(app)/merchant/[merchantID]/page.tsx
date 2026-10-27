@@ -14,6 +14,15 @@ export default function MerchantDetailPage() {
   const [merchant, setMerchant] = useState<Merchant | undefined>(undefined);
   const [shopPage, setShopPage] = useState<ShopPage | null>(null);
   const [error, setError] = useState<string | null>(hasValidMerchantId ? null : 'Invalid merchant ID.');
+  const merchantLocation = [
+    merchant?.address,
+    merchant?.barangay,
+    merchant?.city,
+    merchant?.province,
+    merchant?.region,
+  ]
+  .filter(Boolean)
+  .join(", ");
 
   useEffect(() => {
     if (!hasValidMerchantId) return;
@@ -40,6 +49,7 @@ export default function MerchantDetailPage() {
   const [addingId, setAddingId] = useState<number | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
   const addingRef = useRef(false);
+  
 
   const handleAddToCart = async (produce: Produce) => {
     if (addingRef.current) return;
@@ -124,7 +134,7 @@ export default function MerchantDetailPage() {
               ) : null}
               <div className={styles.merchantInfo}>
                 <h1 className={styles.merchantName}>{merchant.merchant_name}</h1>
-                <p className={styles.merchantLocation}>Location: {merchant.location ?? 'Not specified'}</p>
+                <p className={styles.merchantLocation}>Location: {merchantLocation ?? 'Not specified'}</p>
                 {(shopPage?.description) && (
                   <p className={styles.merchantDesc}>{shopPage.description}</p>
                 )}

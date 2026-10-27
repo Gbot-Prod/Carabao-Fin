@@ -5,30 +5,28 @@ Convention: stops are placed on a simple lat/lng grid so expected distances
 and orderings are predictable without floating-point surprises.
 """
 
-import pytest
-import numpy as np
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from app.routing.state import Stop, RouteState, MultiRouteState, _haversine_distance
+import numpy as np
+
+from app.routing.eta import _eta_from_waypoints
 from app.routing.operators.destroy import (
-    random_removal,
-    worst_removal,
-    knearest_removal,
     cross_route_removal,
+    knearest_removal,
+    random_removal,
     random_removal_multi,
+    worst_removal,
 )
 from app.routing.operators.repair import (
+    cross_route_insert,
     greedy_insert,
+    greedy_insert_multi,
     random_insert,
     regret2_insert,
-    cross_route_insert,
-    greedy_insert_multi,
-    _best_insertion,
 )
-from app.routing.solver import solve, solve_multi, _two_opt
 from app.routing.service import compute_route, compute_routes
-from app.routing.eta import _eta_from_waypoints
-
+from app.routing.solver import _two_opt, solve, solve_multi
+from app.routing.state import MultiRouteState, RouteState, Stop, _haversine_distance
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -36,13 +34,17 @@ from app.routing.eta import _eta_from_waypoints
 
 DEPOT_LAT, DEPOT_LNG = 14.60, 121.00
 
+
 def make_stop(order_id: int, lat: float, lng: float) -> Stop:
     return Stop(order_id=order_id, merchant_id=1, lat=lat, lng=lng)
 
 
 def make_linear_stops(n: int) -> list[Stop]:
     """n stops in a straight line heading northeast from the depot."""
-    return [make_stop(i, DEPOT_LAT + (i + 1) * 0.01, DEPOT_LNG + (i + 1) * 0.01) for i in range(n)]
+    return [
+        make_stop(i, DEPOT_LAT + (i + 1) * 0.01, DEPOT_LNG + (i + 1) * 0.01)
+        for i in range(n)
+    ]
 
 
 def make_state(stops: list[Stop]) -> RouteState:
@@ -51,13 +53,17 @@ def make_state(stops: list[Stop]) -> RouteState:
 
 def make_multi_state(routes: list[list[Stop]]) -> MultiRouteState:
     return MultiRouteState(
-        routes=[RouteState(depot_lat=DEPOT_LAT, depot_lng=DEPOT_LNG, stops=list(s)) for s in routes]
+        routes=[
+            RouteState(depot_lat=DEPOT_LAT, depot_lng=DEPOT_LNG, stops=list(s))
+            for s in routes
+        ]
     )
 
 
 # ---------------------------------------------------------------------------
 # State / objective
 # ---------------------------------------------------------------------------
+
 
 class TestRouteState:
     def test_objective_empty_no_unassigned(self):
@@ -105,6 +111,7 @@ class TestMultiRouteState:
 # Destroy operators — single route
 # ---------------------------------------------------------------------------
 
+
 def _all_stops_accounted(original: RouteState, result: RouteState) -> bool:
     orig_ids = sorted(s.order_id for s in original.stops)
     new_ids = sorted(s.order_id for s in result.stops + result.unassigned)
@@ -135,10 +142,11 @@ class TestDestroyOperators:
     def test_knearest_removes_geographically_close_stops(self):
         # Cluster of 3 close stops + 1 far stop
         close = [make_stop(i, 14.601 + i * 0.001, 121.001) for i in range(3)]
-        far   = [make_stop(10, 15.5, 122.0)]
+        far = [make_stop(10, 15.5, 122.0)]
         state = make_state(close + far)
         rng = np.random.default_rng(0)
-        # Force pivot to a close stop by running several times; far stop should survive
+        # Force pivot to a close stop by running several times; far stop should
+        # survive
         removed_far = 0
         for _ in range(20):
             result = knearest_removal(state, rng)
@@ -168,6 +176,7 @@ class TestDestroyOperators:
 # Destroy operators — multi route
 # ---------------------------------------------------------------------------
 
+
 class TestDestroyMulti:
     def test_cross_route_removal_accounts_for_all_stops(self):
         stops = make_linear_stops(8)
@@ -175,7 +184,9 @@ class TestDestroyMulti:
         rng = np.random.default_rng(1)
         result = cross_route_removal(multi, rng)
         all_before = {s.order_id for s in stops}
-        all_after = {s.order_id for r in result.routes for s in r.stops} | {s.order_id for s in result.unassigned}
+        all_after = {s.order_id for r in result.routes for s in r.stops} | {
+            s.order_id for s in result.unassigned
+        }
         assert all_before == all_after
 
     def test_random_removal_multi_accounts_for_all_stops(self):
@@ -184,13 +195,16 @@ class TestDestroyMulti:
         rng = np.random.default_rng(2)
         result = random_removal_multi(multi, rng)
         all_before = {s.order_id for s in stops}
-        all_after = {s.order_id for r in result.routes for s in r.stops} | {s.order_id for s in result.unassigned}
+        all_after = {s.order_id for r in result.routes for s in r.stops} | {
+            s.order_id for s in result.unassigned
+        }
         assert all_before == all_after
 
 
 # ---------------------------------------------------------------------------
 # Repair operators — single route
 # ---------------------------------------------------------------------------
+
 
 def _repair_reinserts_all(op, n: int = 5) -> bool:
     stops = make_linear_stops(n)
@@ -229,7 +243,7 @@ class TestRepairOperators:
     def test_regret2_does_not_worsen_vs_greedy_on_average(self):
         stops = make_linear_stops(8)
         rng_r2 = np.random.default_rng(5)
-        rng_g  = np.random.default_rng(5)
+        rng_g = np.random.default_rng(5)
         r2_objs, g_objs = [], []
         for _ in range(30):
             state = make_state([])
@@ -248,15 +262,20 @@ class TestRepairOperators:
         original_unassigned = list(state.unassigned)
         rng = np.random.default_rng(9)
         greedy_insert(state, rng)
-        assert [s.order_id for s in state.unassigned] == [s.order_id for s in original_unassigned]
+        assert [s.order_id for s in state.unassigned] == [
+            s.order_id for s in original_unassigned
+        ]
 
 
 # ---------------------------------------------------------------------------
 # Repair operators — multi route
 # ---------------------------------------------------------------------------
 
+
 class TestRepairMulti:
-    def _make_state_with_unassigned(self, n_routes: int, n_unassigned: int) -> MultiRouteState:
+    def _make_state_with_unassigned(
+        self, n_routes: int, n_unassigned: int
+    ) -> MultiRouteState:
         multi = make_multi_state([[] for _ in range(n_routes)])
         multi.unassigned = make_linear_stops(n_unassigned)
         return multi
@@ -264,7 +283,7 @@ class TestRepairMulti:
 
 class TestEtaHelper:
     def test_uses_estimated_arrival_without_shipped_at(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         route_waypoints = [
             {"type": "pickup", "order_id": None, "total_duration_seconds": 600},
             {
@@ -307,6 +326,7 @@ class TestEtaHelper:
 # 2-opt
 # ---------------------------------------------------------------------------
 
+
 class TestTwoOpt:
     def test_two_opt_improves_known_crossing_route(self):
         # Deliberately zigzag: 0→3→1→2→0 crosses; 0→1→2→3→0 is optimal.
@@ -320,7 +340,7 @@ class TestTwoOpt:
 
         def route_dist(stops):
             r = [depot] + stops + [depot]
-            return sum(_haversine_distance(r[i], r[i+1]) for i in range(len(r)-1))
+            return sum(_haversine_distance(r[i], r[i + 1]) for i in range(len(r) - 1))
 
         improved = _two_opt(bad_order, depot)
         assert route_dist(improved) <= route_dist(bad_order)
@@ -343,6 +363,7 @@ class TestTwoOpt:
 # Solver (end-to-end)
 # ---------------------------------------------------------------------------
 
+
 class TestSolve:
     def test_solve_returns_all_stops(self):
         stops = make_linear_stops(6)
@@ -352,7 +373,9 @@ class TestSolve:
     def test_solve_improves_on_shuffled_input(self):
         stops = make_linear_stops(8)
         # Reversed order is a bad starting point
-        shuffled = RouteState(depot_lat=DEPOT_LAT, depot_lng=DEPOT_LNG, stops=list(reversed(stops)))
+        shuffled = RouteState(
+            depot_lat=DEPOT_LAT, depot_lng=DEPOT_LNG, stops=list(reversed(stops))
+        )
         result = solve(stops, DEPOT_LAT, DEPOT_LNG, seed=1)
         assert result.objective() <= shuffled.objective() + 1e-6
 
@@ -384,6 +407,7 @@ class TestSolveMulti:
 # ---------------------------------------------------------------------------
 # Service layer
 # ---------------------------------------------------------------------------
+
 
 class TestService:
     def test_compute_route_empty(self):

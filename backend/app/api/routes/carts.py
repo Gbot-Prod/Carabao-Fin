@@ -6,7 +6,7 @@ from app.models.produce import Produce
 from app.models.user import User
 from app.schemas.cart import CartResponse, CartUpdate
 
-from ._order_helpers import get_or_create_cart, _extract_item_int
+from ._order_helpers import _extract_item_int, get_or_create_cart
 
 router = APIRouter(tags=["carts"])
 
@@ -45,4 +45,3 @@ async def replace_my_cart(
     db.commit()
     db.refresh(cart)
     return cart
-

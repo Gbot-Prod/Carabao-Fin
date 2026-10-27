@@ -10,11 +10,15 @@ class Transaction(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
-    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
-    user_id = Column(Integer, ForeignKey("backend_users.id"), nullable=False, index=True)
+    merchant_id = Column(
+        Integer, ForeignKey("merchants.id"), nullable=False, index=True
+    )
+    user_id = Column(
+        Integer, ForeignKey("backend_users.id"), nullable=False, index=True
+    )
 
-    amount = Column(Integer, nullable=False)           # pesos
-    platform_fee = Column(Integer, nullable=False)     # 1% of amount
+    amount = Column(Integer, nullable=False)  # pesos
+    platform_fee = Column(Integer, nullable=False)  # 1% of amount
     merchant_amount = Column(Integer, nullable=False)  # 99% of amount
 
     status = Column(String, nullable=False, default="pending", index=True)
@@ -25,7 +29,9 @@ class Transaction(Base):
     paymongo_payment_id = Column(String, nullable=True)
     checkout_url = Column(String, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     paid_at = Column(DateTime(timezone=True), nullable=True)
 
     order = relationship("Order")

@@ -12,14 +12,7 @@ const normalizedPostgresUrl = rawPostgresUrl
   ? rawPostgresUrl.trim().replace(/^"|"$/g, "")
   : "";
 
-const postgresUrl =
-  normalizedPostgresUrl.includes("render.com") &&
-    !normalizedPostgresUrl.includes("sslmode=")
-    ? `${normalizedPostgresUrl}${normalizedPostgresUrl.includes("?") ? "&" : "?"
-    }sslmode=require`
-    : normalizedPostgresUrl;
-
-if (!postgresUrl) {
+if (!normalizedPostgresUrl) {
   throw new Error(
     "Better Auth Postgres URL is missing. Set one of: POSTGRES_URL, DATABASE_URL, POSTGRESQL_URL, or PGDATABASE_URL."
   );
@@ -27,7 +20,7 @@ if (!postgresUrl) {
 
 if (process.env.NODE_ENV !== "production") {
   try {
-    const parsedUrl = new URL(postgresUrl);
+    const parsedUrl = new URL(normalizedPostgresUrl);
     const databaseName = parsedUrl.pathname.replace(/^\//, "") || "(none)";
     console.info(
       `[auth] Better Auth DB target host=${parsedUrl.hostname} db=${databaseName}`
@@ -39,17 +32,21 @@ if (process.env.NODE_ENV !== "production") {
 
 const pool = (() => {
   try {
-    const u = new URL(postgresUrl);
+    const u = new URL(normalizedPostgresUrl);
     return new Pool({
       host: u.hostname,
       port: Number(u.port) || 5432,
       database: u.pathname.replace(/^\//, ""),
       user: decodeURIComponent(u.username),
       password: decodeURIComponent(u.password),
-      ssl: { rejectUnauthorized: true },
+      ssl: { rejectUnauthorized: false },
     });
   } catch {
-    return new Pool({ connectionString: postgresUrl, ssl: { rejectUnauthorized: false } });
+    return new Pool({ 
+      connectionString: 
+      normalizedPostgresUrl, 
+      ssl: { rejectUnauthorized: true}
+    });
   }
 })();
 

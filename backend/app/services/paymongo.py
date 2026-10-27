@@ -3,13 +3,14 @@ import hashlib
 import hmac
 import os
 import time
-from typing import Optional
 
 import requests
 
 _use_test = os.getenv("PAYMONGO_USE_TEST", "false").lower() == "true"
 PAYMONGO_SECRET_KEY = (
-    os.getenv("PAYMONGO_SECRET_TEST_KEY") if _use_test else os.getenv("PAYMONGO_SECRET_KEY")
+    os.getenv("PAYMONGO_SECRET_TEST_KEY")
+    if _use_test
+    else os.getenv("PAYMONGO_SECRET_KEY")
 )
 PAYMONGO_WEBHOOK_SECRET = os.getenv("PAYMONGO_WEBHOOK_SECRET", "")
 PAYMONGO_BASE_URL = "https://api.paymongo.com/v1"
@@ -35,7 +36,7 @@ def create_checkout_session(
     merchant_name: str,
     success_url: str,
     cancel_url: str,
-    reference_number: Optional[str] = None,
+    reference_number: str | None = None,
 ) -> dict:
     """Returns the checkout session data object from PayMongo."""
     amount_centavos = amount_pesos * 100
@@ -176,7 +177,7 @@ def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
     if abs(int(time.time()) - timestamp) > 300:
         return False
 
-    signed_payload = f"{timestamp_str}.".encode("utf-8") + raw_body
+    signed_payload = f"{timestamp_str}.".encode() + raw_body
     computed = hmac.new(
         PAYMONGO_WEBHOOK_SECRET.encode(),
         signed_payload,

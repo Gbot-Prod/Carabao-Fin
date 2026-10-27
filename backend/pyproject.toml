@@ -18,6 +18,39 @@ dependencies = [
     "numpy>=1.26.0",
 ]
 
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+explicit_package_bases = true
+ignore_missing_imports = true
+strict = true
+
+[tool.ruff]
+# Target version matches your project python requirement
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+# Rules configured for a robust FastAPI relational DB setup
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes (catches unused imports, undefined variables)
+    "I",   # isort (automatically sorts imports cleanly)
+    "B",   # flake8-bugbear (catches design flaws, e.g., mutable defaults in routes)
+    "UP",  # pyupgrade (upgrades code to modern Python 3.13+ syntax)
+    "ASYNC", # flake8-async (ensures async endpoints are written correctly)
+]
+ignore = []
+
+# Protect Alembic migrations from being aggressively cleaned up by the linter
+[tool.ruff.lint.per-file-ignores]
+"migrations/**/*.py" = ["E501"] 
+
+[tool.ruff.format]
+# Enforce clean formatting across the codebase
+quote-style = "double"
+indent-style = "space"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",

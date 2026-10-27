@@ -6,13 +6,24 @@ from app.core.database import Base
 
 
 class OrderHistory(Base):
-	__tablename__ = "order_histories"
+    __tablename__ = "order_histories"
 
-	id = Column(Integer, primary_key=True, index=True)
-	user_id = Column(Integer, ForeignKey("backend_users.id"), nullable=False, unique=True, index=True)
-	last_order_at = Column(DateTime(timezone=True), nullable=True)
-	created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-	updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(
+        Integer, ForeignKey("backend_users.id"), nullable=False, unique=True, index=True
+    )
+    last_order_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
-	user = relationship("User", back_populates="order_history")
-	orders = relationship("Order", back_populates="order_history", cascade="all, delete-orphan")
+    user = relationship("User", back_populates="order_history")
+    orders = relationship(
+        "Order", back_populates="order_history", cascade="all, delete-orphan"
+    )

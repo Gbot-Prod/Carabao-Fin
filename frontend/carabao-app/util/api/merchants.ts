@@ -1,3 +1,4 @@
+import { MerchantApplication } from './admin';
 import { apiClient } from './client';
 import type { Produce } from './produce';
 
@@ -5,7 +6,13 @@ export type Merchant = {
   id: number;
   user_id: number;
   merchant_name: string;
-  location: string | null;
+  region: string | null;
+  province: string | null;
+  city: string | null;
+  barangay: string | null;
+  address: string | null;
+  postal_code: string | null;
+  category: string | null;
   contact_number: string;
   operating_hours: string | Record<string, string> | null;
   delivery_price: number | null;
@@ -14,35 +21,27 @@ export type Merchant = {
   produces: Produce[];
 };
 
-export type MerchantCreatePayload = {
-  merchant_name: string;
-  location?: string | null;
-  contact_number: string;
-  operating_hours?: string | Record<string, string> | null;
-  delivery_price?: number | null;
-  delivery_time?: number | null;
-  rating?: number | null;
-};
-
 export type MerchantOnboardingPayload = {
   merchant_name: string;
   legal_business_name: string;
   business_type: string;
   tin?: string | null;
-  registration_type?: string | null;
-  registration_number?: string | null;
+  registration_type: string;
+  registration_number: string ;
   contact_email: string;
   contact_number: string;
-  address_line: string;
-  barangay: string | null;
-  city: string;
-  province?: string | null;
-  region?: string | null;
-  postal_code?: string | null;
+  region: string;
+  province: string;
+  city?: string;
+  barangay?: string;
+  address: string;
+  postal_code?: string;
   price_range_min: number;
   price_range_max: number;
+  delivery_time: number;
+  delivery_price: number;
   available_days: string[];
-  rsbsa_number?: string | null;
+  rsbsa_number?: string;
 };
 
 export type ShopPage = {
@@ -80,14 +79,15 @@ export const fetchMerchantById = async (merchantId: number): Promise<Merchant> =
   return response.data;
 };
 
-export const createMyMerchant = async (payload: MerchantCreatePayload): Promise<Merchant> => {
-  const response = await apiClient.post<Merchant>('/merchants/me', payload);
-  return response.data;
-};
-
 export type MerchantUpdatePayload = {
   merchant_name?: string | null;
-  location?: string | null;
+  region?: string | null;
+  province?: string | null;
+  city?: string | null;
+  barangay?: string | null;
+  address?: string | null;
+  postal_code?: string | null;
+  contact_email?: string | null;
   contact_number?: string | null;
   operating_hours?: string | null;
   delivery_price?: number | null;
@@ -102,11 +102,11 @@ export const updateMyMerchant = async (payload: MerchantUpdatePayload): Promise<
 export const submitMyMerchantOnboarding = async (
   payload: MerchantOnboardingPayload,
   rsbsaFile: File,
-): Promise<Merchant> => {
+): Promise<MerchantApplication> => {
   const formData = new FormData();
   formData.append('payload', JSON.stringify(payload));
   formData.append('rsbsa_file', rsbsaFile);
-  const response = await apiClient.post<Merchant>('/merchant-onboarding/me', formData);
+  const response = await apiClient.post<MerchantApplication>('/merchant-onboarding/me', formData);
   return response.data;
 };
 

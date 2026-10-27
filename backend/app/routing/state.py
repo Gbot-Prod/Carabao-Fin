@@ -19,6 +19,7 @@ class RouteState:
     Represents a single delivery route as an ordered list of stops.
     The depot (rider start point) is the first and last position.
     """
+
     depot_lat: float
     depot_lng: float
     stops: list[Stop] = field(default_factory=list)
@@ -27,7 +28,7 @@ class RouteState:
 
     def objective(self) -> float:
         """Total Haversine distance of the route (depot → stops → depot).
-        
+
         Uses Haversine formula for accurate lat/lng distances on Earth.
         Penalises unassigned stops to force the repair operator to reinsert them.
         """
@@ -58,6 +59,7 @@ class MultiRouteState:
     Represents multiple delivery routes (one per vehicle/rider).
     The shared unassigned pool is used by cross-route operators.
     """
+
     routes: list[RouteState]
     unassigned: list[Stop] = field(default_factory=list)
 
@@ -73,22 +75,24 @@ class MultiRouteState:
 def _haversine_distance(a: Stop, b: Stop) -> float:
     """
     Calculate great-circle distance between two points in km using Haversine formula.
-    
+
     Much more accurate than Euclidean for lat/lng coordinates.
     Philippines is roughly 2000 km north-south, so results are in realistic km range.
     """
     R_EARTH_KM = 6371  # Earth radius in km
-    
+
     lat_a, lng_a = math.radians(a.lat), math.radians(a.lng)
     lat_b, lng_b = math.radians(b.lat), math.radians(b.lng)
-    
+
     dlat = lat_b - lat_a
     dlng = lng_b - lng_a
-    
+
     sin_dlat = math.sin(dlat / 2)
     sin_dlng = math.sin(dlng / 2)
-    
-    a_coeff = sin_dlat * sin_dlat + math.cos(lat_a) * math.cos(lat_b) * sin_dlng * sin_dlng
+
+    a_coeff = (
+        sin_dlat * sin_dlat + math.cos(lat_a) * math.cos(lat_b) * sin_dlng * sin_dlng
+    )
     c = 2 * math.atan2(math.sqrt(a_coeff), math.sqrt(1 - a_coeff))
-    
+
     return R_EARTH_KM * c

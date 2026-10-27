@@ -15,19 +15,27 @@ export type MerchantApplication = {
   registration_number: string | null;
   contact_email: string;
   contact_number: string;
-  address_line: string;
-  city: string;
-  province: string;
   region: string | null;
+  province: string | null;
+  city: string | null;
+  barangay: string | null;
+  address: string | null;
   postal_code: string | null;
   price_range_min: number;
   price_range_max: number;
+  delivery_time: number;
+  delivery_price: number;
   available_days: string[];
   rsbsa_number: string | null;
-  rsbsa_document_path: string;
   rsbsa_document_original_name: string | null;
   rsbsa_document_content_type: string | null;
   admin_note: string | null;
+};
+
+export type RsbsaDocumentUrl = {
+  url: string;
+  filename: string | null;
+  content_type: string | null;
 };
 
 export type DailyRevenue = {
@@ -127,4 +135,14 @@ export const reviewMerchantApplication = async (
     admin_note: admin_note ?? null,
   });
   return res.data;
+};
+
+export const fetchRsbsaDocumentUrl = async (
+  applicationId: number,
+): Promise<RsbsaDocumentUrl> => {
+  const response = await apiClient.get<RsbsaDocumentUrl>(
+    `/admin/merchant-applications/${applicationId}/rsbsa-document`,
+  );
+
+  return response.data;
 };

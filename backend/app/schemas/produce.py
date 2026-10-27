@@ -1,16 +1,17 @@
-from typing import Literal, Optional
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class ProduceBase(BaseModel):
     name: str
-    description: Optional[str] = None
-    category: Optional[Literal["Vegetables", "Fruits"]] = None
+    description: str | None = None
+    category: Literal["Vegetables", "Fruits"] | None = None
     price: int = 0
     unit: Literal["kg", "lbs"] = "kg"
     unit_quantity: float = 1.0
     stock_quantity: int = 0
-    image_url: Optional[str] = None
+    image_url: str | None = None
 
 
 class ProduceCreate(ProduceBase):
@@ -18,14 +19,14 @@ class ProduceCreate(ProduceBase):
 
 
 class ProduceUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[Literal["Vegetables", "Fruits"]] = None
-    price: Optional[int] = None
-    unit: Optional[Literal["kg", "lbs"]] = None
-    unit_quantity: Optional[float] = None
-    stock_quantity: Optional[int] = None
-    image_url: Optional[str] = None
+    name: str | None = None
+    description: str | None = None
+    category: Literal["Vegetables", "Fruits"] | None = None
+    price: int | None = None
+    unit: Literal["kg", "lbs"] | None = None
+    unit_quantity: float | None = None
+    stock_quantity: int | None = None
+    image_url: str | None = None
 
     @field_validator("category", mode="before")
     @classmethod

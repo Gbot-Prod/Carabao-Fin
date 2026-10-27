@@ -39,6 +39,7 @@ import {
   type MerchantTransaction,
   type MerchantOrder,
 } from "@/util/api";
+import getApiErrorMessage from "@/util/errorHelper";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -202,7 +203,16 @@ export default function MerchantDashboardPage() {
 
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [locationEditing, setLocationEditing] = useState(false);
-  const [locationDraft, setLocationDraft] = useState({ address_line: "", barangay: "", city: "", contact_number: "", available_days: [] as string[] });
+  const [locationDraft, setLocationDraft] = useState({
+    region: "",
+    province: "",
+    barangay: "",
+    city: "",
+    address: "",
+    postal_code: "",
+    contact_number: "",
+    available_days: [] as string[]
+  });
   const [locationSaving, setLocationSaving] = useState(false);
 
   const [deletingMerchant, setDeletingMerchant] = useState(false);
@@ -394,13 +404,20 @@ export default function MerchantDashboardPage() {
   const handleSaveLocation = async () => {
     setLocationSaving(true);
     try {
-      const location = [locationDraft.address_line, locationDraft.barangay, locationDraft.city]
-        .map((s) => s.trim()).filter(Boolean).join(", ") || null;
       const localDigits = locationDraft.contact_number.replace(/\s/g, "");
       const contact_number = localDigits ? `+63 ${formatLocalPhone(localDigits)}` : undefined;
       const operating_hours = locationDraft.available_days.length > 0
         ? locationDraft.available_days.join(", ") : null;
-      const updated = await updateMyMerchant({ location, contact_number, operating_hours });
+      const updated = await updateMyMerchant({
+        region: locationDraft.region.trim() || undefined,
+        province: locationDraft.province.trim() || undefined,
+        city: locationDraft.city.trim() || null,
+        barangay: locationDraft.barangay.trim() || null,
+        address: locationDraft.address.trim() || undefined,
+        postal_code: locationDraft.postal_code.trim() || undefined,
+        contact_number,
+        operating_hours,
+      });
       setMerchant(updated);
       setLocationEditing(false);
     } catch { /* silently fail */ }
@@ -509,10 +526,9 @@ export default function MerchantDashboardPage() {
       await reloadOrders();
       await reloadShipments();
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string } } };
       setShipmentMessage({
         type: "error",
-        text: err?.response?.data?.detail ?? "Could not create shipment.",
+        text: getApiErrorMessage(e, "Could not create shipment."),
       });
     } finally {
       setShipmentCreating(false);
@@ -891,34 +907,27 @@ export default function MerchantDashboardPage() {
                     Street / House No.
                     <input
                       className={styles.formInput}
-                      value={locationDraft.address_line}
-                      onChange={(e) => setLocationDraft((d) => ({ ...d, address_line: e.target.value }))}
+                      value={locationDraft.address}
+                      onChange={(e) => setLocationDraft((d) => ({ ...d, address: e.target.value }))}
                       placeholder="e.g. 123 Rizal St., Unit 4B"
                     />
                   </label>
 
-                  <label className={styles.formLabel}>
-                    Barangay
-                    <input
-                      className={styles.formInput}
-                      value={locationDraft.barangay}
-                      onChange={(e) => setLocationDraft((d) => ({ ...d, barangay: e.target.value }))}
-                      placeholder="e.g. Brgy. Sta. Cruz"
-                    />
-                  </label>
-
-                  {/* PSGC region + city */}
                   <div className={styles.shopDetailsLocRow}>
                     <LocationSelects
-                      value={locationDraft.city}
-                      onChange={(city) => setLocationDraft((d) => ({ ...d, city }))}
+                      value={{
+                        region: locationDraft.region,
+                        province: locationDraft.province,
+                        city: locationDraft.city,
+                        barangay: locationDraft.barangay,
+                      }}
+                      onChange={(location) => setLocationDraft(previous => ({ ...previous, ...location }))}
                       selectClassName={styles.formInput}
                       labelClassName={styles.formLabel}
-                      wrapClassName={styles.shopDetailsLocField}
+                      wrapClassName={styles.panelFormField}
                     />
                   </div>
 
-                  {/* Province */}
                   {/* Contact number */}
                   <div className={styles.formLabel} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     <span>Contact Number</span>
@@ -934,6 +943,16 @@ export default function MerchantDashboardPage() {
                       />
                     </div>
                   </div>
+
+                  <label className={styles.formLabel}>
+                    Postal Code
+                    <input
+                      className={styles.formInput}
+                      value={locationDraft.postal_code}
+                      onChange={(e) => setLocationDraft((d) => ({ ...d, postal_code: e.target.value }))}
+                      placeholder="e.g. 2600"
+                    />
+                  </label>
 
                   {/* Operating days */}
                   <div className={styles.formLabel} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -969,8 +988,24 @@ export default function MerchantDashboardPage() {
               ) : (
                 <div className={styles.shopDetailsView}>
                   <div className={styles.shopDetailRow}>
+                    <span className={styles.shopDetailLabel}>Region</span>
+                    <span className={styles.shopDetailValue}>{merchant?.region ?? <em>Not set</em>}</span>
+                  </div>
+                  <div className={styles.shopDetailRow}>
+                    <span className={styles.shopDetailLabel}>Province</span>
+                    <span className={styles.shopDetailValue}>{merchant?.province ?? <em>Not set</em>}</span>
+                  </div>
+                  <div className={styles.shopDetailRow}>
+                    <span className={styles.shopDetailLabel}>City</span>
+                    <span className={styles.shopDetailValue}>{merchant?.city ?? <em>Not set</em>}</span>
+                  </div>
+                  <div className={styles.shopDetailRow}>
+                    <span className={styles.shopDetailLabel}>Barangay</span>
+                    <span className={styles.shopDetailValue}>{merchant?.barangay ?? <em>Not set</em>}</span>
+                  </div>
+                  <div className={styles.shopDetailRow}>
                     <span className={styles.shopDetailLabel}>Address</span>
-                    <span className={styles.shopDetailValue}>{merchant?.location ?? <em>Not set</em>}</span>
+                    <span className={styles.shopDetailValue}>{merchant?.address ?? <em>Not set</em>}</span>
                   </div>
                   <div className={styles.shopDetailRow}>
                     <span className={styles.shopDetailLabel}>Contact</span>
@@ -993,13 +1028,17 @@ export default function MerchantDashboardPage() {
                       const oh = merchant?.operating_hours;
                       const ohStr = oh ? (typeof oh === "string" ? oh : JSON.stringify(oh)) : "";
                       const savedDays = ohStr.split(",").map((s) => s.trim()).filter((s) => DAYS.includes(s as typeof DAYS[number]));
-                      setLocationDraft({
-                        address_line: merchant?.location ?? "",
-                        barangay: "",
-                        city: "",
+                      setLocationDraft((previous) => ({
+                        ...previous,
+                        region: merchant?.region ?? "",
+                        province: merchant?.province ?? "",
+                        city: merchant?.city ?? "",
+                        barangay: merchant?.barangay ?? "",
+                        address: merchant?.address ?? "",
+                        postal_code: merchant?.postal_code ?? "",
                         contact_number: formatLocalPhone(localPart),
                         available_days: savedDays,
-                      });
+                      }));
                       setLocationEditing(true);
                     }}
                   >

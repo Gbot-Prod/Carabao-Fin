@@ -1,7 +1,8 @@
 "use client";
 
+import errorHelper from "@/util/errorHelper";
+
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
@@ -10,8 +11,8 @@ import {
   submitMyMerchantOnboarding,
   sendOtp,
   verifyOtp,
-  type Merchant,
-  type MerchantOnboardingPayload,
+  MerchantOnboardingPayload,
+  MerchantApplication,
 } from "@/util/api";
 
 type StepId = "legal" | "ops" | "docs" | "verify";
@@ -61,8 +62,9 @@ export default function MerchantOnboardingPage() {
   const [rsbsaFile, setRsbsaFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittedApplication, setSubmittedApplication] = useState<MerchantApplication | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [successMerchant, setSuccessMerchant] = useState<Merchant | null>(null);
+  const [successApplication, setSuccessApplication] = useState<MerchantApplication | null>(null);
 
   // OTP state
   const [otpSent, setOtpSent] = useState(false);
@@ -81,11 +83,14 @@ export default function MerchantOnboardingPage() {
     registration_number: "",
     contact_email: "",
     contact_number: "",
-    address_line: "",
-    city: "",
+    region: '',
     province: "",
-    region: "",
+    city: '',
+    barangay: '',
+    address: "",
     postal_code: "",
+    delivery_time: 0,
+    delivery_price: 0,
     price_range_min: 0,
     price_range_max: 0,
     available_days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
@@ -100,9 +105,9 @@ export default function MerchantOnboardingPage() {
           ...prev,
           contact_email: prev.contact_email || p.email || "",
           contact_number: prev.contact_number || (p.phone_number?.replace(/^\+63\s?/, "") ?? ""),
-          address_line: prev.address_line || (p.address ?? ""),
+          address: prev.address || (p.address ?? ""),
           city: prev.city || (p.city ?? ""),
-          province: prev.province || (p.country ?? ""),
+          province: prev.province || (p.province ?? ""),
           postal_code: prev.postal_code || (p.postal_code ?? ""),
         }));
       } catch {
@@ -167,8 +172,7 @@ export default function MerchantOnboardingPage() {
       return null;
     }
     if (index === 1) {
-      if (!form.address_line.trim()) return "Address is required.";
-      if (!form.city.trim()) return "City / Municipality is required.";
+      if (!form.address.trim()) return "Address is required.";
       if (!Array.isArray(form.available_days) || form.available_days.length === 0) return "Select at least one available day.";
       if (!Number.isFinite(form.price_range_min) || form.price_range_min < 0) return "Minimum price must be 0 or higher.";
       if (!Number.isFinite(form.price_range_max) || form.price_range_max < 0) return "Maximum price must be 0 or higher.";
@@ -209,9 +213,9 @@ export default function MerchantOnboardingPage() {
       await sendOtp(fullPhoneNumber);
       setOtpSent(true);
       setResendCooldown(30);
-    } catch (e: any) {
+    } catch (error: unknown) {
       setOtpError(
-        e?.response?.data?.detail || "Failed to send verification code. Please try again.",
+        errorHelper(error) || "Failed to send verification code. Please try again.",
       );
     } finally {
       setIsSendingOtp(false);
@@ -227,7 +231,7 @@ export default function MerchantOnboardingPage() {
         const idx = DAYS.indexOf(d as (typeof DAYS)[number]);
         return idx === -1 ? 999 : idx;
       };
-      const merchant = await submitMyMerchantOnboarding(
+      const merchantApplication = await submitMyMerchantOnboarding(
         {
           ...form,
           contact_number: form.contact_number.trim() ? `+63 ${form.contact_number.trim()}` : "",
@@ -235,12 +239,10 @@ export default function MerchantOnboardingPage() {
         },
         rsbsaFile,
       );
-      setSuccessMerchant(merchant);
-    } catch (e: any) {
-      const message =
-        e?.response?.data?.detail ||
-        "Unable to submit your merchant application right now. Please try again.";
-      setError(String(message));
+      setSuccessApplication(merchantApplication);
+    } catch (error: unknown) {
+      const message = errorHelper(error) ?? "Unable to submit your merchant application right now. Please try again.";
+      setError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -251,8 +253,8 @@ export default function MerchantOnboardingPage() {
     setIsVerifyingOtp(true);
     try {
       await verifyOtp(fullPhoneNumber, otpValue);
-    } catch (e: any) {
-      setOtpError(e?.response?.data?.detail || "Incorrect code. Please try again.");
+    } catch (error: unknown) {
+      setOtpError(errorHelper(error) || "Incorrect code. Please try again.");
       setIsVerifyingOtp(false);
       return;
     }
@@ -260,21 +262,20 @@ export default function MerchantOnboardingPage() {
     await submit();
   };
 
-  if (successMerchant) {
+  if (successApplication) {
     return (
       <div className={styles.page}>
         <section className={styles.card}>
           <h1 className={styles.title}>Application submitted</h1>
           <p className={styles.subtitle}>
-            You can now access your merchant page and start setting up your shop.
+            Your application is now set for review. We will notify you via email once your application has been approved or rejected.
           </p>
           <div className={styles.successBox}>
             <div>
               <div className={styles.successLabel}>Merchant</div>
-              <div className={styles.successValue}>{successMerchant.merchant_name}</div>
+              <div className={styles.successValue}>{successApplication.merchant_name}</div>
             </div>
             <div className={styles.successActions}>
-              <Link className={styles.primaryBtn} href={`/merchant/${successMerchant.id}`}>Go to merchant page</Link>
               <button className={styles.secondaryBtn} type="button" onClick={() => router.push("/profile")}>Back to profile</button>
             </div>
           </div>
@@ -391,13 +392,17 @@ export default function MerchantOnboardingPage() {
             <div className={styles.grid}>
               <div className={`${styles.field} ${styles.fieldFull}`}>
                 <label className={styles.label}>Address</label>
-                <input className={styles.input} value={form.address_line} onChange={setField("address_line")} placeholder="Street, Barangay" />
+                <input className={styles.input} value={form.address} onChange={setField("address")} placeholder="Street, Barangay" />
               </div>
 
               <LocationSelects
-                value={form.city}
-                onChange={(city) => setForm((prev) => ({ ...prev, city }))}
-                onRegionChange={(region) => setForm((prev) => ({ ...prev, region, province: region }))}
+                value={{
+                  region: form.region,
+                  province: form.province,
+                  city: form.city,
+                  barangay: form.barangay,
+                }}
+                onChange={(location) => setForm((previous) => ({ ...previous, ...location }))}
                 selectClassName={styles.select}
                 labelClassName={styles.label}
                 wrapClassName={styles.field}

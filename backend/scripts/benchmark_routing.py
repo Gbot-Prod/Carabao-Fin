@@ -14,7 +14,7 @@ the search.
 import math
 import sys
 import time
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 import requests
@@ -27,17 +27,17 @@ DEPOT_NAME = "Legazpi Village, Makati"
 DEPOT = (14.5547, 121.0244)
 
 STOPS: list[tuple[str, tuple[float, float]]] = [
-    ("Rockwell, Makati",          (14.5637, 121.0311)),
-    ("BGC 5th Ave, Taguig",       (14.5501, 121.0506)),
-    ("Ortigas Center, Pasig",     (14.5876, 121.0577)),
-    ("Shaw Blvd, Mandaluyong",    (14.5810, 121.0331)),
-    ("Ermita, Manila",            (14.5775, 120.9815)),
-    ("Binondo, Manila",           (14.5993, 120.9728)),
-    ("Cubao, Quezon City",        (14.6192, 121.0522)),
-    ("Pasay Rotonda, Pasay",      (14.5345, 121.0013)),
+    ("Rockwell, Makati", (14.5637, 121.0311)),
+    ("BGC 5th Ave, Taguig", (14.5501, 121.0506)),
+    ("Ortigas Center, Pasig", (14.5876, 121.0577)),
+    ("Shaw Blvd, Mandaluyong", (14.5810, 121.0331)),
+    ("Ermita, Manila", (14.5775, 120.9815)),
+    ("Binondo, Manila", (14.5993, 120.9728)),
+    ("Cubao, Quezon City", (14.6192, 121.0522)),
+    ("Pasay Rotonda, Pasay", (14.5345, 121.0013)),
 ]
 
-STOP_NAMES  = [s[0] for s in STOPS]
+STOP_NAMES = [s[0] for s in STOPS]
 STOP_COORDS = [s[1] for s in STOPS]
 
 # index 0 = depot, 1..N = customer stops
@@ -83,25 +83,33 @@ def fetch_route_km(ordered_indices: list[int]) -> float:
 # Distance functions
 # ---------------------------------------------------------------------------
 
+
 def haversine(a: int, b: int) -> float:
     lat1, lng1 = ALL_COORDS[a]
     lat2, lng2 = ALL_COORDS[b]
     R = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlng = math.radians(lng2 - lng1)
-    h = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    h = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(dlng / 2) ** 2
+    )
     return R * 2 * math.atan2(math.sqrt(h), math.sqrt(1 - h))
 
 
 def make_matrix_dist(matrix: list[list[float]]) -> Callable[[int, int], float]:
     def dist(a: int, b: int) -> float:
         return matrix[a][b]
+
     return dist
 
 
 # ---------------------------------------------------------------------------
 # Self-contained ALNS
 # ---------------------------------------------------------------------------
+
 
 def _route_cost(order: list[int], dist: Callable) -> float:
     if not order:
@@ -114,7 +122,9 @@ def _best_insert(order: list[int], stop: int, dist: Callable) -> tuple[int, floa
     best_pos, best_delta = 0, float("inf")
     full = [0] + order + [0]
     for i in range(1, len(full)):
-        delta = dist(full[i - 1], stop) + dist(stop, full[i]) - dist(full[i - 1], full[i])
+        delta = (
+            dist(full[i - 1], stop) + dist(stop, full[i]) - dist(full[i - 1], full[i])
+        )
         if delta < best_delta:
             best_delta = delta
             best_pos = i - 1
@@ -129,7 +139,7 @@ def _two_opt(order: list[int], dist: Callable) -> list[int]:
         for i in range(1, len(route) - 2):
             for j in range(i + 1, len(route) - 1):
                 before = dist(route[i - 1], route[i]) + dist(route[j], route[j + 1])
-                after  = dist(route[i - 1], route[j]) + dist(route[i], route[j + 1])
+                after = dist(route[i - 1], route[j]) + dist(route[i], route[j + 1])
                 if after < before - 1e-10:
                     route[i : j + 1] = route[i : j + 1][::-1]
                     improved = True
@@ -211,7 +221,11 @@ def alns_solve(
 
         # Destroy
         n_remove = max(1, int(len(current) * rng.uniform(0.1, 0.3)))
-        rm_indices = set(rng.choice(len(current), size=min(n_remove, len(current)), replace=False).tolist())
+        rm_indices = set(
+            rng.choice(
+                len(current), size=min(n_remove, len(current)), replace=False
+            ).tolist()
+        )
         removed = [current[k] for k in sorted(rm_indices)]
         partial = [s for k, s in enumerate(current) if k not in rm_indices]
 
@@ -259,6 +273,7 @@ def alns_solve(
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def print_route(label: str, order: list[int], hav_km: float, road_km: float) -> None:
     names = " -> ".join(STOP_NAMES[i - 1] for i in order)
@@ -309,7 +324,7 @@ def main() -> None:
     print("=" * width)
     print(f"\n  Depot  : {DEPOT_NAME}")
     print(f"  Stops  : {N_STOPS}")
-    print(f"  Solver : 2 000 iterations, same seed (42), same operators")
+    print("  Solver : 2 000 iterations, same seed (42), same operators")
 
     print_route("Haversine ALNS", h_order, h_hav_km, h_road_km)
     print_route("Road-dist ALNS", r_order, r_hav_km, r_road_km)
@@ -322,17 +337,26 @@ def main() -> None:
     print(f"  Same stop order     : {same_order}")
     print(f"  Road distance delta : {diff_km:+.2f} km  ({diff_pct:+.1f}%)")
     print(f"  Solve time (Hav)    : {h_solve_ms:.0f} ms")
-    print(f"  Solve time (Road)   : {r_solve_ms:.0f} ms  (matrix lookup, no API calls during search)")
+    print(
+        f"  Solve time (Road)   : {
+            r_solve_ms:.0f} ms  (matrix lookup, no API calls during search)"
+    )
     print("=" * width)
 
     if same_order:
         print("\n  Verdict  Identical orderings — Haversine produces the same route.")
         print("           Straight-line distance is a sufficient proxy for this area.")
     elif abs(diff_km) < 1.0:
-        print(f"\n  Verdict  Different orderings but road distance gap is small ({abs(diff_km):.2f} km).")
+        print(
+            f"\n  Verdict  Different orderings but road distance gap is small ({
+                abs(diff_km):.2f} km)."
+        )
         print("           Haversine is a reasonable approximation.")
     else:
-        print(f"\n  Verdict  Road-distance ALNS saves {abs(diff_km):.2f} km ({abs(diff_pct):.1f}%) on actual roads.")
+        print(
+            f"\n  Verdict  Road-distance ALNS saves {abs(diff_km):.2f} km ({
+                abs(diff_pct):.1f}%) on actual roads."
+        )
         print("           Haversine-based ordering introduces measurable inefficiency.")
 
     print()

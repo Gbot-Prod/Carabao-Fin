@@ -49,17 +49,29 @@ async def upload_my_avatar(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if avatar.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
+    if avatar.content_type not in {
+        "image/png",
+        "image/jpeg",
+        "image/jpg",
+        "image/webp",
+    }:
         raise HTTPException(status_code=400, detail="Avatar must be PNG, JPEG, or WebP")
 
     data = await avatar.read()
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Avatar must be under 5 MB")
     try:
-        url = r2_service.upload_avatar(current_user.id, data, avatar.content_type or "image/jpeg", avatar.filename or "")
+        url = r2_service.upload_avatar(
+            current_user.id,
+            data,
+            avatar.content_type or "image/jpeg",
+            avatar.filename or "",
+        )
     except Exception as exc:
         logger.error("R2 avatar upload failed: %s", exc, exc_info=True)
-        raise HTTPException(status_code=502, detail=f"Image upload failed: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Image upload failed: {exc}"
+        ) from exc
 
     current_user.profile_picture_url = url
     db.commit()
@@ -67,7 +79,8 @@ async def upload_my_avatar(
     return current_user
 
 
-# ─── Payment methods ──────────────────────────────────────────────────────────
+# ─── Payment methods ────────────────────────────────────────────────────
+
 
 @router.get("/users/me/payment-methods", response_model=list[SavedCard])
 async def list_my_payment_methods(

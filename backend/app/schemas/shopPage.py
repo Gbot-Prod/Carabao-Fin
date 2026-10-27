@@ -1,28 +1,26 @@
-from typing import Optional
-
 from pydantic import BaseModel
 
 
 class ShopPageBase(BaseModel):
     title: str
     slug: str
-    banner_image_url: Optional[str] = None
-    logo_url: Optional[str] = None
-    description: Optional[str] = None
+    banner_image_url: str | None = None
+    logo_url: str | None = None
+    description: str | None = None
 
 
 class ShopPageCreate(BaseModel):
     title: str
     slug: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class ShopPageUpdate(BaseModel):
-    title: Optional[str] = None
-    slug: Optional[str] = None
-    banner_image_url: Optional[str] = None
-    logo_url: Optional[str] = None
-    description: Optional[str] = None
+    title: str | None = None
+    slug: str | None = None
+    banner_image_url: str | None = None
+    logo_url: str | None = None
+    description: str | None = None
 
 
 class ShopPageResponse(ShopPageBase):

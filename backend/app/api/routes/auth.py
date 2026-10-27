@@ -8,7 +8,6 @@ import json
 import os
 import time
 import unicodedata
-from typing import Optional
 from uuid import uuid4
 
 import bcrypt as _bcrypt
@@ -33,7 +32,7 @@ def _bcrypt_verify(password: str, hashed: str) -> bool:
     return _bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def _verified_signup_identifier(token: Optional[str]) -> tuple[str, str] | None:
+def _verified_signup_identifier(token: str | None) -> tuple[str, str] | None:
     if not token:
         return None
     secret = os.getenv("AUTH_SYNC_SHARED_SECRET")
@@ -68,19 +67,19 @@ BETTER_AUTH_SCRYPT_PARAMS = {
 class AuthSyncPayload(BaseModel):
     provider_user_id: str
     email: EmailStr
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    phone_number: Optional[str] = None
-    role: Optional[str] = None
-    verification_token: Optional[str] = None
+    first_name: str | None = None
+    last_name: str | None = None
+    phone_number: str | None = None
+    role: str | None = None
+    verification_token: str | None = None
 
 
 class AuthSyncResponse(BaseModel):
     ok: bool
     user_id: int
     email: EmailStr
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    first_name: str | None = None
+    last_name: str | None = None
     access_token: str
     token_type: str = "bearer"
     expires_in: int = 3600
@@ -90,7 +89,7 @@ class AuthSyncResponse(BaseModel):
 async def sync_auth(
     payload: AuthSyncPayload,
     db: Session = Depends(get_db),
-    x_internal_auth_sync_secret: Optional[str] = Header(
+    x_internal_auth_sync_secret: str | None = Header(
         default=None,
         alias="X-Internal-Auth-Sync-Secret",
     ),
@@ -105,19 +104,26 @@ async def sync_auth(
     if not hmac.compare_digest(x_internal_auth_sync_secret or "", expected_secret):
         raise HTTPException(status_code=401, detail="Unauthorized auth sync request")
 
-    user = db.query(User).filter(User.external_auth_id == payload.provider_user_id).first()
+    user = (
+        db.query(User).filter(User.external_auth_id == payload.provider_user_id).first()
+    )
 
-    # Fallback by email so existing users can be linked to Better Auth without duplicates.
+    # Fallback by email so existing users can be linked to Better Auth without
+    # duplicates.
     if user is None:
         user = db.query(User).filter(User.email == payload.email).first()
 
     verified_identifier = _verified_signup_identifier(payload.verification_token)
     if user is None and verified_identifier is None:
-        raise HTTPException(status_code=403, detail="Signup identifier has not been verified")
+        raise HTTPException(
+            status_code=403, detail="Signup identifier has not been verified"
+        )
     if verified_identifier is not None:
         channel, identifier = verified_identifier
         if channel == "email" and identifier.lower() != payload.email.lower():
-            raise HTTPException(status_code=403, detail="Verified email does not match signup email")
+            raise HTTPException(
+                status_code=403, detail="Verified email does not match signup email"
+            )
         if channel == "phone":
             payload.phone_number = identifier
 
@@ -182,8 +188,8 @@ async def get_me(current_user: User = Depends(get_current_user)):
 class MobileSignUpPayload(BaseModel):
     email: EmailStr
     password: str
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    first_name: str | None = None
+    last_name: str | None = None
 
 
 class MobileSignInPayload(BaseModel):
@@ -191,7 +197,7 @@ class MobileSignInPayload(BaseModel):
     password: str
 
 
-def _split_name(full_name: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+def _split_name(full_name: str | None) -> tuple[str | None, str | None]:
     if not full_name:
         return None, None
 
@@ -204,10 +210,13 @@ def _split_name(full_name: Optional[str]) -> tuple[Optional[str], Optional[str]]
     return first_name, last_name
 
 
-def _find_better_auth_account(db: Session, email: str) -> Optional[tuple[str, Optional[str], str]]:
-    row = db.execute(
-        text(
-            """
+def _find_better_auth_account(
+    db: Session, email: str
+) -> tuple[str, str | None, str] | None:
+    row = (
+        db.execute(
+            text(
+                """
             SELECT u.id AS user_id, u.name AS name, a.password AS password_hash
             FROM "user" u
             JOIN account a ON a."userId" = u.id
@@ -216,9 +225,12 @@ def _find_better_auth_account(db: Session, email: str) -> Optional[tuple[str, Op
             ORDER BY a."updatedAt" DESC
             LIMIT 1
             """
-        ),
-        {"email": email},
-    ).mappings().first()
+            ),
+            {"email": email},
+        )
+        .mappings()
+        .first()
+    )
 
     if row is None:
         return None
@@ -262,7 +274,7 @@ def _sync_backend_user_from_better_auth(
     *,
     email: str,
     better_auth_user_id: str,
-    full_name: Optional[str],
+    full_name: str | None,
     password: str,
 ) -> User:
     first_name, last_name = _split_name(full_name)
@@ -284,10 +296,14 @@ def _sync_backend_user_from_better_auth(
         if last_name is not None:
             user.last_name = last_name
 
-    credential = db.query(MobileCredential).filter(MobileCredential.user_id == user.id).first()
+    credential = (
+        db.query(MobileCredential).filter(MobileCredential.user_id == user.id).first()
+    )
     backend_password_hash = _bcrypt_hash(password)
     if credential is None:
-        credential = MobileCredential(user_id=user.id, password_hash=backend_password_hash)
+        credential = MobileCredential(
+            user_id=user.id, password_hash=backend_password_hash
+        )
         db.add(credential)
     else:
         credential.password_hash = backend_password_hash
@@ -303,9 +319,13 @@ async def mobile_sign_up(
     db: Session = Depends(get_db),
 ) -> AuthSyncResponse:
     if not payload.password or len(payload.password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        raise HTTPException(
+            status_code=400, detail="Password must be at least 8 characters"
+        )
     if len(payload.password.encode("utf-8")) > 72:
-        raise HTTPException(status_code=400, detail="Password must be 72 characters or fewer")
+        raise HTTPException(
+            status_code=400, detail="Password must be 72 characters or fewer"
+        )
 
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
@@ -323,7 +343,9 @@ async def mobile_sign_up(
     db.commit()
     db.refresh(user)
 
-    credential = MobileCredential(user_id=user.id, password_hash=_bcrypt_hash(payload.password))
+    credential = MobileCredential(
+        user_id=user.id, password_hash=_bcrypt_hash(payload.password)
+    )
     db.add(credential)
     db.commit()
 
@@ -356,14 +378,22 @@ async def mobile_sign_in(
 
     credential = None
     if user is not None:
-        credential = db.query(MobileCredential).filter(MobileCredential.user_id == user.id).first()
+        credential = (
+            db.query(MobileCredential)
+            .filter(MobileCredential.user_id == user.id)
+            .first()
+        )
 
     if credential is not None:
         if not _bcrypt_verify(payload.password, credential.password_hash):
             await asyncio.sleep(1)
             raise HTTPException(status_code=401, detail="Invalid email or password")
     else:
-        if user is not None and user.external_auth_id and user.external_auth_id.startswith("mobile:"):
+        if (
+            user is not None
+            and user.external_auth_id
+            and user.external_auth_id.startswith("mobile:")
+        ):
             # Backward-compat for the earlier prototype that stored the bcrypt hash
             # directly in external_auth_id as "mobile:<hash>".
             stored_hash = user.external_auth_id[len("mobile:") :]
@@ -376,8 +406,12 @@ async def mobile_sign_in(
                 await asyncio.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
 
-            better_auth_user_id, better_auth_name, better_auth_password_hash = better_auth_account
-            if not _verify_better_auth_password(better_auth_password_hash, payload.password):
+            better_auth_user_id, better_auth_name, better_auth_password_hash = (
+                better_auth_account
+            )
+            if not _verify_better_auth_password(
+                better_auth_password_hash, payload.password
+            ):
                 await asyncio.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -424,9 +458,15 @@ async def mobile_set_password(
     current_user: User = Depends(get_current_user),
 ):
     if not payload.password or len(payload.password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        raise HTTPException(
+            status_code=400, detail="Password must be at least 8 characters"
+        )
 
-    credential = db.query(MobileCredential).filter(MobileCredential.user_id == current_user.id).first()
+    credential = (
+        db.query(MobileCredential)
+        .filter(MobileCredential.user_id == current_user.id)
+        .first()
+    )
     hashed = _bcrypt_hash(payload.password)
 
     if credential is None:

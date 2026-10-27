@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -14,10 +14,17 @@ from app.models.order_history import OrderHistory
 from app.models.produce import Produce
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.schemas.order import CurrentOrderResponse, OrderItemResponse, PlaceOrderRequest, PlaceOrderResponse
+from app.schemas.order import (
+    CurrentOrderResponse,
+    OrderItemResponse,
+    PlaceOrderRequest,
+    PlaceOrderResponse,
+)
 from app.services.sms_service import notify_order_shipped
 
 from ._order_helpers import (
+    _extract_item_int,
+    _to_int,
     get_or_create_cart,
     get_or_create_order_history,
     get_order_history,
@@ -25,8 +32,6 @@ from ._order_helpers import (
     to_current_order_item,
     to_current_order_item_from_order,
     to_order_history_item,
-    _to_int,
-    _extract_item_int,
 )
 
 router = APIRouter(tags=["orders"])
@@ -63,17 +68,18 @@ async def place_order_from_cart(
             order_items.append(item)
             continue
         produce = (
-            db.query(Produce)
-            .filter(Produce.id == produce_id)
-            .with_for_update()
-            .first()
+            db.query(Produce).filter(Produce.id == produce_id).with_for_update().first()
         )
         if produce is None:
-            raise HTTPException(status_code=400, detail=f"Produce ID {produce_id} not found")
+            raise HTTPException(
+                status_code=400, detail=f"Produce ID {produce_id} not found"
+            )
         if produce.stock_quantity < quantity:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient stock for '{produce.name}': {produce.stock_quantity} available, {quantity} requested",
+                detail=f"Insufficient stock for '{produce.name}': {
+                    produce.stock_quantity
+                } available, {quantity} requested",
             )
         produce.stock_quantity -= quantity
         fresh_total += produce.price * quantity
@@ -124,7 +130,9 @@ async def get_my_order_history(
     if history is None:
         return []
 
-    orders = sorted(history.orders, key=lambda order: order.ordered_at or datetime.min, reverse=True)
+    orders = sorted(
+        history.orders, key=lambda order: order.ordered_at or datetime.min, reverse=True
+    )
     return [to_order_history_item(order) for order in orders]
 
 
@@ -165,7 +173,9 @@ async def get_my_current_orders(
     )
 
     if current_orders:
-        return [to_current_order_item(current_order) for current_order in current_orders]
+        return [
+            to_current_order_item(current_order) for current_order in current_orders
+        ]
 
     history = get_order_history(db, current_user.id)
     if history is None:
@@ -174,7 +184,9 @@ async def get_my_current_orders(
     active_statuses = {"pending", "processing", "shipped", "out_for_delivery"}
     active_orders = [
         order
-        for order in sorted(history.orders, key=lambda item: item.ordered_at, reverse=True)
+        for order in sorted(
+            history.orders, key=lambda item: item.ordered_at, reverse=True
+        )
         if order.status.lower() in active_statuses
     ]
     return [to_current_order_item_from_order(order) for order in active_orders]
@@ -185,15 +197,22 @@ async def get_my_current_orders(
 # ---------------------------------------------------------------------------
 
 ACTIVE_ORDER_STATUSES = {"pending", "processing", "shipped", "out_for_delivery"}
-VALID_ORDER_STATUSES = {"pending", "processing", "shipped", "out_for_delivery", "delivered", "cancelled"}
+VALID_ORDER_STATUSES = {
+    "pending",
+    "processing",
+    "shipped",
+    "out_for_delivery",
+    "delivered",
+    "cancelled",
+}
 
 _VALID_TRANSITIONS: dict[str, set[str]] = {
-    "pending":          {"processing", "cancelled"},
-    "processing":       {"shipped", "cancelled"},
-    "shipped":          {"out_for_delivery", "delivered", "cancelled"},
+    "pending": {"processing", "cancelled"},
+    "processing": {"shipped", "cancelled"},
+    "shipped": {"out_for_delivery", "delivered", "cancelled"},
     "out_for_delivery": {"delivered", "cancelled"},
-    "delivered":        set(),
-    "cancelled":        set(),
+    "delivered": set(),
+    "cancelled": set(),
 }
 
 
@@ -235,15 +254,23 @@ async def update_order_status(
     status = body.status
     merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
     if not merchant:
-        raise HTTPException(status_code=403, detail="Only merchants can update order status")
+        raise HTTPException(
+            status_code=403, detail="Only merchants can update order status"
+        )
 
     if status not in VALID_ORDER_STATUSES:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid status. Must be one of: {', '.join(sorted(VALID_ORDER_STATUSES))}",
+            detail=f"Invalid status. Must be one of: {
+                ', '.join(sorted(VALID_ORDER_STATUSES))
+            }",
         )
 
-    order = db.query(Order).filter(Order.id == order_id, Order.merchant_id == merchant.id).first()
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.merchant_id == merchant.id)
+        .first()
+    )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
@@ -255,13 +282,18 @@ async def update_order_status(
         )
 
     if status == "cancelled":
-        for item in (order.items or []):
+        for item in order.items or []:
             if not isinstance(item, dict):
                 continue
             produce_id = _extract_item_int(item, "produce_id", "produceId", "id")
             quantity = max(_to_int(item.get("quantity"), 0), 0)
             if produce_id and quantity:
-                produce = db.query(Produce).filter(Produce.id == produce_id).with_for_update().first()
+                produce = (
+                    db.query(Produce)
+                    .filter(Produce.id == produce_id)
+                    .with_for_update()
+                    .first()
+                )
                 if produce:
                     produce.stock_quantity += quantity
 
@@ -271,8 +303,14 @@ async def update_order_status(
 
     db.commit()
 
-    order_history = db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
-    buyer = db.query(User).filter(User.id == order_history.user_id).first() if order_history else None
+    order_history = (
+        db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
+    )
+    buyer = (
+        db.query(User).filter(User.id == order_history.user_id).first()
+        if order_history
+        else None
+    )
     merchant_name = order.merchant.merchant_name if order.merchant else "Merchant"
     notify_order_shipped(
         phone_number=buyer.phone_number if buyer else None,
@@ -282,4 +320,3 @@ async def update_order_status(
     )
 
     return {"order_id": order_id, "status": status}
-

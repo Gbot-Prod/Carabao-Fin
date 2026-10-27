@@ -1,6 +1,6 @@
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import jwt
 from fastapi import HTTPException, status
@@ -19,9 +19,9 @@ def _get_jwt_secret() -> str:
 def create_access_token(
     subject: str,
     expires_minutes: int = 60,
-    extra_claims: Optional[dict[str, Any]] = None,
+    extra_claims: dict[str, Any] | None = None,
 ) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload: dict[str, Any] = {
         "sub": subject,
         "iat": int(now.timestamp()),
@@ -42,7 +42,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
         ) from exc
 
 
-def get_token_subject(token: str) -> Optional[str]:
+def get_token_subject(token: str) -> str | None:
     payload = decode_access_token(token)
     subject = payload.get("sub")
     if not isinstance(subject, str) or not subject:
