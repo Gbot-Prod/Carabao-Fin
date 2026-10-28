@@ -11,8 +11,9 @@ merchant_applications table did not receive province and barangay.
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy import inspect
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "8c2d4e6f91ab"

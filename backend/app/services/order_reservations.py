@@ -1,5 +1,7 @@
 """Release stock held by checkout orders that never receive payment."""
 
+import logging
+import os
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -7,6 +9,14 @@ from sqlalchemy.orm import Session
 from app.models.order import Order
 from app.models.produce import Produce
 from app.models.transaction import Transaction
+from app.services.paymongo import expire_checkout_session
+
+logger = logging.getLogger(__name__)
+
+
+def reservation_ttl_minutes() -> int:
+    """How long a checkout holds stock, and how long its PayMongo session lives."""
+    return int(os.getenv("ORDER_RESERVATION_TTL_MINUTES", "30"))
 
 
 def _item_value(item: dict, *keys: str) -> int | None:
@@ -20,10 +30,51 @@ def _item_value(item: dict, *keys: str) -> int | None:
     return None
 
 
-def release_order_reservation(order: Order, db: Session, transaction_status: str) -> None:
-    """Return an unpaid order's stock exactly once and close its checkout."""
+def close_checkout_sessions(order: Order, db: Session) -> bool:
+    """Expire the order's open PayMongo sessions so none can be paid later.
+
+    Returns False if any session could not be confirmed closed, either because a
+    payment is paid or in progress or because PayMongo could not be reached.
+    """
+    session_ids = [
+        session_id
+        for (session_id,) in (
+            db.query(Transaction.paymongo_session_id)
+            .filter(
+                Transaction.order_id == order.id,
+                Transaction.status == "pending",
+                Transaction.paymongo_session_id.isnot(None),
+            )
+            .all()
+        )
+    ]
+    for session_id in session_ids:
+        try:
+            if not expire_checkout_session(session_id):
+                logger.info(
+                    "Checkout session %s has a payment in progress; keeping order %s",
+                    session_id,
+                    order.id,
+                )
+                return False
+        except Exception:
+            logger.exception("Could not expire checkout session %s", session_id)
+            return False
+    return True
+
+
+def release_order_reservation(
+    order: Order, db: Session, transaction_status: str
+) -> bool:
+    """Return an unpaid order's stock exactly once and close its checkout.
+
+    Returns False (and keeps the stock held) while one of its PayMongo sessions
+    may still be paid; the webhook or a later sweep settles it.
+    """
     if order.status != "pending":
-        return
+        return False
+    if not close_checkout_sessions(order, db):
+        return False
 
     for item in order.items or []:
         if not isinstance(item, dict):
@@ -50,6 +101,7 @@ def release_order_reservation(order: Order, db: Session, transaction_status: str
         .filter(Transaction.order_id == order.id, Transaction.status == "pending")
         .update({Transaction.status: transaction_status}, synchronize_session=False)
     )
+    return True
 
 
 def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
@@ -91,7 +143,7 @@ def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
         if has_live_checkout:
             continue
 
-        release_order_reservation(order, db, transaction_status="expired")
-        released += 1
+        if release_order_reservation(order, db, transaction_status="expired"):
+            released += 1
 
     return released

@@ -4,7 +4,7 @@
 }
 
 .merchantHeader {
-  background: #fff;
+  background: var(--bg-white);
   box-shadow: 0 4px 12px rgba(52, 95, 52, 0.06);
 }
 
@@ -105,7 +105,7 @@
 }
 
 .productCard {
-  background: #fff;
+  background: var(--bg-white);
   border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(52, 95, 52, 0.08);

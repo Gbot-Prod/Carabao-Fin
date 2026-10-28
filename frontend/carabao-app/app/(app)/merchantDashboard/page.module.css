@@ -4,7 +4,7 @@
   min-height: calc(100dvh - 0px);
   display: flex;
   flex-direction: column;
-  background: #f2f7f3;
+  background: var(--bg-primary);
 }
 
 @media (max-width: 768px) {
@@ -146,7 +146,7 @@
 /* ── Tab bar ──────────────────────────────────────────────────────────────── */
 .tabBar {
   display: flex;
-  background: #fff;
+  background: var(--bg-white);
   border-bottom: 1px solid rgba(23, 61, 37, 0.10);
   padding: 0 28px;
   gap: 0;
@@ -232,7 +232,7 @@
 
 /* ── Shared panel ────────────────────────────────────────────────────────── */
 .panel {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid rgba(23, 61, 37, 0.08);
   border-radius: var(--radius-md);
   padding: 20px 24px;
@@ -293,7 +293,7 @@
 }
 
 .kpiCard {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid rgba(23, 61, 37, 0.08);
   border-radius: var(--radius-md);
   padding: 18px 16px;
@@ -456,7 +456,7 @@
   align-items: flex-start;
   gap: 14px;
   padding: 14px 16px;
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid rgba(23, 61, 37, 0.08);
   border-radius: var(--radius-md);
 }
@@ -555,14 +555,14 @@
 }
 
 .shopCreateForm {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px dashed rgba(49, 146, 93, 0.3);
   border-radius: var(--radius-md);
   padding: 20px 24px;
 }
 
 .shopEditor {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid rgba(23, 61, 37, 0.10);
   border-radius: var(--radius-md);
   overflow: hidden;
@@ -697,7 +697,7 @@
 
 /* ── Store details panel ─────────────────────────────────────────────────── */
 .shopDetailsSection {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid rgba(23, 61, 37, 0.10);
   border-radius: var(--radius-md);
   padding: 20px 24px;
@@ -872,7 +872,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid #e7efe7;
   border-radius: var(--radius-md);
 }
@@ -951,7 +951,7 @@
 }
 
 .orderCard {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid rgba(23, 61, 37, 0.08);
   border-radius: var(--radius-md);
   padding: 18px 20px;
@@ -1401,7 +1401,7 @@
 
 /* ── Forms ───────────────────────────────────────────────────────────────── */
 .produceForm {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid rgba(23, 61, 37, 0.10);
   border-radius: var(--radius-md);
   padding: 18px;
@@ -1453,7 +1453,7 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--green-900);
-  background: #fff;
+  background: var(--bg-white);
   font-family: inherit;
   width: 100%;
   box-sizing: border-box;

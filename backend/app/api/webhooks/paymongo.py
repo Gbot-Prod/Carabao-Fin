@@ -9,7 +9,7 @@ from app.models.cart import Cart
 from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.transaction import Transaction
-from app.services.paymongo import PAYMONGO_WEBHOOK_SECRET, verify_webhook_signature
+from app.services.paymongo import get_webhook_secret, verify_webhook_signature
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ async def paymongo_webhook(request: Request, db: Session = Depends(get_db)):
     raw_body = await request.body()
     signature = request.headers.get("Paymongo-Signature", "")
 
-    if not PAYMONGO_WEBHOOK_SECRET:
+    if not get_webhook_secret():
         raise HTTPException(status_code=500, detail="Webhook secret is not configured")
     if not signature:
         raise HTTPException(status_code=400, detail="Missing webhook signature")
@@ -30,8 +30,8 @@ async def paymongo_webhook(request: Request, db: Session = Depends(get_db)):
 
     try:
         payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from e
 
     event_type = payload.get("data", {}).get("attributes", {}).get("type", "")
 
@@ -75,6 +75,7 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
     txn = (
         db.query(Transaction)
         .filter(Transaction.paymongo_session_id == session_id)
+        .with_for_update()
         .first()
     )
 

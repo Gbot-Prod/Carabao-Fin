@@ -14,13 +14,17 @@ function readBackendToken(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-async function refreshBackendToken(): Promise<boolean> {
-  try {
-    const res = await fetch('/api/auth', { method: 'POST', credentials: 'include' });
-    return res.ok;
-  } catch {
-    return false;
-  }
+let pendingRefresh: Promise<boolean> | null = null;
+
+// Concurrent 401s share one sync request instead of each starting their own.
+function refreshBackendToken(): Promise<boolean> {
+  pendingRefresh ??= fetch('/api/auth', { method: 'POST', credentials: 'include' })
+    .then((res) => res.ok)
+    .catch(() => false)
+    .finally(() => {
+      pendingRefresh = null;
+    });
+  return pendingRefresh;
 }
 
 export const apiClient = axios.create({

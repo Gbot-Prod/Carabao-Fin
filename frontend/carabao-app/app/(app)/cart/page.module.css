@@ -25,7 +25,7 @@
 .itemsCard,
 .summaryCard {
   min-width: 0;
-  background: #ffffff;
+  background: var(--bg-white);
   border-radius: var(--radius-md);
   border: 1px solid var(--green-border);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
@@ -101,7 +101,7 @@
 }
 
 .qtyControl button {
-  background: #fff;
+  background: var(--bg-white);
   font-weight: 700;
 }
 
@@ -171,7 +171,7 @@
 
 .secondaryButton {
   border: 1px solid var(--border-strong);
-  background: #ffffff;
+  background: var(--bg-white);
 }
 
 .emptyState {

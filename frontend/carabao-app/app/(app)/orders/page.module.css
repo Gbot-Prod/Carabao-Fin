@@ -57,7 +57,7 @@
 }
 
 .tabActive {
-  background: #fff;
+  background: var(--bg-white);
   color: #11492a;
   box-shadow: 0 1px 4px rgba(4, 53, 21, 0.1);
 }
@@ -73,7 +73,7 @@
 }
 
 .card {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid #d9e7dd;
   border-radius: var(--radius-md);
   padding: 1rem 1.1rem;
@@ -240,7 +240,7 @@
 /* ── Empty state ──────────────────────────────────────────────────────────── */
 
 .empty {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid #d9e7dd;
   border-radius: var(--radius-md);
   padding: 2.5rem 1.5rem;

@@ -24,18 +24,19 @@ from app.schemas.payment import (
     PayoutBatchResponse,
     TransactionResponse,
 )
-from app.services.paymongo import create_checkout_session, retrieve_checkout_session
 from app.services.order_reservations import (
+    close_checkout_sessions,
     expire_stale_reservations,
     release_order_reservation,
+    reservation_ttl_minutes,
 )
+from app.services.paymongo import create_checkout_session, retrieve_checkout_session
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 _raw_frontend = os.getenv("FRONTEND_URL", "http://localhost:3000")
 FRONTEND_URL = _raw_frontend.split(",")[0].strip()
 PLATFORM_FEE_RATE = 0.05
-RESERVATION_TTL_MINUTES = int(os.getenv("ORDER_RESERVATION_TTL_MINUTES", "30"))
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,7 @@ def create_payment_checkout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    expire_stale_reservations(db, RESERVATION_TTL_MINUTES)
+    expire_stale_reservations(db, reservation_ttl_minutes())
     order = (
         db.query(Order)
         .join(OrderHistory, Order.order_history_id == OrderHistory.id)
@@ -144,7 +145,7 @@ def create_payment_checkout(
         created_at = existing_pending.created_at
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
-        if (datetime.now(UTC) - created_at).total_seconds() < RESERVATION_TTL_MINUTES * 60:
+        if (datetime.now(UTC) - created_at).total_seconds() < reservation_ttl_minutes() * 60:
             return CheckoutResponse(
                 transaction_id=existing_pending.id,
                 order_id=order_id,
@@ -153,6 +154,18 @@ def create_payment_checkout(
                 amount=existing_pending.amount,
                 status=existing_pending.status,
             )
+
+    # Close any superseded session before opening a new one, so the buyer can't
+    # pay for the same order twice.
+    if not close_checkout_sessions(order, db):
+        raise HTTPException(
+            status_code=409, detail="A payment for this order is already in progress"
+        )
+    (
+        db.query(Transaction)
+        .filter(Transaction.order_id == order_id, Transaction.status == "pending")
+        .update({Transaction.status: "expired"}, synchronize_session=False)
+    )
 
     merchant = db.query(Merchant).filter(Merchant.id == order.merchant_id).first()
     if not merchant:
@@ -184,19 +197,19 @@ def create_payment_checkout(
         )
         raise HTTPException(
             status_code=502, detail=f"PayMongo error: {response_text[:2000]}"
-        )
+        ) from e
     except RuntimeError as e:
         release_order_reservation(order, db, transaction_status="failed")
         db.commit()
         logger.error("Payment configuration error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception as e:
         release_order_reservation(order, db, transaction_status="failed")
         db.commit()
         logger.exception("Unexpected error while creating checkout session")
         raise HTTPException(
             status_code=500, detail="Unexpected error creating checkout session"
-        )
+        ) from e
 
     txn = Transaction(
         order_id=order_id,
@@ -249,7 +262,12 @@ def cancel_payment_checkout(
     if paid:
         raise HTTPException(status_code=409, detail="Order has already been paid")
 
-    release_order_reservation(order, db, transaction_status="failed")
+    if order.status == "pending" and not release_order_reservation(
+        order, db, transaction_status="failed"
+    ):
+        raise HTTPException(
+            status_code=409, detail="A payment for this order is already in progress"
+        )
     db.commit()
 
 
