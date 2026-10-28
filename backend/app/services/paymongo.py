@@ -20,6 +20,7 @@ SUPPORTED_METHODS = [
     "gcash",
     "paymaya",
     "grab_pay",
+    "qr_ph",
 ]
 
 

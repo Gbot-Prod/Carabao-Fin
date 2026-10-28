@@ -58,6 +58,37 @@ const apiBaseUrl = normalizedApiUrl
     : `https://${normalizedApiUrl}`
   : "";
 
+// Better Auth rejects requests whose Origin isn't the baseURL origin or listed here ("Invalid origin").
+// Normalize env values so quotes, trailing slashes, paths or a missing scheme don't break the match.
+const toOrigin = (value: string | undefined) => {
+  const trimmed = value?.trim().replace(/^"|"$/g, "");
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`).origin;
+  } catch {
+    return null;
+  }
+};
+
+const appBaseUrl =
+  toOrigin(process.env.BETTER_AUTH_URL) ||
+  toOrigin(process.env.NEXT_PUBLIC_APP_URL) ||
+  "http://localhost:3000";
+
+const trustedOrigins = Array.from(
+  new Set(
+    [
+      appBaseUrl,
+      process.env.NEXT_PUBLIC_APP_URL,
+      process.env.FRONTEND_URL,
+      process.env.RAILWAY_PUBLIC_DOMAIN,
+      ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS || "").split(","),
+    ]
+      .map(toOrigin)
+      .filter((origin): origin is string => Boolean(origin))
+  )
+);
+
 export const auth = betterAuth({
   plugins: [admin()],
   database: pool,
@@ -67,10 +98,8 @@ export const auth = betterAuth({
       maxAge: 5 * 60,
     },
   },
-  baseURL:
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.BETTER_AUTH_URL ||
-    "http://localhost:3000",
+  baseURL: appBaseUrl,
+  trustedOrigins,
   basePath: "/api/auth",
   secret: process.env.BETTER_AUTH_SECRET,
   emailAndPassword: {

@@ -1,12 +1,16 @@
+import asyncio
 import logging
 import os
 import traceback
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes.router import router
+from app.core.database import SessionLocal
+from app.services.order_reservations import expire_stale_reservations
 from app.models import (  # noqa: F401
     cart,
     current_orders,
@@ -27,7 +31,36 @@ from app.models import (  # noqa: F401
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    async def release_expired_reservations() -> None:
+        # Each API worker runs this sweep. Row locks prevent double releases.
+        db = SessionLocal()
+        try:
+            ttl = int(os.getenv("ORDER_RESERVATION_TTL_MINUTES", "30"))
+            released = expire_stale_reservations(db, ttl)
+            db.commit()
+            if released:
+                logger.info("Released %s expired checkout reservation(s)", released)
+        except Exception:
+            db.rollback()
+            logger.exception("Could not release expired checkout reservations")
+        finally:
+            db.close()
+
+    async def reservation_cleanup_loop() -> None:
+        while True:
+            await release_expired_reservations()
+            await asyncio.sleep(60)
+
+    cleanup_task = asyncio.create_task(reservation_cleanup_loop())
+    yield
+    cleanup_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await cleanup_task
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.exception_handler(Exception)

@@ -84,6 +84,11 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
 
     if txn.status == "paid":
         return  # already processed (duplicate delivery)
+    if txn.status != "pending":
+        logger.warning(
+            "Ignoring payment for closed transaction %s (status=%s)", txn.id, txn.status
+        )
+        return
 
     txn.status = "paid"
     txn.paymongo_payment_id = payment_id

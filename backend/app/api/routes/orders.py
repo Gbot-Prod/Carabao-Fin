@@ -21,6 +21,7 @@ from app.schemas.order import (
     PlaceOrderResponse,
 )
 from app.services.sms_service import notify_order_shipped
+from app.services.order_reservations import expire_stale_reservations
 
 from ._order_helpers import (
     _extract_item_int,
@@ -28,7 +29,6 @@ from ._order_helpers import (
     get_or_create_cart,
     get_or_create_order_history,
     get_order_history,
-    resolve_merchant_from_items,
     to_current_order_item,
     to_current_order_item_from_order,
     to_order_history_item,
@@ -36,59 +36,68 @@ from ._order_helpers import (
 
 router = APIRouter(tags=["orders"])
 
-
 @router.post("/orders/me/place", response_model=PlaceOrderResponse)
 async def place_order_from_cart(
     payload: PlaceOrderRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Release any elapsed checkout holds before checking availability.
+    expire_stale_reservations(db, ttl_minutes=30)
     cart = get_or_create_cart(db, current_user.id)
     cart_items = cart.items or []
-
     if not cart_items:
         raise HTTPException(status_code=400, detail="Cart is empty")
 
     history = get_or_create_order_history(db, current_user.id)
-    merchant = resolve_merchant_from_items(db, cart_items)
-    if not merchant:
-        raise HTTPException(
-            status_code=400, detail="Cannot determine merchant from cart items"
-        )
-    service_fee = merchant.delivery_price  
-
+    produce_by_id: dict[int, Produce] = {}
     order_items = []
     fresh_total = 0
     for item in cart_items:
         if not isinstance(item, dict):
-            order_items.append(item)
-            continue
+            raise HTTPException(status_code=400, detail="Invalid cart item")
+
         produce_id = _extract_item_int(item, "produce_id", "produceId", "id")
         if produce_id is None:
-            order_items.append(item)
-            continue
-        quantity = max(_to_int(item.get("quantity"), 0), 0)
-        if quantity == 0:
-            order_items.append(item)
-            continue
+            raise HTTPException(status_code=400, detail="Cart item is missing a produce ID")
+
         produce = (
-            db.query(Produce).filter(Produce.id == produce_id).with_for_update().first()
+            db.query(Produce)
+            .filter(Produce.id == produce_id)
+            .with_for_update()
+            .first()
         )
         if produce is None:
             raise HTTPException(
                 status_code=400, detail=f"Produce ID {produce_id} not found"
             )
+
+        quantity = max(_to_int(item.get("quantity"), 0), 0)
+        if quantity == 0:
+            raise HTTPException(status_code=400, detail="Item quantity must be positive")
         if produce.stock_quantity < quantity:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient stock for '{produce.name}': {
-                    produce.stock_quantity
-                } available, {quantity} requested",
+                detail=(
+                    f"Insufficient stock for '{produce.name}': "
+                    f"{produce.stock_quantity} available, {quantity} requested"
+                ),
             )
+
+        produce_by_id[produce_id] = produce
         produce.stock_quantity -= quantity
         fresh_total += produce.price * quantity
         order_items.append({**item, "price": produce.price})
 
+    merchant_ids = {produce.merchant_id for produce in produce_by_id.values()}
+    if len(merchant_ids) != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Your cart can contain products from only one merchant.",
+        )
+
+    merchant = next(iter(produce_by_id.values())).merchant
+    service_fee = merchant.delivery_price or 0
     total_price = fresh_total + service_fee
 
     order = Order(
