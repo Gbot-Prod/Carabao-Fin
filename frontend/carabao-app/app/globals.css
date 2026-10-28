@@ -13,6 +13,21 @@
   --color-border: #eee;
   --color-shadow: rgba(0, 0, 0, 0.1);
 
+  /* Brand palette (use these instead of raw hex values) */
+  --green-900: #173d25;
+  --green-600: #31925d;
+  --green-50: #f7fcf8;
+  --green-border: #e0ece5;
+  --text-muted: #5c6a5e;
+  --text-subtle: #647067;
+  --danger: #b91c1c;
+  --success-text: #166534;
+  --text-strong: #1a2e20;
+  --text-faint: #9aab9d;
+  --border-strong: #d0e4d5;
+  --surface-muted: #f0f5f2;
+  --focus-ring: 0 0 0 3px rgba(49, 146, 93, 0.35);
+
   /* Spacing */
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
@@ -24,10 +39,9 @@
   --font-family: 'Plus Jakarta Sans', sans-serif;
 
   /* Border radius */
-  --radius-sm: 10px;
-  --radius-md: 20px;
-  --radius-lg: 30px;
-  --radius-full: 50%;
+  --radius-sm: 8px;    /* inputs, buttons, chips */
+  --radius-md: 12px;   /* cards, panels, modals */
+  --radius-pill: 999px;
 }
 
 /* Base resets */
@@ -58,7 +72,6 @@ h5,
 h6 {
   font-weight: 600;
   line-height: 1.2;
-  margin-bottom: var(--spacing-md);
 }
 
 h1 {
@@ -105,9 +118,37 @@ a:hover {
 button {
   font-family: var(--font-family);
   border: none;
-  outline: none;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Keyboard focus indicator (mouse clicks stay clean) */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--green-600);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 /* Shadows */
@@ -175,15 +216,15 @@ button {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--surface-muted);
   border-radius: var(--radius-md);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
+  background: var(--text-faint);
   border-radius: var(--radius-md);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--text-subtle);
 }

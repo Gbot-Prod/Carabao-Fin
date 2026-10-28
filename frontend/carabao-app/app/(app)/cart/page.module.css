@@ -12,7 +12,7 @@
 }
 
 .header p {
-  color: #5b5b5b;
+  color: var(--text-muted);
   margin-bottom: 1.5rem;
 }
 
@@ -26,8 +26,8 @@
 .summaryCard {
   min-width: 0;
   background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid #e9e9e9;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--green-border);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
 
@@ -45,10 +45,10 @@
   display: grid;
   grid-template-columns: 1.2fr 1fr;
   gap: 0.75rem;
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
+  border: 1px solid var(--surface-muted);
+  border-radius: var(--radius-md);
   padding: 0.9rem;
-  background: #fcfcfc;
+  background: var(--green-50);
 }
 
 .farm {
@@ -64,7 +64,7 @@
 }
 
 .priceLine {
-  color: #666;
+  color: var(--text-muted);
   margin-top: 0.4rem;
 }
 
@@ -76,8 +76,8 @@
 
 .qtyControl {
   display: inline-flex;
-  border: 1px solid #d9d9d9;
-  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -106,7 +106,7 @@
 }
 
 .qtyControl span {
-  background: #f2f2f2;
+  background: var(--surface-muted);
   font-weight: 600;
 }
 
@@ -143,7 +143,7 @@
 .summaryLineGrand {
   margin-top: 1rem;
   padding-top: 0.85rem;
-  border-top: 1px dashed #dedede;
+  border-top: 1px dashed var(--border-strong);
   font-size: 1.05rem;
 }
 
@@ -160,7 +160,7 @@
   justify-content: center;
   width: 100%;
   padding: 0.75rem 0.9rem;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
 }
 
@@ -170,7 +170,7 @@
 }
 
 .secondaryButton {
-  border: 1px solid #d7d7d7;
+  border: 1px solid var(--border-strong);
   background: #ffffff;
 }
 
@@ -216,7 +216,7 @@
 
   .itemsCard,
   .summaryCard {
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     padding: 1rem;
   }
 

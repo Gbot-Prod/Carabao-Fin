@@ -12,7 +12,7 @@
 
 .modal {
   background: #fff;
-  border-radius: 1rem;
+  border-radius: var(--radius-md);
   width: 100%;
   max-width: 560px;
   max-height: 85vh;
@@ -27,14 +27,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem 1.5rem 1rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--green-border);
   flex-shrink: 0;
 }
 
 .header h2 {
   font-size: 1.0625rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-strong);
   margin: 0;
 }
 
@@ -42,9 +42,9 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--text-faint);
   padding: 0.25rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -52,8 +52,8 @@
 }
 
 .closeBtn:hover {
-  color: #374151;
-  background-color: #f3f4f6;
+  color: var(--text-muted);
+  background-color: var(--surface-muted);
 }
 
 .body {
@@ -61,14 +61,14 @@
   padding: 1.25rem 1.5rem;
   flex: 1;
   font-size: 0.875rem;
-  color: #374151;
+  color: var(--text-muted);
   line-height: 1.65;
 }
 
 .body h3 {
   font-size: 0.9375rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-strong);
   margin: 1.25rem 0 0.375rem;
 }
 
@@ -91,13 +91,13 @@
 
 .body .effective {
   font-size: 0.8125rem;
-  color: #9ca3af;
+  color: var(--text-faint);
   margin-bottom: 1rem;
 }
 
 .footer {
   padding: 1rem 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--green-border);
   display: flex;
   gap: 0.625rem;
   justify-content: flex-end;
@@ -107,9 +107,9 @@
 .closeTextBtn {
   padding: 0.6rem 1.125rem;
   background: transparent;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
+  color: var(--text-subtle);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -117,8 +117,8 @@
 }
 
 .closeTextBtn:hover {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
 }
 
 .agreeBtn {
@@ -126,7 +126,7 @@
   background: var(--color-primary, #2f8f57);
   color: #fff;
   border: none;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-sm);
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
@@ -146,7 +146,7 @@
   .modal {
     max-width: 100%;
     max-height: 90dvh;
-    border-radius: 1.25rem 1.25rem 0 0;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
     animation: slideUpMobile 0.22s ease;
   }
 

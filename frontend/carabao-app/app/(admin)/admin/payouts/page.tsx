@@ -203,14 +203,14 @@ export default function PayoutsPage() {
                           </button>
                         </div>
                       ) : batch.status === "released" ? (
-                        <span style={{ fontSize: 12, color: "#647067" }}>
+                        <span className={styles.releasedNote}>
                           {batch.released_at
                             ? new Date(batch.released_at).toLocaleDateString("en-PH", { month: "short", day: "numeric" })
                             : "Released"}
                           {batch.notes && ` · ${batch.notes}`}
                         </span>
                       ) : (
-                        <span style={{ fontSize: 12, color: "#9ca3af" }}>—</span>
+                        <span className={styles.emptyCell}>—</span>
                       )}
                     </td>
                   </tr>

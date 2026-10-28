@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, #f7fcf8 0%, #ecf6ef 100%);
+  background: linear-gradient(180deg, var(--green-50) 0%, #ecf6ef 100%);
 }
 
 .email-verified-container {
@@ -24,21 +24,21 @@
 .email-verified-icon-wrapper svg {
   width: 24px;
   height: 24px;
-  stroke: #31925d;
+  stroke: var(--green-600);
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .email-verified-title {
-  color: #173d25;
+  color: var(--green-900);
   font-weight: 600;
   font-size: 16px;
   margin: 0;
 }
 
 .email-verified-subtitle {
-  color: #647067;
+  color: var(--text-subtle);
   font-size: 14px;
   margin-top: 6px;
 }
@@ -48,13 +48,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, #f7fcf8 0%, #ecf6ef 100%);
+  background: linear-gradient(180deg, var(--green-50) 0%, #ecf6ef 100%);
   padding: 16px;
 }
 
 .email-verified-error-card {
   background: white;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   padding: 40px 32px;
   width: 100%;
   max-width: 400px;
@@ -63,12 +63,12 @@
 }
 
 .email-verified-error-message {
-  color: #b91c1c;
+  color: var(--danger);
   margin-bottom: 16px;
 }
 
 .email-verified-error-link {
-  color: #31925d;
+  color: var(--green-600);
   font-size: 14px;
   text-decoration: underline;
 }

@@ -515,7 +515,7 @@ export default function MerchantOnboardingPage() {
                         <input
                           type="file"
                           accept="image/*,application/pdf"
-                          style={{ display: "none" }}
+                          hidden
                           onChange={(e) => setRsbsaFile(e.target.files?.[0] ?? null)}
                         />
                         <svg className={styles.dropzoneIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

@@ -146,15 +146,17 @@ def get_admin_stats(
     )
 
     since = datetime.now(UTC) - timedelta(days=30)
+    # Plain cast (no bound params) so SELECT and GROUP BY match under psycopg3.
+    paid_day = cast(Transaction.paid_at, Date)
     daily_rows = (
         db.query(
-            cast(func.date_trunc("day", Transaction.paid_at), Date).label("date"),
+            paid_day.label("date"),
             func.sum(Transaction.amount).label("revenue"),
             func.sum(Transaction.platform_fee).label("platform_fee"),
         )
         .filter(Transaction.status == "paid", Transaction.paid_at >= since)
-        .group_by(cast(func.date_trunc("day", Transaction.paid_at), Date))
-        .order_by(cast(func.date_trunc("day", Transaction.paid_at), Date))
+        .group_by(paid_day)
+        .order_by(paid_day)
         .all()
     )
 

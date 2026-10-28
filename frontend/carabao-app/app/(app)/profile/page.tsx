@@ -36,7 +36,7 @@ function UserAvatar({ pictureUrl, uploading, onUpload }: {
       <input
         type="file"
         accept="image/png,image/jpeg,image/webp"
-        style={{ display: 'none' }}
+        hidden
         disabled={uploading}
         onChange={(e) => {
           const file = e.target.files?.[0];
