@@ -63,16 +63,24 @@ async def lifespan(_: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
-    logger.error(
-        "Unhandled exception on %s %s: %s\n%s",
-        request.method,
-        request.url.path,
-        exc,
-        traceback.format_exc(),
-    )
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+# Registered as middleware (before CORSMiddleware, so it sits inside it) rather
+# than an Exception handler: Starlette runs those outside CORS, which strips the
+# CORS headers and makes every 500 look like a CORS error in the browser.
+@app.middleware("http")
+async def unhandled_exception_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        logger.error(
+            "Unhandled exception on %s %s: %s\n%s",
+            request.method,
+            request.url.path,
+            exc,
+            traceback.format_exc(),
+        )
+        return JSONResponse(
+            status_code=500, content={"detail": "Internal server error"}
+        )
 
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")

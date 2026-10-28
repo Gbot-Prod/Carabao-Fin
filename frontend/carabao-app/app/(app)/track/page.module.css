@@ -23,7 +23,7 @@
   width: 100%;
   height: 420px;
   border: 1px solid #d8e0d8;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
@@ -35,7 +35,7 @@
   height: 420px;
   overflow: hidden;
   border: 1px solid #d8e0d8;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   background:
     linear-gradient(135deg, rgba(220, 252, 231, 0.8), rgba(239, 246, 255, 0.9)),
     repeating-linear-gradient(45deg, rgba(148, 163, 184, 0.12) 0 1px, transparent 1px 18px);
@@ -67,17 +67,17 @@
   max-width: 280px;
   padding: 8px 10px;
   border: 1px solid rgba(148, 163, 184, 0.45);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.9);
-  color: #475569;
+  color: var(--text-muted);
   font-size: 0.78rem;
   line-height: 1.25;
 }
 
 .detailsSection {
   background-color: #ffffff;
-  border: 1px solid #e7e7e7;
-  border-radius: 16px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
   padding: 16px;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
 }
@@ -86,7 +86,7 @@
   margin: 0 0 12px;
   font-size: 1.1rem;
   font-weight: 700;
-  color: #1b1b1b;
+  color: var(--text-strong);
 }
 
 .detailGrid {
@@ -98,7 +98,7 @@
 .shipmentPanel {
   margin-top: 16px;
   border: 1px solid #dbe7dd;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   padding: 14px;
   background: linear-gradient(180deg, #f7fbf8 0%, #ffffff 100%);
 }
@@ -115,14 +115,14 @@
   margin: 2px 0 0;
   font-size: 1rem;
   font-weight: 800;
-  color: #173d25;
+  color: var(--green-900);
 }
 
 .shipmentStatus {
   display: inline-flex;
   align-items: center;
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: #e9f4ec;
   color: #245033;
   font-size: 0.75rem;
@@ -140,7 +140,7 @@
 
 .shipmentSummaryRow>div {
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: #ffffff;
   border: 1px solid #e2ece2;
 }
@@ -166,7 +166,7 @@
 
 .shipmentStopItem {
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border: 1px solid #e2ece2;
   background: #fff;
 }
@@ -187,7 +187,7 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: #eff7f1;
   color: #245033;
   font-size: 0.74rem;
@@ -205,7 +205,7 @@
   margin: 8px 0 4px;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #173d25;
+  color: var(--green-900);
 }
 
 .shipmentStopAddress {
@@ -217,17 +217,17 @@
 .shipmentError {
   margin: 12px 0 0;
   font-size: 0.95rem;
-  color: #b91c1c;
+  color: var(--danger);
   background: #fef2f2;
   border: 1px solid #fecaca;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
 }
 
 .detailItem {
   background-color: #f7faf7;
   border: 1px solid #e2ece2;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 10px 12px;
 }
 
@@ -250,8 +250,8 @@
 
 .ordersSection {
   background-color: #ffffff;
-  border: 1px solid #e7e7e7;
-  border-radius: 16px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
   padding: 16px;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
   max-height: 620px;

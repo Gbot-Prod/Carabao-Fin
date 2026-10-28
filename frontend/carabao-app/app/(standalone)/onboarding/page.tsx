@@ -7,6 +7,7 @@ import { fetchMyProfile, updateMyProfile } from "@/util/api";
 import { signUp } from "@/lib/auth-client";
 import TermsModal from "@/components/TermsModal/TermsModal";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
+import styles from "./page.module.css";
 
 type FormData = {
   firstName: string;
@@ -125,31 +126,8 @@ export default function OnboardingPage() {
     }
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "9px 12px",
-    border: "1px solid #d0e4d5",
-    borderRadius: 8,
-    fontSize: 14,
-    color: "#173d25",
-    background: "#f9fcf9",
-    boxSizing: "border-box",
-    fontFamily: "inherit",
-    outline: "none",
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: 11,
-    fontWeight: 700,
-    color: "#5c6a5e",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    display: "block",
-    marginBottom: 5,
-  };
-
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(180deg, #f7fcf8 0%, #ecf6ef 100%)", padding: 16 }}>
+    <div className={styles.page}>
       {showTerms && (
         <TermsModal
           onClose={() => setShowTerms(false)}
@@ -159,46 +137,45 @@ export default function OnboardingPage() {
           }}
         />
       )}
-      <div style={{ background: "white", borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 500, boxShadow: "0 4px 20px rgba(0,0,0,0.10)" }}>
+      <div className={styles.card}>
 
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px", color: "#173d25" }}>Complete your profile</h1>
-        <p style={{ fontSize: 14, color: "#647067", margin: "0 0 28px" }}>
+        <h1 className={styles.title}>Complete your profile</h1>
+        <p className={styles.subtitle}>
           {pendingSignup ? "Set your account password, then add your profile details." : "All fields are optional — fill in what you have now and update anytime."}
         </p>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <form onSubmit={handleSubmit} className={styles.form}>
           {pendingSignup && (
             <>
               <div>
-                <label style={labelStyle}>Account email</label>
+                <label className={styles.label}>Account email</label>
                 <input
                   type="email"
                   required
                   value={accountEmail}
                   onChange={(e) => setAccountEmail(e.target.value)}
                   placeholder="you@example.com"
-                  style={inputStyle}
+                  className={styles.input}
                   readOnly={pendingSignup.channel === "email"}
                 />
               </div>
               <div>
-                <label style={labelStyle}>Password</label>
-                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} style={inputStyle} />
+                <label className={styles.label}>Password</label>
+                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
               </div>
               <div>
-                <label style={labelStyle}>Confirm password</label>
-                <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={inputStyle} />
+                <label className={styles.label}>Confirm password</label>
+                <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={styles.input} />
               </div>
-              <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#647067", lineHeight: 1.4 }}>
+              <label className={styles.termsRow}>
                 <input
                   type="checkbox"
                   checked={termsAccepted}
                   onChange={(e) => setTermsAccepted(e.target.checked)}
-                  style={{ marginTop: 2, accentColor: "#31925d" }}
                 />
                 <span>
                   I agree to the{" "}
-                  <button type="button" onClick={() => setShowTerms(true)} style={{ border: 0, background: "none", padding: 0, color: "#2f8f57", font: "inherit", fontWeight: 600, textDecoration: "underline", cursor: "pointer" }}>
+                  <button type="button" onClick={() => setShowTerms(true)} className={styles.termsLink}>
                     Terms of Service
                   </button>
                 </span>
@@ -207,20 +184,20 @@ export default function OnboardingPage() {
           )}
 
           {/* Name row */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+          <div className={styles.nameRow}>
             <div>
-              <label style={labelStyle}>First name</label>
-              <input name="firstName" value={formData.firstName} onChange={handleChange} placeholder="Juan" style={inputStyle} />
+              <label className={styles.label}>First name</label>
+              <input name="firstName" value={formData.firstName} onChange={handleChange} placeholder="Juan" className={styles.input} />
             </div>
             <div>
-              <label style={labelStyle}>Last name</label>
-              <input name="lastName" value={formData.lastName} onChange={handleChange} placeholder="dela Cruz" style={inputStyle} />
+              <label className={styles.label}>Last name</label>
+              <input name="lastName" value={formData.lastName} onChange={handleChange} placeholder="dela Cruz" className={styles.input} />
             </div>
           </div>
 
           <div>
-            <label style={labelStyle}>Phone number</label>
-            <input type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} placeholder="+63 912 345 6789" style={inputStyle} />
+            <label className={styles.label}>Phone number</label>
+            <input type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} placeholder="+63 912 345 6789" className={styles.input} />
           </div>
 
           <LocationSelects
@@ -236,39 +213,39 @@ export default function OnboardingPage() {
                   ...location
                 }))
               }
-              selectStyle={inputStyle}
-              labelStyle={labelStyle}
+              selectClassName={styles.input}
+              labelClassName={styles.label}
           />
           
           <div>
-            <label style={labelStyle}>Street address</label>
-            <input type="text" name="streetAddress" value={formData.streetAddress} onChange={handleChange} placeholder="123 Rizal Ave" style={inputStyle} />
+            <label className={styles.label}>Street address</label>
+            <input type="text" name="streetAddress" value={formData.streetAddress} onChange={handleChange} placeholder="123 Rizal Ave" className={styles.input} />
           </div>
 
           <div>
-            <label style={labelStyle}>ZIP code</label>
-            <input type="text" name="zipCode" value={formData.zipCode} onChange={handleChange} placeholder="1634" style={inputStyle} />
+            <label className={styles.label}>ZIP code</label>
+            <input type="text" name="zipCode" value={formData.zipCode} onChange={handleChange} placeholder="1634" className={styles.input} />
           </div>
 
           {saveError && (
-            <p style={{ margin: 0, padding: "10px 12px", borderRadius: 8, background: "#fdecea", color: "#b91c1c", fontSize: 13 }}>
+            <p className={styles.error}>
               {saveError}
             </p>
           )}
 
-          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+          <div className={styles.actions}>
             <button
               type="submit"
               disabled={isSaving}
-              style={{ flex: 1, padding: "11px 0", background: isSaving ? "#7cbf9e" : "#31925d", color: "white", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: isSaving ? "not-allowed" : "pointer", fontFamily: "inherit" }}
+              className={styles.submitButton}
             >
               {isSaving ? "Saving…" : "Save and continue"}
             </button>
           </div>
         </form>
 
-        <div style={{ marginTop: 20, textAlign: "center" }}>
-          <Link href="/order" style={{ fontSize: 13, color: "#5c6a5e", textDecoration: "underline" }}>
+        <div className={styles.skip}>
+          <Link href="/order">
             Skip for now → go to app
           </Link>
         </div>

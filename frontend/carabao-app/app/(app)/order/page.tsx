@@ -178,12 +178,7 @@ function OrderContent() {
 
           return (
             <article key={uniqueKey} className={styles.farmCard}>
-              <div
-                className={styles.cardImage}
-                style={{
-                  backgroundImage: 'linear-gradient(165deg, rgba(11, 78, 36, 0.15), rgba(11, 78, 36, 0.6))',
-                }}
-              >
+              <div className={styles.cardImage}>
                 {farm.logoUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={farm.logoUrl} alt={farm.name} className={styles.cardLogo} />

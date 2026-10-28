@@ -1,0 +1,131 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, var(--green-50) 0%, #ecf6ef 100%);
+  padding: 16px;
+}
+
+.card {
+  background: #fff;
+  border-radius: var(--radius-md);
+  padding: 32px 28px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--green-900);
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--text-subtle);
+  margin: 0 0 28px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.nameRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--green-900);
+  background: #f9fcf9;
+  font-family: inherit;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--green-600);
+  background: #fff;
+}
+
+.termsRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-subtle);
+  line-height: 1.4;
+}
+
+.termsRow input {
+  margin-top: 2px;
+  accent-color: var(--green-600);
+}
+
+.termsLink {
+  padding: 0;
+  background: none;
+  color: #2f8f57;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.error {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: #fdecea;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.submitButton {
+  flex: 1;
+  padding: 11px 0;
+  background: var(--green-600);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.submitButton:disabled {
+  background: #7cbf9e;
+}
+
+.skip {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.skip a {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: underline;
+}
