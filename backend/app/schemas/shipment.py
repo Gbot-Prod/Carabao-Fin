@@ -42,5 +42,10 @@ class ShipmentTrackingResponse(BaseModel):
     active_stop_index: int
 
 
+# Pickup + 20 stops = 21 points, inside the Mapbox Matrix API's 25-point
+# limit, so every shipment is routed from a single matrix request.
+MAX_SHIPMENT_ORDERS = 20
+
+
 class CreateShipmentRequest(BaseModel):
-    order_ids: list[int] = Field(min_length=1)
+    order_ids: list[int] = Field(min_length=1, max_length=MAX_SHIPMENT_ORDERS)

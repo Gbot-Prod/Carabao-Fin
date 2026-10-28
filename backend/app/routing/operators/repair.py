@@ -7,7 +7,7 @@ import heapq
 
 import numpy as np
 
-from app.routing.state import MultiRouteState, RouteState, Stop, _haversine_distance
+from app.routing.state import MultiRouteState, RouteState, Stop, _haversine_km
 
 
 def greedy_insert(state: RouteState, rng: np.random.Generator) -> RouteState:
@@ -55,7 +55,7 @@ def regret2_insert(state: RouteState, rng: np.random.Generator) -> RouteState:
     while result.unassigned:
         best_stop_idx = 0
         best_pos = 0
-        best_regret = -float("inf")
+        best_key = (-float("inf"), 0.0)
 
         depot = result._depot()
         for si, stop in enumerate(result.unassigned):
@@ -63,10 +63,11 @@ def regret2_insert(state: RouteState, rng: np.random.Generator) -> RouteState:
             top2 = heapq.nsmallest(2, costs)
             c1 = top2[0][0]
             c2 = top2[1][0] if len(top2) > 1 else c1
-            regret = c2 - c1
-            if regret > best_regret:
-                best_regret = regret
-                best_pos = costs[0][1]
+            # Highest regret wins; ties go to the cheaper insertion.
+            key = (c2 - c1, -c1)
+            if key > best_key:
+                best_key = key
+                best_pos = top2[0][1]
                 best_stop_idx = si
 
         stop = result.unassigned.pop(best_stop_idx)
@@ -143,6 +144,48 @@ def greedy_insert_multi(
     return result
 
 
+def regret2_insert_multi(
+    state: MultiRouteState, rng: np.random.Generator
+) -> MultiRouteState:
+    """
+    Cross-route regret-2: insert first the stop whose best route beats its
+    second-best route by the largest margin.
+
+    Insertion cost includes the makespan term (growth of the longest route),
+    so stops lean toward under-loaded riders when distances are close.
+    """
+    result = state.copy()
+    lengths = [r.objective() for r in result.routes]
+    w = result.makespan_weight
+
+    while result.unassigned:
+        longest = max(lengths)
+        best_key = (-float("inf"), 0.0)
+        choice = (0, 0, 0, 0.0)
+
+        for si, stop in enumerate(result.unassigned):
+            per_route: list[tuple[float, int, int, float]] = []
+            for ri, route in enumerate(result.routes):
+                pos, delta = _best_insertion(route.stops, stop, route._depot())
+                cost = delta + w * max(0.0, lengths[ri] + delta - longest)
+                per_route.append((cost, ri, pos, delta))
+            top2 = heapq.nsmallest(2, per_route)
+            c1 = top2[0][0]
+            c2 = top2[1][0] if len(top2) > 1 else c1
+            key = (c2 - c1, -c1)
+            if key > best_key:
+                best_key = key
+                _, ri, pos, delta = top2[0]
+                choice = (si, ri, pos, delta)
+
+        si, ri, pos, delta = choice
+        stop = result.unassigned.pop(si)
+        result.routes[ri].stops.insert(pos, stop)
+        lengths[ri] += delta
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -158,14 +201,17 @@ def _all_insertion_costs(
     stops: list[Stop], candidate: Stop, depot: Stop
 ) -> list[tuple[float, int]]:
     """Return [(delta_cost, position), ...] for every possible insertion slot."""
-    route = [depot] + stops + [depot]
+    # Hot path of every repair operator: work on raw coordinates and call the
+    # cached kernel directly instead of going through Stop objects.
+    coords = [(depot.lat, depot.lng)]
+    coords.extend((s.lat, s.lng) for s in stops)
+    coords.append((depot.lat, depot.lng))
+    c_lat, c_lng = candidate.lat, candidate.lng
+    to_cand = [_haversine_km(lat, lng, c_lat, c_lng) for lat, lng in coords]
     results: list[tuple[float, int]] = []
-    for i in range(1, len(route)):
-        prev, nxt = route[i - 1], route[i]
-        delta = (
-            _haversine_distance(prev, candidate)
-            + _haversine_distance(candidate, nxt)
-            - _haversine_distance(prev, nxt)
-        )
+    for i in range(1, len(coords)):
+        p_lat, p_lng = coords[i - 1]
+        n_lat, n_lng = coords[i]
+        delta = to_cand[i - 1] + to_cand[i] - _haversine_km(p_lat, p_lng, n_lat, n_lng)
         results.append((delta, i - 1))
     return results

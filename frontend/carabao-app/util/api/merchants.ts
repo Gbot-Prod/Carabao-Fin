@@ -281,6 +281,9 @@ export type MerchantShipmentTracking = {
   active_stop_index: number;
 };
 
+// Must match MAX_SHIPMENT_ORDERS in backend/app/schemas/shipment.py.
+export const MAX_SHIPMENT_ORDERS = 20;
+
 export const createMerchantShipment = async (orderIds: number[]): Promise<MerchantShipmentTracking> => {
   const response = await apiClient.post<MerchantShipmentTracking>('/merchants/me/shipments', { order_ids: orderIds });
   return response.data;
