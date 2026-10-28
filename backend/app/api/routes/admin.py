@@ -1,8 +1,8 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import Date, cast, func, text
+from sqlalchemy import Date, cast, func, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,8 @@ from app.schemas.merchant_application import (
     ApplicationReviewPayload,
     MerchantApplicationResponse,
 )
+from app.schemas.merchant import MerchantResponse
+from app.schemas.pagination import Page
 from app.schemas.payment import PayoutBatchResponse
 from app.schemas.user import UserResponse
 from app.services import r2_service
@@ -60,12 +62,46 @@ def set_user_admin_role(
     return user
 
 
-@router.get("/admin/users", response_model=list[UserResponse])
+@router.get("/admin/users", response_model=Page[UserResponse])
 def list_all_users(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
-    return db.query(User).order_by(User.id.asc()).all()
+    q = db.query(User)
+    total = q.count()
+    items = (
+        q.order_by(User.id.asc()).offset((page - 1) * page_size).limit(page_size).all()
+    )
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/admin/merchants", response_model=Page[MerchantResponse])
+def list_all_merchants(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: User = Depends(_require_admin),
+):
+    q = (
+        db.query(Merchant)
+        .outerjoin(MerchantApplication, MerchantApplication.user_id == Merchant.user_id)
+        .filter(
+            or_(
+                MerchantApplication.id.is_(None),
+                MerchantApplication.status != "rejected",
+            )
+        )
+    )
+    total = q.count()
+    items = (
+        q.order_by(Merchant.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get(

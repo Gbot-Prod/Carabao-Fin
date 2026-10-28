@@ -25,12 +25,17 @@ from app.schemas.payment import (
     TransactionResponse,
 )
 from app.services.paymongo import create_checkout_session, retrieve_checkout_session
+from app.services.order_reservations import (
+    expire_stale_reservations,
+    release_order_reservation,
+)
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
 _raw_frontend = os.getenv("FRONTEND_URL", "http://localhost:3000")
 FRONTEND_URL = _raw_frontend.split(",")[0].strip()
 PLATFORM_FEE_RATE = 0.05
+RESERVATION_TTL_MINUTES = int(os.getenv("ORDER_RESERVATION_TTL_MINUTES", "30"))
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +104,7 @@ def create_payment_checkout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    expire_stale_reservations(db, RESERVATION_TTL_MINUTES)
     order = (
         db.query(Order)
         .join(OrderHistory, Order.order_history_id == OrderHistory.id)
@@ -108,6 +114,8 @@ def create_payment_checkout(
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != "pending":
+        raise HTTPException(status_code=400, detail="This order is no longer awaiting payment")
 
     already_paid = (
         db.query(Transaction)
@@ -136,7 +144,7 @@ def create_payment_checkout(
         created_at = existing_pending.created_at
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
-        if (datetime.now(UTC) - created_at).total_seconds() < 3600:
+        if (datetime.now(UTC) - created_at).total_seconds() < RESERVATION_TTL_MINUTES * 60:
             return CheckoutResponse(
                 transaction_id=existing_pending.id,
                 order_id=order_id,
@@ -162,10 +170,12 @@ def create_payment_checkout(
             description=f"Carabao Order #{order_id}",
             merchant_name=merchant.merchant_name,
             success_url=f"{FRONTEND_URL}/orders/success?order_id={order_id}",
-            cancel_url=f"{FRONTEND_URL}/checkout",
+            cancel_url=f"{FRONTEND_URL}/checkout?payment_cancelled=1&order_id={order_id}",
             reference_number=str(order_id),
         )
     except requests.HTTPError as e:
+        release_order_reservation(order, db, transaction_status="failed")
+        db.commit()
         response_text = ""
         if e.response is not None:
             response_text = e.response.text or ""
@@ -176,9 +186,13 @@ def create_payment_checkout(
             status_code=502, detail=f"PayMongo error: {response_text[:2000]}"
         )
     except RuntimeError as e:
+        release_order_reservation(order, db, transaction_status="failed")
+        db.commit()
         logger.error("Payment configuration error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
     except Exception:
+        release_order_reservation(order, db, transaction_status="failed")
+        db.commit()
         logger.exception("Unexpected error while creating checkout session")
         raise HTTPException(
             status_code=500, detail="Unexpected error creating checkout session"
@@ -208,6 +222,35 @@ def create_payment_checkout(
         amount=amount,
         status=txn.status,
     )
+
+
+@router.post("/checkout/{order_id}/cancel", status_code=204)
+def cancel_payment_checkout(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Release stock when PayMongo returns the buyer without a payment."""
+    order = (
+        db.query(Order)
+        .join(OrderHistory, Order.order_history_id == OrderHistory.id)
+        .filter(Order.id == order_id, OrderHistory.user_id == current_user.id)
+        .with_for_update()
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    paid = (
+        db.query(Transaction.id)
+        .filter(Transaction.order_id == order.id, Transaction.status == "paid")
+        .first()
+    )
+    if paid:
+        raise HTTPException(status_code=409, detail="Order has already been paid")
+
+    release_order_reservation(order, db, transaction_status="failed")
+    db.commit()
 
 
 @router.get("/transactions/order/{order_id}", response_model=TransactionResponse)

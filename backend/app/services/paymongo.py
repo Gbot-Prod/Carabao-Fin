@@ -20,7 +20,11 @@ SUPPORTED_METHODS = [
     "gcash",
     "paymaya",
     "grab_pay",
+<<<<<<< HEAD
     "qrph",
+=======
+    "qr_ph",
+>>>>>>> c638365e209ed5d7e1c23006cde0aa524eb09ed9
 ]
 
 

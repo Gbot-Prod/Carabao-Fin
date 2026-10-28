@@ -21,6 +21,9 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+from app.core.database_url import normalize_database_url
+
+
 STEPS = [
     # ── backend_users ────────────────────────────────────────────────────────
     (
@@ -113,7 +116,7 @@ def main() -> None:
             "This script alters live schema. Re-run with --yes to confirm."
         )
 
-    engine = create_engine(get_database_url())
+    engine = create_engine(normalize_database_url(get_database_url()))
 
     with engine.begin() as conn:
         for label, sql in STEPS:

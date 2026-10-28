@@ -1,21 +1,47 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { fetchAdminUsers, setUserAdminRole, type UserProfile } from "@/util/api/admin";
+import { Suspense, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ADMIN_PAGE_SIZE, fetchAdminUsers, setUserAdminRole, type UserProfile } from "@/util/api/admin";
+import Pagination from "../../Pagination";
 import styles from "./page.module.css";
 
 export default function AdminUsersPage() {
+  return (
+    <Suspense fallback={<div className={styles.state}>Loading…</div>}>
+      <AdminUsersContent />
+    </Suspense>
+  );
+}
+
+function AdminUsersContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const page = Math.max(1, Number(searchParams.get("page")) || 1);
+
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [loadedPage, setLoadedPage] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toggling, setToggling] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchAdminUsers()
-      .then(setUsers)
+    fetchAdminUsers(page)
+      .then((res) => {
+        setUsers(res.items);
+        setTotal(res.total);
+        setError(null);
+      })
       .catch(() => setError("Failed to load users."))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => setLoadedPage(page));
+  }, [page]);
+
+  const loading = loadedPage !== page;
+
+  const goToPage = (next: number) => {
+    router.push(`${pathname}?page=${next}`);
+  };
 
   const handleRoleToggle = async (user: UserProfile) => {
     setToggling(user.id);
@@ -29,12 +55,12 @@ export default function AdminUsersPage() {
     }
   };
 
-  if (loading) return <div className={styles.state}>Loading…</div>;
+  if (loading && users.length === 0) return <div className={styles.state}>Loading…</div>;
   if (error) return <div className={styles.stateError}>{error}</div>;
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.heading}>Users <span className={styles.count}>{users.length}</span></h1>
+      <h1 className={styles.heading}>Users <span className={styles.count}>{total}</span></h1>
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
@@ -77,6 +103,7 @@ export default function AdminUsersPage() {
           </tbody>
         </table>
       </div>
+      <Pagination page={page} pageSize={ADMIN_PAGE_SIZE} total={total} disabled={loading} onPageChange={goToPage} />
     </div>
   );
 }

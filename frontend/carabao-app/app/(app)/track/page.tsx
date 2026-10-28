@@ -46,6 +46,65 @@ function buildBounds(waypoints: Waypoint[]): mapboxgl.LngLatBounds {
   return bounds;
 }
 
+function FallbackRouteMap({
+  waypoints,
+  activeOrderId,
+}: {
+  waypoints: Waypoint[];
+  activeOrderId: number | null;
+}) {
+  if (waypoints.length === 0) return null;
+
+  const lngs = waypoints.map((waypoint) => waypoint.lng);
+  const lats = waypoints.map((waypoint) => waypoint.lat);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const lngSpan = Math.max(maxLng - minLng, 0.001);
+  const latSpan = Math.max(maxLat - minLat, 0.001);
+  const project = (waypoint: Waypoint) => ({
+    x: 8 + ((waypoint.lng - minLng) / lngSpan) * 84,
+    y: 92 - ((waypoint.lat - minLat) / latSpan) * 84,
+  });
+  const points = waypoints.map(project);
+
+  return (
+    <div className={styles.fallbackMap} role="img" aria-label="Shipment route diagram">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+        <polyline
+          points={points.map((point) => `${point.x},${point.y}`).join(" ")}
+          fill="none"
+          stroke="#22c55e"
+          strokeWidth="1.2"
+          strokeDasharray="2 1"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      {waypoints.map((waypoint, index) => {
+        const point = points[index];
+        const isPickup = waypoint.type === "pickup";
+        const isActive = waypoint.order_id === activeOrderId;
+        return (
+          <div
+            className={styles.fallbackMarker}
+            key={`${waypoint.order_id ?? "pickup"}-${waypoint.sequence}`}
+            style={{
+              left: `${point.x}%`,
+              top: `${point.y}%`,
+              backgroundColor: isPickup ? "#3b82f6" : isActive ? "#f59e0b" : "#ef4444",
+            }}
+            title={waypoint.label}
+          />
+        );
+      })}
+      <div className={styles.fallbackMapMessage}>
+        Map imagery is temporarily unavailable. Showing the shipment route.
+      </div>
+    </div>
+  );
+}
+
 function Track() {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const driverMarkerRef = useRef<mapboxgl.Marker | null>(null);
@@ -56,7 +115,10 @@ function Track() {
   const pendingRouteRef = useRef<RouteGeoJSON | null>(null);
   const stopMarkersPlacedRef = useRef(false);
   const activeStopOrderIdRef = useRef<number | null>(null);
+  const routeAttemptedRef = useRef(false);
+  const mapUnavailableRef = useRef(false);
   const [tracking, setTracking] = useState<TrackingData | null>(null);
+  const [mapUnavailable, setMapUnavailable] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>([]);
   const [selectedOrderIndex, setSelectedOrderIndex] = useState(0);
@@ -159,7 +221,8 @@ function Track() {
 
     // Fetch the route from Mapbox Directions once per order selection.
     // Store it in pendingRouteRef so we never redundantly hit the API.
-    if (!routeRef.current && !pendingRouteRef.current) {
+    if (!mapUnavailableRef.current && !routeAttemptedRef.current && !routeRef.current && !pendingRouteRef.current) {
+      routeAttemptedRef.current = true;
       const token = process.env.NEXT_PUBLIC_MAPBOX_API_KEY ?? '';
       const route = await fetchRouteGeoJSON(data.waypoints, token);
       if (route) {
@@ -175,6 +238,8 @@ function Track() {
           drawRouteLayer(map, pendingRouteRef.current);
           routeRef.current = pendingRouteRef.current;
           pendingRouteRef.current = null;
+          routeAttemptedRef.current = false;
+          mapUnavailableRef.current = false;
         } catch (err) {
           console.error('[tracking] drawRouteLayer failed:', err);
         }
@@ -205,6 +270,7 @@ function Track() {
     stopMarkersRef.current = [];
     setTracking(null);
     setTrackingError(null);
+    setMapUnavailable(false);
   }, []);
 
   useEffect(() => {
@@ -324,13 +390,21 @@ function Track() {
     if (mapRef.current) return;
 
     mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_API_KEY || '';
-    mapRef.current = new mapboxgl.Map({
+    const map = new mapboxgl.Map({
       container: node,
       style: 'mapbox://styles/mapbox/streets-v12',
       center: [121.013, 14.567],
       zoom: 12,
     });
-    mapRef.current.addControl(new mapboxgl.NavigationControl(), 'top-right');
+    map.on('error', (event) => {
+      if (event.error) {
+        console.error('[tracking] Mapbox map error:', event.error);
+      }
+      mapUnavailableRef.current = true;
+      setMapUnavailable(true);
+    });
+    mapRef.current = map;
+    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
   }, []);
 
   return (
@@ -347,6 +421,12 @@ function Track() {
           <div className={styles.trackingContainer}>
             <div className={styles.mapSection}>
               <div className={styles.mapBoxContainer} ref={mapContainerRef} />
+              {mapUnavailable && tracking && (
+                <FallbackRouteMap
+                  waypoints={tracking.waypoints}
+                  activeOrderId={selectedOrder?.orderId ?? null}
+                />
+              )}
               <div className={styles.detailsSection}>
                 <h2 className={styles.sectionTitle}>Delivery Details</h2>
                 <div className={styles.detailGrid}>
