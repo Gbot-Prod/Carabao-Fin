@@ -56,7 +56,7 @@ def worst_removal(state: RouteState, rng: np.random.Generator) -> RouteState:
         costs.append(before - after)
 
     noise = rng.uniform(0.9, 1.1, size=len(costs))
-    noisy_costs = [c * w for c, w in zip(costs, noise)]
+    noisy_costs = [c * w for c, w in zip(costs, noise, strict=True)]
 
     n = min(n, len(result.stops))
     remove_indices = sorted(np.argsort(noisy_costs)[-n:].tolist(), reverse=True)
@@ -142,4 +142,40 @@ def random_removal_multi(
         removed = [s for i, s in enumerate(route.stops) if i in indices]
         route.stops = [s for i, s in enumerate(route.stops) if i not in indices]
         result.unassigned.extend(removed)
+    return result
+
+
+def knearest_removal_multi(
+    state: MultiRouteState, rng: np.random.Generator
+) -> MultiRouteState:
+    """
+    Remove a geographic cluster of stops around a random pivot, regardless of
+    which route they belong to. Lets neighbouring riders trade stops near
+    their shared boundary, which per-route removals rarely achieve.
+    """
+    result = state.copy()
+
+    all_stops = [
+        (ri, si) for ri, r in enumerate(result.routes) for si in range(len(r.stops))
+    ]
+    if not all_stops:
+        return result
+
+    n = max(1, int(len(all_stops) * rng.uniform(0.1, 0.3)))
+    pri, psi = all_stops[int(rng.integers(len(all_stops)))]
+    pivot = result.routes[pri].stops[psi]
+
+    distances = [
+        ((ri, si), _haversine_distance(pivot, result.routes[ri].stops[si]))
+        for ri, si in all_stops
+    ]
+    nearest_n = heapq.nsmallest(n, distances, key=lambda x: x[1])
+    per_route: dict[int, list[int]] = {}
+    for (ri, si), _ in nearest_n:
+        per_route.setdefault(ri, []).append(si)
+
+    for ri, indices in per_route.items():
+        for si in sorted(indices, reverse=True):
+            result.unassigned.append(result.routes[ri].stops.pop(si))
+
     return result

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import math
-from copy import deepcopy
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 
 @dataclass
@@ -46,7 +46,14 @@ class RouteState:
         return total
 
     def copy(self) -> RouteState:
-        return deepcopy(self)
+        # Stops are never mutated, so copying the lists is enough - a deepcopy
+        # here dominated solver runtime.
+        return RouteState(
+            depot_lat=self.depot_lat,
+            depot_lng=self.depot_lng,
+            stops=list(self.stops),
+            unassigned=list(self.unassigned),
+        )
 
     # ------------------------------------------------------------------
     def _depot(self) -> Stop:
@@ -62,14 +69,24 @@ class MultiRouteState:
 
     routes: list[RouteState]
     unassigned: list[Stop] = field(default_factory=list)
+    # Weight on the longest route. With 0 the solver only minimises total
+    # distance, which happily leaves riders idle; > 0 balances the workload.
+    makespan_weight: float = 0.0
 
     def objective(self) -> float:
-        total = sum(r.objective() for r in self.routes)
+        route_objs = [r.objective() for r in self.routes]
+        total = sum(route_objs)
+        if self.makespan_weight and route_objs:
+            total += self.makespan_weight * max(route_objs)
         total += len(self.unassigned) * 1_000_000
         return total
 
     def copy(self) -> MultiRouteState:
-        return deepcopy(self)
+        return MultiRouteState(
+            routes=[r.copy() for r in self.routes],
+            unassigned=list(self.unassigned),
+            makespan_weight=self.makespan_weight,
+        )
 
 
 def _haversine_distance(a: Stop, b: Stop) -> float:
@@ -79,10 +96,18 @@ def _haversine_distance(a: Stop, b: Stop) -> float:
     Much more accurate than Euclidean for lat/lng coordinates.
     Philippines is roughly 2000 km north-south, so results are in realistic km range.
     """
+    return _haversine_km(a.lat, a.lng, b.lat, b.lng)
+
+
+@lru_cache(maxsize=16_384)
+def _haversine_km(lat_a: float, lng_a: float, lat_b: float, lng_b: float) -> float:
+    # Cached: the multi-vehicle solver evaluates the same stop pairs thousands
+    # of times. Sized for one solve (~60 stops = 3,600 pairs), so a
+    # long-running server does not keep tens of MB of old pairs.
     R_EARTH_KM = 6371  # Earth radius in km
 
-    lat_a, lng_a = math.radians(a.lat), math.radians(a.lng)
-    lat_b, lng_b = math.radians(b.lat), math.radians(b.lng)
+    lat_a, lng_a = math.radians(lat_a), math.radians(lng_a)
+    lat_b, lng_b = math.radians(lat_b), math.radians(lng_b)
 
     dlat = lat_b - lat_a
     dlng = lng_b - lng_a

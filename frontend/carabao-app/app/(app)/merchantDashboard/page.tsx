@@ -17,6 +17,7 @@ import {
   fetchMyMerchantOrders,
   updateMerchantOrderStatus,
   createMerchantShipment,
+  MAX_SHIPMENT_ORDERS,
   fetchMyShipments,
   updateMyPayoutInfo,
   requestPayout,
@@ -502,16 +503,19 @@ export default function MerchantDashboardPage() {
 
   const toggleShipmentOrder = (orderId: number) => {
     setShipmentMessage(null);
+    const eligibleIds = new Set(shipmentCandidates.map((o) => o.id));
     setSelectedShipmentOrderIds((prev) => {
-      const next = new Set(prev);
+      // Drop selections that are no longer eligible (e.g. cancelled since),
+      // so they neither count toward the cap nor get submitted.
+      const next = new Set([...prev].filter((id) => eligibleIds.has(id)));
       if (next.has(orderId)) next.delete(orderId);
-      else next.add(orderId);
+      else if (next.size < MAX_SHIPMENT_ORDERS) next.add(orderId);
       return next;
     });
   };
 
   const handleCreateShipment = async () => {
-    const orderIds = Array.from(selectedShipmentOrderIds);
+    const orderIds = selectedShipmentOrders.map((o) => o.id);
     if (orderIds.length === 0) return;
 
     setShipmentCreating(true);
@@ -1073,11 +1077,12 @@ export default function MerchantDashboardPage() {
                 <h3 className={styles.shipmentComposerTitle}>Batch shipment</h3>
                 <p className={styles.shipmentComposerText}>
                   Select processing orders from the same merchant run, then create one shipment with a computed stop sequence.
+                  Up to {MAX_SHIPMENT_ORDERS} orders per shipment.
                 </p>
               </div>
               <div className={styles.shipmentComposerActions}>
                 <span className={styles.shipmentCounter}>
-                  {selectedShipmentOrders.length} selected / {shipmentCandidates.length} eligible
+                  {selectedShipmentOrders.length} / {MAX_SHIPMENT_ORDERS} selected · {shipmentCandidates.length} eligible
                 </span>
                 <button
                   className={styles.primaryBtn}
@@ -1150,9 +1155,18 @@ export default function MerchantDashboardPage() {
                         <input
                           type="checkbox"
                           checked={selectedShipmentOrderIds.has(order.id)}
+                          disabled={
+                            !selectedShipmentOrderIds.has(order.id) &&
+                            selectedShipmentOrders.length >= MAX_SHIPMENT_ORDERS
+                          }
                           onChange={() => toggleShipmentOrder(order.id)}
                         />
-                        <span>Select for shipment</span>
+                        <span>
+                          {!selectedShipmentOrderIds.has(order.id) &&
+                          selectedShipmentOrders.length >= MAX_SHIPMENT_ORDERS
+                            ? `Shipment full (${MAX_SHIPMENT_ORDERS} max)`
+                            : "Select for shipment"}
+                        </span>
                       </label>
                     )}
 
