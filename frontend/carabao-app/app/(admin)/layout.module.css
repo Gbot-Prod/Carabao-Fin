@@ -1,7 +1,7 @@
 .shell {
   min-height: 100vh;
   display: flex;
-  background: var(--green-50);
+  background: var(--bg-primary);
 }
 
 /* ── Sidebar ─────────────────────────────────── */
@@ -9,7 +9,7 @@
 .sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: #fff;
+  background: var(--bg-white);
   border-right: 1px solid var(--green-border);
   display: flex;
   flex-direction: column;
@@ -150,7 +150,7 @@
     gap: 4px;
     border: 1px solid #d9e1dc;
     border-radius: var(--radius-sm);
-    background: #ffffff;
+    background: var(--bg-white);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   }
 

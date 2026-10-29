@@ -5,11 +5,11 @@ from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from app.core.database_url import normalize_database_url
 
 # this is the project metadata, which is used by Alembic for autogenerate
 # support
 from app.core.database import Base
+from app.core.database_url import normalize_database_url
 
 # Exclude BetterAuth-managed tables from FastAPI/Alembic migrations.
 EXCLUDED_TABLES = {"user", "session", "account", "verification"}

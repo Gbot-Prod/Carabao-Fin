@@ -23,7 +23,7 @@
 
 .formCard,
 .summaryCard {
-  background: #ffffff;
+  background: var(--bg-white);
   border: 1px solid var(--green-border);
   border-radius: var(--radius-md);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
@@ -89,7 +89,7 @@
   font: inherit;
   font-weight: 500;
   color: inherit;
-  background: #ffffff;
+  background: var(--bg-white);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -127,7 +127,7 @@
   border: 1px solid var(--green-border);
   border-radius: var(--radius-sm);
   padding: 0.6rem 0.7rem;
-  background: #ffffff;
+  background: var(--bg-white);
   margin-top: 0;
 }
 
@@ -203,7 +203,7 @@
 
 .secondaryButton {
   border: 1px solid var(--border-strong);
-  background: #ffffff;
+  background: var(--bg-white);
 }
 
 .errorMessage {

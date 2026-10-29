@@ -42,14 +42,29 @@ select = [
 ]
 ignore = []
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency markers are meant to be used as argument defaults
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Query",
+    "fastapi.Header",
+    "fastapi.Body",
+]
+
 # Protect Alembic migrations from being aggressively cleaned up by the linter
 [tool.ruff.lint.per-file-ignores]
-"migrations/**/*.py" = ["E501"] 
+"alembic/**/*.py" = ["E501"]
 
 [tool.ruff.format]
 # Enforce clean formatting across the codebase
 quote-style = "double"
 indent-style = "space"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
 
 [dependency-groups]
 dev = [

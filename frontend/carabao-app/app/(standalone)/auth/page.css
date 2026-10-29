@@ -3,7 +3,7 @@
   --brand-bg-start: #0d4f2f;
   --brand-bg-end: #1f7a49;
   --brand-text: #f6fff8;
-  --form-bg: #ffffff;
+  --form-bg: var(--bg-white);
   --form-text: #142312;
   --muted-text: #4f6650;
   --border: #dbe9dc;

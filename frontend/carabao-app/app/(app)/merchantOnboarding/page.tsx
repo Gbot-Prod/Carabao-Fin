@@ -62,7 +62,6 @@ export default function MerchantOnboardingPage() {
   const [rsbsaFile, setRsbsaFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submittedApplication, setSubmittedApplication] = useState<MerchantApplication | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successApplication, setSuccessApplication] = useState<MerchantApplication | null>(null);
 

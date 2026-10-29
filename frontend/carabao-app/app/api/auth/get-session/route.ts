@@ -8,12 +8,12 @@ export async function GET(req: NextRequest) {
     if (useMockSession) {
       return NextResponse.json({
         session: {
-          token: "mock-session-token",
           user: {
             id: "mock_user_id",
             email: "mock.user@carabao.local",
             name: "Mock User",
           },
+          backendAuthenticated: true,
         },
       });
     }
@@ -27,7 +27,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       session: {
-        token: session.session.token,
         user: {
           id: session.user.id,
           email: session.user.email,

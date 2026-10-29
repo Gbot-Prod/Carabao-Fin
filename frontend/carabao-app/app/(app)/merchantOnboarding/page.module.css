@@ -11,7 +11,7 @@
   padding: var(--pad-y) var(--pad-x);
   max-width: 920px;
   margin: 0 auto;
-  background: #ffffff;
+  background: var(--bg-white);
   border: 1px solid rgba(23, 61, 37, 0.08);
   border-radius: var(--radius-md);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.10);

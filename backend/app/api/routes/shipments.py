@@ -301,7 +301,7 @@ async def create_merchant_shipment(
         depot_lng=origin_coords[1],
         distance_matrix=duration_matrix,
     )
-    ordered_stop_map = {stop.order_id: stop for stop in ordered_stops}
+    context_by_order_id = {context["order"].id: context for context in order_contexts}
 
     shipment = Shipment(
         merchant_id=merchant.id,
@@ -327,11 +327,7 @@ async def create_merchant_shipment(
     ]
 
     for sequence, stop in enumerate(ordered_stops, start=1):
-        ctx = next(
-            context
-            for context in order_contexts
-            if context["order"].id == stop.order_id
-        )
+        ctx = context_by_order_id[stop.order_id]
         buyer = ctx["buyer"]
         assert isinstance(ctx["order"], Order)
         buyer_full_name = (

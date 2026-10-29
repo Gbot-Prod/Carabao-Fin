@@ -3,82 +3,108 @@
 import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Clock, Search, ShoppingCart, Star, Store, Truck, X } from 'lucide-react';
 import styles from './page.module.css';
-import { fetchMerchants, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem } from '@/util/api';
+import { fetchMerchants, fetchMerchantShopPage, fetchMyCart } from '@/util/api';
 
 type FarmView = {
-  merchantId: number | null;
+  merchantId: number;
   name: string;
   rating: number;
-  time: string;
   deliveryTimeDays: number | null;
   category: string;
   deliveryFee: number;
   logoUrl: string | null;
 };
 
-const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number], logoUrl: string | null = null): FarmView => ({
+type SortKey = 'recommended' | 'rating' | 'fastest' | 'fee';
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'recommended', label: 'Recommended' },
+  { value: 'rating', label: 'Top rated' },
+  { value: 'fastest', label: 'Fastest delivery' },
+  { value: 'fee', label: 'Lowest delivery fee' },
+];
+
+const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]): FarmView => ({
   merchantId: merchant.id,
   name: merchant.merchant_name,
   rating: merchant.rating ?? 0,
-  time: merchant.delivery_time ? `${merchant.delivery_time} Days` : 'N/A',
   deliveryTimeDays: merchant.delivery_time ?? null,
   category: merchant.category ?? 'Farm Goods',
   deliveryFee: merchant.delivery_price ?? 0,
-  logoUrl,
+  logoUrl: null,
 });
 
+const formatDeliveryTime = (days: number | null) => {
+  if (days === null) return 'Varies';
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
+};
+
+const getInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join('');
 
 function OrderContent() {
   const searchParams = useSearchParams();
   const [farmList, setFarmList] = useState<FarmView[]>([]);
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [isAddingByFarm, setIsAddingByFarm] = useState<Record<string, boolean>>({});
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [cartItemCount, setCartItemCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-
-  const buildItemId = (farmName: string) => farmName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const [sortKey, setSortKey] = useState<SortKey>('recommended');
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
-    const loadData = async () => {
+    let cancelled = false;
+
+    const loadMerchants = async () => {
       try {
         const merchants = await fetchMerchants();
-        if (merchants.length > 0) {
-          const shopPages = await Promise.allSettled(
-            merchants.map((m) => fetchMerchantShopPage(m.id))
-          );
-          setFarmList(
-            merchants.map((m, i) => {
-              const result = shopPages[i];
-              const logoUrl = result.status === 'fulfilled' ? result.value.logo_url : null;
-              return toFarmView(m, logoUrl);
-            })
-          );
-        }
+        if (cancelled) return;
+        setFarmList(merchants.map(toFarmView));
+        setIsLoading(false);
+
+        // Logos load after the list renders so cards appear immediately.
+        const shopPages = await Promise.allSettled(
+          merchants.map((m) => fetchMerchantShopPage(m.id))
+        );
+        if (cancelled) return;
+        const logos = new Map<number, string | null>();
+        shopPages.forEach((result, i) => {
+          if (result.status === 'fulfilled') logos.set(merchants[i].id, result.value.logo_url);
+        });
+        setFarmList((prev) =>
+          prev.map((farm) => ({ ...farm, logoUrl: logos.get(farm.merchantId) ?? farm.logoUrl }))
+        );
       } catch {
-
+        if (!cancelled) {
+          setLoadError(true);
+          setIsLoading(false);
+        }
       }
+    };
 
+    const loadCart = async () => {
       try {
         const cart = await fetchMyCart();
-        if (Array.isArray(cart.items)) {
-          setCartItems(
-            cart.items.map((item) => ({
-              id: String(item.id),
-              farm: item.farm,
-              produce: item.produce,
-              unit: item.unit,
-              quantity: Number(item.quantity) || 0,
-              price: Number(item.price) || 0,
-            })),
-          );
+        if (!cancelled && Array.isArray(cart.items)) {
+          setCartItemCount(cart.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0));
         }
       } catch {
 
       }
     };
 
-    void loadData();
+    void loadMerchants();
+    void loadCart();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const activeFilters = useMemo(() => {
@@ -108,116 +134,154 @@ function OrderContent() {
       );
     }
 
-    return result;
-  }, [farmList, searchTerm, activeFilters]);
-
-  const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-  const merchantCountLabel = `${filteredFarms.length} ${filteredFarms.length === 1 ? 'merchant' : 'merchants'}`;
-
-  const handleAddToCart = async (farm: FarmView) => {
-    const itemId = buildItemId(farm.name);
-    setIsAddingByFarm((prev) => ({ ...prev, [itemId]: true }));
-
-    const existingItem = cartItems.find((item) => item.id === itemId);
-    const updatedItems: CartItem[] = existingItem
-      ? cartItems.map((item) =>
-        item.id === itemId ? { ...item, quantity: item.quantity + 1 } : item,
-      )
-      : [
-        ...cartItems,
-        {
-          id: itemId,
-          farm: farm.name,
-          produce: `${farm.name} Produce Bundle`,
-          unit: 'bundle',
-          quantity: 1,
-          price: farm.deliveryFee > 0 ? farm.deliveryFee : 120,
-        },
-      ];
-
-    try {
-      await replaceMyCart(updatedItems);
-      setCartItems(updatedItems);
-      setFeedback(`${farm.name} added to cart.`);
-    } catch {
-      setFeedback('Unable to add item to cart right now.');
-    } finally {
-      setIsAddingByFarm((prev) => ({ ...prev, [itemId]: false }));
+    const sorted = [...result];
+    if (sortKey === 'rating') {
+      sorted.sort((a, b) => b.rating - a.rating);
+    } else if (sortKey === 'fastest') {
+      sorted.sort((a, b) => (a.deliveryTimeDays ?? Infinity) - (b.deliveryTimeDays ?? Infinity));
+    } else if (sortKey === 'fee') {
+      sorted.sort((a, b) => a.deliveryFee - b.deliveryFee);
     }
-  };
+    return sorted;
+  }, [farmList, searchTerm, activeFilters, sortKey]);
+
+  const merchantCountLabel = `${filteredFarms.length} ${filteredFarms.length === 1 ? 'shop' : 'shops'}`;
+  const hasQuery = searchTerm.trim().length > 0;
 
   return (
     <div className={styles.container}>
-      <section className={styles.pageHeader}>
-        <div className={styles.pageHeaderLeft}>
+      <header className={styles.header}>
+        <div className={styles.headerTitle}>
           <h1 className={styles.pageTitle}>Browse Shops</h1>
-          <span className={styles.merchantCount}>{merchantCountLabel}</span>
+          {!isLoading && <span className={styles.merchantCount}>{merchantCountLabel}</span>}
         </div>
-        <Link href="/cart" className={styles.cartLink}>
-          Cart ({cartItemCount})
+
+        <div className={styles.searchWrap}>
+          <Search className={styles.searchIcon} size={18} aria-hidden />
+          <input
+            type="search"
+            className={styles.searchInput}
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search shops or categories…"
+            aria-label="Search shops"
+          />
+          {hasQuery && (
+            <button
+              type="button"
+              className={styles.clearSearch}
+              onClick={() => setSearchTerm('')}
+              aria-label="Clear search"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        <Link href="/cart" className={styles.cartButton} aria-label={`Cart, ${cartItemCount} items`}>
+          <ShoppingCart size={18} aria-hidden />
+          <span className={styles.cartLabel}>Cart</span>
+          {cartItemCount > 0 && <span className={styles.cartBadge}>{cartItemCount}</span>}
         </Link>
-      </section>
+      </header>
 
-      <section className={styles.controlsRow}>
-        <input
-          type="search"
-          className={styles.searchInput}
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="Search by merchant name or location…"
-        />
-      </section>
+      <div className={styles.toolbar}>
+        <div className={styles.activeFilters}>
+          {Array.from(activeFilters).map((filter) => (
+            <span key={filter} className={styles.filterTag}>{filter}</span>
+          ))}
+        </div>
+        <label className={styles.sortLabel}>
+          Sort by
+          <select
+            className={styles.sortSelect}
+            value={sortKey}
+            onChange={(event) => setSortKey(event.target.value as SortKey)}
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
 
-      {feedback && <p className={styles.feedback}>{feedback}</p>}
-
-      <section className={styles.farmGrid}>
-        {filteredFarms.map((farm, index) => {
-          const itemId = buildItemId(farm.name);
-          const uniqueKey = farm.merchantId ? `merchant-${farm.merchantId}` : `farm-${index}`;
-          const merchantHref = farm.merchantId ? `/merchant/${farm.merchantId}` : '/merchant';
-
-          return (
-            <article key={uniqueKey} className={styles.farmCard}>
+      {isLoading ? (
+        <section className={styles.farmGrid} aria-busy="true">
+          {Array.from({ length: 8 }, (_, i) => (
+            <div key={i} className={`${styles.farmCard} ${styles.skeletonCard}`}>
+              <div className={styles.skeletonImage} />
+              <div className={styles.cardContent}>
+                <div className={styles.skeletonLine} />
+                <div className={`${styles.skeletonLine} ${styles.skeletonLineShort}`} />
+              </div>
+            </div>
+          ))}
+        </section>
+      ) : loadError ? (
+        <section className={styles.emptyState}>
+          <Store size={32} className={styles.emptyIcon} aria-hidden />
+          <h2>Couldn&apos;t load shops</h2>
+          <p>Check your connection and try again.</p>
+          <button type="button" className={styles.emptyAction} onClick={() => window.location.reload()}>
+            Retry
+          </button>
+        </section>
+      ) : filteredFarms.length === 0 ? (
+        <section className={styles.emptyState}>
+          <Store size={32} className={styles.emptyIcon} aria-hidden />
+          <h2>{farmList.length === 0 ? 'No shops available yet' : 'No shops match your search'}</h2>
+          <p>
+            {farmList.length === 0
+              ? 'Check back soon — new farms are joining Carabao.'
+              : 'Try a different name or category, or adjust your filters.'}
+          </p>
+          {hasQuery && (
+            <button type="button" className={styles.emptyAction} onClick={() => setSearchTerm('')}>
+              Clear search
+            </button>
+          )}
+        </section>
+      ) : (
+        <section className={styles.farmGrid}>
+          {filteredFarms.map((farm) => (
+            <Link
+              key={farm.merchantId}
+              href={`/merchant/${farm.merchantId}`}
+              className={styles.farmCard}
+            >
               <div className={styles.cardImage}>
-                {farm.logoUrl && (
+                {farm.logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={farm.logoUrl} alt={farm.name} className={styles.cardLogo} />
+                  <img src={farm.logoUrl} alt="" className={styles.cardLogo} loading="lazy" />
+                ) : (
+                  <span className={styles.cardInitials} aria-hidden>{getInitials(farm.name)}</span>
                 )}
                 <span className={styles.categoryChip}>{farm.category}</span>
               </div>
 
               <div className={styles.cardContent}>
-                <h3>{farm.name}</h3>
-                <div className={styles.cardMeta}>
-                  <span>Rating: {farm.rating.toFixed(1)}</span>
-                  <span>•</span>
-                  <span>{farm.time}</span>
+                <div className={styles.cardTitleRow}>
+                  <h3 className={styles.cardTitle}>{farm.name}</h3>
+                  {farm.rating > 0 && (
+                    <span className={styles.rating}>
+                      <Star size={13} aria-hidden />
+                      {farm.rating.toFixed(1)}
+                    </span>
+                  )}
                 </div>
-                <p className={styles.deliveryText}>Delivery Fee: ₱{farm.deliveryFee}</p>
-
-                <div className={styles.cardActions}>
-                  <Link href={merchantHref} className={styles.viewStoreButton}>
-                    Visit Merchant
-                  </Link>
-                  <button
-                    type="button"
-                    className={styles.addToCartButton}
-                    onClick={() => void handleAddToCart(farm)}
-                    disabled={!!isAddingByFarm[itemId]}
-                  >
-                    {isAddingByFarm[itemId] ? 'Adding...' : 'Add Bundle'}
-                  </button>
+                <div className={styles.cardMeta}>
+                  <span className={styles.metaItem}>
+                    <Clock size={13} aria-hidden />
+                    {formatDeliveryTime(farm.deliveryTimeDays)}
+                  </span>
+                  <span className={styles.metaItem}>
+                    <Truck size={13} aria-hidden />
+                    {farm.deliveryFee > 0 ? `₱${farm.deliveryFee} delivery` : 'Free delivery'}
+                  </span>
                 </div>
               </div>
-            </article>
-          );
-        })}
-      </section>
-
-      {filteredFarms.length === 0 && (
-        <section className={styles.emptyState}>
-          <h2>No merchants match your search</h2>
-          <p>Try a different merchant name or clear the search field.</p>
+            </Link>
+          ))}
         </section>
       )}
     </div>

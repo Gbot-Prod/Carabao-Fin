@@ -20,8 +20,11 @@ from app.schemas.order import (
     PlaceOrderRequest,
     PlaceOrderResponse,
 )
+from app.services.order_reservations import (
+    expire_stale_reservations,
+    reservation_ttl_minutes,
+)
 from app.services.sms_service import notify_order_shipped
-from app.services.order_reservations import expire_stale_reservations
 
 from ._order_helpers import (
     _extract_item_int,
@@ -43,7 +46,7 @@ async def place_order_from_cart(
     current_user: User = Depends(get_current_user),
 ):
     # Release any elapsed checkout holds before checking availability.
-    expire_stale_reservations(db, ttl_minutes=30)
+    expire_stale_reservations(db, reservation_ttl_minutes())
     cart = get_or_create_cart(db, current_user.id)
     cart_items = cart.items or []
     if not cart_items:

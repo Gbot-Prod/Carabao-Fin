@@ -5,12 +5,12 @@
 /* CSS Variables */
 :root {
   /* Colors */
-  --bg-primary: #f8f8f8;
-  --bg-white: #ffffff;
+  --bg-primary: #eef2ec;
+  --bg-white: #fdfdfb;
   --color-primary: #079135fa;
   --color-text-light: #d6cfcffa;
-  --color-text-dark: #000000;
-  --color-border: #eee;
+  --color-text-dark: #1a2e20;
+  --color-border: #e0ece5;
   --color-shadow: rgba(0, 0, 0, 0.1);
 
   /* Brand palette (use these instead of raw hex values) */
@@ -36,7 +36,7 @@
   --spacing-2xl: 3rem;
 
   /* Typography */
-  --font-family: 'Plus Jakarta Sans', sans-serif;
+  --font-family: var(--font-plus-jakarta-sans), sans-serif;
 
   /* Border radius */
   --radius-sm: 8px;    /* inputs, buttons, chips */

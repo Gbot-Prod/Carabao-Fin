@@ -13,3 +13,6 @@ node_modules/
 /.clerk/
 
 /generated/prisma
+
+# TypeScript incremental build cache
+*.tsbuildinfo

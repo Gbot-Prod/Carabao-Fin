@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.schemas.produce import ProduceResponse
 
@@ -27,8 +27,7 @@ class MerchantShopResponse(BaseModel):
     banner_image_url: str | None = None
     description: str | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MerchantResponse(BaseModel):
@@ -57,5 +56,4 @@ class MerchantResponse(BaseModel):
     shop_page: MerchantShopResponse | None = None
     produces: list[ProduceResponse] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -13,11 +13,11 @@ from app.models.order import Order
 from app.models.payout_batch import PayoutBatch
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.schemas.merchant import MerchantResponse
 from app.schemas.merchant_application import (
     ApplicationReviewPayload,
     MerchantApplicationResponse,
 )
-from app.schemas.merchant import MerchantResponse
 from app.schemas.pagination import Page
 from app.schemas.payment import PayoutBatchResponse
 from app.schemas.user import UserResponse

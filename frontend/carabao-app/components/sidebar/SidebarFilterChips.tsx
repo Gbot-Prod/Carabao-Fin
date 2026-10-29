@@ -25,7 +25,8 @@ function FilterChipsInner() {
 
   const toggleFilter = (filter: string) => {
     const next = new Set(activeFilters);
-    next.has(filter) ? next.delete(filter) : next.add(filter);
+    if (next.has(filter)) next.delete(filter);
+    else next.add(filter);
     router.push(buildUrl(next, activePrice));
   };
 

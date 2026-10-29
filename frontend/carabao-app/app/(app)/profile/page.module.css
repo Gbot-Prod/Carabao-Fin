@@ -3,7 +3,7 @@
   width: 100%;
   min-height: 100vh;
   padding: 32px;
-  background: linear-gradient(180deg, var(--green-50) 0%, #ecf6ef 100%);
+  background: linear-gradient(180deg, var(--bg-primary) 0%, #e4ebe1 100%);
 }
 
 .main {
@@ -25,7 +25,7 @@
 
 /* ─── Profile card ───────────────────────────────────────────────────────────── */
 .profileSection {
-  background-color: #fff;
+  background-color: var(--bg-white);
   border-radius: var(--radius-md);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   padding: 28px 20px 20px;
@@ -235,7 +235,7 @@
 
 /* ─── Merchant section (below profile card) ──────────────────────────────────── */
 .merchantSection {
-  background: #fff;
+  background: var(--bg-white);
   border-radius: var(--radius-md);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   padding: 16px;
@@ -274,7 +274,7 @@
 /* ─── Right panel: settings ──────────────────────────────────────────────────── */
 .settingsSection {
   flex: 1 1 0;
-  background-color: #fff;
+  background-color: var(--bg-white);
   padding: 24px 20px;
   border-radius: var(--radius-md);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
@@ -427,7 +427,7 @@
   padding: 10px 12px;
   border: 1px solid #d7e7da;
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--bg-white);
 }
 
 .cardBrand {
@@ -526,7 +526,7 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--bg-white);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: left 0.2s;
 }
@@ -555,7 +555,7 @@
   box-sizing: border-box;
 }
 
-.formInput:focus { border-color: var(--green-600); background: #fff; }
+.formInput:focus { border-color: var(--green-600); background: var(--bg-white); }
 
 .saveBtn {
   font-family: inherit;
@@ -603,7 +603,7 @@
 }
 
 .modalCard {
-  background: #fff;
+  background: var(--bg-white);
   border-radius: var(--radius-md);
   padding: 28px;
   width: 100%;
@@ -678,7 +678,7 @@
 
 /* ─── Profile danger zone ────────────────────────────────────────────────────── */
 .profileDangerZone {
-  background: #fff;
+  background: var(--bg-white);
   border-radius: var(--radius-md);
   border: 1px solid rgba(185, 28, 28, 0.18);
   padding: 14px 16px;

@@ -38,7 +38,7 @@
 .card {
   border: 1px solid var(--green-border);
   border-radius: var(--radius-md);
-  background: #fff;
+  background: var(--bg-white);
   margin-bottom: 10px;
   overflow: hidden;
 }

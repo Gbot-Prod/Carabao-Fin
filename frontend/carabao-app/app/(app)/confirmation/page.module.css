@@ -9,7 +9,7 @@
 
 .card {
   width: min(760px, 100%);
-  background: #ffffff;
+  background: var(--bg-white);
   border-radius: var(--radius-md);
   border: 1px solid var(--green-border);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.06);
@@ -94,7 +94,7 @@
 
 .secondaryButton {
   border: 1px solid var(--border-strong);
-  background: #ffffff;
+  background: var(--bg-white);
 }
 
 @media (max-width: 920px) {
