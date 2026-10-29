@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import styles from "./page.module.css";
+import PageLoader from "@/components/PageLoader/PageLoader";
 
 function ConfirmationContent() {
   const searchParams = useSearchParams();
@@ -62,7 +63,7 @@ function ConfirmationContent() {
 export default function ConfirmationPage() {
   return (
     <div className={styles.page}>
-      <Suspense fallback={<div>Loading order details...</div>}>
+      <Suspense fallback={<PageLoader label="Loading order details…" />}>
         <ConfirmationContent />
       </Suspense>
     </div>

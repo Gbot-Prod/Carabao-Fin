@@ -235,6 +235,8 @@ export type MerchantOrder = {
   shipped: boolean;
   time_of_arrival: string | null;
   shipment_id?: number | null;
+  shipped_at?: string | null;
+  auto_confirm_at?: string | null;
 };
 
 export const fetchMyMerchantOrders = async (): Promise<MerchantOrder[]> => {

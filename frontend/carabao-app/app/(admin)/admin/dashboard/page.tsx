@@ -13,6 +13,7 @@ import {
   type PayoutBatch,
 } from "@/util/api/admin";
 import styles from "./page.module.css";
+import PageLoader from "@/components/PageLoader/PageLoader";
 
 const peso = (v: number) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 }).format(v);
@@ -44,7 +45,7 @@ export default function AdminDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className={styles.state}>Loading dashboard…</div>;
+  if (loading) return <PageLoader label="Loading dashboard…" />;
   if (error || !stats) return <div className={styles.stateError}>{error ?? "Unknown error"}</div>;
 
   const pendingBatchCount = batches.filter((b) => b.status === "pending").length;

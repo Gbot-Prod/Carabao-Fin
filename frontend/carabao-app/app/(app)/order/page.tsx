@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Clock, Search, ShoppingCart, Star, Store, Truck, X } from 'lucide-react';
 import styles from './page.module.css';
+import PageLoader from '@/components/PageLoader/PageLoader';
 import { fetchMerchants, fetchMerchantShopPage, fetchMyCart } from '@/util/api';
 
 type FarmView = {
@@ -290,7 +291,7 @@ function OrderContent() {
 
 export default function Order() {
   return (
-    <Suspense>
+    <Suspense fallback={<PageLoader label="Loading shops…" />}>
       <OrderContent />
     </Suspense>
   );

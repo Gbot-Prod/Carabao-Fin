@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
+import PageLoader from '@/components/PageLoader/PageLoader';
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
 
 export default function MerchantDetailPage() {
@@ -92,7 +93,7 @@ export default function MerchantDetailPage() {
   };
 
   if (!merchant && !error) {
-    return <div className={styles.page}><p>Loading…</p></div>;
+    return <PageLoader label="Loading shop…" />;
   }
 
   return (

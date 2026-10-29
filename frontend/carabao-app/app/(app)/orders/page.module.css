@@ -273,3 +273,44 @@
   font-size: 0.875rem;
   text-decoration: none;
 }
+
+/* ── Delivery confirmation ────────────────────────────────────────────────── */
+
+.receivedBtn {
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid #0a8b3a;
+  background: none;
+  color: #0a8b3a;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.autoConfirmNote {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.confirmReceivedYes {
+  padding: 0.3rem 0.75rem;
+  background: #0a8b3a;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirmReceivedYes:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.confirmError {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #dc2626;
+}

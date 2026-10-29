@@ -5,10 +5,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ADMIN_PAGE_SIZE, fetchAdminUsers, setUserAdminRole, type UserProfile } from "@/util/api/admin";
 import Pagination from "../../Pagination";
 import styles from "./page.module.css";
+import PageLoader from "@/components/PageLoader/PageLoader";
 
 export default function AdminUsersPage() {
   return (
-    <Suspense fallback={<div className={styles.state}>Loading…</div>}>
+    <Suspense fallback={<PageLoader label="Loading users…" />}>
       <AdminUsersContent />
     </Suspense>
   );
@@ -55,7 +56,7 @@ function AdminUsersContent() {
     }
   };
 
-  if (loading && users.length === 0) return <div className={styles.state}>Loading…</div>;
+  if (loading && users.length === 0) return <PageLoader label="Loading users…" />;
   if (error) return <div className={styles.stateError}>{error}</div>;
 
   return (

@@ -2,16 +2,24 @@ import logging
 
 import requests
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.current_orders import CurrentOrder
+from app.models.merchant_application import MerchantApplication
+from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.mobile_credential import MobileCredential
 from app.models.order import Order
+from app.models.order_history import OrderHistory
+from app.models.payout_batch import PayoutBatch
+from app.models.shipment import Shipment
+from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.payment import AttachPaymentMethodRequest, SavedCard
 from app.schemas.user import UserResponse, UserUpdate
 from app.services import r2_service
+from app.services.merchant_service import ACTIVE_ORDER_STATUSES
 from app.services.paymongo import (
     attach_payment_method,
     detach_payment_method,
@@ -132,11 +140,85 @@ async def detach_my_payment_method(
         ) from e
 
 
+def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
+    """Records that a hard delete of this user would violate or destroy.
+
+    Transactions, shipments and payout batches hold non-nullable FKs to the
+    user, their orders or their merchant row, so the delete cannot proceed
+    while any exist. Returns only the non-zero counts.
+    """
+    active_orders = (
+        db.query(func.count(Order.id))
+        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
+        .filter(
+            OrderHistory.user_id == user.id,
+            Order.status.in_(ACTIVE_ORDER_STATUSES),
+        )
+        .scalar()
+    )
+    payment_records = (
+        db.query(func.count(Transaction.id))
+        .join(Order, Order.id == Transaction.order_id)
+        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
+        .filter(
+            (Transaction.user_id == user.id) | (OrderHistory.user_id == user.id)
+        )
+        .scalar()
+    )
+    blockers = {"active_orders": active_orders, "payment_records": payment_records}
+
+    # Includes a soft-deleted merchant row: the cascade would still hard-delete it.
+    if user.merchant:
+        merchant_id = user.merchant.id
+        blockers["merchant_payment_records"] = (
+            db.query(func.count(Transaction.id))
+            .filter(Transaction.merchant_id == merchant_id)
+            .scalar()
+        )
+        blockers["shipments"] = (
+            db.query(func.count(Shipment.id))
+            .filter(Shipment.merchant_id == merchant_id)
+            .scalar()
+        )
+        blockers["payout_batches"] = (
+            db.query(func.count(PayoutBatch.id))
+            .filter(PayoutBatch.merchant_id == merchant_id)
+            .scalar()
+        )
+
+    return {key: int(value) for key, value in blockers.items() if value}
+
+
 @router.delete("/users/me", status_code=204)
 async def delete_my_account(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Stopgap until accounts are anonymized instead of hard-deleted: refuse
+    # rather than 500 on the FK violation or wipe financial records.
+    blockers = _account_deletion_blockers(db, current_user)
+    if blockers:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    "Accounts with order or payment history can't be deleted "
+                    "yet. Contact support to close your account."
+                ),
+                "blockers": blockers,
+            },
+        )
+
+    # MerchantApplication and MerchantPayoutInfo have no cascade on the User
+    # or Merchant side, delete them manually.
+    db.query(MerchantApplication).filter(
+        MerchantApplication.user_id == current_user.id
+    ).delete(synchronize_session=False)
+    if current_user.merchant:
+        db.query(MerchantPayoutInfo).filter(
+            MerchantPayoutInfo.merchant_id == current_user.merchant.id
+        ).delete(synchronize_session=False)
+
     # Orphan merchant references before cascade delete removes the merchant row.
     if current_user.merchant:
         merchant_id = current_user.merchant.id

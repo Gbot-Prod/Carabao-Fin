@@ -9,6 +9,7 @@ import {
   deleteMyAccount,
 } from '@/util/api';
 import LocationSelects from '@/components/LocationSelects/LocationSelects';
+import PageLoader from '@/components/PageLoader/PageLoader';
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 function UserAvatar({ pictureUrl, uploading, onUpload }: {
@@ -122,7 +123,7 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
 
   const setField = (f: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [f]: e.target.value }));
 
-  if (!profile) return <p className={styles.panelNote}>Loading…</p>;
+  if (!profile) return <PageLoader variant="compact" />;
 
   return editing ? (
     <div className={styles.panelForm}>
@@ -196,7 +197,7 @@ function NotificationsPanel({ profile, onSaved }: { profile: UserProfile | null;
     }
   };
 
-  if (!profile) return <p className={styles.panelNote}>Loading…</p>;
+  if (!profile) return <PageLoader variant="compact" />;
 
   return (
     <div className={styles.notifList}>
@@ -289,7 +290,7 @@ function PaymentPanel({ userEmail }: { userEmail: string | undefined }) {
     finally { setRemoving(null); }
   };
 
-  if (loadingCards) return <p className={styles.panelNote}>Loading…</p>;
+  if (loadingCards) return <PageLoader variant="compact" />;
 
   return (
     <div className={styles.paymentPanel}>
@@ -437,6 +438,8 @@ export default function Profile() {
   const fullName = profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() || 'Carabao User' : null;
   const hasMerchant = !!profile?.merchant?.id;
 
+  if (isLoading) return <PageLoader label="Loading your profile…" />;
+
   return (
     <div className={styles.container}>
       <main className={styles.main}>
@@ -453,20 +456,20 @@ export default function Profile() {
             />
 
             <div className={styles.nameBlock}>
-              <h2 className={styles.name}>{isLoading ? '—' : (fullName ?? '—')}</h2>
-              <p className={styles.email}>{isLoading ? '—' : (profile?.email ?? '—')}</p>
+              <h2 className={styles.name}>{fullName ?? '—'}</h2>
+              <p className={styles.email}>{profile?.email ?? '—'}</p>
             </div>
 
             <div className={styles.metaBlock}>
               <div className={styles.metaRow}>
                 <span className={styles.metaLabel}>Phone</span>
-                <span className={styles.metaValue}>{isLoading ? '—' : (profile?.phone_number ?? 'No data')}</span>
+                <span className={styles.metaValue}>{profile?.phone_number ?? 'No data'}</span>
               </div>
             </div>
 
             {loadError && <p className={styles.errorBanner}>{loadError}</p>}
 
-            <button className={styles.editBtn} onClick={openModal} disabled={isLoading || !!loadError} type="button">
+            <button className={styles.editBtn} onClick={openModal} disabled={!!loadError} type="button">
               Edit Profile
             </button>
 
@@ -474,16 +477,16 @@ export default function Profile() {
             <div className={styles.profileSnapshot}>
               <div className={styles.snapshotCard}>
                 <span className={styles.snapshotLabel}>Member since</span>
-                <strong className={styles.snapshotValue}>{isLoading ? '—' : (formatDate(profile?.created_at) ?? 'No data')}</strong>
+                <strong className={styles.snapshotValue}>{formatDate(profile?.created_at) ?? 'No data'}</strong>
               </div>
               <div className={styles.snapshotCard}>
                 <span className={styles.snapshotLabel}>Merchant</span>
-                <strong className={styles.snapshotValue}>{isLoading ? '—' : (profile?.merchant?.merchant_name ?? 'None')}</strong>
+                <strong className={styles.snapshotValue}>{profile?.merchant?.merchant_name ?? 'None'}</strong>
               </div>
               <div className={`${styles.snapshotCard} ${styles.snapshotCardWide}`}>
                 <span className={styles.snapshotLabel}>Cart</span>
                 <strong className={styles.snapshotValue}>
-                  {isLoading ? '—' : profile?.cart ? `${profile.cart.total_items} item${profile.cart.total_items === 1 ? '' : 's'} · ${formatPeso(profile.cart.total_price)}` : 'No data'}
+                  {profile?.cart ?`${profile.cart.total_items} item${profile.cart.total_items === 1 ? '' : 's'} · ${formatPeso(profile.cart.total_price)}` : 'No data'}
                 </strong>
               </div>
             </div>
@@ -510,7 +513,6 @@ export default function Profile() {
               <button
                 className={styles.profileDangerBtn}
                 onClick={() => setConfirmDeleteAccount(true)}
-                disabled={isLoading}
                 type="button"
               >
                 Delete account

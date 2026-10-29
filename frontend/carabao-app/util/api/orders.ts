@@ -22,6 +22,8 @@ export type CurrentOrderItem = {
   shipped: boolean;
   date_bought: string;
   time_of_arrival: string | null;
+  shipped_at?: string | null;
+  auto_confirm_at?: string | null;
   delivery_fee: number;
   image: string | null;
   status: string;
@@ -56,6 +58,11 @@ export const fetchCurrentOrders = async (): Promise<CurrentOrderItem[]> => {
 
 export const placeOrderFromCart = async (payload: PlaceOrderPayload): Promise<PlaceOrderResponse> => {
   const response = await apiClient.post<PlaceOrderResponse>('/orders/me/place', payload);
+  return response.data;
+};
+
+export const confirmOrderReceived = async (orderId: number): Promise<CurrentOrderItem> => {
+  const response = await apiClient.post<CurrentOrderItem>(`/orders/me/${orderId}/confirm-received`);
   return response.data;
 };
 

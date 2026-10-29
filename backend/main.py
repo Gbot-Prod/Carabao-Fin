@@ -30,6 +30,7 @@ from app.services.order_reservations import (
     expire_stale_reservations,
     reservation_ttl_minutes,
 )
+from app.services.order_status import auto_confirm_days, auto_confirm_delivered_orders
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,10 +51,24 @@ async def lifespan(_: FastAPI):
         finally:
             db.close()
 
+    def confirm_unconfirmed_deliveries() -> None:
+        db = SessionLocal()
+        try:
+            confirmed = auto_confirm_delivered_orders(db, auto_confirm_days())
+            db.commit()
+            if confirmed:
+                logger.info("Auto-confirmed %s delivered order(s)", confirmed)
+        except Exception:
+            db.rollback()
+            logger.exception("Could not auto-confirm delivered orders")
+        finally:
+            db.close()
+
     async def reservation_cleanup_loop() -> None:
         while True:
             # DB and PayMongo calls block, so keep them off the event loop.
             await asyncio.to_thread(release_expired_reservations)
+            await asyncio.to_thread(confirm_unconfirmed_deliveries)
             await asyncio.sleep(60)
 
     cleanup_task = asyncio.create_task(reservation_cleanup_loop())

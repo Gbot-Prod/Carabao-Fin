@@ -5,10 +5,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ADMIN_PAGE_SIZE, fetchAdminMerchantsPage, type Merchant } from "@/util/api/admin";
 import Pagination from "../../Pagination";
 import styles from "./page.module.css";
+import PageLoader from "@/components/PageLoader/PageLoader";
 
 export default function AdminMerchantsPage() {
   return (
-    <Suspense fallback={<div className={styles.state}>Loading…</div>}>
+    <Suspense fallback={<PageLoader label="Loading merchants…" />}>
       <AdminMerchantsContent />
     </Suspense>
   );
@@ -42,7 +43,7 @@ function AdminMerchantsContent() {
     router.push(`${pathname}?page=${next}`);
   };
 
-  if (loading && merchants.length === 0) return <div className={styles.state}>Loading…</div>;
+  if (loading && merchants.length === 0) return <PageLoader label="Loading merchants…" />;
   if (error) return <div className={styles.stateError}>{error}</div>;
 
   return (

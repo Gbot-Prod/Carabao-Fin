@@ -17,6 +17,8 @@ class MerchantOrderResponse(BaseModel):
     shipped: bool = False
     time_of_arrival: datetime | None = None
     shipment_id: int | None = None
+    shipped_at: datetime | None = None
+    auto_confirm_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

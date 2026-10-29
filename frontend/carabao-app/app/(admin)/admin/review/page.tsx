@@ -8,6 +8,7 @@ import {
   type MerchantApplication,
 } from "@/util/api/admin";
 import styles from "./page.module.css";
+import PageLoader from "@/components/PageLoader/PageLoader";
 
 const STATUS_LABELS: Record<string, string> = {
   submitted: "Submitted",
@@ -254,7 +255,7 @@ export default function AdminReviewPage() {
     );
   };
 
-  if (loading) return <div className={styles.state}>Loading…</div>;
+  if (loading) return <PageLoader label="Loading applications…" />;
   if (error) return <div className={styles.stateError}>{error}</div>;
 
   const pending = applications.filter(
