@@ -38,6 +38,9 @@ class MerchantOnboardingPayload(BaseModel):
     # Step 3
     rsbsa_number: str | None = None
 
+    # Step 4 — token from /sms/otp/verify proving contact_number was confirmed
+    phone_verification_token: str | None = None
+
 
 class MerchantApplicationResponse(BaseModel):
     id: int

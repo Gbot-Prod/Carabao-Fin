@@ -21,6 +21,7 @@ from app.schemas.order import (
     PlaceOrderResponse,
 )
 from app.services.order_reservations import (
+    cancel_order,
     expire_stale_reservations,
     reservation_ttl_minutes,
 )
@@ -298,24 +299,11 @@ async def update_order_status(
         )
 
     if status == "cancelled":
-        for item in order.items or []:
-            if not isinstance(item, dict):
-                continue
-            produce_id = _extract_item_int(item, "produce_id", "produceId", "id")
-            quantity = max(_to_int(item.get("quantity"), 0), 0)
-            if produce_id and quantity:
-                produce = (
-                    db.query(Produce)
-                    .filter(Produce.id == produce_id)
-                    .with_for_update()
-                    .first()
-                )
-                if produce:
-                    produce.stock_quantity += quantity
-
-    order.status = status
-    if order.current_order:
-        order.current_order.status = status
+        cancel_order(order, db)
+    else:
+        order.status = status
+        if order.current_order:
+            order.current_order.status = status
 
     db.commit()
 

@@ -45,28 +45,12 @@ def get_current_user(
 
     user = db.query(User).filter(User.external_auth_id == subject).first()
 
+    # Rows are only created or linked by /auth/sync; a 401 here makes the
+    # frontend re-sync instead of relinking by email.
     if user is None:
-        # JWT has embedded claims — auto-provision the backend_users row so a
-        # FastAPI crash during the original sync never permanently blocks a user.
-        email: str | None = payload.get("email")
-        if not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
-            )
-        # Check if the user exists by email (unlinked row from a prior state).
-        user = db.query(User).filter(User.email == email).first()
-        if user:
-            user.external_auth_id = subject
-        else:
-            user = User(
-                external_auth_id=subject,
-                email=email,
-                first_name=payload.get("first_name"),
-                last_name=payload.get("last_name"),
-            )
-            db.add(user)
-        db.commit()
-        db.refresh(user)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
 
     return user

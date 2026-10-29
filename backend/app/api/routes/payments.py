@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 import requests
@@ -14,14 +14,12 @@ from app.models.merchant import Merchant
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
 from app.models.order_history import OrderHistory
-from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.payment import (
     CheckoutResponse,
     MerchantPayoutInfoCreate,
     MerchantPayoutInfoResponse,
-    PayoutBatchResponse,
     TransactionResponse,
 )
 from app.services.order_reservations import (
@@ -366,7 +364,7 @@ def get_merchant_payout_info(
 
 
 # ---------------------------------------------------------------------------
-# Admin: payout batch management
+# Admin: order status maintenance
 # ---------------------------------------------------------------------------
 
 
@@ -374,91 +372,6 @@ def _require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
     return current_user
-
-
-@router.post("/admin/batches/generate", response_model=list[PayoutBatchResponse])
-def generate_payout_batches(
-    period: date | None = None,
-    db: Session = Depends(get_db),
-    admin: User = Depends(_require_admin),
-):
-    """Groups all paid, unbatched transactions for the given date (defaults to today) into per-merchant batches."""
-    target_date = period or date.today()
-    start_dt = datetime(
-        target_date.year, target_date.month, target_date.day, tzinfo=UTC
-    )
-    end_dt = start_dt + timedelta(days=1)
-
-    unbatched = (
-        db.query(Transaction)
-        .outerjoin(PayoutBatchItem, PayoutBatchItem.transaction_id == Transaction.id)
-        .filter(
-            Transaction.status == "paid",
-            Transaction.paid_at >= start_dt,
-            Transaction.paid_at < end_dt,
-            PayoutBatchItem.id.is_(None),
-        )
-        .all()
-    )
-
-    if not unbatched:
-        return []
-
-    # Group by merchant
-    by_merchant: dict[int, list[Transaction]] = {}
-    for txn in unbatched:
-        by_merchant.setdefault(txn.merchant_id, []).append(txn)
-
-    batches = []
-    for merchant_id, txns in by_merchant.items():
-        batch = PayoutBatch(
-            merchant_id=merchant_id,
-            period_date=target_date,
-            transaction_count=len(txns),
-            gross_amount=sum(t.merchant_amount for t in txns),
-            status="pending",
-        )
-        db.add(batch)
-        db.flush()
-
-        for txn in txns:
-            db.add(
-                PayoutBatchItem(
-                    batch_id=batch.id,
-                    transaction_id=txn.id,
-                    amount=txn.merchant_amount,
-                )
-            )
-
-        batches.append(batch)
-
-    db.commit()
-    for b in batches:
-        db.refresh(b)
-    return batches
-
-
-@router.patch("/admin/batches/{batch_id}/release", response_model=PayoutBatchResponse)
-def release_payout_batch(
-    batch_id: int,
-    notes: str | None = None,
-    db: Session = Depends(get_db),
-    admin: User = Depends(_require_admin),
-):
-    batch = db.query(PayoutBatch).filter(PayoutBatch.id == batch_id).first()
-    if not batch:
-        raise HTTPException(status_code=404, detail="Batch not found")
-    if batch.status == "released":
-        raise HTTPException(status_code=400, detail="Batch already released")
-
-    batch.status = "released"
-    batch.released_at = datetime.now(UTC)
-    if notes:
-        batch.notes = notes
-
-    db.commit()
-    db.refresh(batch)
-    return batch
 
 
 @router.post("/admin/sync-current-order-statuses")

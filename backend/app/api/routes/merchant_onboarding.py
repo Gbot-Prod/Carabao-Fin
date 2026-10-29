@@ -17,6 +17,7 @@ from app.schemas.merchant_application import (
     MerchantOnboardingPayload,
 )
 from app.services import r2_service
+from app.services.phone_verification import normalize_ph_mobile, read_token
 
 router = APIRouter(tags=["merchant-onboarding"])
 logger = logging.getLogger(__name__)
@@ -51,6 +52,17 @@ async def submit_my_merchant_onboarding_route(
         raise HTTPException(
             status_code=400, detail="Invalid onboarding payload"
         ) from exc
+
+    verified = read_token(data.phone_verification_token)
+    if (
+        verified is None
+        or verified.get("purpose") != "merchant_phone"
+        or verified.get("user_id") != current_user.id
+        or verified.get("number") != normalize_ph_mobile(data.contact_number)
+    ):
+        raise HTTPException(
+            status_code=400, detail="Please verify your contact number first"
+        )
 
     if (
         db.query(Merchant).filter(Merchant.user_id == current_user.id).first()

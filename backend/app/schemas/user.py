@@ -25,10 +25,13 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    external_auth_id: str | None = None
+    # Identity fields (email, external_auth_id) are owned by Better Auth and
+    # only change through /auth/sync. Unknown fields are rejected so they
+    # can't be smuggled in.
+    model_config = ConfigDict(extra="forbid")
+
     first_name: str | None = None
     last_name: str | None = None
-    email: EmailStr | None = None
     phone_number: str | None = None
     region: str | None = None
     province: str | None = None
@@ -36,7 +39,6 @@ class UserUpdate(BaseModel):
     barangay: str | None = None
     address: str | None = None
     postal_code: str | None = None
-    created_at: datetime | None = None
     notifications_preferences: dict | None = None
 
 

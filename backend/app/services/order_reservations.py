@@ -76,6 +76,19 @@ def release_order_reservation(
     if not close_checkout_sessions(order, db):
         return False
 
+    restore_order_stock(order, db)
+    _mark_cancelled(order)
+
+    (
+        db.query(Transaction)
+        .filter(Transaction.order_id == order.id, Transaction.status == "pending")
+        .update({Transaction.status: transaction_status}, synchronize_session=False)
+    )
+    return True
+
+
+def restore_order_stock(order: Order, db: Session) -> None:
+    """Put the order's item quantities back on their produce listings."""
     for item in order.items or []:
         if not isinstance(item, dict):
             continue
@@ -92,16 +105,27 @@ def release_order_reservation(
         if produce:
             produce.stock_quantity += quantity
 
+
+def _mark_cancelled(order: Order) -> None:
     order.status = "cancelled"
     if order.current_order:
         order.current_order.status = "cancelled"
 
+
+def cancel_order(order: Order, db: Session) -> None:
+    """Cancel an accepted order: return its stock and flag its payment for refund.
+
+    Paid transactions move to ``refund_pending`` so they are never paid out to
+    the merchant.
+    """
+    restore_order_stock(order, db)
+    _mark_cancelled(order)
+
     (
         db.query(Transaction)
-        .filter(Transaction.order_id == order.id, Transaction.status == "pending")
-        .update({Transaction.status: transaction_status}, synchronize_session=False)
+        .filter(Transaction.order_id == order.id, Transaction.status == "paid")
+        .update({Transaction.status: "refund_pending"}, synchronize_session=False)
     )
-    return True
 
 
 def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:

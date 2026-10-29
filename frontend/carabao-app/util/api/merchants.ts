@@ -42,6 +42,7 @@ export type MerchantOnboardingPayload = {
   delivery_price: number;
   available_days: string[];
   rsbsa_number?: string;
+  phone_verification_token?: string;
 };
 
 export type ShopPage = {
@@ -191,6 +192,7 @@ export type MerchantTransaction = {
   description: string | null;
   created_at: string;
   paid_at: string | null;
+  order_status: string | null;
 };
 
 export const fetchMyPayoutInfo = async (): Promise<PayoutInfo | null> => {

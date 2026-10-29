@@ -72,6 +72,8 @@ export default function MerchantOnboardingPage() {
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
+  // Kept so a failed submit can be retried without re-entering a consumed code
+  const [phoneVerificationToken, setPhoneVerificationToken] = useState<string | null>(null);
 
   const [form, setForm] = useState<MerchantOnboardingPayload>({
     merchant_name: "",
@@ -201,6 +203,7 @@ export default function MerchantOnboardingPage() {
     if (stepIndex === STEPS.length - 1) {
       setOtpSent(false);
       setOtpValue("");
+      setPhoneVerificationToken(null);
     }
     setStepIndex((s) => Math.max(s - 1, 0));
   };
@@ -210,8 +213,9 @@ export default function MerchantOnboardingPage() {
     setOtpError(null);
     try {
       await sendOtp(fullPhoneNumber);
+      setPhoneVerificationToken(null);
       setOtpSent(true);
-      setResendCooldown(30);
+      setResendCooldown(60);
     } catch (error: unknown) {
       setOtpError(
         errorHelper(error) || "Failed to send verification code. Please try again.",
@@ -221,7 +225,7 @@ export default function MerchantOnboardingPage() {
     }
   };
 
-  const submit = async () => {
+  const submit = async (phoneVerificationToken: string) => {
     setError(null);
     if (!rsbsaFile) return;
     setIsSubmitting(true);
@@ -235,6 +239,7 @@ export default function MerchantOnboardingPage() {
           ...form,
           contact_number: form.contact_number.trim() ? `+63 ${form.contact_number.trim()}` : "",
           available_days: [...form.available_days].sort((a, b) => dayOrder(a) - dayOrder(b)),
+          phone_verification_token: phoneVerificationToken,
         },
         rsbsaFile,
       );
@@ -249,16 +254,20 @@ export default function MerchantOnboardingPage() {
 
   const handleVerifyAndSubmit = async () => {
     setOtpError(null);
-    setIsVerifyingOtp(true);
-    try {
-      await verifyOtp(fullPhoneNumber, otpValue);
-    } catch (error: unknown) {
-      setOtpError(errorHelper(error) || "Incorrect code. Please try again.");
+    let token = phoneVerificationToken;
+    if (!token) {
+      setIsVerifyingOtp(true);
+      try {
+        token = await verifyOtp(fullPhoneNumber, otpValue);
+        setPhoneVerificationToken(token);
+      } catch (error: unknown) {
+        setOtpError(errorHelper(error) || "Incorrect code. Please try again.");
+        setIsVerifyingOtp(false);
+        return;
+      }
       setIsVerifyingOtp(false);
-      return;
     }
-    setIsVerifyingOtp(false);
-    await submit();
+    await submit(token);
   };
 
   if (successApplication) {
