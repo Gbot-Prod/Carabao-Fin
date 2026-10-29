@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -10,7 +10,7 @@ from app.api.dependencies import get_current_user, get_db
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.order import Order
-from app.models.payout_batch import PayoutBatch
+from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.merchant import MerchantResponse
@@ -215,6 +215,94 @@ def list_payout_batches(
     if status:
         q = q.filter(PayoutBatch.status == status)
     return q.order_by(PayoutBatch.period_date.desc()).all()
+
+
+@router.post("/admin/batches/generate", response_model=list[PayoutBatchResponse])
+def generate_payout_batches(
+    period: date | None = None,
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """Groups paid, unbatched transactions of delivered orders for the given date
+    (defaults to today) into per-merchant batches."""
+    target_date = period or date.today()
+    start_dt = datetime(
+        target_date.year, target_date.month, target_date.day, tzinfo=UTC
+    )
+    end_dt = start_dt + timedelta(days=1)
+
+    unbatched = (
+        db.query(Transaction)
+        .join(Order, Order.id == Transaction.order_id)
+        .outerjoin(PayoutBatchItem, PayoutBatchItem.transaction_id == Transaction.id)
+        .filter(
+            Transaction.status == "paid",
+            Order.status == "delivered",
+            Transaction.paid_at >= start_dt,
+            Transaction.paid_at < end_dt,
+            PayoutBatchItem.id.is_(None),
+        )
+        .all()
+    )
+
+    if not unbatched:
+        return []
+
+    # Group by merchant
+    by_merchant: dict[int, list[Transaction]] = {}
+    for txn in unbatched:
+        by_merchant.setdefault(txn.merchant_id, []).append(txn)
+
+    batches = []
+    for merchant_id, txns in by_merchant.items():
+        batch = PayoutBatch(
+            merchant_id=merchant_id,
+            period_date=target_date,
+            transaction_count=len(txns),
+            gross_amount=sum(t.merchant_amount for t in txns),
+            status="pending",
+        )
+        db.add(batch)
+        db.flush()
+
+        for txn in txns:
+            db.add(
+                PayoutBatchItem(
+                    batch_id=batch.id,
+                    transaction_id=txn.id,
+                    amount=txn.merchant_amount,
+                )
+            )
+
+        batches.append(batch)
+
+    db.commit()
+    for b in batches:
+        db.refresh(b)
+    return batches
+
+
+@router.patch("/admin/batches/{batch_id}/release", response_model=PayoutBatchResponse)
+def release_payout_batch(
+    batch_id: int,
+    notes: str | None = None,
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    batch = db.query(PayoutBatch).filter(PayoutBatch.id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    if batch.status == "released":
+        raise HTTPException(status_code=400, detail="Batch already released")
+
+    batch.status = "released"
+    batch.released_at = datetime.now(UTC)
+    if notes:
+        batch.notes = notes
+
+    db.commit()
+    db.refresh(batch)
+    return batch
 
 
 @router.patch(

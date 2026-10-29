@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fetchMyProfile, updateMyProfile } from "@/util/api";
-import { signUp } from "@/lib/auth-client";
+import { signIn, signUp } from "@/lib/auth-client";
 import TermsModal from "@/components/TermsModal/TermsModal";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import styles from "./page.module.css";
@@ -34,6 +34,7 @@ export default function OnboardingPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>(EMPTY);
+  const [awaitingEmailVerification, setAwaitingEmailVerification] = useState<string | null>(null);
 
   useEffect(() => {
     const rawPendingSignup = sessionStorage.getItem("pending_signup");
@@ -94,14 +95,26 @@ export default function OnboardingPage() {
           setIsSaving(false);
           return;
         }
+        const email = accountEmail.trim();
         await signUp.email({
-          email: accountEmail.trim(),
+          email,
           password,
           name: `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim(),
         });
-        const syncResponse = await fetch("/api/auth", { method: "POST", credentials: "include" });
-        if (!syncResponse.ok) {
-          throw new Error("Could not finish account setup");
+
+        if (pendingSignup.channel === "phone") {
+          // The phone was verified but the email wasn't; the account can't be
+          // used until the emailed link is clicked.
+          sessionStorage.removeItem("pending_signup");
+          setAwaitingEmailVerification(email);
+          return;
+        }
+
+        try {
+          await signIn.email({ email, password });
+        } catch {
+          setSaveError("We couldn't create your account. If you already have one, sign in instead.");
+          return;
         }
       }
 
@@ -125,6 +138,20 @@ export default function OnboardingPage() {
       setIsSaving(false);
     }
   };
+
+  if (awaitingEmailVerification) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.card}>
+          <h1 className={styles.title}>Check your email</h1>
+          <p className={styles.subtitle}>
+            We sent a verification link to {awaitingEmailVerification}. Open it to activate your
+            account, then you can finish your profile.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page}>

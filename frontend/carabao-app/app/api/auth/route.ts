@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         provider_user_id: session.user.id,
         email: session.user.email,
+        email_verified: session.user.emailVerified,
         first_name: firstName || null,
         last_name: lastName || null,
         role: session.user.role ?? null,

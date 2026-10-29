@@ -67,13 +67,10 @@ export const signUp = {
       throw new Error(getErrorMessage(error, "Signup failed"));
     }
 
-    // Better Auth silently "succeeds" for existing verified emails (anti-enumeration).
-    // Detect it by checking if the returned user is already verified.
-    if (data.user.emailVerified) {
-      throw new Error("An account with this email already exists. Please sign in instead.");
-    }
-
-    // Backend sync happens in /email-verified after the user verifies their email.
+    // requireEmailVerification means sign-up never opens a session, and an
+    // existing email gets a look-alike success (anti-enumeration). Callers
+    // either sign in next (email-OTP signups) or wait for the emailed link,
+    // which lands on /email-verified and syncs there.
     return data;
   },
 };

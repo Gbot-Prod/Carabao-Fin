@@ -13,13 +13,13 @@ from uuid import uuid4
 import bcrypt as _bcrypt
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.core.security import create_access_token
 from app.models.mobile_credential import MobileCredential
-from app.models.user import User
+from app.models.user import User, normalize_email
 
 router = APIRouter(tags=["auth"])
 
@@ -72,6 +72,9 @@ class AuthSyncPayload(BaseModel):
     phone_number: str | None = None
     role: str | None = None
     verification_token: str | None = None
+    # Better Auth's emailVerified flag; trusted because the caller holds the
+    # shared secret.
+    email_verified: bool = False
 
 
 class AuthSyncResponse(BaseModel):
@@ -104,35 +107,52 @@ async def sync_auth(
     if not hmac.compare_digest(x_internal_auth_sync_secret or "", expected_secret):
         raise HTTPException(status_code=401, detail="Unauthorized auth sync request")
 
-    user = (
-        db.query(User).filter(User.external_auth_id == payload.provider_user_id).first()
-    )
-
-    # Fallback by email so existing users can be linked to Better Auth without
-    # duplicates.
-    if user is None:
-        user = db.query(User).filter(User.email == payload.email).first()
+    email = normalize_email(payload.email)
 
     verified_identifier = _verified_signup_identifier(payload.verification_token)
-    if user is None and verified_identifier is None:
-        raise HTTPException(
-            status_code=403, detail="Signup identifier has not been verified"
-        )
     if verified_identifier is not None:
         channel, identifier = verified_identifier
-        if channel == "email" and identifier.lower() != payload.email.lower():
+        if channel == "email" and normalize_email(identifier) != email:
             raise HTTPException(
                 status_code=403, detail="Verified email does not match signup email"
             )
         if channel == "phone":
             payload.phone_number = identifier
+    email_proven = payload.email_verified or (
+        verified_identifier is not None and verified_identifier[0] == "email"
+    )
+
+    user = (
+        db.query(User).filter(User.external_auth_id == payload.provider_user_id).first()
+    )
+
+    if user is None:
+        # Linking by email hands an existing row to whoever holds the address,
+        # so only do it once the address is proven and the row is unclaimed.
+        existing = db.query(User).filter(func.lower(User.email) == email).first()
+        if existing is not None:
+            if not email_proven:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Verify your email before linking this account",
+                )
+            if existing.external_auth_id is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This email is already linked to another account",
+                )
+            user = existing
+        elif verified_identifier is None and not payload.email_verified:
+            raise HTTPException(
+                status_code=403, detail="Signup identifier has not been verified"
+            )
 
     is_admin = payload.role == "admin"
 
     if user is None:
         user = User(
             external_auth_id=payload.provider_user_id,
-            email=payload.email,
+            email=email,
             first_name=payload.first_name,
             last_name=payload.last_name,
             phone_number=payload.phone_number,
@@ -141,7 +161,18 @@ async def sync_auth(
         db.add(user)
     else:
         user.external_auth_id = payload.provider_user_id
-        user.email = payload.email
+        if email_proven and normalize_email(user.email) != email:
+            taken = (
+                db.query(User)
+                .filter(func.lower(User.email) == email, User.id != user.id)
+                .first()
+            )
+            if taken is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This email is already linked to another account",
+                )
+            user.email = email
         if payload.first_name is not None:
             user.first_name = payload.first_name
         if payload.last_name is not None:

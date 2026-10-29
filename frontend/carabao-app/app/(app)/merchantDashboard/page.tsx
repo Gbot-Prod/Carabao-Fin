@@ -304,8 +304,12 @@ export default function MerchantDashboardPage() {
 
   const earningsAnalytics = useMemo(() => {
     const totalPaid = transactions.filter((t) => t.status === "paid").reduce((acc, t) => acc + t.merchant_amount, 0);
+    // Only delivered orders can be cashed out.
+    const totalDelivered = transactions
+      .filter((t) => t.status === "paid" && t.order_status === "delivered")
+      .reduce((acc, t) => acc + t.merchant_amount, 0);
     const totalReleased = payouts.filter((p) => p.status === "released").reduce((acc, p) => acc + p.gross_amount, 0);
-    const available = Math.max(0, totalPaid - totalReleased);
+    const available = Math.max(0, totalDelivered - totalReleased);
     const pending = payouts.find((p) => ["pending", "approved", "processing"].includes(p.status));
     return { totalPaid, totalReleased, available, pendingBatch: pending ?? null };
   }, [transactions, payouts]);

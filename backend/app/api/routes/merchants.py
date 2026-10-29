@@ -34,6 +34,7 @@ from app.schemas.payout import (
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
 from app.services import r2_service
+from app.services.order_reservations import cancel_order
 from app.services.sms_service import notify_order_shipped
 from app.utils.geocoding import _geocode
 
@@ -692,13 +693,20 @@ async def get_my_transactions(
     merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
-    return (
-        db.query(Transaction)
+    rows = (
+        db.query(Transaction, Order.status)
+        .outerjoin(Order, Order.id == Transaction.order_id)
         .filter(Transaction.merchant_id == merchant.id)
         .order_by(Transaction.created_at.desc())
         .limit(50)
         .all()
     )
+    return [
+        TransactionSummary.model_validate(txn).model_copy(
+            update={"order_status": order_status}
+        )
+        for txn, order_status in rows
+    ]
 
 
 @router.post("/merchants/me/payouts/request", response_model=PayoutBatchResponse)
@@ -745,16 +753,21 @@ async def request_my_payout(
 
     unpaid_txns = (
         db.query(Transaction)
+        .join(Order, Order.id == Transaction.order_id)
         .filter(
             Transaction.merchant_id == merchant.id,
             Transaction.status == "paid",
+            Order.status == "delivered",
             Transaction.id.not_in(already_batched_ids),
         )
         .all()
     )
 
     if not unpaid_txns:
-        raise HTTPException(status_code=400, detail="No unpaid earnings to cash out")
+        raise HTTPException(
+            status_code=400,
+            detail="No delivered orders with unpaid earnings to cash out",
+        )
 
     total = sum(t.merchant_amount for t in unpaid_txns)
     batch = PayoutBatch(
@@ -859,26 +872,11 @@ async def update_my_merchant_order_status(
         )
 
     if status == "cancelled":
-        for item in order.items or []:
-            if not isinstance(item, dict):
-                continue
-            produce_id = (
-                item.get("produce_id") or item.get("produceId") or item.get("id")
-            )
-            quantity = item.get("quantity", 0)
-            if produce_id and quantity:
-                produce = (
-                    db.query(Produce)
-                    .filter(Produce.id == int(produce_id))
-                    .with_for_update()
-                    .first()
-                )
-                if produce:
-                    produce.stock_quantity += int(quantity)
-
-    order.status = status
-    if order.current_order:
-        order.current_order.status = status
+        cancel_order(order, db)
+    else:
+        order.status = status
+        if order.current_order:
+            order.current_order.status = status
 
     # Compute and store ALNS route when order is marked for shipping (first
     # time only)

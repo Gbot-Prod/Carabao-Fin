@@ -37,7 +37,6 @@ export type UserProfile = {
 export type UserProfileUpdatePayload = {
   first_name?: string | null;
   last_name?: string | null;
-  email?: string;
   phone_number?: string | null;
   address?: string | null;
   barangay?: string | null;

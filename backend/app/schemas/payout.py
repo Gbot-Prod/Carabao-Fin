@@ -66,5 +66,6 @@ class TransactionSummary(BaseModel):
     description: str | None = None
     created_at: datetime
     paid_at: datetime | None = None
+    order_status: str | None = None
 
     model_config = {"from_attributes": True}

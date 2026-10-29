@@ -5,6 +5,11 @@ from sqlalchemy.sql import func
 from app.core.database import Base
 
 
+def normalize_email(value: str) -> str:
+    """Canonical form for storing and comparing emails (matches Better Auth)."""
+    return value.strip().lower()
+
+
 class User(Base):
     __tablename__ = "backend_users"
 
