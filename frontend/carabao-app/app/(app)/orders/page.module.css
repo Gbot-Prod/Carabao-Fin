@@ -6,7 +6,7 @@
 .header {
   background: linear-gradient(130deg, #f0fff1 0%, #dff5e6 52%, #ccefd8 100%);
   border: 1px solid #c5e8d0;
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   padding: 1.4rem;
   display: flex;
   justify-content: space-between;
@@ -36,13 +36,13 @@
   gap: 0.375rem;
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid #b9ddc7;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 4px;
 }
 
 .tab {
   padding: 0.45rem 1rem;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   font-size: 0.875rem;
@@ -57,7 +57,7 @@
 }
 
 .tabActive {
-  background: #fff;
+  background: var(--bg-white);
   color: #11492a;
   box-shadow: 0 1px 4px rgba(4, 53, 21, 0.1);
 }
@@ -73,9 +73,9 @@
 }
 
 .card {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid #d9e7dd;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   padding: 1rem 1.1rem;
   box-shadow: 0 4px 12px rgba(4, 53, 21, 0.05);
   display: grid;
@@ -92,7 +92,7 @@
 .orderId {
   margin: 0;
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--text-subtle);
   font-weight: 500;
 }
 
@@ -122,7 +122,7 @@
 
 .badge {
   padding: 0.25rem 0.7rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 0.78rem;
   font-weight: 600;
   white-space: nowrap;
@@ -154,7 +154,7 @@
 }
 
 .dot {
-  color: #9ca3af;
+  color: var(--text-faint);
 }
 
 .cardActions {
@@ -165,7 +165,7 @@
 
 .trackBtn {
   padding: 0.5rem 1rem;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background-color: #0a8b3a;
   color: #fff;
@@ -205,9 +205,9 @@
   gap: 0.5rem;
   flex-wrap: wrap;
   font-size: 0.85rem;
-  color: #374151;
+  color: var(--text-muted);
   padding-top: 0.25rem;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--surface-muted);
 }
 
 .confirmYes {
@@ -215,7 +215,7 @@
   background: #dc2626;
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
@@ -229,23 +229,23 @@
 .confirmNo {
   padding: 0.3rem 0.75rem;
   background: none;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
-  color: #374151;
+  color: var(--text-muted);
 }
 
 /* ── Empty state ──────────────────────────────────────────────────────────── */
 
 .empty {
-  background: #fff;
+  background: var(--bg-white);
   border: 1px solid #d9e7dd;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   padding: 2.5rem 1.5rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-subtle);
   display: grid;
   gap: 0.5rem;
   justify-items: center;
@@ -268,7 +268,7 @@
   padding: 0.6rem 1.25rem;
   background-color: #0a8b3a;
   color: #fff;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
   font-size: 0.875rem;
   text-decoration: none;

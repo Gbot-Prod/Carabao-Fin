@@ -1,7 +1,6 @@
 import asyncio
 import os
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 
 import requests as _requests
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -627,7 +626,7 @@ async def upload_produce_image(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/merchants/me/payout-info", response_model=Optional[PayoutInfoResponse])
+@router.get("/merchants/me/payout-info", response_model=PayoutInfoResponse | None)
 async def get_my_payout_info(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

@@ -23,7 +23,6 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.core.database_url import normalize_database_url
 
-
 STEPS = [
     # ── backend_users ────────────────────────────────────────────────────────
     (

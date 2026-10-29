@@ -98,16 +98,9 @@ export default function MerchantDetailPage() {
   return (
     <div className={styles.page}>
       {notification && (
-        <div style={{
-          position: 'fixed', bottom: '1.5rem', right: '1.5rem',
-          background: '#166534', color: '#fff',
-          padding: '0.75rem 1.25rem', borderRadius: 10,
-          display: 'flex', alignItems: 'center', gap: '0.75rem',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)', zIndex: 1000,
-          fontSize: '0.9rem', fontWeight: 500,
-        }}>
+        <div className={styles.cartToast} role="status">
           <span>&#10003; {notification} added to cart</span>
-          <Link href="/cart" style={{ color: '#86efac', textDecoration: 'underline', whiteSpace: 'nowrap' }}>
+          <Link href="/cart">
             View Cart
           </Link>
         </div>

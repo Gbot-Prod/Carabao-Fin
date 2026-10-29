@@ -6,13 +6,6 @@ import time
 
 import requests
 
-_use_test = os.getenv("PAYMONGO_USE_TEST", "false").lower() == "true"
-PAYMONGO_SECRET_KEY = (
-    os.getenv("PAYMONGO_SECRET_TEST_KEY")
-    if _use_test
-    else os.getenv("PAYMONGO_SECRET_KEY")
-)
-PAYMONGO_WEBHOOK_SECRET = os.getenv("PAYMONGO_WEBHOOK_SECRET", "")
 PAYMONGO_BASE_URL = "https://api.paymongo.com/v1"
 
 SUPPORTED_METHODS = [
@@ -24,10 +17,22 @@ SUPPORTED_METHODS = [
 ]
 
 
+# Settings are read per call rather than at import time so they don't depend on
+# load_dotenv() having run before this module was first imported.
+def _use_test_mode() -> bool:
+    return os.getenv("PAYMONGO_USE_TEST", "false").lower() == "true"
+
+
+def get_webhook_secret() -> str:
+    return os.getenv("PAYMONGO_WEBHOOK_SECRET", "")
+
+
 def _auth_header() -> dict:
-    if not PAYMONGO_SECRET_KEY:
-        raise RuntimeError("PAYMONGO_SECRET_KEY is not set")
-    encoded = base64.b64encode(f"{PAYMONGO_SECRET_KEY}:".encode()).decode()
+    key_name = "PAYMONGO_SECRET_TEST_KEY" if _use_test_mode() else "PAYMONGO_SECRET_KEY"
+    secret_key = os.getenv(key_name)
+    if not secret_key:
+        raise RuntimeError(f"{key_name} is not set")
+    encoded = base64.b64encode(f"{secret_key}:".encode()).decode()
     return {"Authorization": f"Basic {encoded}", "Content-Type": "application/json"}
 
 
@@ -87,6 +92,27 @@ def retrieve_checkout_session(session_id: str) -> dict:
     )
     response.raise_for_status()
     return response.json()["data"]
+
+
+def expire_checkout_session(session_id: str) -> bool:
+    """Expire a checkout session so it can no longer be paid.
+
+    Returns True once the session is expired (or unknown to PayMongo) and False
+    when PayMongo refuses because a payment is already paid or in progress.
+    """
+    response = requests.post(
+        f"{PAYMONGO_BASE_URL}/checkout_sessions/{session_id}/expire",
+        headers=_auth_header(),
+        timeout=15,
+    )
+    if response.status_code == 404:
+        return True
+    if response.status_code == 400:
+        # Refused: already expired, already paid, or a payment is in progress.
+        session = retrieve_checkout_session(session_id)
+        return session["attributes"].get("status") == "expired"
+    response.raise_for_status()
+    return True
 
 
 def get_or_create_paymongo_customer(db, user) -> str:
@@ -155,7 +181,8 @@ def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
     PayMongo sends: Paymongo-Signature: t=<ts>,te=<test_hmac>,li=<live_hmac>
     Signed payload: "<timestamp>.<raw_body>"
     """
-    if not PAYMONGO_WEBHOOK_SECRET or not signature_header:
+    webhook_secret = get_webhook_secret()
+    if not webhook_secret or not signature_header:
         return False
 
     parts: dict[str, str] = {}
@@ -165,9 +192,10 @@ def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
             parts[k.strip()] = v.strip()
 
     timestamp_str = parts.get("t")
-    sigs = [s for s in (parts.get("li"), parts.get("te")) if s]
+    # Test-mode events are signed in `te`, live-mode events in `li`.
+    sig = parts.get("te") if _use_test_mode() else parts.get("li")
 
-    if not timestamp_str or not sigs:
+    if not timestamp_str or not sig:
         return False
 
     try:
@@ -180,9 +208,9 @@ def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
 
     signed_payload = f"{timestamp_str}.".encode() + raw_body
     computed = hmac.new(
-        PAYMONGO_WEBHOOK_SECRET.encode(),
+        webhook_secret.encode(),
         signed_payload,
         hashlib.sha256,
     ).hexdigest()
 
-    return any(hmac.compare_digest(computed, sig) for sig in sigs)
+    return hmac.compare_digest(computed, sig)

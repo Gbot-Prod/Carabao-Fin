@@ -62,7 +62,6 @@ export default function MerchantOnboardingPage() {
   const [rsbsaFile, setRsbsaFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submittedApplication, setSubmittedApplication] = useState<MerchantApplication | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successApplication, setSuccessApplication] = useState<MerchantApplication | null>(null);
 
@@ -515,7 +514,7 @@ export default function MerchantOnboardingPage() {
                         <input
                           type="file"
                           accept="image/*,application/pdf"
-                          style={{ display: "none" }}
+                          hidden
                           onChange={(e) => setRsbsaFile(e.target.files?.[0] ?? null)}
                         />
                         <svg className={styles.dropzoneIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

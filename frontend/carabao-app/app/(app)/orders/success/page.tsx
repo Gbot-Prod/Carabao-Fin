@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
+import styles from "./page.module.css";
 import { fetchTransactionByOrder, type TransactionStatusResponse } from "@/util/api";
 
 function PaymentSuccessContent() {
@@ -60,169 +61,88 @@ function PaymentSuccessContent() {
 
   if (status === "not_found") {
     return (
-      <div style={styles.container}>
+      <div className={styles.container}>
         <p>No order found. Please check your order history.</p>
-        <Link href="/orders" style={styles.primaryButton}>View Order History</Link>
+        <Link href="/orders" className={styles.primaryButton}>View Order History</Link>
       </div>
     );
   }
 
   if (status === "failed") {
     return (
-      <div style={styles.container}>
-        <div style={{ ...styles.badge, background: "#fee2e2", color: "#dc2626" }}>
+      <div className={styles.container}>
+        <div className={`${styles.badge} ${styles.badgeFailed}`}>
           Payment Failed
         </div>
-        <h1 style={styles.heading}>Something went wrong</h1>
-        <p style={styles.subtext}>Your payment was not completed. No charges were made.</p>
-        <Link href="/checkout" style={styles.primaryButton}>Try Again</Link>
-        <Link href="/orders" style={styles.secondaryButton}>View Order History</Link>
+        <h1 className={styles.heading}>Something went wrong</h1>
+        <p className={styles.subtext}>Your payment was not completed. No charges were made.</p>
+        <Link href="/checkout" className={styles.primaryButton}>Try Again</Link>
+        <Link href="/orders" className={styles.secondaryButton}>View Order History</Link>
       </div>
     );
   }
 
   if (status === "polling") {
     return (
-      <div style={styles.container}>
-        <div style={styles.spinner} />
-        <h1 style={styles.heading}>Confirming your payment…</h1>
-        <p style={styles.subtext}>This usually takes a few seconds.</p>
+      <div className={styles.container}>
+        <div className={styles.spinner} />
+        <h1 className={styles.heading}>Confirming your payment…</h1>
+        <p className={styles.subtext}>This usually takes a few seconds.</p>
       </div>
     );
   }
 
   if (status === "timeout") {
     return (
-      <div style={styles.container}>
-        <div style={{ ...styles.badge, background: "#fef9c3", color: "#854d0e" }}>
+      <div className={styles.container}>
+        <div className={`${styles.badge} ${styles.badgePending}`}>
           Payment Pending
         </div>
-        <h1 style={styles.heading}>Still confirming your payment</h1>
-        <p style={styles.subtext}>
+        <h1 className={styles.heading}>Still confirming your payment</h1>
+        <p className={styles.subtext}>
           This is taking longer than usual. Check your order history in a few minutes — if payment went through it will appear there.
         </p>
-        <Link href="/orders" style={styles.primaryButton}>View Order History</Link>
+        <Link href="/orders" className={styles.primaryButton}>View Order History</Link>
       </div>
     );
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.badge}>Payment Confirmed</div>
-      <h1 style={styles.heading}>Thank you for your order!</h1>
-      <p style={styles.subtext}>
+    <div className={styles.container}>
+      <div className={styles.badge}>Payment Confirmed</div>
+      <h1 className={styles.heading}>Thank you for your order!</h1>
+      <p className={styles.subtext}>
         Order #{orderId} has been paid{" "}
         {transaction?.amount !== undefined && `(PHP ${transaction.amount.toFixed(2)})`}.
         The merchant will begin preparing your items.
       </p>
 
-      <div style={styles.timeline}>
-        <div style={styles.timelineItem}>
-          <span style={styles.dot} />
+      <div className={styles.timeline}>
+        <div className={styles.timelineItem}>
+          <span className={styles.dot} />
           <span>Payment received</span>
         </div>
-        <div style={styles.timelineItem}>
-          <span style={{ ...styles.dot, background: "#d1d5db" }} />
-          <span style={{ color: "#9ca3af" }}>Merchant confirms order</span>
+        <div className={`${styles.timelineItem} ${styles.timelineItemPending}`}>
+          <span className={styles.dot} />
+          <span>Merchant confirms order</span>
         </div>
-        <div style={styles.timelineItem}>
-          <span style={{ ...styles.dot, background: "#d1d5db" }} />
-          <span style={{ color: "#9ca3af" }}>Out for delivery</span>
+        <div className={`${styles.timelineItem} ${styles.timelineItemPending}`}>
+          <span className={styles.dot} />
+          <span>Out for delivery</span>
         </div>
       </div>
 
-      <Link href={`/track`} style={styles.primaryButton}>Track Order</Link>
-      <Link href="/orders" style={styles.secondaryButton}>View Order History</Link>
-      <Link href="/order" style={styles.secondaryButton}>Place Another Order</Link>
+      <Link href={`/track`} className={styles.primaryButton}>Track Order</Link>
+      <Link href="/orders" className={styles.secondaryButton}>View Order History</Link>
+      <Link href="/order" className={styles.secondaryButton}>Place Another Order</Link>
     </div>
   );
 }
 
 export default function PaymentSuccessPage() {
   return (
-    <Suspense fallback={<div style={styles.container}><div style={styles.spinner} /></div>}>
+    <Suspense fallback={<div className={styles.container}><div className={styles.spinner} /></div>}>
       <PaymentSuccessContent />
     </Suspense>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    maxWidth: 480,
-    margin: "4rem auto",
-    padding: "2rem",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "1rem",
-    textAlign: "center",
-  },
-  badge: {
-    background: "#dcfce7",
-    color: "#16a34a",
-    padding: "0.35rem 1rem",
-    borderRadius: 999,
-    fontSize: "0.85rem",
-    fontWeight: 600,
-  },
-  heading: {
-    fontSize: "1.6rem",
-    fontWeight: 700,
-    margin: 0,
-  },
-  subtext: {
-    color: "#6b7280",
-    margin: 0,
-  },
-  timeline: {
-    width: "100%",
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.75rem",
-    margin: "1rem 0",
-    textAlign: "left",
-  },
-  timelineItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-    fontSize: "0.95rem",
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-    background: "#16a34a",
-    flexShrink: 0,
-  },
-  primaryButton: {
-    display: "block",
-    width: "100%",
-    padding: "0.75rem",
-    background: "#16a34a",
-    color: "#fff",
-    borderRadius: 8,
-    textDecoration: "none",
-    fontWeight: 600,
-    textAlign: "center",
-  },
-  secondaryButton: {
-    display: "block",
-    width: "100%",
-    padding: "0.75rem",
-    border: "1px solid #d1d5db",
-    borderRadius: 8,
-    textDecoration: "none",
-    fontWeight: 500,
-    textAlign: "center",
-    color: "#374151",
-  },
-  spinner: {
-    width: 36,
-    height: 36,
-    border: "3px solid #e5e7eb",
-    borderTop: "3px solid #16a34a",
-    borderRadius: "50%",
-    animation: "spin 0.8s linear infinite",
-  },
-};

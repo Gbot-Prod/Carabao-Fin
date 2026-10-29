@@ -15,13 +15,13 @@
 .heading {
   font-size: 22px;
   font-weight: 700;
-  color: #173d25;
+  color: var(--green-900);
   margin: 0 0 4px;
 }
 
 .subheading {
   font-size: 13px;
-  color: #647067;
+  color: var(--text-subtle);
   margin: 0;
 }
 
@@ -35,9 +35,9 @@
 }
 
 .kpiCard {
-  background: #fff;
-  border: 1px solid #e0ece5;
-  border-radius: 12px;
+  background: var(--bg-white);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
   padding: 16px 20px;
 }
 
@@ -49,7 +49,7 @@
 .kpiLabel {
   font-size: 11px;
   font-weight: 600;
-  color: #647067;
+  color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 0 0 6px;
@@ -58,7 +58,7 @@
 .kpiValue {
   font-size: 22px;
   font-weight: 700;
-  color: #173d25;
+  color: var(--green-900);
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -66,9 +66,9 @@
 /* ── Table card ──────────────────────────────── */
 
 .tableCard {
-  background: #fff;
-  border: 1px solid #e0ece5;
-  border-radius: 12px;
+  background: var(--bg-white);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -77,7 +77,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #e0ece5;
+  border-bottom: 1px solid var(--green-border);
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -85,7 +85,7 @@
 .tableTitle {
   font-size: 14px;
   font-weight: 600;
-  color: #173d25;
+  color: var(--green-900);
   margin: 0;
   display: flex;
   align-items: center;
@@ -101,17 +101,17 @@
   font-size: 12px;
   font-weight: 500;
   padding: 4px 12px;
-  border-radius: 20px;
-  border: 1px solid #e0ece5;
-  background: #fff;
-  color: #647067;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--green-border);
+  background: var(--bg-white);
+  color: var(--text-subtle);
   cursor: pointer;
 }
 
 .filterBtnActive {
-  background: #173d25;
+  background: var(--green-900);
   color: #fff;
-  border-color: #173d25;
+  border-color: var(--green-900);
 }
 
 .table {
@@ -123,13 +123,13 @@
 .table th {
   font-size: 11px;
   font-weight: 600;
-  color: #647067;
+  color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 10px 20px;
   text-align: left;
-  background: #f7fcf8;
-  border-bottom: 1px solid #e0ece5;
+  background: var(--green-50);
+  border-bottom: 1px solid var(--green-border);
 }
 
 .table td {
@@ -145,7 +145,7 @@
 }
 
 .table tr:hover td {
-  background: #f7fcf8;
+  background: var(--green-50);
 }
 
 .merchantName {
@@ -186,7 +186,7 @@
   font-size: 11px;
   font-weight: 600;
   padding: 3px 10px;
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   text-transform: capitalize;
   white-space: nowrap;
 }
@@ -208,7 +208,7 @@
 
 .badge_released {
   background: #dcfce7;
-  color: #166534;
+  color: var(--success-text);
 }
 
 .badge_failed {
@@ -228,9 +228,9 @@
   font-size: 12px;
   font-weight: 600;
   padding: 5px 14px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: none;
-  background: #173d25;
+  background: var(--green-900);
   color: #fff;
   cursor: pointer;
 }
@@ -244,9 +244,9 @@
   font-size: 13px;
   font-weight: 600;
   padding: 8px 18px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: none;
-  background: #31925d;
+  background: var(--green-600);
   color: #fff;
   cursor: pointer;
   white-space: nowrap;
@@ -262,8 +262,8 @@
 .notesInput {
   font-size: 12px;
   padding: 4px 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   width: 140px;
   color: #1a2e20;
 }
@@ -278,13 +278,13 @@
 
 .state {
   padding: 40px 32px;
-  color: #647067;
+  color: var(--text-subtle);
   font-size: 14px;
 }
 
 .stateError {
   padding: 40px 32px;
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 14px;
 }
 
@@ -293,7 +293,7 @@
   font-weight: 600;
   background: #fef9c3;
   color: #854d0e;
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   padding: 2px 8px;
 }
 
@@ -301,12 +301,22 @@
   position: fixed;
   bottom: 1.5rem;
   right: 1.5rem;
-  background: #173d25;
+  background: var(--green-900);
   color: #fff;
   padding: 10px 18px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 500;
   z-index: 1000;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.releasedNote,
+.emptyCell {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.emptyCell {
+  color: var(--text-faint);
 }

@@ -1,45 +1,99 @@
-.container {
-  display: flex;
-  justify-content: center;
-  padding: 24px;
-}
-
+/* Full-height three-pane layout: orders | map | details.
+   The app shell pads its content by 1.5rem top/bottom, hence the 3rem offset. */
 .trackingContainer {
   display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 20px;
-  width: 100%;
-  max-width: 1200px;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) minmax(300px, 380px);
+  gap: var(--spacing-md);
+  height: calc(100dvh - 3rem);
+  min-height: 560px;
 }
+
+.loading {
+  padding: var(--spacing-lg);
+  color: var(--text-muted);
+}
+
+/* ── Panes ────────────────────────────────────────────────────────────────── */
+
+.ordersSection,
+.detailsSection {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+  background: var(--bg-white);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+}
+
+.paneHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-strong);
+}
+
+.countBadge {
+  min-width: 28px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  color: var(--green-900);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.sectionTitle {
+  margin: 0 0 var(--spacing-md);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.orderList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Map ──────────────────────────────────────────────────────────────────── */
 
 .mapSection {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  min-height: 0;
+  border: 1px solid #d8e0d8;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  background: var(--surface-muted);
 }
 
 .mapBoxContainer {
-  width: 100%;
-  height: 420px;
-  border: 1px solid #d8e0d8;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  position: absolute;
+  inset: 0;
 }
 
 .fallbackMap {
   position: absolute;
-  inset: 0 auto auto 0;
-  width: 100%;
-  height: 420px;
+  inset: 0;
   overflow: hidden;
-  border: 1px solid #d8e0d8;
-  border-radius: 16px;
   background:
     linear-gradient(135deg, rgba(220, 252, 231, 0.8), rgba(239, 246, 255, 0.9)),
     repeating-linear-gradient(45deg, rgba(148, 163, 184, 0.12) 0 1px, transparent 1px 18px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   z-index: 2;
 }
 
@@ -67,40 +121,123 @@
   max-width: 280px;
   padding: 8px 10px;
   border: 1px solid rgba(148, 163, 184, 0.45);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.9);
-  color: #475569;
+  color: var(--text-muted);
   font-size: 0.78rem;
   line-height: 1.25;
 }
 
-.detailsSection {
-  background-color: #ffffff;
-  border: 1px solid #e7e7e7;
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
+.mapEtaChip {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
-.sectionTitle {
-  margin: 0 0 12px;
-  font-size: 1.1rem;
+.mapEtaLabel {
+  font-size: 0.7rem;
   font-weight: 700;
-  color: #1b1b1b;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
+
+.mapEtaValue {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--green-900);
+}
+
+.mapLegend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 8px 12px;
+  list-style: none;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.mapLegend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Details ──────────────────────────────────────────────────────────────── */
 
 .detailGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
+}
+
+/* Inner tiles sit inside a 12px-radius pane, so they step down to 8px. */
+.detailItem {
+  padding: 10px 12px;
+  background: #f7faf7;
+  border: 1px solid #e2ece2;
+  border-radius: var(--radius-sm);
+}
+
+.detailItemWide {
+  grid-column: 1 / -1;
+}
+
+.detailLabel {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.detailValue {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.detailLink {
+  color: var(--green-600);
+  text-decoration: none;
+}
+
+.detailLink:hover {
+  text-decoration: underline;
 }
 
 .shipmentPanel {
-  margin-top: 16px;
-  border: 1px solid #dbe7dd;
-  border-radius: 16px;
-  padding: 14px;
-  background: linear-gradient(180deg, #f7fbf8 0%, #ffffff 100%);
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--green-border);
 }
 
 .shipmentPanelHeader {
@@ -112,21 +249,21 @@
 }
 
 .shipmentTitle {
-  margin: 2px 0 0;
+  margin: 0;
   font-size: 1rem;
   font-weight: 800;
-  color: #173d25;
+  color: var(--green-900);
 }
 
 .shipmentStatus {
   display: inline-flex;
   align-items: center;
-  padding: 6px 10px;
-  border-radius: 999px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
   background: #e9f4ec;
   color: #245033;
   font-size: 0.75rem;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: capitalize;
   white-space: nowrap;
 }
@@ -138,10 +275,10 @@
   margin-bottom: 12px;
 }
 
-.shipmentSummaryRow>div {
+.shipmentSummaryRow > div {
   padding: 10px 12px;
-  border-radius: 12px;
-  background: #ffffff;
+  border-radius: var(--radius-sm);
+  background: #f7faf7;
   border: 1px solid #e2ece2;
 }
 
@@ -149,10 +286,10 @@
   display: block;
   margin-bottom: 4px;
   font-size: 0.72rem;
-  color: #5d6b5d;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .shipmentStopList {
@@ -161,19 +298,19 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .shipmentStopItem {
-  padding: 12px 14px;
-  border-radius: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid #e2ece2;
-  background: #fff;
+  background: var(--bg-white);
 }
 
 .shipmentStopActive {
   border-color: #f59e0b;
-  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.15);
+  background: #fffbeb;
 }
 
 .shipmentStopHeader {
@@ -186,112 +323,136 @@
 .shipmentStopBadge {
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px;
-  border-radius: 999px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
   background: #eff7f1;
   color: #245033;
-  font-size: 0.74rem;
-  font-weight: 800;
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .shipmentStopStatus {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #5d6b5d;
+  color: var(--text-muted);
   text-transform: capitalize;
 }
 
 .shipmentStopName {
-  margin: 8px 0 4px;
+  margin: 8px 0 2px;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #173d25;
+  color: var(--green-900);
 }
 
 .shipmentStopAddress {
   margin: 0;
-  font-size: 0.88rem;
-  color: #5d6b5d;
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 .shipmentError {
-  margin: 12px 0 0;
-  font-size: 0.95rem;
-  color: #b91c1c;
+  margin: var(--spacing-md) 0 0;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  color: var(--danger);
   background: #fef2f2;
   border: 1px solid #fecaca;
-  padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
 }
 
-.detailItem {
-  background-color: #f7faf7;
-  border: 1px solid #e2ece2;
-  border-radius: 12px;
-  padding: 10px 12px;
-}
+/* ── Empty state ──────────────────────────────────────────────────────────── */
 
-.detailLabel {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: #5d6b5d;
-  margin-bottom: 4px;
-  text-transform: uppercase;
-}
-
-.detailValue {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #1c2c1c;
-}
-
-.ordersSection {
-  background-color: #ffffff;
-  border: 1px solid #e7e7e7;
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
-  max-height: 620px;
-  overflow: auto;
-}
-
-.orderList {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.emptyState {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  min-height: calc(100dvh - 3rem);
+  padding: var(--spacing-xl);
+  text-align: center;
+  background: var(--bg-white);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
 }
 
-@media (max-width: 980px) {
+.emptyText {
+  max-width: 360px;
+  color: var(--text-muted);
+}
+
+.emptyAction {
+  margin-top: var(--spacing-sm);
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--green-600);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+
+/* Medium: orders on the left, map over details on the right. */
+@media (max-width: 1280px) {
   .trackingContainer {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
   }
 
   .ordersSection {
-    max-height: none;
+    grid-row: 1 / -1;
+  }
+
+  .mapSection,
+  .detailsSection {
+    grid-column: 2;
   }
 }
 
-@media (max-width: 640px) {
-  .container {
-    padding: 14px;
-  }
-
-  .mapBoxContainer {
-    height: 320px;
-  }
-
-  .detailGrid {
+/* Small: single column, natural page scroll. */
+@media (max-width: 900px) {
+  .trackingContainer {
     grid-template-columns: 1fr;
+    grid-template-rows: none;
+    height: auto;
+    min-height: 0;
+  }
+
+  .ordersSection,
+  .mapSection,
+  .detailsSection {
+    grid-column: auto;
+    grid-row: auto;
+    overflow: visible;
+  }
+
+  .mapSection {
+    height: 55vh;
+    min-height: 320px;
+    overflow: hidden;
+  }
+
+  .ordersSection {
+    order: 2;
+  }
+
+  .mapSection {
+    order: 1;
+  }
+
+  .detailsSection {
+    order: 3;
+  }
+
+  .emptyState {
+    min-height: 60vh;
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 520px) {
+  .detailGrid,
   .shipmentSummaryRow {
     grid-template-columns: 1fr;
   }

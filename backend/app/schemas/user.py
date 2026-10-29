@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class UserBase(BaseModel):
@@ -44,8 +44,7 @@ class UserMerchantInfo(BaseModel):
     id: int
     merchant_name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserCartInfo(BaseModel):
@@ -53,8 +52,7 @@ class UserCartInfo(BaseModel):
     total_items: int
     total_price: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserResponse(UserBase):
@@ -64,5 +62,4 @@ class UserResponse(UserBase):
     merchant: UserMerchantInfo | None = None
     cart: UserCartInfo | None = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

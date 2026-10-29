@@ -13,11 +13,11 @@ from app.models.order import Order
 from app.models.payout_batch import PayoutBatch
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.schemas.merchant import MerchantResponse
 from app.schemas.merchant_application import (
     ApplicationReviewPayload,
     MerchantApplicationResponse,
 )
-from app.schemas.merchant import MerchantResponse
 from app.schemas.pagination import Page
 from app.schemas.payment import PayoutBatchResponse
 from app.schemas.user import UserResponse
@@ -146,15 +146,17 @@ def get_admin_stats(
     )
 
     since = datetime.now(UTC) - timedelta(days=30)
+    # Plain cast (no bound params) so SELECT and GROUP BY match under psycopg3.
+    paid_day = cast(Transaction.paid_at, Date)
     daily_rows = (
         db.query(
-            cast(func.date_trunc("day", Transaction.paid_at), Date).label("date"),
+            paid_day.label("date"),
             func.sum(Transaction.amount).label("revenue"),
             func.sum(Transaction.platform_fee).label("platform_fee"),
         )
         .filter(Transaction.status == "paid", Transaction.paid_at >= since)
-        .group_by(cast(func.date_trunc("day", Transaction.paid_at), Date))
-        .order_by(cast(func.date_trunc("day", Transaction.paid_at), Date))
+        .group_by(paid_day)
+        .order_by(paid_day)
         .all()
     )
 

@@ -21,6 +21,34 @@ interface LocationSelectsProps {
   wrapStyle?: React.CSSProperties;
 }
 
+const NCR_CODE = '1300000000';
+
+/**
+ * Loads PSGC options for `key`, dropping responses for keys that are no longer
+ * current. A null key means the parent selection is missing, so no options.
+ */
+function usePsgcOptions<T>(key: string | null, load: () => Promise<T[]>) {
+  const [loaded, setLoaded] = useState<{ key: string | null; options: T[] }>({ key: null, options: [] });
+
+  useEffect(() => {
+    if (!key) return;
+    let cancelled = false;
+    load()
+      .catch(() => [] as T[])
+      .then((options) => {
+        if (!cancelled) setLoaded({ key, options });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `load` is derived from `key`, so the key alone identifies the request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  const isCurrent = key !== null && loaded.key === key;
+  return { options: isCurrent ? loaded.options : [], loading: key !== null && !isCurrent };
+}
+
 export default function LocationSelects({
   value,
   onChange,
@@ -31,149 +59,51 @@ export default function LocationSelects({
   labelStyle,
   wrapStyle,
 }: LocationSelectsProps) {
-
-  const NCR_CODE = '1300000000';
-  const [regions, setRegions] = useState<PsgcRegion[]>([]);
-  const [provinces, setProvinces] = useState<PsgcProvince[]>([]);
-  const [cities, setCities] = useState<PsgcCity[]>([]);
-  const [barangays, setBarangays] = useState<PsgcBarangay[]>([]);
-  const [loadingBarangays, setLoadingBarangays] = useState(false);
-  const [loadingCities, setLoadingCities] = useState(false);
-  const [loadingProvinces, setLoadingProvinces] = useState(false);
-  const [loadingRegions, setLoadingRegions] = useState(true);
-
+  const { options: regions, loading: loadingRegions } = usePsgcOptions<PsgcRegion>('regions', fetchRegions);
   const selectedRegion = regions.find((region) => region.name === value.region);
+  const regionCode = selectedRegion?.code;
+  const isNcr = regionCode === NCR_CODE;
+
+  const { options: provinces, loading: loadingProvinces } = usePsgcOptions<PsgcProvince>(
+    regionCode && !isNcr ? `provinces:${regionCode}` : null,
+    () => fetchProvincesByRegion(regionCode!),
+  );
   const selectedProvince = provinces.find((province) => province.name === value.province);
+  const provinceCode = selectedProvince?.code;
+
+  // NCR has no provinces, so its cities hang directly off the region.
+  const { options: cities, loading: loadingCities } = usePsgcOptions<PsgcCity>(
+    isNcr ? `cities:${regionCode}` : regionCode && provinceCode ? `cities:${regionCode}:${provinceCode}` : null,
+    () => (isNcr ? fetchCitiesByRegion(regionCode!) : fetchCitiesByProvince(regionCode!, provinceCode!)),
+  );
   const selectedCity = cities.find((city) => city.name === value.city);
+  const cityCode = selectedCity?.code;
+
+  const { options: barangays, loading: loadingBarangays } = usePsgcOptions<PsgcBarangay>(
+    cityCode ? `barangays:${cityCode}` : null,
+    () => fetchBarangaysByCity(cityCode!),
+  );
   const selectedBarangay = barangays.find((barangay) => barangay.name === value.barangay);
 
-
-  const handleRegionChange = async (regionCode: string) => {
-    const region = regions.find((item) => item.code === regionCode);
-    onChange({ 
-      region: region?.name ?? "", 
-      province: "", 
-      city: "", 
-      barangay: "" }
-    );
-  }
-
-  const handleProvinceChange = async (provinceCode: string) => {
-    const province = provinces.find((item) => item.code === provinceCode);
-    onChange({ 
-      region: value.region,
-      province: province?.name ?? "", 
-      city: "", 
-      barangay: "" }
-    );
-  }
-
-  const handleCityChange = async (cityCode: string) => {
-    const city = cities.find((item) => item.code === cityCode);
-    onChange({ 
-      region: value.region,
-      province: value.province,
-      city: city?.name ?? "", 
-      barangay: "" }
-    );
-  }
-  
-  const handleBarangayChange = async (barangayCode: string) => {
-    const barangay = barangays.find((item) => item.code === barangayCode);
-    onChange({ 
-      region: value.region,
-      province: value.province,
-      city: value.city,
-      barangay: barangay?.name ?? "" }
-    );
-  }
-
-  const loadRegions = async () => {
-    const regions = await fetchRegions();
-    setRegions(regions);
-    setLoadingRegions(false);
+  const handleRegionChange = (code: string) => {
+    const region = regions.find((item) => item.code === code);
+    onChange({ region: region?.name ?? '', province: '', city: '', barangay: '' });
   };
 
-  const loadProvinces = async () => {
-    const regionCode = regions.find((region) => region.name === value.region)?.code;
-    if (regionCode === NCR_CODE) {
-      setProvinces([]);
-      setLoadingProvinces(false);
-    } else if (regionCode) {
-      const provinces = await fetchProvincesByRegion(regionCode);
-      setLoadingProvinces(true);
-      setProvinces(provinces);
-      setLoadingProvinces(false);
-    } else {
-      setProvinces([]);
-    }
+  const handleProvinceChange = (code: string) => {
+    const province = provinces.find((item) => item.code === code);
+    onChange({ region: value.region, province: province?.name ?? '', city: '', barangay: '' });
   };
 
-  const loadCities = async () => {
-    const regionCode = regions.find((region) => region.name === value.region)?.code;
-    const provinceCode = provinces.find((province) => province.name === value.province)?.code;
-    if (regionCode === NCR_CODE) {
-      const cities = await fetchCitiesByRegion(regionCode);
-      setLoadingCities(true);
-      setCities(cities);
-      setLoadingCities(false);
-    } else if (regionCode && provinceCode) {
-      const cities = await fetchCitiesByProvince(regionCode, provinceCode);
-      setLoadingCities(true);
-      setCities(cities);
-      setLoadingCities(false);
-    } else {
-      setCities([]);  
-    }
+  const handleCityChange = (code: string) => {
+    const city = cities.find((item) => item.code === code);
+    onChange({ region: value.region, province: value.province, city: city?.name ?? '', barangay: '' });
   };
 
-  const loadBarangays = async () => {
-    const cityCode = cities.find((city) => city.name === value.city)?.code;
-    if (cityCode) {
-      const barangays = await fetchBarangaysByCity(cityCode);
-      setLoadingBarangays(true);
-      setBarangays(barangays);
-      setLoadingBarangays(false);
-    } else {
-      setBarangays([]);
-    }
+  const handleBarangayChange = (code: string) => {
+    const barangay = barangays.find((item) => item.code === code);
+    onChange({ region: value.region, province: value.province, city: value.city, barangay: barangay?.name ?? '' });
   };
-
-  useEffect(() => {
-    // The loader synchronizes this component with the PSGC service.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadRegions();
-  }, []);
-
-  useEffect(() => {
-    if (value.region && regions.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      void loadProvinces();
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setProvinces([]);
-    }
-  }, [value.region, regions]);
-
-  useEffect(() => {
-    if (value.region && regions.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      void loadCities();
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCities([]);
-    }
-  }, [value.region, value.province, regions, provinces]);
-
-  useEffect(() => {
-    if (value.city) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      void loadBarangays();
-    } else {
-      setBarangays([]);
-    }
-  }, [value.city]);
-
 
   return (
     <>
@@ -184,7 +114,7 @@ export default function LocationSelects({
           className={selectClassName}
           style={selectStyle}
           value={selectedRegion?.code ?? ''}
-          onChange={(e) => void handleRegionChange(e.target.value)}
+          onChange={(e) => handleRegionChange(e.target.value)}
           disabled={loadingRegions}
         >
           <option value="">{loadingRegions ? 'Loading…' : 'Select region'}</option>
@@ -192,7 +122,6 @@ export default function LocationSelects({
             <option key={region.code} value={region.code}>{region.name}</option>
           ))}
         </select>
-        
       </div>
 
       <div className={wrapClassName} style={wrapStyle}>
@@ -201,11 +130,11 @@ export default function LocationSelects({
           className={selectClassName}
           style={selectStyle}
           value={selectedProvince?.code ?? ''}
-          onChange={(e) => void handleProvinceChange(e.target.value)}
-          disabled={!value.region || selectedRegion?.code === NCR_CODE ||loadingProvinces}
+          onChange={(e) => handleProvinceChange(e.target.value)}
+          disabled={!value.region || isNcr || loadingProvinces}
         >
           <option value="">
-            {!value.region ? 'Select a region first' : loadingProvinces ? 'Loading…' : 'Select province'}
+            {!value.region ? 'Select a region first' : isNcr ? 'Not applicable for NCR' : loadingProvinces ? 'Loading…' : 'Select province'}
           </option>
           {provinces.map((province) => (
             <option key={province.code} value={province.code}>{province.name}</option>
@@ -219,11 +148,11 @@ export default function LocationSelects({
           className={selectClassName}
           style={selectStyle}
           value={selectedCity?.code ?? ''}
-          onChange={(e) => void handleCityChange(e.target.value)}
-          disabled={!value.region || loadingCities}
+          onChange={(e) => handleCityChange(e.target.value)}
+          disabled={!value.region || (!isNcr && !value.province) || loadingCities}
         >
           <option value="">
-            {!value.province ? 'Select a province first' : loadingCities ? 'Loading…' : 'Select city'}
+            {!value.region ? 'Select a region first' : !isNcr && !value.province ? 'Select a province first' : loadingCities ? 'Loading…' : 'Select city'}
           </option>
           {cities.map((city) => (
             <option key={city.code} value={city.code}>{city.name}</option>
@@ -237,18 +166,17 @@ export default function LocationSelects({
           className={selectClassName}
           style={selectStyle}
           value={selectedBarangay?.code ?? ''}
-          onChange={(e) => void handleBarangayChange(e.target.value)}
+          onChange={(e) => handleBarangayChange(e.target.value)}
           disabled={!value.city || loadingBarangays}
         >
           <option value="">
-            {!value.city? 'Select a city first' : loadingBarangays ? 'Loading…' : 'Select barangay'}
+            {!value.city ? 'Select a city first' : loadingBarangays ? 'Loading…' : 'Select barangay'}
           </option>
           {barangays.map((barangay) => (
             <option key={barangay.code} value={barangay.code}>{barangay.name}</option>
           ))}
         </select>
       </div>
-
     </>
   );
 }

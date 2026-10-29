@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ShopPageBase(BaseModel):
@@ -27,5 +27,4 @@ class ShopPageResponse(ShopPageBase):
     id: int
     merchant_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

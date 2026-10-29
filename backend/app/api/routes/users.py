@@ -110,7 +110,9 @@ async def attach_my_payment_method(
     except requests.HTTPError as e:
         body = e.response.text if e.response is not None else ""
         logger.warning("PayMongo attach payment method failed: %s", body)
-        raise HTTPException(status_code=502, detail=f"PayMongo error: {body[:400]}")
+        raise HTTPException(
+            status_code=502, detail=f"PayMongo error: {body[:400]}"
+        ) from e
 
 
 @router.delete("/users/me/payment-methods/{payment_method_id}", status_code=204)
@@ -125,7 +127,9 @@ async def detach_my_payment_method(
         detach_payment_method(current_user.paymongo_customer_id, payment_method_id)
     except requests.HTTPError as e:
         body = e.response.text if e.response is not None else ""
-        raise HTTPException(status_code=502, detail=f"PayMongo error: {body[:400]}")
+        raise HTTPException(
+            status_code=502, detail=f"PayMongo error: {body[:400]}"
+        ) from e
 
 
 @router.delete("/users/me", status_code=204)

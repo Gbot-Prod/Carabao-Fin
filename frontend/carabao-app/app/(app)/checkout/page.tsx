@@ -7,6 +7,7 @@ import styles from "./page.module.css";
 import { cancelPaymentCheckout, createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
 import { SERVICE_FEE } from "@/lib/constants";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
+import { getApiErrorStatus } from "@/util/errorHelper";
 
 export default function CheckoutPage() {
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
@@ -63,8 +64,11 @@ export default function CheckoutPage() {
       return;
     }
 
-    void cancelPaymentCheckout(orderId).catch(() => {
-      // The server-side expiry sweep will still release stock if this request fails.
+    void cancelPaymentCheckout(orderId).catch((err) => {
+      if (getApiErrorStatus(err) === 409) {
+        setError("A payment for this order is still being processed. Check your orders before trying again.");
+      }
+      // Otherwise the server-side expiry sweep will still release stock.
     });
     setError("Payment was cancelled. Your items are available in your cart.");
     window.history.replaceState({}, "", "/checkout");

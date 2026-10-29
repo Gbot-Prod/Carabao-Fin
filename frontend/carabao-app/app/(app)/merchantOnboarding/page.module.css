@@ -11,9 +11,9 @@
   padding: var(--pad-y) var(--pad-x);
   max-width: 920px;
   margin: 0 auto;
-  background: #ffffff;
+  background: var(--bg-white);
   border: 1px solid rgba(23, 61, 37, 0.08);
-  border-radius: 18px;
+  border-radius: var(--radius-md);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.10);
   overflow: hidden;
 }
@@ -31,14 +31,14 @@
   margin: 0;
   font-size: 22px;
   font-weight: 800;
-  color: #173d25;
+  color: var(--green-900);
   letter-spacing: -0.02em;
 }
 
 .subtitle {
   margin: 6px 0 0;
   font-size: 14px;
-  color: #5c6a5e;
+  color: var(--text-muted);
   max-width: 64ch;
 }
 
@@ -52,7 +52,7 @@
   justify-content: center;
   height: 30px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 800;
   color: #1b4d31;
@@ -71,7 +71,7 @@
   display: flex;
   gap: 10px;
   padding: 12px 12px;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(23, 61, 37, 0.08);
   background: rgba(255, 255, 255, 0.8);
 }
@@ -79,7 +79,7 @@
 .stepDot {
   width: 10px;
   height: 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   margin-top: 4px;
   flex: 0 0 auto;
 }
@@ -87,7 +87,7 @@
 .stepTitle {
   font-size: 13px;
   font-weight: 800;
-  color: #173d25;
+  color: var(--green-900);
   margin: 0;
 }
 
@@ -104,7 +104,7 @@
 }
 
 .step_active .stepDot {
-  background: #31925d;
+  background: var(--green-600);
 }
 
 .step_done {
@@ -143,7 +143,7 @@
 .label {
   font-size: 11px;
   font-weight: 900;
-  color: #5c6a5e;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -153,9 +153,9 @@
   width: 100%;
   padding: 10px 12px;
   border: 1px solid #d0e4d5;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
-  color: #173d25;
+  color: var(--green-900);
   background: #f9fcf9;
   outline: none;
 }
@@ -174,10 +174,10 @@
 
 .dayChip {
   padding: 8px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid rgba(23, 61, 37, 0.16);
   background: rgba(23, 61, 37, 0.03);
-  color: #173d25;
+  color: var(--green-900);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -193,7 +193,7 @@
   display: flex;
   align-items: stretch;
   border: 1px solid #d0e4d5;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   background: #f9fcf9;
 }
@@ -207,7 +207,7 @@
   padding: 10px 12px;
   font-size: 14px;
   font-weight: 700;
-  color: #5c6a5e;
+  color: var(--text-muted);
   background: rgba(23, 61, 37, 0.04);
   border-right: 1px solid #d0e4d5;
   white-space: nowrap;
@@ -219,7 +219,7 @@
   flex: 1;
   padding: 10px 12px;
   font-size: 14px;
-  color: #173d25;
+  color: var(--green-900);
   border: none;
   background: transparent;
   outline: none;
@@ -243,7 +243,7 @@
 /* ── File dropzone ────────────────────────────────────────────────── */
 .dropzone {
   border: 2px dashed rgba(49, 146, 93, 0.35);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   padding: 28px 20px;
   background: rgba(49, 146, 93, 0.04);
   text-align: center;
@@ -282,7 +282,7 @@
 .dropzoneIcon {
   width: 40px;
   height: 40px;
-  color: #31925d;
+  color: var(--green-600);
   opacity: 0.75;
   margin-bottom: 4px;
 }
@@ -290,12 +290,12 @@
 .dropzoneTitle {
   font-size: 15px;
   font-weight: 700;
-  color: #173d25;
+  color: var(--green-900);
 }
 
 .dropzoneSubtitle {
   font-size: 13px;
-  color: #31925d;
+  color: var(--green-600);
   font-weight: 600;
 }
 
@@ -319,7 +319,7 @@
   flex: 0 0 auto;
   width: 36px;
   height: 36px;
-  color: #31925d;
+  color: var(--green-600);
 }
 
 .fileCardIcon svg {
@@ -337,7 +337,7 @@
   display: block;
   font-size: 14px;
   font-weight: 700;
-  color: #173d25;
+  color: var(--green-900);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -347,17 +347,17 @@
   display: block;
   margin-top: 2px;
   font-size: 12px;
-  color: #5c6a5e;
+  color: var(--text-muted);
 }
 
 .fileCardRemove {
   flex: 0 0 auto;
   width: 28px;
   height: 28px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid rgba(185, 28, 28, 0.25);
   background: rgba(185, 28, 28, 0.08);
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 20px;
   font-weight: 700;
   cursor: pointer;
@@ -377,10 +377,10 @@
 .errorBox {
   margin-top: 14px;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(185, 28, 28, 0.10);
   border: 1px solid rgba(185, 28, 28, 0.20);
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 13px;
   font-weight: 650;
 }
@@ -421,7 +421,7 @@
 .primaryBtn,
 .secondaryBtn {
   padding: 11px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 0;
   font-weight: 800;
   font-size: 14px;
@@ -435,7 +435,7 @@
 }
 
 .primaryBtn {
-  background: #31925d;
+  background: var(--green-600);
   color: #ffffff;
   box-shadow: 0 8px 20px rgba(49, 146, 93, 0.22);
 }
@@ -447,7 +447,7 @@
 
 .secondaryBtn {
   background: rgba(23, 61, 37, 0.06);
-  color: #173d25;
+  color: var(--green-900);
   border: 1px solid rgba(23, 61, 37, 0.14);
 }
 
@@ -459,7 +459,7 @@
 .successBox {
   margin-top: 18px;
   padding: 16px;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(49, 146, 93, 0.20);
   background: rgba(49, 146, 93, 0.07);
   display: flex;
@@ -481,7 +481,7 @@
   margin-top: 3px;
   font-size: 16px;
   font-weight: 900;
-  color: #173d25;
+  color: var(--green-900);
 }
 
 .successActions {
@@ -504,7 +504,7 @@
   padding: 16px 18px;
   background: rgba(49, 146, 93, 0.05);
   border: 1px solid rgba(49, 146, 93, 0.22);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -520,7 +520,7 @@
 .verifyPhoneLabel {
   font-size: 11px;
   font-weight: 900;
-  color: #5c6a5e;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -528,15 +528,15 @@
 .verifyPhoneNum {
   font-size: 18px;
   font-weight: 800;
-  color: #173d25;
+  color: var(--green-900);
 }
 
 .editPhoneBtn {
   padding: 6px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid rgba(49, 146, 93, 0.30);
   background: rgba(49, 146, 93, 0.08);
-  color: #31925d;
+  color: var(--green-600);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -550,9 +550,9 @@
 
 .sendOtpBtn {
   padding: 12px 28px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: none;
-  background: #31925d;
+  background: var(--green-600);
   color: #fff;
   font-size: 14px;
   font-weight: 800;
@@ -577,7 +577,7 @@
 .otpHint {
   margin: 0;
   font-size: 13px;
-  color: #5c6a5e;
+  color: var(--text-muted);
   text-align: center;
 }
 
@@ -586,10 +586,10 @@
   max-width: 240px;
   padding: 14px 16px;
   border: 2px solid #d0e4d5;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   font-size: 26px;
   font-weight: 800;
-  color: #173d25;
+  color: var(--green-900);
   text-align: center;
   letter-spacing: 0.3em;
   font-family: monospace;
@@ -604,10 +604,10 @@
 
 .resendBtn {
   padding: 7px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid rgba(23, 61, 37, 0.14);
   background: rgba(23, 61, 37, 0.04);
-  color: #173d25;
+  color: var(--green-900);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;

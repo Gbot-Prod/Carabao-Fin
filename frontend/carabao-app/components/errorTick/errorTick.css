@@ -6,7 +6,7 @@
   background-color: #fee;
   border: 1px solid #fcc;
   border-left: 4px solid #e53e3e;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: #c53030;
   font-size: 14px;
   line-height: 1.5;
@@ -39,7 +39,7 @@
   color: #c53030;
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   transition: background-color 0.2s ease;
 }
 

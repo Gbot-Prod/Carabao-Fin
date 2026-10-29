@@ -9,9 +9,9 @@
 
 .card {
   width: min(760px, 100%);
-  background: #ffffff;
-  border-radius: 18px;
-  border: 1px solid #e8e8e8;
+  background: var(--bg-white);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--green-border);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.06);
   padding: 1.6rem;
 }
@@ -19,7 +19,7 @@
 .badge {
   display: inline-flex;
   padding: 0.35rem 0.7rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: #e9faef;
   color: #1b7a37;
   font-weight: 700;
@@ -33,7 +33,7 @@
 }
 
 .lead {
-  color: #595959;
+  color: var(--text-muted);
   margin-bottom: 1rem;
 }
 
@@ -44,16 +44,16 @@
 }
 
 .details div {
-  border: 1px solid #ececec;
-  border-radius: 12px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
   padding: 0.75rem;
-  background: #fafafa;
+  background: var(--green-50);
 }
 
 .details span {
   display: block;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-muted);
 }
 
 .details strong {
@@ -63,7 +63,7 @@
 
 .timeline {
   margin-top: 1rem;
-  border-top: 1px dashed #ddd;
+  border-top: 1px dashed var(--border-strong);
   padding-top: 0.9rem;
   display: grid;
   gap: 0.45rem;
@@ -82,7 +82,7 @@
   justify-content: center;
   align-items: center;
   padding: 0.75rem 0.8rem;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
   text-align: center;
 }
@@ -93,8 +93,8 @@
 }
 
 .secondaryButton {
-  border: 1px solid #dadada;
-  background: #ffffff;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-white);
 }
 
 @media (max-width: 920px) {

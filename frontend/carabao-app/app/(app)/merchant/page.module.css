@@ -4,7 +4,7 @@
 }
 
 .merchantHeader {
-  background: #fff;
+  background: var(--bg-white);
   box-shadow: 0 4px 12px rgba(52, 95, 52, 0.06);
 }
 
@@ -31,7 +31,7 @@
 .merchantImage {
   width: 90px;
   height: 90px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   object-fit: cover;
   flex-shrink: 0;
   border: 3px solid #fff;
@@ -105,8 +105,8 @@
 }
 
 .productCard {
-  background: #fff;
-  border-radius: 12px;
+  background: var(--bg-white);
+  border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(52, 95, 52, 0.08);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -147,7 +147,7 @@
   background: #345f34;
   color: #fff;
   padding: 0.35rem 0.65rem;
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -181,7 +181,7 @@
   border: 2px solid #345f34;
   background: transparent;
   color: #345f34;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -236,4 +236,27 @@
   .productsGrid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+.cartToast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--success-text);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.cartToast a {
+  color: #86efac;
+  text-decoration: underline;
+  white-space: nowrap;
 }

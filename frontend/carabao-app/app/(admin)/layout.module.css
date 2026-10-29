@@ -1,7 +1,7 @@
 .shell {
   min-height: 100vh;
   display: flex;
-  background: #f7fcf8;
+  background: var(--bg-primary);
 }
 
 /* ── Sidebar ─────────────────────────────────── */
@@ -9,8 +9,8 @@
 .sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: #fff;
-  border-right: 1px solid #e0ece5;
+  background: var(--bg-white);
+  border-right: 1px solid var(--green-border);
   display: flex;
   flex-direction: column;
   position: sticky;
@@ -29,7 +29,7 @@
 
 .sidebarBottom {
   padding-top: 16px;
-  border-top: 1px solid #e0ece5;
+  border-top: 1px solid var(--green-border);
 }
 
 /* ── Brand ───────────────────────────────────── */
@@ -37,7 +37,7 @@
 .brand {
   font-size: 14px;
   font-weight: 700;
-  color: #173d25;
+  color: var(--green-900);
   letter-spacing: -0.01em;
   padding: 0 8px;
 }
@@ -54,21 +54,21 @@
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: #647067;
+  color: var(--text-subtle);
   text-decoration: none;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   transition: background 0.12s, color 0.12s;
 }
 
 .navLink:hover {
   background: #f0f5f2;
-  color: #173d25;
+  color: var(--green-900);
 }
 
 .navLinkActive {
   background: #e8f5ec;
-  color: #173d25;
+  color: var(--green-900);
   font-weight: 600;
 }
 
@@ -77,12 +77,12 @@
 .signOutBtn {
   width: 100%;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: none;
   background: none;
   font-size: 13px;
   font-weight: 500;
-  color: #647067;
+  color: var(--text-subtle);
   cursor: pointer;
   text-align: left;
   transition: background 0.12s, color 0.12s;
@@ -149,16 +149,16 @@
     justify-content: center;
     gap: 4px;
     border: 1px solid #d9e1dc;
-    border-radius: 8px;
-    background: #ffffff;
+    border-radius: var(--radius-sm);
+    background: var(--bg-white);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   }
 
   .mobileToggle span {
     width: 19px;
     height: 2px;
-    border-radius: 2px;
-    background: #166534;
+    border-radius: var(--radius-sm);
+    background: var(--success-text);
   }
 
   .mobileClose {
@@ -171,9 +171,9 @@
     height: 36px;
     align-items: center;
     justify-content: center;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     background: #e8f5ec;
-    color: #173d25;
+    color: var(--green-900);
     font-size: 1.5rem;
   }
 

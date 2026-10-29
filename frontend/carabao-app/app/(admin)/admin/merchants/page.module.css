@@ -5,7 +5,7 @@
 .heading {
   font-size: 22px;
   font-weight: 700;
-  color: #173d25;
+  color: var(--green-900);
   margin: 0 0 24px;
   display: flex;
   align-items: center;
@@ -15,16 +15,16 @@
 .count {
   font-size: 14px;
   font-weight: 500;
-  color: #647067;
+  color: var(--text-subtle);
   background: #f0f5f2;
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   padding: 2px 10px;
 }
 
 .tableWrap {
   overflow-x: auto;
-  border-radius: 12px;
-  border: 1px solid #e0ece5;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--green-border);
 }
 
 .table {
@@ -36,13 +36,13 @@
 .table th {
   text-align: left;
   padding: 10px 16px;
-  background: #f7fcf8;
-  color: #647067;
+  background: var(--green-50);
+  color: var(--text-subtle);
   font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  border-bottom: 1px solid #e0ece5;
+  border-bottom: 1px solid var(--green-border);
   white-space: nowrap;
 }
 
@@ -57,7 +57,7 @@
 }
 
 .table tr:hover td {
-  background: #f7fcf8;
+  background: var(--green-50);
 }
 
 .bold {
@@ -66,7 +66,7 @@
 
 .mono {
   font-variant-numeric: tabular-nums;
-  color: #647067;
+  color: var(--text-subtle);
 }
 
 .empty {
@@ -75,12 +75,12 @@
 
 .state {
   padding: 40px 32px;
-  color: #647067;
+  color: var(--text-subtle);
   font-size: 14px;
 }
 
 .stateError {
   padding: 40px 32px;
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 14px;
 }

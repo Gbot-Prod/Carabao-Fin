@@ -6,7 +6,7 @@
 .heading {
   font-size: 22px;
   font-weight: 700;
-  color: #173d25;
+  color: var(--green-900);
   margin: 0 0 28px;
 }
 
@@ -20,9 +20,9 @@
 }
 
 .kpiCard {
-  background: #fff;
-  border: 1px solid #e0ece5;
-  border-radius: 12px;
+  background: var(--bg-white);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
   padding: 18px 20px;
 }
 
@@ -34,7 +34,7 @@
 .kpiLabel {
   font-size: 12px;
   font-weight: 600;
-  color: #647067;
+  color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 0 0 8px;
@@ -43,7 +43,7 @@
 .kpiValue {
   font-size: 24px;
   font-weight: 700;
-  color: #173d25;
+  color: var(--green-900);
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -51,9 +51,9 @@
 /* ── Sections ────────────────────────────────── */
 
 .section {
-  background: #fff;
-  border: 1px solid #e0ece5;
-  border-radius: 12px;
+  background: var(--bg-white);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
   padding: 20px 24px;
   margin-bottom: 16px;
 }
@@ -61,7 +61,7 @@
 .sectionTitle {
   font-size: 14px;
   font-weight: 600;
-  color: #173d25;
+  color: var(--green-900);
   margin: 0 0 16px;
   display: flex;
   align-items: center;
@@ -98,8 +98,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border-radius: 8px;
-  background: #f7fcf8;
+  border-radius: var(--radius-sm);
+  background: var(--green-50);
 }
 
 .payoutLeft {
@@ -128,7 +128,7 @@
 }
 
 .dot_released {
-  background: #31925d;
+  background: var(--green-600);
 }
 
 .dot_failed {
@@ -144,16 +144,16 @@
 
 .payoutCount {
   font-size: 12px;
-  color: #647067;
+  color: var(--text-subtle);
   background: #e8f5ec;
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   padding: 1px 8px;
 }
 
 .payoutAmount {
   font-size: 13px;
   font-weight: 600;
-  color: #173d25;
+  color: var(--green-900);
   font-variant-numeric: tabular-nums;
 }
 
@@ -164,7 +164,7 @@
   font-weight: 600;
   background: #fef9c3;
   color: #854d0e;
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   padding: 2px 8px;
 }
 
@@ -178,13 +178,13 @@
 
 .state {
   padding: 40px 32px;
-  color: #647067;
+  color: var(--text-subtle);
   font-size: 14px;
 }
 
 .stateError {
   padding: 40px 32px;
-  color: #b91c1c;
+  color: var(--danger);
   font-size: 14px;
 }
 

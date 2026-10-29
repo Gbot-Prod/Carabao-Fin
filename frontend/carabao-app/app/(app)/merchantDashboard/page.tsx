@@ -17,6 +17,7 @@ import {
   fetchMyMerchantOrders,
   updateMerchantOrderStatus,
   createMerchantShipment,
+  MAX_SHIPMENT_ORDERS,
   fetchMyShipments,
   updateMyPayoutInfo,
   requestPayout,
@@ -127,12 +128,12 @@ function ProduceFormFields({ form, onChange }: { form: ProduceFormState; onChang
       </div>
 
       <div className={styles.priceRow}>
-        <label className={styles.formLabel} style={{ flex: 1 }}>
+        <label className={`${styles.formLabel} ${styles.grow1}`}>
           Price (₱)
           <input className={styles.formInput} type="number" min="0" value={form.price} onChange={(e) => onChange({ ...form, price: Number(e.target.value) })} />
         </label>
         <div className={styles.pricePerLabel}>per</div>
-        <label className={styles.formLabel} style={{ width: 90 }}>
+        <label className={`${styles.formLabel} ${styles.qtyField}`}>
           Quantity
           <input className={styles.formInput} type="number" min="0.1" step="0.1" value={form.unit_quantity ?? 1} onChange={(e) => onChange({ ...form, unit_quantity: Number(e.target.value) || 1 })} />
         </label>
@@ -502,16 +503,19 @@ export default function MerchantDashboardPage() {
 
   const toggleShipmentOrder = (orderId: number) => {
     setShipmentMessage(null);
+    const eligibleIds = new Set(shipmentCandidates.map((o) => o.id));
     setSelectedShipmentOrderIds((prev) => {
-      const next = new Set(prev);
+      // Drop selections that are no longer eligible (e.g. cancelled since),
+      // so they neither count toward the cap nor get submitted.
+      const next = new Set([...prev].filter((id) => eligibleIds.has(id)));
       if (next.has(orderId)) next.delete(orderId);
-      else next.add(orderId);
+      else if (next.size < MAX_SHIPMENT_ORDERS) next.add(orderId);
       return next;
     });
   };
 
   const handleCreateShipment = async () => {
-    const orderIds = Array.from(selectedShipmentOrderIds);
+    const orderIds = selectedShipmentOrders.map((o) => o.id);
     if (orderIds.length === 0) return;
 
     setShipmentCreating(true);
@@ -815,7 +819,7 @@ export default function MerchantDashboardPage() {
                       ) : (
                         <div className={styles.produceThumbPlaceholder}>+</div>
                       )}
-                      <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} disabled={uploadingProduceIds.has(produce.id)} onChange={(e) => void handleProduceImageUpload(produce.id, e)} />
+                      <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={uploadingProduceIds.has(produce.id)} onChange={(e) => void handleProduceImageUpload(produce.id, e)} />
                     </label>
                     <div className={styles.produceRowInfo}>
                       <strong className={styles.produceName}>{produce.name}</strong>
@@ -842,10 +846,10 @@ export default function MerchantDashboardPage() {
 
             {!shopPage ? (
               <div className={styles.shopCreateForm}>
-                <p className={styles.emptyText} style={{ marginBottom: 12 }}>Set up your public shop page so customers can find you.</p>
+                <p className={`${styles.emptyText} ${styles.spaceBelow}`}>Set up your public shop page so customers can find you.</p>
                 <label className={styles.formLabel}>Title *<input className={styles.formInput} value={createDraft.title} onChange={(e) => setCreateDraft((d) => ({ ...d, title: e.target.value }))} placeholder="e.g. Dela Cruz Farm" /></label>
-                <label className={styles.formLabel} style={{ marginTop: 8 }}>Description<textarea className={styles.formInput} rows={2} value={createDraft.description} onChange={(e) => setCreateDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Short description shown on your shop page" /></label>
-                <div className={styles.formActions} style={{ marginTop: 10 }}>
+                <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} value={createDraft.description} onChange={(e) => setCreateDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Short description shown on your shop page" /></label>
+                <div className={`${styles.formActions} ${styles.spaceAboveLg}`}>
                   <button className={styles.primaryBtn} disabled={shopPageCreating || !createDraft.title.trim()} onClick={() => void handleCreateShopPage()}>{shopPageCreating ? "Creating…" : "Create Shop Page"}</button>
                 </div>
               </div>
@@ -861,7 +865,7 @@ export default function MerchantDashboardPage() {
                     <div className={styles.shopBannerEmpty}>Click to upload a banner image</div>
                   )}
                   <div className={styles.shopBannerOverlay}>Change Banner</div>
-                  <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} disabled={bannerUploading} onChange={(e) => void handleBannerUpload(e)} />
+                  <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={bannerUploading} onChange={(e) => void handleBannerUpload(e)} />
                 </label>
 
                 <div className={styles.shopMetaRow}>
@@ -874,14 +878,14 @@ export default function MerchantDashboardPage() {
                         <div className={styles.shopLogoPlaceholder}>Logo</div>
                       )}
                     <div className={styles.shopLogoOverlay}>Change</div>
-                    <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: "none" }} disabled={logoUploading} onChange={(e) => void handleLogoUpload(e)} />
+                    <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={logoUploading} onChange={(e) => void handleLogoUpload(e)} />
                   </label>
 
                   {shopPageEditing ? (
                     <div className={styles.shopInfoForm}>
                       <label className={styles.formLabel}>Title<input className={styles.formInput} value={shopPageDraft.title} onChange={(e) => setShopPageDraft((d) => ({ ...d, title: e.target.value }))} /></label>
-                      <label className={styles.formLabel} style={{ marginTop: 8 }}>Description<textarea className={styles.formInput} rows={2} value={shopPageDraft.description} onChange={(e) => setShopPageDraft((d) => ({ ...d, description: e.target.value }))} /></label>
-                      <div className={styles.formActions} style={{ marginTop: 8 }}>
+                      <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} value={shopPageDraft.description} onChange={(e) => setShopPageDraft((d) => ({ ...d, description: e.target.value }))} /></label>
+                      <div className={`${styles.formActions} ${styles.spaceAbove}`}>
                         <button className={styles.primaryBtn} disabled={shopPageSaving} onClick={() => void handleSaveShopPage()}>{shopPageSaving ? "Saving…" : "Save"}</button>
                         <button className={styles.secondaryBtn} onClick={() => setShopPageEditing(false)}>Cancel</button>
                       </div>
@@ -890,7 +894,7 @@ export default function MerchantDashboardPage() {
                     <div className={styles.shopInfoView}>
                       <strong className={styles.shopInfoTitle}>{shopPage.title}</strong>
                       {shopPage.description && <p className={styles.shopInfoDesc}>{shopPage.description}</p>}
-                      <button className={styles.uploadBtn} style={{ marginTop: 8 }} onClick={() => { setShopPageDraft({ title: shopPage.title, description: shopPage.description ?? "" }); setShopPageEditing(true); }}>Edit title & description</button>
+                      <button className={`${styles.uploadBtn} ${styles.spaceAbove}`} onClick={() => { setShopPageDraft({ title: shopPage.title, description: shopPage.description ?? "" }); setShopPageEditing(true); }}>Edit title & description</button>
                     </div>
                   )}
                 </div>
@@ -929,7 +933,7 @@ export default function MerchantDashboardPage() {
                   </div>
 
                   {/* Contact number */}
-                  <div className={styles.formLabel} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div className={styles.formLabel}>
                     <span>Contact Number</span>
                     <div className={styles.phoneRow}>
                       <span className={styles.phonePrefix}>+63</span>
@@ -955,7 +959,7 @@ export default function MerchantDashboardPage() {
                   </label>
 
                   {/* Operating days */}
-                  <div className={styles.formLabel} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div className={`${styles.formLabel} ${styles.formLabelLoose}`}>
                     <span>Operating Days</span>
                     <div className={styles.tickRow}>
                       {DAYS.map((d) => {
@@ -978,7 +982,7 @@ export default function MerchantDashboardPage() {
                     </div>
                   </div>
 
-                  <div className={styles.formActions} style={{ marginTop: 10 }}>
+                  <div className={`${styles.formActions} ${styles.spaceAboveLg}`}>
                     <button className={styles.primaryBtn} disabled={locationSaving} onClick={() => void handleSaveLocation()}>
                       {locationSaving ? "Saving…" : "Save"}
                     </button>
@@ -1020,8 +1024,7 @@ export default function MerchantDashboardPage() {
                     </span>
                   </div>
                   <button
-                    className={styles.uploadBtn}
-                    style={{ marginTop: 12 }}
+                    className={`${styles.uploadBtn} ${styles.spaceAboveLg}`}
                     onClick={() => {
                       const rawContact = merchant?.contact_number ?? "";
                       const localPart = rawContact.replace(/^\+63\s?/, "");
@@ -1054,7 +1057,7 @@ export default function MerchantDashboardPage() {
         {activeTab === "orders" && (
           <div className={styles.ordersLayout}>
             <div className={styles.ordersHeader}>
-              <h2 className={styles.sectionTitle} style={{ margin: 0 }}>Customer Orders</h2>
+              <h2 className={`${styles.sectionTitle} ${styles.flush}`}>Customer Orders</h2>
               <div className={styles.orderFilterRow}>
                 {["all", "pending", "processing", "shipped", "delivered", "cancelled"].map((f) => (
                   <button
@@ -1073,11 +1076,12 @@ export default function MerchantDashboardPage() {
                 <h3 className={styles.shipmentComposerTitle}>Batch shipment</h3>
                 <p className={styles.shipmentComposerText}>
                   Select processing orders from the same merchant run, then create one shipment with a computed stop sequence.
+                  Up to {MAX_SHIPMENT_ORDERS} orders per shipment.
                 </p>
               </div>
               <div className={styles.shipmentComposerActions}>
                 <span className={styles.shipmentCounter}>
-                  {selectedShipmentOrders.length} selected / {shipmentCandidates.length} eligible
+                  {selectedShipmentOrders.length} / {MAX_SHIPMENT_ORDERS} selected · {shipmentCandidates.length} eligible
                 </span>
                 <button
                   className={styles.primaryBtn}
@@ -1095,12 +1099,12 @@ export default function MerchantDashboardPage() {
               </div>
             )}
 
-            <div className={styles.panel} style={{ marginBottom: 12 }}>
-              <h3 className={styles.sectionTitle} style={{ margin: 0 }}>Shipments</h3>
+            <div className={`${styles.panel} ${styles.spaceBelow}`}>
+              <h3 className={`${styles.sectionTitle} ${styles.flush}`}>Shipments</h3>
               {shipmentsLoading ? (
                 <p className={styles.emptyText}>Loading shipments…</p>
               ) : shipmentsError ? (
-                <p className={styles.emptyText} style={{ color: '#b91c1c' }}>{shipmentsError}</p>
+                <p className={`${styles.emptyText} ${styles.errorText}`}>{shipmentsError}</p>
               ) : shipments.length === 0 ? (
                 <p className={styles.emptyText}>No shipments yet.</p>
               ) : (
@@ -1121,7 +1125,7 @@ export default function MerchantDashboardPage() {
             </div>
 
             {ordersLoading && <p className={styles.emptyText}>Loading orders…</p>}
-            {!ordersLoading && ordersError && <p className={styles.emptyText} style={{ color: "#b91c1c" }}>{ordersError}</p>}
+            {!ordersLoading && ordersError && <p className={`${styles.emptyText} ${styles.errorText}`}>{ordersError}</p>}
             {!ordersLoading && !ordersError && orders.length === 0 && (
               <p className={styles.emptyText}>No orders yet.</p>
             )}
@@ -1150,9 +1154,18 @@ export default function MerchantDashboardPage() {
                         <input
                           type="checkbox"
                           checked={selectedShipmentOrderIds.has(order.id)}
+                          disabled={
+                            !selectedShipmentOrderIds.has(order.id) &&
+                            selectedShipmentOrders.length >= MAX_SHIPMENT_ORDERS
+                          }
                           onChange={() => toggleShipmentOrder(order.id)}
                         />
-                        <span>Select for shipment</span>
+                        <span>
+                          {!selectedShipmentOrderIds.has(order.id) &&
+                          selectedShipmentOrders.length >= MAX_SHIPMENT_ORDERS
+                            ? `Shipment full (${MAX_SHIPMENT_ORDERS} max)`
+                            : "Select for shipment"}
+                        </span>
                       </label>
                     )}
 
@@ -1239,7 +1252,7 @@ export default function MerchantDashboardPage() {
 
             <div className={styles.earningsRow}>
               {/* Cash out panel */}
-              <div className={styles.panel} style={{ flex: 1 }}>
+              <div className={`${styles.panel} ${styles.grow1}`}>
                 <h2 className={styles.panelTitle}>Cash Out</h2>
 
                 {earningsAnalytics.pendingBatch ? (
@@ -1252,7 +1265,7 @@ export default function MerchantDashboardPage() {
                   </div>
                 ) : !payoutInfo && !payoutInfoEditing ? (
                   <div>
-                    <p className={styles.emptyText} style={{ marginBottom: 12 }}>Set up your payout method to request a cash out.</p>
+                    <p className={`${styles.emptyText} ${styles.spaceBelow}`}>Set up your payout method to request a cash out.</p>
                     <button className={styles.primaryBtn} onClick={() => { setPayoutInfoDraft({ payout_type: "gcash", bank_code: "", account_number: "", account_name: "", ewallet_number: "" }); setPayoutInfoEditing(true); }}>Set Up Payout Method</button>
                   </div>
                 ) : payoutInfoEditing ? (
@@ -1266,27 +1279,27 @@ export default function MerchantDashboardPage() {
                       </select>
                     </label>
                     {payoutInfoDraft.payout_type === "bank" && (
-                      <label className={styles.formLabel} style={{ marginTop: 8 }}>
+                      <label className={`${styles.formLabel} ${styles.spaceAbove}`}>
                         Bank Code
                         <input className={styles.formInput} value={payoutInfoDraft.bank_code} onChange={(e) => setPayoutInfoDraft((d) => ({ ...d, bank_code: e.target.value }))} placeholder="BDO, BPI, UnionBank…" />
                       </label>
                     )}
-                    <label className={styles.formLabel} style={{ marginTop: 8 }}>
+                    <label className={`${styles.formLabel} ${styles.spaceAbove}`}>
                       Account Name
                       <input className={styles.formInput} value={payoutInfoDraft.account_name} onChange={(e) => setPayoutInfoDraft((d) => ({ ...d, account_name: e.target.value }))} placeholder="Full name on account" />
                     </label>
                     {payoutInfoDraft.payout_type === "bank" ? (
-                      <label className={styles.formLabel} style={{ marginTop: 8 }}>
+                      <label className={`${styles.formLabel} ${styles.spaceAbove}`}>
                         Account Number
                         <input className={styles.formInput} value={payoutInfoDraft.account_number} onChange={(e) => setPayoutInfoDraft((d) => ({ ...d, account_number: e.target.value }))} placeholder="Account number" />
                       </label>
                     ) : (
-                      <label className={styles.formLabel} style={{ marginTop: 8 }}>
+                      <label className={`${styles.formLabel} ${styles.spaceAbove}`}>
                         Mobile Number
                         <input className={styles.formInput} value={payoutInfoDraft.ewallet_number} onChange={(e) => setPayoutInfoDraft((d) => ({ ...d, ewallet_number: e.target.value }))} placeholder="+63 9XX XXX XXXX" />
                       </label>
                     )}
-                    <div className={styles.formActions} style={{ marginTop: 12 }}>
+                    <div className={`${styles.formActions} ${styles.spaceAboveLg}`}>
                       <button type="submit" className={styles.primaryBtn} disabled={payoutInfoSaving}>{payoutInfoSaving ? "Saving…" : "Save Payout Method"}</button>
                       <button type="button" className={styles.secondaryBtn} onClick={() => setPayoutInfoEditing(false)}>Cancel</button>
                     </div>
@@ -1323,7 +1336,7 @@ export default function MerchantDashboardPage() {
                         </div>
                       )}
                     </div>
-                    <div className={styles.formActions} style={{ marginTop: 12 }}>
+                    <div className={`${styles.formActions} ${styles.spaceAboveLg}`}>
                       <button
                         className={styles.cashOutBtn}
                         disabled={requestingPayout || earningsAnalytics.available === 0}
@@ -1338,7 +1351,7 @@ export default function MerchantDashboardPage() {
               </div>
 
               {/* Recent transactions */}
-              <div className={styles.panel} style={{ flex: 2 }}>
+              <div className={`${styles.panel} ${styles.grow2}`}>
                 <h2 className={styles.panelTitle}>Recent Transactions</h2>
                 {transactions.length === 0 ? (
                   <p className={styles.emptyText}>No transactions yet.</p>

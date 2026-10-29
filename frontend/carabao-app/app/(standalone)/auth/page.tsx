@@ -3,6 +3,7 @@
 import { signIn } from "@/lib/auth-client";
 import { apiClient } from "@/util/api";
 import { Mail, Phone } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Logo from "@/public/images/icons/carabaoLogo.png";
@@ -77,7 +78,7 @@ export default function SignupPage() {
     <div className="auth-page">
       <section className="auth-brand-panel">
         <div className="auth-brand-content">
-          <img src={Logo.src} alt="Carabao Logo" className="auth-brand-logo" />
+          <Image src={Logo} alt="Carabao Logo" className="auth-brand-logo" priority />
           <h1>Carabao</h1>
           <p>
             Farm-fresh produce, delivered with confidence. Join the marketplace that connects

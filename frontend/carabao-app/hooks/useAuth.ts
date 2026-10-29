@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 
 type AuthSession = {
-  token: string;
   user: {
     id: string;
     email: string;

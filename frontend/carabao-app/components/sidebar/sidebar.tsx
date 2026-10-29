@@ -2,26 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 import "./sidebar.css";
 import Logo from "@/public/images/icons/carabaoLogo.png";
-import { LogoutButton } from "../LogoutButton";
+import { LogoutButton } from "@/components/LogoutButton";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
 import { SidebarFilterChips } from "./SidebarFilterChips";
-
-const PROTECTED = new Set(["/track", "/profile", "/checkout", "/confirmation", "/orders"]);
-const SHOP_PATHS = ["/order", "/cart"];
-const PROFILE_PATHS = ["/profile", "/track"];
-
-function StoreIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  );
-}
+import { fetchMyProfile, type UserProfile } from "@/util/api/users";
 
 function ShopIcon() {
   return (
@@ -52,15 +41,6 @@ function UserIcon() {
   );
 }
 
-function SettingsIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
-}
-
 function ReceiptIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -81,33 +61,31 @@ function TrackIcon() {
   );
 }
 
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      className={`sidebar__chevron${open ? " sidebar__chevron--open" : ""}`}
-      xmlns="http://www.w3.org/2000/svg"
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
 export default function Sidebar() {
   const pathname = usePathname();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
   const { showPrompt } = useAuthPrompt();
 
-  const [shopsOpen, setShopsOpen] = useState(true);
-  const [profileOpen, setProfileOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    if (!isBackendAuthenticated) return;
+    fetchMyProfile()
+      .then(setProfile)
+      .catch(() => setProfile(null));
+  }, [isBackendAuthenticated]);
+
+  const profileName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ");
+  const displayName = profileName || user?.name || (isAuthenticated ? "Carabao User" : "Guest");
+  const displayEmail = profile?.email ?? user?.email ?? null;
+  const avatarUrl = profile?.profile_picture_url ?? null;
+  const initials = displayName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -127,7 +105,7 @@ export default function Sidebar() {
     isProtected = false
   ) => {
     const blocked = isProtected && !isLoading && !isAuthenticated;
-    const isActive = pathname.startsWith(href);
+    const isActive = pathname === href || pathname.startsWith(`${href}/`);
     return (
       <li key={href}>
         <Link
@@ -174,51 +152,38 @@ export default function Sidebar() {
           &times;
         </button>
         <div className="sidebar__brand">
-          <img src={Logo.src} alt="Carabao Logo" className="sidebar__brand-icon" />
+          <Image src={Logo} alt="Carabao Logo" className="sidebar__brand-icon" />
           <span className="sidebarBrandName">Carabao</span>
+        </div>
+
+        <div className="sidebar__account">
+          <div className="sidebar__avatar">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt="" className="sidebar__avatar-img" />
+            ) : (
+              <span className="sidebar__avatar-initials">{isAuthenticated ? initials : <UserIcon />}</span>
+            )}
+          </div>
+          <div className="sidebar__account-text">
+            <span className="sidebar__account-name">{isLoading ? "Loading..." : displayName}</span>
+            {displayEmail && <span className="sidebar__account-email">{displayEmail}</span>}
+          </div>
         </div>
 
         <nav className="sidebar__nav">
           <div className="sidebar__section">
-            <button
-              className="sidebar__section-header"
-              onClick={() => setShopsOpen((o) => !o)}
-              aria-expanded={shopsOpen}
-            >
-              <span className="sidebar__section-icon sidebar__section-icon--shops"><StoreIcon /></span>
-              <span className="sidebar__section-title">Shops</span>
-              <ChevronIcon open={shopsOpen} />
-            </button>
-            <div className={`sidebar__section-body${shopsOpen ? " sidebar__section-body--open" : ""}`}>
-              <div className="sidebar__section-inner">
-                <ul className="sidebar__nav-list">
-                  {renderNavLink("/order", "Browse Shops", <ShopIcon />)}
-                  {renderNavLink("/cart", "Cart", <CartIcon />)}
-                </ul>
-                <SidebarFilterChips />
-              </div>
-            </div>
+            <ul className="sidebar__nav-list">
+              {renderNavLink("/profile", "Profile", <UserIcon />, true)}
+              {renderNavLink("/order", "Shops", <ShopIcon />)}
+              {renderNavLink("/cart", "Cart", <CartIcon />)}
+              {renderNavLink("/track", "Track", <TrackIcon />, true)}
+              {renderNavLink("/orders", "Orders", <ReceiptIcon />, true)}
+            </ul>
           </div>
 
           <div className="sidebar__section sidebar__section--divided">
-            <button
-              className="sidebar__section-header"
-              onClick={() => setProfileOpen((o) => !o)}
-              aria-expanded={profileOpen}
-            >
-              <span className="sidebar__section-icon sidebar__section-icon--profile"><UserIcon /></span>
-              <span className="sidebar__section-title">Profile</span>
-              <ChevronIcon open={profileOpen} />
-            </button>
-            <div className={`sidebar__section-body${profileOpen ? " sidebar__section-body--open" : ""}`}>
-              <div className="sidebar__section-inner">
-                <ul className="sidebar__nav-list">
-                  {renderNavLink("/profile", "Settings", <SettingsIcon />, true)}
-                  {renderNavLink("/track", "Track", <TrackIcon />, true)}
-                  {renderNavLink("/orders", "Orders", <ReceiptIcon />, true)}
-                </ul>
-              </div>
-            </div>
+            <SidebarFilterChips />
           </div>
         </nav>
 

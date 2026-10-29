@@ -41,7 +41,7 @@
 
 .text p {
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--text-subtle);
   line-height: 1.5;
   margin: 0;
 }
@@ -76,7 +76,7 @@
   width: 100%;
   padding: 0.6rem 1rem;
   background: transparent;
-  color: #9ca3af;
+  color: var(--text-faint);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   font-size: 0.9rem;
@@ -86,8 +86,8 @@
 }
 
 .laterBtn:hover {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--surface-muted);
+  color: var(--text-muted);
 }
 
 @keyframes fadeIn {

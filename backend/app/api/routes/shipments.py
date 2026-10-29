@@ -69,6 +69,44 @@ async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] |
         return None
 
 
+async def _get_duration_matrix(
+    coords: list[tuple[float, float]],
+) -> list[list[float | None]] | None:
+    """
+    Calls the Mapbox Matrix API and returns the all-pairs driving duration
+    matrix (seconds), coords[0] first. A None entry means Mapbox found no road
+    route for that pair. Returns None if the request itself fails.
+    """
+    token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
+    if not token:
+        print("[shipment-matrix] MAPBOX_ACCESS_TOKEN is not set")
+        return None
+    coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
+    url = f"https://api.mapbox.com/directions-matrix/v1/mapbox/driving/{coord_str}"
+    try:
+        loop = asyncio.get_running_loop()
+        resp = await loop.run_in_executor(
+            None,
+            lambda: _requests.get(
+                url,
+                params={"access_token": token, "annotations": "duration"},
+                timeout=10,
+            ),
+        )
+        if not resp.ok:
+            print(f"[shipment-matrix] Mapbox error {resp.status_code}")
+            return None
+        body = resp.json()
+        durations = body.get("durations")
+        if body.get("code") != "Ok" or not durations or len(durations) != len(coords):
+            print(f"[shipment-matrix] Invalid Mapbox response: {body.get('code')}")
+            return None
+        return durations
+    except Exception as exc:
+        print(f"[shipment-matrix] Exception: {exc}")
+        return None
+
+
 def _shipment_response(
     shipment: Shipment,
     merchant_name: str,
@@ -230,10 +268,40 @@ async def create_merchant_shipment(
             )
         )
 
+    # Stops are ordered on real road travel times. There is deliberately no
+    # straight-line fallback: if road data is unavailable, shipment creation
+    # is unavailable rather than producing a worse route.
+    duration_matrix = None
+    if len(stops) > 1:
+        duration_matrix = await _get_duration_matrix(
+            [origin_coords] + [(s.lat, s.lng) for s in stops]
+        )
+        if duration_matrix is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Route optimisation is temporarily unavailable. "
+                "Please try creating the shipment again later.",
+            )
+        # Index 0 is the pickup; index k is stops[k - 1].
+        unroutable: set[int] = set()
+        for i, row in enumerate(duration_matrix):
+            for j, value in enumerate(row):
+                if value is None:
+                    unroutable.update(stops[k - 1].order_id for k in (i, j) if k > 0)
+        if unroutable:
+            raise HTTPException(
+                status_code=422,
+                detail="No road route found for orders: "
+                f"{', '.join(map(str, sorted(unroutable)))}",
+            )
+
     ordered_stops = compute_route(
-        stops=stops, depot_lat=origin_coords[0], depot_lng=origin_coords[1]
+        stops=stops,
+        depot_lat=origin_coords[0],
+        depot_lng=origin_coords[1],
+        distance_matrix=duration_matrix,
     )
-    ordered_stop_map = {stop.order_id: stop for stop in ordered_stops}
+    context_by_order_id = {context["order"].id: context for context in order_contexts}
 
     shipment = Shipment(
         merchant_id=merchant.id,
@@ -259,11 +327,7 @@ async def create_merchant_shipment(
     ]
 
     for sequence, stop in enumerate(ordered_stops, start=1):
-        ctx = next(
-            context
-            for context in order_contexts
-            if context["order"].id == stop.order_id
-        )
+        ctx = context_by_order_id[stop.order_id]
         buyer = ctx["buyer"]
         assert isinstance(ctx["order"], Order)
         buyer_full_name = (

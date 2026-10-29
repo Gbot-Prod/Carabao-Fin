@@ -128,7 +128,6 @@ function Track() {
 
   useEffect(() => {
     // Capture the client clock once so the ETA display remains render-pure.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentTime(Date.now());
   }, []);
 
@@ -151,7 +150,6 @@ function Track() {
   useEffect(() => {
     if (selectedOrderIndex >= currentOrders.length) {
       // Keep the selection valid when the loaded order list shrinks.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedOrderIndex(0);
     }
   }, [currentOrders.length, selectedOrderIndex]);
@@ -381,8 +379,12 @@ function Track() {
     maximumFractionDigits: 0,
   }).format(selectedOrder?.deliveryFee ?? 0);
 
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+
   const mapContainerRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) {
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       mapRef.current?.remove();
       mapRef.current = null;
       return;
@@ -405,143 +407,153 @@ function Track() {
     });
     mapRef.current = map;
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+    // The map pane is flex-sized, so keep the canvas in sync with its container.
+    resizeObserverRef.current = new ResizeObserver(() => mapRef.current?.resize());
+    resizeObserverRef.current.observe(node);
   }, []);
 
+  const activeStopNumber = tracking
+    ? Math.min(tracking.active_stop_index + 1, tracking.stops.length)
+    : 0;
+  const estimatedArrival = tracking && currentTime
+    ? new Date(currentTime + tracking.eta_minutes * 60_000).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+    : selectedOrder?.shipped
+      ? selectedOrder.timeOfArrival
+      : 'Pending shipment';
+
+  const ordersPane = (
+    <aside className={styles.ordersSection}>
+      <div className={styles.paneHeader}>
+        <h1 className={styles.pageTitle}>Track orders</h1>
+        <span className={styles.countBadge}>{currentOrders.length}</span>
+      </div>
+      <ul className={styles.orderList}>
+        {currentOrders.map((order, index) => (
+          <OrderCard
+            key={`${order.orderId}-${index}`}
+            order={order}
+            isSelected={selectedOrderIndex === index}
+            onClick={() => setSelectedOrderIndex(index)}
+          />
+        ))}
+      </ul>
+    </aside>
+  );
+
   return (
-    <Suspense fallback={<div className={styles.loading}>Loading...</div>}> 
-      <div className={styles.container}>
-        {!selectedOrder ? (
-          <div className={styles.trackingContainer}>
-            <div className={styles.ordersSection}>
-              <h1 className={styles.sectionTitle}>Current Orders</h1>
-              <p>No active orders yet.</p>
-            </div>
-          </div>
-        ) : (
-          <div className={styles.trackingContainer}>
-            <div className={styles.mapSection}>
-              <div className={styles.mapBoxContainer} ref={mapContainerRef} />
-              {mapUnavailable && tracking && (
-                <FallbackRouteMap
-                  waypoints={tracking.waypoints}
-                  activeOrderId={selectedOrder?.orderId ?? null}
-                />
-              )}
-              <div className={styles.detailsSection}>
-                <h2 className={styles.sectionTitle}>Delivery Details</h2>
-                <div className={styles.detailGrid}>
-                  <div className={styles.detailItem}>
-                    <span className={styles.detailLabel}>Merchant</span>
-                    <p className={styles.detailValue}>
-                      {selectedOrder.merchantId ? (
-                        <Link href={`/merchant/${selectedOrder.merchantId}`}>{selectedOrder.merchant}</Link>
-                      ) : (
-                        selectedOrder.merchant
-                      )}
-                    </p>
-                  </div>
-                  <div className={styles.detailItem}>
-                    <span className={styles.detailLabel}>Date Bought</span>
-                    <p className={styles.detailValue}>{selectedOrder.dateBought}</p>
-                  </div>
-                  <div className={styles.detailItem}>
-                    <span className={styles.detailLabel}>Status</span>
-                    <p className={styles.detailValue}>{selectedOrder.shipped ? 'Shipped' : 'Not Shipped Yet'}</p>
-                  </div>
-                  <div className={styles.detailItem}>
-                    <span className={styles.detailLabel}>Shipment</span>
-                    <p className={styles.detailValue}>{tracking ? `#${tracking.shipment_id}` : 'Pending shipment'}</p>
-                  </div>
-                  <div className={styles.detailItem}>
-                    <span className={styles.detailLabel}>Estimated Arrival</span>
-                    <p className={styles.detailValue}>
-                      {tracking && currentTime
-                        ? new Date(currentTime + tracking.eta_minutes * 60_000).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
-                        : selectedOrder.shipped
-                        ? selectedOrder.timeOfArrival
-                        : 'Pending shipment'}
-                    </p>
-                  </div>
-                  {tracking && (
-                    <div className={styles.detailItem}>
-                      <span className={styles.detailLabel}>Stops</span>
-                      <p className={styles.detailValue}>{tracking.stops.length} stop{tracking.stops.length === 1 ? '' : 's'}</p>
-                    </div>
+    <Suspense fallback={<div className={styles.loading}>Loading...</div>}>
+      {!selectedOrder ? (
+        <div className={styles.emptyState}>
+          <h1 className={styles.pageTitle}>Track orders</h1>
+          <p className={styles.emptyText}>No active orders yet. Once you place an order, you can follow its delivery here.</p>
+          <Link href="/order" className={styles.emptyAction}>Browse produce</Link>
+        </div>
+      ) : (
+        <div className={styles.trackingContainer}>
+          {ordersPane}
+
+          <section className={styles.mapSection}>
+            <div className={styles.mapBoxContainer} ref={mapContainerRef} />
+            {mapUnavailable && tracking && (
+              <FallbackRouteMap
+                waypoints={tracking.waypoints}
+                activeOrderId={selectedOrder?.orderId ?? null}
+              />
+            )}
+
+            {tracking && (
+              <div className={styles.mapEtaChip}>
+                <span className={styles.mapEtaLabel}>Arriving in</span>
+                <strong className={styles.mapEtaValue}>{tracking.eta_minutes} min</strong>
+              </div>
+            )}
+
+            <ul className={styles.mapLegend} aria-label="Map legend">
+              <li><span className={styles.legendDot} style={{ backgroundColor: '#3b82f6' }} />Pickup</li>
+              <li><span className={styles.legendDot} style={{ backgroundColor: '#f59e0b' }} />Active stop</li>
+              <li><span className={styles.legendDot} style={{ backgroundColor: '#ef4444' }} />Other stops</li>
+              <li><span className={styles.legendDot} style={{ backgroundColor: '#22c55e' }} />Driver</li>
+            </ul>
+          </section>
+
+          <aside className={styles.detailsSection}>
+            <h2 className={styles.sectionTitle}>Delivery details</h2>
+            <div className={styles.detailGrid}>
+              <div className={`${styles.detailItem} ${styles.detailItemWide}`}>
+                <span className={styles.detailLabel}>Merchant</span>
+                <p className={styles.detailValue}>
+                  {selectedOrder.merchantId ? (
+                    <Link className={styles.detailLink} href={`/merchant/${selectedOrder.merchantId}`}>{selectedOrder.merchant}</Link>
+                  ) : (
+                    selectedOrder.merchant
                   )}
-                  <div className={styles.detailItem}>
-                    <span className={styles.detailLabel}>Delivery Fee</span>
-                    <p className={styles.detailValue}>{formattedDeliveryFee}</p>
-                  </div>
-                  {tracking && (
-                    <div className={styles.detailItem}>
-                      <span className={styles.detailLabel}>ETA (live)</span>
-                      <p className={styles.detailValue}>{tracking.eta_minutes} min</p>
-                    </div>
-                  )}
-                </div>
-
-                {tracking && (
-                  <div className={styles.shipmentPanel}>
-                    <div className={styles.shipmentPanelHeader}>
-                      <div>
-                        <span className={styles.detailLabel}>Shipment route</span>
-                        <h3 className={styles.shipmentTitle}>{tracking.merchant_name}</h3>
-                      </div>
-                      <span className={styles.shipmentStatus}>{tracking.status.replaceAll('_', ' ')}</span>
-                    </div>
-
-                    <div className={styles.shipmentSummaryRow}>
-                      <div>
-                        <span className={styles.shipmentSummaryLabel}>Shipment #</span>
-                        <strong>{tracking.shipment_id}</strong>
-                      </div>
-                      <div>
-                        <span className={styles.shipmentSummaryLabel}>Active stop</span>
-                        <strong>{Math.min(tracking.active_stop_index + 1, tracking.stops.length)}/{tracking.stops.length || 1}</strong>
-                      </div>
-                      <div>
-                        <span className={styles.shipmentSummaryLabel}>Live ETA</span>
-                        <strong>{tracking.eta_minutes} min</strong>
-                      </div>
-                    </div>
-
-                    <ol className={styles.shipmentStopList}>
-                      {tracking.stops.map((stop, index) => (
-                        <li key={`${stop.order_id}-${stop.sequence}`} className={`${styles.shipmentStopItem} ${index === tracking.active_stop_index ? styles.shipmentStopActive : ''}`}>
-                          <div className={styles.shipmentStopHeader}>
-                            <span className={styles.shipmentStopBadge}>Stop {stop.sequence}</span>
-                            <span className={styles.shipmentStopStatus}>{index === tracking.active_stop_index ? 'Active' : stop.status.replaceAll('_', ' ')}</span>
-                          </div>
-                          <p className={styles.shipmentStopName}>{stop.buyer_name ?? stop.label}</p>
-                          <p className={styles.shipmentStopAddress}>{stop.delivery_address ?? 'Delivery address unavailable'}</p>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                )}
-
-                {trackingError && !tracking && (
-                  <p className={styles.shipmentError}>{trackingError}</p>
-                )}
+                </p>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailLabel}>Status</span>
+                <p className={styles.detailValue}>{selectedOrder.shipped ? 'Shipped' : 'Not shipped yet'}</p>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailLabel}>Date bought</span>
+                <p className={styles.detailValue}>{selectedOrder.dateBought}</p>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailLabel}>Est. arrival</span>
+                <p className={styles.detailValue}>{estimatedArrival}</p>
+              </div>
+              <div className={styles.detailItem}>
+                <span className={styles.detailLabel}>Delivery fee</span>
+                <p className={styles.detailValue}>{formattedDeliveryFee}</p>
               </div>
             </div>
 
-            <div className={styles.ordersSection}>
-              <h1 className={styles.sectionTitle}>Current Orders</h1>
-              <ul className={styles.orderList}>
-                {currentOrders.map((order, index) => (
-                  <OrderCard
-                    key={`${order.orderId}-${index}`}
-                    order={order}
-                    isSelected={selectedOrderIndex === index}
-                    onClick={() => setSelectedOrderIndex(index)}
-                  />
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
-      </div>
+            {tracking && (
+              <div className={styles.shipmentPanel}>
+                <div className={styles.shipmentPanelHeader}>
+                  <div>
+                    <span className={styles.detailLabel}>Shipment route</span>
+                    <h3 className={styles.shipmentTitle}>{tracking.merchant_name}</h3>
+                  </div>
+                  <span className={styles.shipmentStatus}>{tracking.status.replaceAll('_', ' ')}</span>
+                </div>
+
+                <div className={styles.shipmentSummaryRow}>
+                  <div>
+                    <span className={styles.shipmentSummaryLabel}>Shipment</span>
+                    <strong>#{tracking.shipment_id}</strong>
+                  </div>
+                  <div>
+                    <span className={styles.shipmentSummaryLabel}>Stop</span>
+                    <strong>{activeStopNumber}/{tracking.stops.length || 1}</strong>
+                  </div>
+                  <div>
+                    <span className={styles.shipmentSummaryLabel}>Live ETA</span>
+                    <strong>{tracking.eta_minutes} min</strong>
+                  </div>
+                </div>
+
+                <ol className={styles.shipmentStopList}>
+                  {tracking.stops.map((stop, index) => (
+                    <li key={`${stop.order_id}-${stop.sequence}`} className={`${styles.shipmentStopItem} ${index === tracking.active_stop_index ? styles.shipmentStopActive : ''}`}>
+                      <div className={styles.shipmentStopHeader}>
+                        <span className={styles.shipmentStopBadge}>Stop {stop.sequence}</span>
+                        <span className={styles.shipmentStopStatus}>{index === tracking.active_stop_index ? 'Active' : stop.status.replaceAll('_', ' ')}</span>
+                      </div>
+                      <p className={styles.shipmentStopName}>{stop.buyer_name ?? stop.label}</p>
+                      <p className={styles.shipmentStopAddress}>{stop.delivery_address ?? 'Delivery address unavailable'}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {trackingError && !tracking && (
+              <p className={styles.shipmentError}>{trackingError}</p>
+            )}
+          </aside>
+        </div>
+      )}
     </Suspense>
   );
 }
