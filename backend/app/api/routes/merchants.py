@@ -34,20 +34,21 @@ from app.schemas.payout import (
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
 from app.services import r2_service
+from app.services.merchant_service import (
+    find_deletion_blockers,
+    get_active_merchant,
+    soft_delete_merchant,
+)
 from app.services.order_reservations import cancel_order
+from app.services.order_status import (
+    MERCHANT_TRANSITIONS,
+    auto_confirm_at,
+    mark_shipped,
+)
 from app.services.sms_service import notify_order_shipped
 from app.utils.geocoding import _geocode
 
 router = APIRouter(tags=["merchants"])
-
-_VALID_TRANSITIONS: dict[str, set[str]] = {
-    "pending": {"processing", "cancelled"},
-    "processing": {"shipped", "cancelled"},
-    "shipped": {"out_for_delivery", "delivered", "cancelled"},
-    "out_for_delivery": {"delivered", "cancelled"},
-    "delivered": set(),
-    "cancelled": set(),
-}
 
 
 class MerchantOrderStatusUpdate(BaseModel):
@@ -223,10 +224,11 @@ async def list_merchants(db: Session = Depends(get_db)):
         db.query(Merchant)
         .outerjoin(MerchantApplication, MerchantApplication.user_id == Merchant.user_id)
         .filter(
+            Merchant.deleted_at.is_(None),
             or_(
                 MerchantApplication.id.is_(None),
                 MerchantApplication.status != "rejected",
-            )
+            ),
         )
         .order_by(Merchant.id.asc())
         .all()
@@ -235,7 +237,11 @@ async def list_merchants(db: Session = Depends(get_db)):
 
 @router.get("/merchants/{merchant_id}", response_model=MerchantResponse)
 async def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
-    merchant = db.query(Merchant).filter(Merchant.id == merchant_id).first()
+    merchant = (
+        db.query(Merchant)
+        .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
+        .first()
+    )
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
     return merchant
@@ -247,7 +253,7 @@ async def update_my_merchant(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -265,7 +271,7 @@ async def get_my_merchant_performance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -355,7 +361,11 @@ async def get_my_merchant_performance(
 
 @router.get("/merchants/{merchant_id}/produce", response_model=list[ProduceResponse])
 async def list_merchant_produce(merchant_id: int, db: Session = Depends(get_db)):
-    merchant = db.query(Merchant).filter(Merchant.id == merchant_id).first()
+    merchant = (
+        db.query(Merchant)
+        .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
+        .first()
+    )
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
     return merchant.produces
@@ -367,7 +377,7 @@ async def create_produce(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -385,7 +395,7 @@ async def update_produce(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -411,7 +421,7 @@ async def delete_produce(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -434,7 +444,12 @@ async def delete_produce(
 
 @router.get("/merchants/{merchant_id}/shoppage", response_model=ShopPageResponse)
 async def get_merchant_shoppage(merchant_id: int, db: Session = Depends(get_db)):
-    shop_page = db.query(ShopPage).filter(ShopPage.merchant_id == merchant_id).first()
+    shop_page = (
+        db.query(ShopPage)
+        .join(Merchant, Merchant.id == ShopPage.merchant_id)
+        .filter(ShopPage.merchant_id == merchant_id, Merchant.deleted_at.is_(None))
+        .first()
+    )
     if not shop_page:
         raise HTTPException(status_code=404, detail="Shop page not found")
     return shop_page
@@ -446,7 +461,7 @@ async def create_my_shoppage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -474,7 +489,7 @@ async def update_my_shoppage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -508,7 +523,7 @@ async def upload_my_shoppage_logo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -543,7 +558,7 @@ async def upload_my_shoppage_banner(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -587,7 +602,7 @@ async def upload_produce_image(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -632,7 +647,7 @@ async def get_my_payout_info(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
     return (
@@ -648,7 +663,7 @@ async def update_my_payout_info(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -674,7 +689,7 @@ async def get_my_payouts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
     return (
@@ -690,7 +705,7 @@ async def get_my_transactions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
     rows = (
@@ -714,7 +729,7 @@ async def request_my_payout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -758,6 +773,7 @@ async def request_my_payout(
             Transaction.merchant_id == merchant.id,
             Transaction.status == "paid",
             Order.status == "delivered",
+            Order.delivered_at.isnot(None),
             Transaction.id.not_in(already_batched_ids),
         )
         .all()
@@ -802,7 +818,7 @@ async def get_my_merchant_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -837,6 +853,8 @@ async def get_my_merchant_orders(
                 shipped=current.shipped if current else False,
                 time_of_arrival=current.time_of_arrival if current else None,
                 shipment_id=order.shipment_id,
+                shipped_at=order.shipped_at,
+                auto_confirm_at=auto_confirm_at(order),
             )
         )
     return result
@@ -852,19 +870,20 @@ async def update_my_merchant_order_status(
     current_user: User = Depends(get_current_user),
 ):
     status = body.status
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
     order = (
         db.query(Order)
         .filter(Order.id == order_id, Order.merchant_id == merchant.id)
+        .with_for_update()
         .first()
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    allowed_next = _VALID_TRANSITIONS.get(order.status, set())
+    allowed_next = MERCHANT_TRANSITIONS.get(order.status, set())
     if status not in allowed_next:
         raise HTTPException(
             status_code=400,
@@ -872,7 +891,13 @@ async def update_my_merchant_order_status(
         )
 
     if status == "cancelled":
-        cancel_order(order, db)
+        if not cancel_order(order, db):
+            raise HTTPException(
+                status_code=409,
+                detail="A payment for this order is in progress; try again shortly",
+            )
+    elif status == "shipped":
+        mark_shipped(order)
     else:
         order.status = status
         if order.current_order:
@@ -918,6 +943,8 @@ async def update_my_merchant_order_status(
         shipped=current.shipped if current else False,
         time_of_arrival=current.time_of_arrival if current else None,
         shipment_id=order.shipment_id,
+        shipped_at=order.shipped_at,
+        auto_confirm_at=auto_confirm_at(order),
     )
 
 
@@ -926,43 +953,24 @@ async def delete_my_merchant(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    # The row lock makes checkout wait, so no order can slip in between the
+    # blocker check and the delete.
+    merchant = get_active_merchant(db, current_user.id, for_update=True)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    # Null out nullable merchant_id references on order records (preserves
-    # order history)
-    db.query(Order).filter(Order.merchant_id == merchant.id).update(
-        {"merchant_id": None}, synchronize_session=False
-    )
-    db.query(CurrentOrder).filter(CurrentOrder.merchant_id == merchant.id).update(
-        {"merchant_id": None}, synchronize_session=False
-    )
-
-    # Remove payout batch items before batches (FK: payout_batch_items.batch_id)
-    batch_ids = [
-        row.id
-        for row in db.query(PayoutBatch.id)
-        .filter(PayoutBatch.merchant_id == merchant.id)
-        .all()
-    ]
-    if batch_ids:
-        db.query(PayoutBatchItem).filter(
-            PayoutBatchItem.batch_id.in_(batch_ids)
-        ).delete(synchronize_session=False)
-        db.query(PayoutBatch).filter(PayoutBatch.merchant_id == merchant.id).delete(
-            synchronize_session=False
+    blockers = find_deletion_blockers(db, merchant.id)
+    if blockers:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    "Settle active orders, refunds and payouts before "
+                    "deleting your merchant profile"
+                ),
+                "blockers": blockers,
+            },
         )
 
-    # Remove transactions (merchant_id is non-nullable, cannot be orphaned)
-    db.query(Transaction).filter(Transaction.merchant_id == merchant.id).delete(
-        synchronize_session=False
-    )
-
-    # Remove payout configuration
-    db.query(MerchantPayoutInfo).filter(
-        MerchantPayoutInfo.merchant_id == merchant.id
-    ).delete(synchronize_session=False)
-
-    db.delete(merchant)
+    soft_delete_merchant(db, merchant)
     db.commit()

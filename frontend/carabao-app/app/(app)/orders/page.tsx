@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
+import PageLoader from "@/components/PageLoader/PageLoader";
 import {
   fetchCurrentOrders,
   fetchOrderHistory,
   deleteOrderFromHistory,
+  confirmOrderReceived,
   type CurrentOrderItem,
   type OrderHistoryItem,
 } from "@/util/api";
@@ -19,11 +21,41 @@ function StatusBadge({ shipped, status }: { shipped: boolean; status: string }) 
   if (shipped || normalized === "shipped" || normalized === "delivered") cls = styles.badgeShipped;
   else if (normalized === "cancelled") cls = styles.badgeCancelled;
 
-  const label = shipped ? "Shipped" : status.charAt(0).toUpperCase() + status.slice(1);
+  const label = normalized === "delivered"
+    ? "Delivered"
+    : shipped ? "Shipped" : status.charAt(0).toUpperCase() + status.slice(1);
   return <span className={`${styles.badge} ${cls}`}>{label}</span>;
 }
 
-function OrderCard({ order }: { order: CurrentOrderItem }) {
+const formatShortDate = (value: string) =>
+  new Date(value).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
+
+function OrderCard({
+  order,
+  onConfirmed,
+}: {
+  order: CurrentOrderItem;
+  onConfirmed: (updated: CurrentOrderItem) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const awaitingConfirmation = ["shipped", "out_for_delivery"].includes(order.status.toLowerCase());
+
+  const handleConfirmReceived = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const updated = await confirmOrderReceived(order.order_id);
+      onConfirmed({ ...order, ...updated, id: order.id });
+      setConfirming(false);
+    } catch {
+      setError("Could not confirm this order. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const merchantHref = order.merchant_id ? `/merchant/${order.merchant_id}` : null;
   const dateBought = new Date(order.date_bought).toLocaleDateString("en-PH", {
     year: "numeric", month: "short", day: "numeric",
@@ -59,7 +91,41 @@ function OrderCard({ order }: { order: CurrentOrderItem }) {
 
       <div className={styles.cardActions}>
         <Link href="/track" className={styles.trackBtn}>Live Tracking</Link>
+        {awaitingConfirmation && !confirming && (
+          <button type="button" className={styles.receivedBtn} onClick={() => setConfirming(true)}>
+            Order Received
+          </button>
+        )}
       </div>
+
+      {awaitingConfirmation && order.auto_confirm_at && !confirming && (
+        <p className={styles.autoConfirmNote}>
+          Auto-confirms on {formatShortDate(order.auto_confirm_at)} if you don&apos;t confirm or contact support.
+        </p>
+      )}
+
+      {confirming && (
+        <div className={styles.confirmRow}>
+          <span>Confirm you received this order? This releases payment to the seller.</span>
+          <button
+            type="button"
+            className={styles.confirmReceivedYes}
+            onClick={() => void handleConfirmReceived()}
+            disabled={submitting}
+          >
+            {submitting ? "Confirming…" : "Yes, I received it"}
+          </button>
+          <button
+            type="button"
+            className={styles.confirmNo}
+            onClick={() => setConfirming(false)}
+            disabled={submitting}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {error && <p className={styles.confirmError}>{error}</p>}
     </li>
   );
 }
@@ -170,6 +236,10 @@ export default function Orders() {
     }
   }, [tab, historyFetched]);
 
+  const handleConfirmed = (updated: CurrentOrderItem) => {
+    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+  };
+
   const handleDelete = (id: number) => {
     setPastOrders((prev) => prev.filter((o) => o.id !== id));
   };
@@ -201,7 +271,7 @@ export default function Orders() {
 
       {tab === "current" && (
         loadingCurrent ? (
-          <div className={styles.empty}>Loading your orders…</div>
+          <PageLoader variant="inline" label="Loading your orders…" />
         ) : orders.length === 0 ? (
           <div className={styles.empty}>
             <p className={styles.emptyTitle}>No active orders</p>
@@ -211,7 +281,7 @@ export default function Orders() {
         ) : (
           <ul className={styles.list}>
             {orders.map((order) => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard key={order.id} order={order} onConfirmed={handleConfirmed} />
             ))}
           </ul>
         )
@@ -219,7 +289,7 @@ export default function Orders() {
 
       {tab === "history" && (
         loadingHistory ? (
-          <div className={styles.empty}>Loading history…</div>
+          <PageLoader variant="inline" label="Loading order history…" />
         ) : pastOrders.length === 0 ? (
           <div className={styles.empty}>
             <p className={styles.emptyTitle}>No past orders</p>

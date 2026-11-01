@@ -20,10 +20,17 @@ from app.schemas.order import (
     PlaceOrderRequest,
     PlaceOrderResponse,
 )
+from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
     cancel_order,
     expire_stale_reservations,
     reservation_ttl_minutes,
+)
+from app.services.order_status import (
+    IN_TRANSIT_STATUSES,
+    MERCHANT_TRANSITIONS,
+    mark_delivered,
+    mark_shipped,
 )
 from app.services.sms_service import notify_order_shipped
 
@@ -100,7 +107,19 @@ async def place_order_from_cart(
             detail="Your cart can contain products from only one merchant.",
         )
 
-    merchant = next(iter(produce_by_id.values())).merchant
+    # Shared lock: checkouts don't block each other, but a concurrent merchant
+    # deletion either waits for this order or is seen here as deleted.
+    merchant = (
+        db.query(Merchant)
+        .filter(Merchant.id == next(iter(merchant_ids)))
+        .with_for_update(read=True)
+        .populate_existing()
+        .first()
+    )
+    if merchant is None or merchant.deleted_at is not None:
+        raise HTTPException(
+            status_code=400, detail="This merchant is no longer accepting orders"
+        )
     service_fee = merchant.delivery_price or 0
     total_price = fresh_total + service_fee
 
@@ -153,6 +172,9 @@ async def get_my_order_history(
     return [to_order_history_item(order) for order in orders]
 
 
+_REMOVABLE_ORDER_STATUSES = {"delivered", "cancelled"}
+
+
 @router.delete("/orders/me/history/{order_id}", status_code=204)
 async def delete_order_from_history(
     order_id: int,
@@ -170,6 +192,20 @@ async def delete_order_from_history(
     )
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
+    if order.status not in _REMOVABLE_ORDER_STATUSES:
+        raise HTTPException(
+            status_code=400, detail="Only completed orders can be removed"
+        )
+    # Stopgap until history uses a hide flag: transactions.order_id is a
+    # non-nullable FK, and payment records must outlive the buyer's view.
+    has_payment = (
+        db.query(Transaction.id).filter(Transaction.order_id == order.id).first()
+    )
+    if has_payment:
+        raise HTTPException(
+            status_code=409,
+            detail="Orders with a payment record can't be removed yet",
+        )
 
     db.delete(order)
     db.commit()
@@ -209,6 +245,36 @@ async def get_my_current_orders(
     return [to_current_order_item_from_order(order) for order in active_orders]
 
 
+@router.post(
+    "/orders/me/{order_id}/confirm-received", response_model=CurrentOrderResponse
+)
+async def confirm_order_received(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Buyer confirms delivery, which makes the order's earnings payable."""
+    order = (
+        db.query(Order)
+        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
+        .filter(Order.id == order_id, OrderHistory.user_id == current_user.id)
+        .with_for_update(of=Order)
+        .first()
+    )
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status not in IN_TRANSIT_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot confirm an order that is '{order.status}'",
+        )
+
+    mark_delivered(order, confirmed_by="buyer")
+    db.commit()
+    db.refresh(order)
+    return to_current_order_item_from_order(order)
+
+
 # ---------------------------------------------------------------------------
 # Merchant order queue routes
 # ---------------------------------------------------------------------------
@@ -223,15 +289,6 @@ VALID_ORDER_STATUSES = {
     "cancelled",
 }
 
-_VALID_TRANSITIONS: dict[str, set[str]] = {
-    "pending": {"processing", "cancelled"},
-    "processing": {"shipped", "cancelled"},
-    "shipped": {"out_for_delivery", "delivered", "cancelled"},
-    "out_for_delivery": {"delivered", "cancelled"},
-    "delivered": set(),
-    "cancelled": set(),
-}
-
 
 class OrderStatusUpdate(BaseModel):
     status: str
@@ -242,7 +299,7 @@ async def get_merchant_current_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -269,7 +326,7 @@ async def update_order_status(
     current_user: User = Depends(get_current_user),
 ):
     status = body.status
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(
             status_code=403, detail="Only merchants can update order status"
@@ -286,12 +343,13 @@ async def update_order_status(
     order = (
         db.query(Order)
         .filter(Order.id == order_id, Order.merchant_id == merchant.id)
+        .with_for_update()
         .first()
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    allowed_next = _VALID_TRANSITIONS.get(order.status, set())
+    allowed_next = MERCHANT_TRANSITIONS.get(order.status, set())
     if status not in allowed_next:
         raise HTTPException(
             status_code=400,
@@ -299,7 +357,13 @@ async def update_order_status(
         )
 
     if status == "cancelled":
-        cancel_order(order, db)
+        if not cancel_order(order, db):
+            raise HTTPException(
+                status_code=409,
+                detail="A payment for this order is in progress; try again shortly",
+            )
+    elif status == "shipped":
+        mark_shipped(order)
     else:
         order.status = status
         if order.current_order:

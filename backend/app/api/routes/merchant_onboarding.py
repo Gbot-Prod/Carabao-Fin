@@ -9,7 +9,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
-from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.user import User
 from app.schemas.merchant_application import (
@@ -17,6 +16,7 @@ from app.schemas.merchant_application import (
     MerchantOnboardingPayload,
 )
 from app.services import r2_service
+from app.services.merchant_service import get_active_merchant
 from app.services.phone_verification import normalize_ph_mobile, read_token
 
 router = APIRouter(tags=["merchant-onboarding"])
@@ -64,9 +64,7 @@ async def submit_my_merchant_onboarding_route(
             status_code=400, detail="Please verify your contact number first"
         )
 
-    if (
-        db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
-    ) is not None:
+    if get_active_merchant(db, current_user.id) is not None:
         raise HTTPException(
             status_code=409, detail="User already has a merchant profile"
         )

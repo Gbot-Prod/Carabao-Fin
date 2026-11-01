@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -52,6 +53,7 @@ class MerchantResponse(BaseModel):
     price_range_min: int
     price_range_max: int
     rating: float | None = None
+    deleted_at: datetime | None = None
 
     shop_page: MerchantShopResponse | None = None
     produces: list[ProduceResponse] = Field(default_factory=list)

@@ -12,6 +12,7 @@ from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.produce import Produce
+from app.services.order_status import auto_confirm_at
 
 
 def _to_int(value: Any, default: int = 0) -> int:
@@ -147,6 +148,8 @@ def to_current_order_item_from_order(order: Order) -> dict[str, Any]:
         "shipped": order.status.lower() in {"shipped", "out_for_delivery", "delivered"},
         "date_bought": order.ordered_at,
         "time_of_arrival": None,
+        "shipped_at": order.shipped_at,
+        "auto_confirm_at": auto_confirm_at(order),
         "delivery_fee": int(
             first_item.get("deliveryFee", 0) if isinstance(first_item, dict) else 0
         ),
@@ -170,6 +173,8 @@ def to_current_order_item(current_order: CurrentOrder) -> dict[str, Any]:
         "shipped": current_order.shipped,
         "date_bought": order.ordered_at,
         "time_of_arrival": current_order.time_of_arrival,
+        "shipped_at": order.shipped_at,
+        "auto_confirm_at": auto_confirm_at(order),
         "delivery_fee": current_order.delivery_fee,
         "image": current_order.image
         or (first_item.get("image") if isinstance(first_item, dict) else None),

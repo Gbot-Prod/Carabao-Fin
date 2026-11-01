@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
+import PageLoader from "@/components/PageLoader/PageLoader";
 import { fetchMyCart, replaceMyCart } from "@/util/api";
 import { SERVICE_FEE } from "@/lib/constants";
 
@@ -99,7 +100,9 @@ export default function CartPage() {
 
       <div className={styles.layout}>
         <section className={styles.itemsCard}>
-          {items.length === 0 ? (
+          {isHydrating ? (
+            <PageLoader variant="inline" label="Loading your cart…" />
+          ) : items.length === 0 ? (
             <div className={styles.emptyState}>
               <h2>Your cart is empty</h2>
               <p>Add products from farms to place an order.</p>

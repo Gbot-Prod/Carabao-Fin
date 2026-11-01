@@ -6,7 +6,9 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.models.cart import Cart
 from app.models.order import Order
+from app.models.order_history import OrderHistory
 from app.models.produce import Produce
 from app.models.transaction import Transaction
 from app.services.paymongo import expire_checkout_session
@@ -112,12 +114,17 @@ def _mark_cancelled(order: Order) -> None:
         order.current_order.status = "cancelled"
 
 
-def cancel_order(order: Order, db: Session) -> None:
-    """Cancel an accepted order: return its stock and flag its payment for refund.
+def cancel_order(order: Order, db: Session) -> bool:
+    """Cancel an order: return its stock and flag its payment for refund.
 
+    An unpaid order also has its checkout closed so it can't be paid afterwards;
+    returns False (order unchanged) while a payment for it may still go through.
     Paid transactions move to ``refund_pending`` so they are never paid out to
     the merchant.
     """
+    if order.status == "pending":
+        return release_order_reservation(order, db, transaction_status="expired")
+
     restore_order_stock(order, db)
     _mark_cancelled(order)
 
@@ -126,6 +133,51 @@ def cancel_order(order: Order, db: Session) -> None:
         .filter(Transaction.order_id == order.id, Transaction.status == "paid")
         .update({Transaction.status: "refund_pending"}, synchronize_session=False)
     )
+    return True
+
+
+def settle_checkout_payment(
+    txn: Transaction, payment_id: str | None, db: Session
+) -> str:
+    """Record a PayMongo payment for ``txn``; the caller commits.
+
+    Only a pending transaction on a still-pending order moves the order to
+    processing. Money that lands on a closed transaction or a cancelled order is
+    flagged ``refund_pending`` instead, so a cancelled order is never revived.
+
+    Returns "paid", "refund" or "duplicate".
+    """
+    # Lock the order before the transaction, the same order cancel takes them.
+    order = db.query(Order).filter(Order.id == txn.order_id).with_for_update().first()
+    db.refresh(txn, with_for_update=True)
+
+    if txn.status in ("paid", "refund_pending", "refunded"):
+        return "duplicate"
+
+    txn.paymongo_payment_id = payment_id
+    txn.paid_at = datetime.now(UTC)
+
+    if txn.status != "pending" or not order or order.status != "pending":
+        txn.status = "refund_pending"
+        return "refund"
+
+    txn.status = "paid"
+    order.status = "processing"
+    if order.current_order:
+        order.current_order.status = "processing"
+    if order.order_history_id:
+        history = (
+            db.query(OrderHistory)
+            .filter(OrderHistory.id == order.order_history_id)
+            .first()
+        )
+        if history:
+            history.last_order_at = datetime.now(UTC)
+
+    cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()
+    if cart:
+        cart.items = []
+    return "paid"
 
 
 def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:

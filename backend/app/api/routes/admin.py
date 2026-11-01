@@ -238,6 +238,7 @@ def generate_payout_batches(
         .filter(
             Transaction.status == "paid",
             Order.status == "delivered",
+            Order.delivered_at.isnot(None),
             Transaction.paid_at >= start_dt,
             Transaction.paid_at < end_dt,
             PayoutBatchItem.id.is_(None),

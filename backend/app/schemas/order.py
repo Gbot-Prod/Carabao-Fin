@@ -29,6 +29,8 @@ class CurrentOrderResponse(BaseModel):
     shipped: bool
     date_bought: datetime
     time_of_arrival: datetime | None = None
+    shipped_at: datetime | None = None
+    auto_confirm_at: datetime | None = None
     delivery_fee: int
     image: str | None = None
     status: str

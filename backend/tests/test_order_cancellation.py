@@ -82,3 +82,126 @@ def test_release_reservation_still_restores_stock(monkeypatch):
     assert order.status == "cancelled"
     assert tomatoes.stock_quantity == 13
     assert _transaction_update(db) == ("pending", "expired")
+
+
+def test_cancel_pending_order_closes_checkout(monkeypatch):
+    closed = []
+    monkeypatch.setattr(
+        order_reservations,
+        "close_checkout_sessions",
+        lambda order, _db: closed.append(order.id) or True,
+    )
+    tomatoes = SimpleNamespace(stock_quantity=10)
+    db = FakeDB({1: tomatoes})
+    order = _order(status="pending")
+
+    assert order_reservations.cancel_order(order, db) is True
+
+    assert closed == [7]
+    assert order.status == "cancelled"
+    assert tomatoes.stock_quantity == 13
+    assert _transaction_update(db) == ("pending", "expired")
+
+
+def test_cancel_pending_order_refused_while_payment_in_progress(monkeypatch):
+    monkeypatch.setattr(
+        order_reservations, "close_checkout_sessions", lambda _order, _db: False
+    )
+    tomatoes = SimpleNamespace(stock_quantity=10)
+    db = FakeDB({1: tomatoes})
+    order = _order(status="pending")
+
+    assert order_reservations.cancel_order(order, db) is False
+
+    assert order.status == "pending"
+    assert tomatoes.stock_quantity == 10
+    assert db.updates == []
+
+
+class SettleDB:
+    def __init__(self, order, cart):
+        self.rows = {"Order": order, "Cart": cart, "OrderHistory": None}
+        self.refreshed = []
+
+    def query(self, model):
+        row = self.rows[model.__name__]
+        query = SimpleNamespace(first=lambda: row)
+        query.filter = lambda *_: query
+        query.with_for_update = lambda: query
+        return query
+
+    def refresh(self, instance, with_for_update=None):
+        self.refreshed.append(with_for_update)
+
+
+def _txn(status="pending"):
+    return SimpleNamespace(
+        id=3, order_id=7, user_id=5, status=status, paymongo_payment_id=None
+    )
+
+
+def _settle_order(status):
+    return SimpleNamespace(
+        status=status,
+        current_order=SimpleNamespace(status=status),
+        order_history_id=None,
+    )
+
+
+def test_payment_moves_pending_order_to_processing():
+    order = _settle_order("pending")
+    cart = SimpleNamespace(items=[{"produce_id": 1}])
+    txn = _txn()
+    db = SettleDB(order, cart)
+
+    outcome = order_reservations.settle_checkout_payment(txn, "pay_1", db)
+
+    assert outcome == "paid"
+    assert db.refreshed == [True]
+    assert txn.status == "paid"
+    assert txn.paymongo_payment_id == "pay_1"
+    assert order.status == "processing"
+    assert order.current_order.status == "processing"
+    assert cart.items == []
+
+
+def test_payment_on_cancelled_order_is_flagged_for_refund():
+    order = _settle_order("cancelled")
+    cart = SimpleNamespace(items=[{"produce_id": 1}])
+    txn = _txn()
+
+    outcome = order_reservations.settle_checkout_payment(
+        txn, "pay_1", SettleDB(order, cart)
+    )
+
+    assert outcome == "refund"
+    assert txn.status == "refund_pending"
+    assert txn.paymongo_payment_id == "pay_1"
+    assert order.status == "cancelled"
+    assert order.current_order.status == "cancelled"
+    assert cart.items == [{"produce_id": 1}]
+
+
+def test_payment_on_expired_transaction_is_flagged_for_refund():
+    order = _settle_order("pending")
+    txn = _txn(status="expired")
+
+    outcome = order_reservations.settle_checkout_payment(
+        txn, "pay_1", SettleDB(order, None)
+    )
+
+    assert outcome == "refund"
+    assert txn.status == "refund_pending"
+    assert order.status == "pending"
+
+
+def test_duplicate_payment_event_is_ignored():
+    txn = _txn(status="paid")
+    txn.paymongo_payment_id = "pay_1"
+
+    outcome = order_reservations.settle_checkout_payment(
+        txn, "pay_2", SettleDB(_settle_order("processing"), None)
+    )
+
+    assert outcome == "duplicate"
+    assert txn.paymongo_payment_id == "pay_1"

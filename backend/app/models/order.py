@@ -28,6 +28,9 @@ class Order(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     shipment_id = Column(Integer, ForeignKey("shipments.id"), nullable=True, index=True)
+    shipped_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    delivery_confirmed_by = Column(String, nullable=True)  # buyer | auto | legacy
     # Pre-computed ALNS route stored when marked for shipping
     route_waypoints = Column(JSONB, nullable=True)
 

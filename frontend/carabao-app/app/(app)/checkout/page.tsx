@@ -8,6 +8,7 @@ import { cancelPaymentCheckout, createPaymentCheckout, fetchMyCart, fetchMyProfi
 import { SERVICE_FEE } from "@/lib/constants";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
 import { getApiErrorStatus } from "@/util/errorHelper";
+import PageLoader from "@/components/PageLoader/PageLoader";
 
 export default function CheckoutPage() {
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
@@ -186,7 +187,7 @@ export default function CheckoutPage() {
         <aside className={styles.summaryCard}>
           <h2>Order Summary</h2>
           {isLoadingCart ? (
-            <p>Loading cart items...</p>
+            <PageLoader variant="compact" label="Loading cart items…" />
           ) : checkoutItems.length === 0 ? (
             <p>Your cart is empty. Add items before checkout.</p>
           ) : (

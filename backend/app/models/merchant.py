@@ -22,6 +22,9 @@ class Merchant(Base):
         onupdate=func.now(),
         nullable=False,
     )
+    # Set when the merchant closes their account. The row is kept so its
+    # orders, transactions and payouts stay attributable.
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     # Location / availability / price range
     region = Column(String, nullable=False, index=True)

@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_current_user, get_db
-from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.shipment import Shipment
@@ -24,6 +23,8 @@ from app.schemas.shipment import (
     TrackingPosition,
     Waypoint,
 )
+from app.services.merchant_service import get_active_merchant
+from app.services.order_status import mark_shipped
 from app.utils.geocoding import _geocode
 
 router = APIRouter(tags=["shipments"])
@@ -166,7 +167,7 @@ async def create_merchant_shipment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -370,9 +371,8 @@ async def create_merchant_shipment(
         order = ctx["order"]
         assert isinstance(order, Order)
         order.shipment_id = shipment.id
-        order.status = "shipped"
+        mark_shipped(order)
         if order.current_order:
-            order.current_order.status = "shipped"
             wp = next((w for w in waypoints if w.get("order_id") == order.id), None)
             if wp and wp.get("estimated_arrival_at"):
                 order.current_order.time_of_arrival = datetime.fromisoformat(
@@ -395,7 +395,7 @@ async def get_shipment_tracking(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -441,7 +441,7 @@ async def list_my_shipments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 import { useRouter } from "next/navigation";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
+import PageLoader from "@/components/PageLoader/PageLoader";
 import {
   fetchMyMerchantPerformance,
   fetchMerchantById,
@@ -304,7 +305,7 @@ export default function MerchantDashboardPage() {
 
   const earningsAnalytics = useMemo(() => {
     const totalPaid = transactions.filter((t) => t.status === "paid").reduce((acc, t) => acc + t.merchant_amount, 0);
-    // Only delivered orders can be cashed out.
+    // Only orders the buyer confirmed (or that auto-confirmed) can be cashed out.
     const totalDelivered = transactions
       .filter((t) => t.status === "paid" && t.order_status === "delivered")
       .reduce((acc, t) => acc + t.merchant_amount, 0);
@@ -564,7 +565,7 @@ export default function MerchantDashboardPage() {
     return (
       <div className={styles.page}>
         <div className={styles.loadingState}>
-          <p className={styles.loadingText}>Loading dashboard…</p>
+          <PageLoader label="Loading dashboard…" />
         </div>
       </div>
     );
@@ -796,7 +797,7 @@ export default function MerchantDashboardPage() {
               </form>
             )}
 
-            {produceLoading && <p className={styles.emptyText}>Loading produce…</p>}
+            {produceLoading && <PageLoader variant="compact" label="Loading produce…" />}
             {!produceLoading && produces.length === 0 && !showAddForm && (
               <p className={styles.emptyText}>No produce listed yet. Add your first item above.</p>
             )}
@@ -1106,7 +1107,7 @@ export default function MerchantDashboardPage() {
             <div className={`${styles.panel} ${styles.spaceBelow}`}>
               <h3 className={`${styles.sectionTitle} ${styles.flush}`}>Shipments</h3>
               {shipmentsLoading ? (
-                <p className={styles.emptyText}>Loading shipments…</p>
+                <PageLoader variant="compact" label="Loading shipments…" />
               ) : shipmentsError ? (
                 <p className={`${styles.emptyText} ${styles.errorText}`}>{shipmentsError}</p>
               ) : shipments.length === 0 ? (
@@ -1128,7 +1129,7 @@ export default function MerchantDashboardPage() {
               )}
             </div>
 
-            {ordersLoading && <p className={styles.emptyText}>Loading orders…</p>}
+            {ordersLoading && <PageLoader variant="compact" label="Loading orders…" />}
             {!ordersLoading && ordersError && <p className={`${styles.emptyText} ${styles.errorText}`}>{ordersError}</p>}
             {!ordersLoading && !ordersError && orders.length === 0 && (
               <p className={styles.emptyText}>No orders yet.</p>
@@ -1208,10 +1209,11 @@ export default function MerchantDashboardPage() {
                             {updatingOrderId === order.id ? "…" : "Confirm Order"}
                           </button>
                         )}
-                        {order.status === 'shipped' && (
-                          <button className={styles.orderActionBtn} disabled={updatingOrderId === order.id} onClick={() => void handleUpdateOrderStatus(order.id, 'delivered')}>
-                            {updatingOrderId === order.id ? "…" : "Mark as Delivered"}
-                          </button>
+                        {["shipped", "out_for_delivery"].includes(order.status) && (
+                          <span className={styles.orderAwaiting}>
+                            Awaiting buyer confirmation
+                            {order.auto_confirm_at && ` · auto-confirms ${formatDate(order.auto_confirm_at)}`}
+                          </span>
                         )}
                         {order.status !== "cancelled" && (
                           <button className={styles.orderCancelBtn} disabled={updatingOrderId === order.id} onClick={() => void handleUpdateOrderStatus(order.id, "cancelled")}>
@@ -1227,7 +1229,11 @@ export default function MerchantDashboardPage() {
         )}
 
         {/* ── EARNINGS ────────────────────────────────────────────────────── */}
-        {activeTab === "earnings" && (
+        {activeTab === "earnings" && !earningsLoaded && (
+          <PageLoader variant="inline" label="Loading earnings…" />
+        )}
+
+        {activeTab === "earnings" && earningsLoaded && (
           <div className={styles.earningsLayout}>
             {/* Summary cards */}
             <section className={styles.earningsGrid}>
@@ -1244,7 +1250,7 @@ export default function MerchantDashboardPage() {
               <div className={`${styles.kpiCard} ${styles.kpiCardGreen}`}>
                 <span className={styles.kpiLabel}>Available to Cash Out</span>
                 <strong className={styles.kpiValue}>{formatPeso(earningsAnalytics.available)}</strong>
-                <span className={styles.kpiSub}>net of released payouts</span>
+                <span className={styles.kpiSub}>buyer-confirmed orders, net of released payouts</span>
               </div>
             </section>
 

@@ -11,6 +11,7 @@ import { fetchCurrentOrders, fetchTracking, type TrackingData, type Waypoint } f
 import { fetchShipmentTracking } from '@/util/api';
 import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
 import getApiErrorMessage, { getApiErrorStatus } from '@/util/errorHelper';
+import PageLoader from '@/components/PageLoader/PageLoader';
 
 type TrackOrder = {
   id: number;
@@ -25,12 +26,19 @@ type TrackOrder = {
   status: string;
 };
 
+// Matches the backend's IN_TRANSIT_STATUSES; only these orders have a route to track.
+const IN_TRANSIT_STATUSES = new Set(['shipped', 'out_for_delivery']);
+
+const isInTransit = (order: Awaited<ReturnType<typeof fetchCurrentOrders>>[number]) =>
+  IN_TRANSIT_STATUSES.has(order.status?.toLowerCase());
+
 const toTrackOrder = (order: Awaited<ReturnType<typeof fetchCurrentOrders>>[number]): TrackOrder => ({
   id: order.id,
   orderId: order.order_id,
   merchant: order.merchant,
   merchantId: order.merchant_id ?? null,
-  shipped: order.shipped,
+  // current_order.shipped is never flipped by the backend, so derive it from status.
+  shipped: order.shipped || isInTransit(order),
   dateBought: new Date(order.date_bought).toLocaleDateString(),
   timeOfArrival: order.time_of_arrival
     ? new Date(order.time_of_arrival).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -121,6 +129,7 @@ function Track() {
   const [mapUnavailable, setMapUnavailable] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
   const [selectedOrderIndex, setSelectedOrderIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
 
@@ -134,13 +143,15 @@ function Track() {
   useEffect(() => {
     const loadCurrentOrders = async () => {
       try {
-        const response = await fetchCurrentOrders();
+        const response = (await fetchCurrentOrders()).filter(isInTransit);
         if (response.length > 0) {
           setCurrentOrders(response.map(toTrackOrder));
           setSelectedOrderIndex(0);
         }
       } catch {
         // orders stay empty if the backend is unavailable
+      } finally {
+        setOrdersLoading(false);
       }
     };
 
@@ -442,12 +453,14 @@ function Track() {
   );
 
   return (
-    <Suspense fallback={<div className={styles.loading}>Loading...</div>}>
-      {!selectedOrder ? (
+    <Suspense fallback={<PageLoader label="Loading your deliveries…" />}>
+      {ordersLoading ? (
+        <PageLoader label="Loading your deliveries…" />
+      ) : !selectedOrder ? (
         <div className={styles.emptyState}>
           <h1 className={styles.pageTitle}>Track orders</h1>
-          <p className={styles.emptyText}>No active orders yet. Once you place an order, you can follow its delivery here.</p>
-          <Link href="/order" className={styles.emptyAction}>Browse produce</Link>
+          <p className={styles.emptyText}>No orders are out for delivery right now. Once a merchant ships your order, you can follow it here.</p>
+          <Link href="/orders" className={styles.emptyAction}>View my orders</Link>
         </div>
       ) : (
         <div className={styles.trackingContainer}>

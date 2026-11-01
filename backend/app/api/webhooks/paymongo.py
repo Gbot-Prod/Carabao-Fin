@@ -1,14 +1,11 @@
 import logging
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
-from app.models.cart import Cart
-from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.transaction import Transaction
+from app.services.order_reservations import settle_checkout_payment
 from app.services.paymongo import get_webhook_secret, verify_webhook_signature
 
 logger = logging.getLogger(__name__)
@@ -75,7 +72,6 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
     txn = (
         db.query(Transaction)
         .filter(Transaction.paymongo_session_id == session_id)
-        .with_for_update()
         .first()
     )
 
@@ -83,37 +79,19 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
         logger.warning("No transaction found for session %s", session_id)
         return
 
-    if txn.status == "paid":
-        return  # already processed (duplicate delivery)
-    if txn.status != "pending":
-        logger.warning(
-            "Ignoring payment for closed transaction %s (status=%s)", txn.id, txn.status
-        )
+    outcome = settle_checkout_payment(txn, payment_id, db)
+    if outcome == "duplicate":
         return
-
-    txn.status = "paid"
-    txn.paymongo_payment_id = payment_id
-    txn.paid_at = datetime.now(UTC)
-
-    cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()
-    if cart:
-        cart.items = []
-
-    order = db.query(Order).filter(Order.id == txn.order_id).first()
-    if order:
-        order.status = "processing"
-        if order.current_order:
-            order.current_order.status = "processing"
-        if order.order_history_id:
-            history = (
-                db.query(OrderHistory)
-                .filter(OrderHistory.id == order.order_history_id)
-                .first()
-            )
-            if history:
-                history.last_order_at = datetime.now(UTC)
-
     db.commit()
-    logger.info(
-        "Transaction %s marked paid, order %s -> processing", txn.id, txn.order_id
-    )
+
+    if outcome == "refund":
+        logger.warning(
+            "Payment %s for closed transaction %s / order %s flagged for refund",
+            payment_id,
+            txn.id,
+            txn.order_id,
+        )
+    else:
+        logger.info(
+            "Transaction %s marked paid, order %s -> processing", txn.id, txn.order_id
+        )

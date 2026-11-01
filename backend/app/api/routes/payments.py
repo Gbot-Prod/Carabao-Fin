@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
-from app.models.cart import Cart
 from app.models.current_orders import CurrentOrder
 from app.models.merchant import Merchant
 from app.models.merchant_payout import MerchantPayoutInfo
@@ -22,11 +21,13 @@ from app.schemas.payment import (
     MerchantPayoutInfoResponse,
     TransactionResponse,
 )
+from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
     close_checkout_sessions,
     expire_stale_reservations,
     release_order_reservation,
     reservation_ttl_minutes,
+    settle_checkout_payment,
 )
 from app.services.paymongo import create_checkout_session, retrieve_checkout_session
 
@@ -61,33 +62,12 @@ def _reconcile_transaction_from_paymongo(txn: Transaction, db: Session) -> None:
 
     payments = attributes.get("payments", [])
     payment_id = payments[0].get("id") if payments else None
-    txn.status = "paid"
-    txn.paymongo_payment_id = payment_id
-    txn.paid_at = datetime.now(UTC)
-
-    order = db.query(Order).filter(Order.id == txn.order_id).first()
-    if order:
-        order.status = "processing"
-        if order.current_order:
-            order.current_order.status = "processing"
-        if order.order_history_id:
-            history = (
-                db.query(OrderHistory)
-                .filter(OrderHistory.id == order.order_history_id)
-                .first()
-            )
-            if history:
-                history.last_order_at = datetime.now(UTC)
-
-    user_cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()
-    if user_cart:
-        user_cart.items = []
-
+    outcome = settle_checkout_payment(txn, payment_id, db)
+    if outcome == "duplicate":
+        return
     db.commit()
     logger.info(
-        "Reconciled transaction %s as paid, order %s -> processing",
-        txn.id,
-        txn.order_id,
+        "Reconciled transaction %s (%s), order %s", txn.id, outcome, txn.order_id
     )
 
 
@@ -322,7 +302,7 @@ def upsert_merchant_payout_info(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=403, detail="Not a merchant account")
 
@@ -349,7 +329,7 @@ def get_merchant_payout_info(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = db.query(Merchant).filter(Merchant.user_id == current_user.id).first()
+    merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=403, detail="Not a merchant account")
 
