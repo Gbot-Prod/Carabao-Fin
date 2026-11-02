@@ -272,6 +272,23 @@ def main() -> None:
         )
     add("")
 
+    # ---- exact solver runtime ------------------------------------------------
+    single = defaultdict(list)
+    unproven = defaultdict(int)
+    for r in read("exact_single_core.csv"):
+        single[int(r["size"])].append(float(r["solve_ms"]))
+        unproven[int(r["size"])] += r["status"] != "OPTIMAL"
+    add("## CP-SAT runtime on one CPU core, one solve at a time (holdout)")
+    add("| stops | solves | median ms | p95 ms | max ms | optimum not proven in 300 s |")
+    add("|---|---|---|---|---|---|")
+    for size, values in sorted(single.items()):
+        add(
+            f"| {size} | {len(values)} | {statistics.median(values):.0f} | "
+            f"{np.percentile(values, 95):.0f} | {max(values):.0f} | "
+            f"{unproven[size]} |"
+        )
+    add("")
+
     # ---- practical impact -------------------------------------------------
     add("## Practical impact, holdout (means per batch)")
     add("| stops | strategy | drive min | km | avg customer wait min |")
