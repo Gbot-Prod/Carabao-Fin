@@ -176,6 +176,16 @@
 | 30 | 60 | 104 | 162 | 188 |
 | 40 | 60 | 199 | 296 | 344 |
 
+## CP-SAT runtime on one CPU core, one solve at a time (holdout)
+| stops | solves | median ms | p95 ms | max ms | optimum not proven in 300 s |
+|---|---|---|---|---|---|
+| 5 | 20 | 2 | 49 | 947 | 0 |
+| 10 | 20 | 7 | 14 | 15 | 0 |
+| 15 | 20 | 23 | 53 | 119 | 0 |
+| 20 | 20 | 66 | 143 | 233 | 0 |
+| 30 | 20 | 770 | 4355 | 5968 | 0 |
+| 40 | 20 | 8599 | 143779 | 300042 | 1 |
+
 ## Practical impact, holdout (means per batch)
 | stops | strategy | drive min | km | avg customer wait min |
 |---|---|---|---|---|
