@@ -12,7 +12,7 @@ router = APIRouter(tags=["carts"])
 
 
 @router.get("/carts/me", response_model=CartResponse)
-async def get_my_cart(
+def get_my_cart(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -21,7 +21,7 @@ async def get_my_cart(
 
 
 @router.put("/carts/me", response_model=CartResponse)
-async def replace_my_cart(
+def replace_my_cart(
     cart_update: CartUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

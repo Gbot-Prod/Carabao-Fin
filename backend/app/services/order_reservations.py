@@ -91,13 +91,17 @@ def release_order_reservation(
 
 def restore_order_stock(order: Order, db: Session) -> None:
     """Put the order's item quantities back on their produce listings."""
+    lines = []
     for item in order.items or []:
         if not isinstance(item, dict):
             continue
         produce_id = _item_value(item, "produce_id", "produceId", "id")
         quantity = _item_value(item, "quantity") or 0
-        if not produce_id or quantity <= 0:
-            continue
+        if produce_id and quantity > 0:
+            lines.append((produce_id, quantity))
+
+    # Same lock order as placing an order, so the two can't deadlock.
+    for produce_id, quantity in sorted(lines):
         produce = (
             db.query(Produce)
             .filter(Produce.id == produce_id)

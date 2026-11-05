@@ -35,7 +35,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 _raw_frontend = os.getenv("FRONTEND_URL", "http://localhost:3000")
 FRONTEND_URL = _raw_frontend.split(",")[0].strip()
-PLATFORM_FEE_RATE = 0.05
+PLATFORM_FEE_RATE = 0.02
 
 logger = logging.getLogger(__name__)
 

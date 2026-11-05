@@ -99,7 +99,7 @@ def _response_from_stored_route(
 
 
 @router.get("/tracking/{order_id}", response_model=ShipmentTrackingResponse)
-async def get_order_tracking(
+def get_order_tracking(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
 import requests as _requests
@@ -29,6 +29,8 @@ from app.utils.geocoding import _geocode
 
 router = APIRouter(tags=["shipments"])
 
+GEOCODE_WORKERS = 8
+
 
 def _resolve_delivery_address(order: Order, buyer: User | None) -> str | None:
     if order.delivery_address:
@@ -41,7 +43,7 @@ def _resolve_delivery_address(order: Order, buyer: User | None) -> str | None:
     return ", ".join(parts) if parts else None
 
 
-async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
+def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
     """Calls Mapbox Directions and returns cumulative driving duration (seconds) from coords[0] to each subsequent coord."""
     token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
     if not token or len(coords) < 2:
@@ -49,12 +51,8 @@ async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] |
     coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
     url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{coord_str}"
     try:
-        loop = asyncio.get_running_loop()
-        resp = await loop.run_in_executor(
-            None,
-            lambda: _requests.get(
-                url, params={"access_token": token, "overview": "false"}, timeout=10
-            ),
+        resp = _requests.get(
+            url, params={"access_token": token, "overview": "false"}, timeout=10
         )
         if not resp.ok:
             print(f"[shipment-directions] Mapbox error {resp.status_code}")
@@ -70,7 +68,7 @@ async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] |
         return None
 
 
-async def _get_duration_matrix(
+def _get_duration_matrix(
     coords: list[tuple[float, float]],
 ) -> list[list[float | None]] | None:
     """
@@ -85,14 +83,10 @@ async def _get_duration_matrix(
     coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
     url = f"https://api.mapbox.com/directions-matrix/v1/mapbox/driving/{coord_str}"
     try:
-        loop = asyncio.get_running_loop()
-        resp = await loop.run_in_executor(
-            None,
-            lambda: _requests.get(
-                url,
-                params={"access_token": token, "annotations": "duration"},
-                timeout=10,
-            ),
+        resp = _requests.get(
+            url,
+            params={"access_token": token, "annotations": "duration"},
+            timeout=10,
         )
         if not resp.ok:
             print(f"[shipment-matrix] Mapbox error {resp.status_code}")
@@ -162,7 +156,7 @@ def _shipment_response(
 
 
 @router.post("/merchants/me/shipments", response_model=ShipmentTrackingResponse)
-async def create_merchant_shipment(
+def create_merchant_shipment(
     payload: CreateShipmentRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -216,7 +210,7 @@ async def create_merchant_shipment(
     if not merchant_address:
         raise HTTPException(status_code=422, detail="Merchant has no location set")
 
-    origin_coords = await _geocode(merchant_address)
+    origin_coords = _geocode(merchant_address)
     if not origin_coords:
         raise HTTPException(
             status_code=422,
@@ -239,9 +233,13 @@ async def create_merchant_shipment(
             }
         )
 
-    destination_results = await asyncio.gather(
-        *[_geocode(str(ctx["delivery_address"])) for ctx in order_contexts]
-    )
+    # A batch can hold dozens of addresses, so look them up in parallel.
+    with ThreadPoolExecutor(max_workers=GEOCODE_WORKERS) as pool:
+        destination_results = list(
+            pool.map(
+                _geocode, [str(ctx["delivery_address"]) for ctx in order_contexts]
+            )
+        )
     if any(result is None for result in destination_results):
         failed = [
             str(order_contexts[index]["order"].id)
@@ -274,7 +272,7 @@ async def create_merchant_shipment(
     # is unavailable rather than producing a worse route.
     duration_matrix = None
     if len(stops) > 1:
-        duration_matrix = await _get_duration_matrix(
+        duration_matrix = _get_duration_matrix(
             [origin_coords] + [(s.lat, s.lng) for s in stops]
         )
         if duration_matrix is None:
@@ -354,7 +352,7 @@ async def create_merchant_shipment(
     all_coords = [(origin_coords[0], origin_coords[1])] + [
         (s.lat, s.lng) for s in ordered_stops
     ]
-    durations = await _get_leg_durations(all_coords)
+    durations = _get_leg_durations(all_coords)
     now = datetime.now(UTC)
     if durations:
         total_duration = durations[-1]
@@ -390,7 +388,7 @@ async def create_merchant_shipment(
 
 
 @router.get("/shipments/{shipment_id}", response_model=ShipmentTrackingResponse)
-async def get_shipment_tracking(
+def get_shipment_tracking(
     shipment_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -437,7 +435,7 @@ async def get_shipment_tracking(
 
 
 @router.get("/merchants/me/shipments")
-async def list_my_shipments(
+def list_my_shipments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

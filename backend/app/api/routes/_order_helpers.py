@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.cart import Cart
 from app.models.current_orders import CurrentOrder
@@ -29,7 +30,12 @@ def get_or_create_cart(db: Session, user_id: int) -> Cart:
 
     cart = Cart(user_id=user_id, items=[])
     db.add(cart)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request for this user created the cart first.
+        db.rollback()
+        return db.query(Cart).filter(Cart.user_id == user_id).one()
     db.refresh(cart)
     return cart
 
@@ -44,9 +50,37 @@ def get_or_create_order_history(db: Session, user_id: int) -> OrderHistory:
         return history
 
     history = OrderHistory(user_id=user_id)
-    db.add(history)
-    db.flush()
+    try:
+        with db.begin_nested():
+            db.add(history)
+            db.flush()
+    except IntegrityError:
+        # A concurrent request for this user created the history first.
+        return db.query(OrderHistory).filter(OrderHistory.user_id == user_id).one()
     return history
+
+
+def get_history_orders(db: Session, history: OrderHistory) -> list[Order]:
+    return (
+        db.query(Order)
+        .options(selectinload(Order.merchant).selectinload(Merchant.shop_page))
+        .filter(Order.order_history_id == history.id)
+        .all()
+    )
+
+
+def current_order_load() -> tuple:
+    """What to_current_order_item reads, loaded in batches instead of per row.
+
+    A function because building these at import time configures the mappers before
+    main.py has imported every model.
+    """
+    return (
+        selectinload(CurrentOrder.order)
+        .selectinload(Order.merchant)
+        .selectinload(Merchant.shop_page),
+        selectinload(CurrentOrder.merchant).selectinload(Merchant.shop_page),
+    )
 
 
 def derive_merchant_name(items: list[dict[str, Any]] | None, fallback: str) -> str:

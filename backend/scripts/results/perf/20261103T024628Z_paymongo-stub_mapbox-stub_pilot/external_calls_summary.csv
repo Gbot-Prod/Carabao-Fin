@@ -1,0 +1,10 @@
+Call,Concurrency,n,p50 (ms),p95 (ms),Max (ms)
+`alns.compute_route`,10,21,0.00,0.00,0.00
+`alns.compute_route`,25,9,0.00,0.00,0.00
+`mapbox.directions`,10,21,0.00,0.00,0.00
+`mapbox.directions`,25,9,0.00,0.00,0.00
+`mapbox.geocode`,10,42,0.01,0.01,0.02
+`mapbox.geocode`,25,18,0.01,0.02,0.02
+`paymongo.create_checkout_session`,1,8,0.01,0.02,0.02
+`paymongo.create_checkout_session`,10,56,0.01,0.02,0.02
+`paymongo.create_checkout_session`,25,18,0.01,0.01,0.01

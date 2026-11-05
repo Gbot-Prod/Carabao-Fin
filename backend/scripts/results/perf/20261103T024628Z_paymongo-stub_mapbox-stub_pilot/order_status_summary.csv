@@ -1,0 +1,5 @@
+Buyer polling,Transition,n,Not seen,Lower bound p50 (ms),Upper bound p50 (ms),Upper bound p95 (ms),Upper bound max (ms),PATCH p95 (ms),Target (ms),Met?
+50 ms,out_for_delivery,30,0,68,77,100,102,25,5000,Yes
+50 ms,shipped,30,0,63,71,98,104,29,5000,Not judged (stubbed)
+3000 ms,out_for_delivery,30,0,"1,441","1,453","2,871","2,994",14,5000,Yes
+3000 ms,shipped,30,0,"1,854","1,867","2,892","2,896",14,5000,Not judged (stubbed)

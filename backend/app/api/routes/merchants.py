@@ -1,4 +1,3 @@
-import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -6,7 +5,7 @@ import requests as _requests
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.current_orders import CurrentOrder
@@ -55,7 +54,7 @@ class MerchantOrderStatusUpdate(BaseModel):
     status: str
 
 
-async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
+def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
     """Calls Mapbox Directions and returns cumulative driving duration (seconds) from coords[0] to each subsequent coord."""
     token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
     if not token or len(coords) < 2:
@@ -63,12 +62,8 @@ async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] |
     coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
     url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{coord_str}"
     try:
-        loop = asyncio.get_running_loop()
-        resp = await loop.run_in_executor(
-            None,
-            lambda: _requests.get(
-                url, params={"access_token": token, "overview": "false"}, timeout=10
-            ),
+        resp = _requests.get(
+            url, params={"access_token": token, "overview": "false"}, timeout=10
         )
         if not resp.ok:
             print(f"[shipment-directions] Mapbox error {resp.status_code}")
@@ -84,7 +79,7 @@ async def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] |
         return None
 
 
-async def _compute_and_store_route(db: Session, order: Order) -> None:
+def _compute_and_store_route(db: Session, order: Order) -> None:
     """Compute ALNS route for order and store waypoints. Called when marking for shipping."""
     if not order.merchant:
         print(f"[route] Skipping route computation for order {order.id}: no merchant")
@@ -131,8 +126,8 @@ async def _compute_and_store_route(db: Session, order: Order) -> None:
         )
         return
 
-    origin_coords = await _geocode(merchant_address)
-    dest_coords = await _geocode(delivery_address)
+    origin_coords = _geocode(merchant_address)
+    dest_coords = _geocode(delivery_address)
 
     if not origin_coords:
         print(
@@ -165,7 +160,7 @@ async def _compute_and_store_route(db: Session, order: Order) -> None:
     )
 
     leg_durations = (
-        await _get_leg_durations(
+        _get_leg_durations(
             [
                 (origin_coords[0], origin_coords[1]),
                 (ordered_stops[0].lat, ordered_stops[0].lng),
@@ -219,9 +214,11 @@ async def _compute_and_store_route(db: Session, order: Order) -> None:
 
 
 @router.get("/merchants", response_model=list[MerchantResponse])
-async def list_merchants(db: Session = Depends(get_db)):
+def list_merchants(db: Session = Depends(get_db)):
     return (
         db.query(Merchant)
+        # MerchantResponse includes both; without this each merchant costs 2 queries.
+        .options(selectinload(Merchant.shop_page), selectinload(Merchant.produces))
         .outerjoin(MerchantApplication, MerchantApplication.user_id == Merchant.user_id)
         .filter(
             Merchant.deleted_at.is_(None),
@@ -236,7 +233,7 @@ async def list_merchants(db: Session = Depends(get_db)):
 
 
 @router.get("/merchants/{merchant_id}", response_model=MerchantResponse)
-async def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
+def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
     merchant = (
         db.query(Merchant)
         .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
@@ -248,7 +245,7 @@ async def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
 
 
 @router.patch("/merchants/me", response_model=MerchantResponse)
-async def update_my_merchant(
+def update_my_merchant(
     merchant_update: MerchantUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -267,7 +264,7 @@ async def update_my_merchant(
 
 
 @router.get("/merchants/me/performance", response_model=MerchantPerformanceResponse)
-async def get_my_merchant_performance(
+def get_my_merchant_performance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -360,7 +357,7 @@ async def get_my_merchant_performance(
 
 
 @router.get("/merchants/{merchant_id}/produce", response_model=list[ProduceResponse])
-async def list_merchant_produce(merchant_id: int, db: Session = Depends(get_db)):
+def list_merchant_produce(merchant_id: int, db: Session = Depends(get_db)):
     merchant = (
         db.query(Merchant)
         .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
@@ -372,7 +369,7 @@ async def list_merchant_produce(merchant_id: int, db: Session = Depends(get_db))
 
 
 @router.post("/produce/", response_model=ProduceResponse)
-async def create_produce(
+def create_produce(
     produce_in: ProduceCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -389,7 +386,7 @@ async def create_produce(
 
 
 @router.patch("/produce/{produce_id}", response_model=ProduceResponse)
-async def update_produce(
+def update_produce(
     produce_id: int,
     produce_update: ProduceUpdate,
     db: Session = Depends(get_db),
@@ -416,7 +413,7 @@ async def update_produce(
 
 
 @router.delete("/produce/{produce_id}", status_code=204)
-async def delete_produce(
+def delete_produce(
     produce_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -443,7 +440,7 @@ async def delete_produce(
 
 
 @router.get("/merchants/{merchant_id}/shoppage", response_model=ShopPageResponse)
-async def get_merchant_shoppage(merchant_id: int, db: Session = Depends(get_db)):
+def get_merchant_shoppage(merchant_id: int, db: Session = Depends(get_db)):
     shop_page = (
         db.query(ShopPage)
         .join(Merchant, Merchant.id == ShopPage.merchant_id)
@@ -456,7 +453,7 @@ async def get_merchant_shoppage(merchant_id: int, db: Session = Depends(get_db))
 
 
 @router.post("/merchants/me/shoppage", response_model=ShopPageResponse)
-async def create_my_shoppage(
+def create_my_shoppage(
     shop_page_in: ShopPageCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -484,7 +481,7 @@ async def create_my_shoppage(
 
 
 @router.patch("/merchants/me/shoppage", response_model=ShopPageResponse)
-async def update_my_shoppage(
+def update_my_shoppage(
     shop_page_update: ShopPageUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -518,7 +515,7 @@ async def update_my_shoppage(
 
 
 @router.post("/merchants/me/shoppage/logo", response_model=ShopPageResponse)
-async def upload_my_shoppage_logo(
+def upload_my_shoppage_logo(
     logo: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -536,7 +533,7 @@ async def upload_my_shoppage_logo(
     if logo.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
         raise HTTPException(status_code=400, detail="Logo must be PNG, JPEG, or WebP")
 
-    data = await logo.read()
+    data = logo.file.read()
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Logo must be under 5 MB")
     try:
@@ -553,7 +550,7 @@ async def upload_my_shoppage_logo(
 
 
 @router.post("/merchants/me/shoppage/banner", response_model=ShopPageResponse)
-async def upload_my_shoppage_banner(
+def upload_my_shoppage_banner(
     banner: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -576,7 +573,7 @@ async def upload_my_shoppage_banner(
     }:
         raise HTTPException(status_code=400, detail="Banner must be PNG, JPEG, or WebP")
 
-    data = await banner.read()
+    data = banner.file.read()
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Banner must be under 5 MB")
     try:
@@ -596,7 +593,7 @@ async def upload_my_shoppage_banner(
 
 
 @router.post("/produce/{produce_id}/image", response_model=ProduceResponse)
-async def upload_produce_image(
+def upload_produce_image(
     produce_id: int,
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -617,7 +614,7 @@ async def upload_produce_image(
     if image.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
         raise HTTPException(status_code=400, detail="Image must be PNG, JPEG, or WebP")
 
-    data = await image.read()
+    data = image.file.read()
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Image must be under 5 MB")
     try:
@@ -643,7 +640,7 @@ async def upload_produce_image(
 
 
 @router.get("/merchants/me/payout-info", response_model=PayoutInfoResponse | None)
-async def get_my_payout_info(
+def get_my_payout_info(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -658,7 +655,7 @@ async def get_my_payout_info(
 
 
 @router.put("/merchants/me/payout-info", response_model=PayoutInfoResponse)
-async def update_my_payout_info(
+def update_my_payout_info(
     payload: PayoutInfoUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -685,7 +682,7 @@ async def update_my_payout_info(
 
 
 @router.get("/merchants/me/payouts", response_model=list[PayoutBatchResponse])
-async def get_my_payouts(
+def get_my_payouts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -701,7 +698,7 @@ async def get_my_payouts(
 
 
 @router.get("/merchants/me/transactions", response_model=list[TransactionSummary])
-async def get_my_transactions(
+def get_my_transactions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -725,11 +722,12 @@ async def get_my_transactions(
 
 
 @router.post("/merchants/me/payouts/request", response_model=PayoutBatchResponse)
-async def request_my_payout(
+def request_my_payout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    # The row lock makes a concurrent request wait, then see this one as pending.
+    merchant = get_active_merchant(db, current_user.id, for_update=True)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -814,7 +812,7 @@ async def request_my_payout(
 
 
 @router.get("/merchants/me/orders", response_model=list[MerchantOrderResponse])
-async def get_my_merchant_orders(
+def get_my_merchant_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -863,7 +861,7 @@ async def get_my_merchant_orders(
 @router.patch(
     "/merchants/me/orders/{order_id}/status", response_model=MerchantOrderResponse
 )
-async def update_my_merchant_order_status(
+def update_my_merchant_order_status(
     order_id: int,
     body: MerchantOrderStatusUpdate,
     db: Session = Depends(get_db),
@@ -906,7 +904,7 @@ async def update_my_merchant_order_status(
     # Compute and store ALNS route when order is marked for shipping (first
     # time only)
     if status == "shipped" and not order.route_waypoints:
-        await _compute_and_store_route(db, order)
+        _compute_and_store_route(db, order)
 
     db.commit()
 
@@ -949,7 +947,7 @@ async def update_my_merchant_order_status(
 
 
 @router.delete("/merchants/me", status_code=204)
-async def delete_my_merchant(
+def delete_my_merchant(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

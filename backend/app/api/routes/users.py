@@ -32,12 +32,12 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/users/me", response_model=UserResponse)
-async def get_current_user_profile(current_user: User = Depends(get_current_user)):
+def get_current_user_profile(current_user: User = Depends(get_current_user)):
     return current_user
 
 
 @router.patch("/users/me", response_model=UserResponse)
-async def update_current_user_profile(
+def update_current_user_profile(
     user_update: UserUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -52,7 +52,7 @@ async def update_current_user_profile(
 
 
 @router.post("/users/me/avatar", response_model=UserResponse)
-async def upload_my_avatar(
+def upload_my_avatar(
     avatar: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -65,7 +65,7 @@ async def upload_my_avatar(
     }:
         raise HTTPException(status_code=400, detail="Avatar must be PNG, JPEG, or WebP")
 
-    data = await avatar.read()
+    data = avatar.file.read()
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Avatar must be under 5 MB")
     try:
@@ -91,7 +91,7 @@ async def upload_my_avatar(
 
 
 @router.get("/users/me/payment-methods", response_model=list[SavedCard])
-async def list_my_payment_methods(
+def list_my_payment_methods(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -106,7 +106,7 @@ async def list_my_payment_methods(
 
 
 @router.post("/users/me/payment-methods", response_model=SavedCard)
-async def attach_my_payment_method(
+def attach_my_payment_method(
     payload: AttachPaymentMethodRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -124,7 +124,7 @@ async def attach_my_payment_method(
 
 
 @router.delete("/users/me/payment-methods/{payment_method_id}", status_code=204)
-async def detach_my_payment_method(
+def detach_my_payment_method(
     payment_method_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -190,7 +190,7 @@ def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
 
 
 @router.delete("/users/me", status_code=204)
-async def delete_my_account(
+def delete_my_account(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
