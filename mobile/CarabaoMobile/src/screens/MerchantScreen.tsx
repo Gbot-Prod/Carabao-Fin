@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
-import { api, type ApiMerchant, type ApiProduce } from '../lib/api';
+import { api, merchantLocation, type ApiMerchant, type ApiProduce } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
@@ -50,6 +50,8 @@ function MerchantScreenContent() {
   const handleAdd = (product: ApiProduce) => {
     addItem({
       id: String(product.id),
+      produceId: product.id,
+      merchantId: product.merchant_id ?? merchant?.id ?? null,
       farm: merchant?.merchant_name ?? farmName ?? '',
       produce: product.name ?? 'Produce',
       unit: product.unit,
@@ -90,17 +92,17 @@ function MerchantScreenContent() {
             <Image source={{ uri: PLACEHOLDER_IMAGE }} style={styles.heroImage} resizeMode="cover" />
             <View style={styles.heroGradient} />
             <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>{merchant?.location ?? 'Farm Goods'}</Text>
+              <Text style={styles.heroBadgeText}>{(merchant && merchantLocation(merchant)) || 'Farm Goods'}</Text>
             </View>
           </View>
 
           {/* Merchant Info */}
           <View style={styles.infoSection}>
             <Text style={styles.merchantName}>{displayName}</Text>
-            {merchant?.location ? (
+            {merchant && merchantLocation(merchant) ? (
               <View style={styles.locationRow}>
                 <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
-                <Text style={styles.merchantLocation}> {merchant.location}</Text>
+                <Text style={styles.merchantLocation}> {merchantLocation(merchant)}</Text>
               </View>
             ) : null}
 

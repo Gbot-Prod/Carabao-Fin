@@ -41,8 +41,27 @@ function CheckoutScreenContent() {
       Alert.alert('Sign In Required', 'Please sign in to place an order.');
       return;
     }
+    if (items.length === 0) {
+      Alert.alert('Cart Empty', 'Add some produce before checking out.');
+      return;
+    }
     setLoading(true);
     try {
+      // The backend places orders from the server-side cart, so sync the
+      // local cart first; otherwise it fails with "Cart is empty".
+      await api.cart.replace(
+        token,
+        items.map((i) => ({
+          id: i.id,
+          produce_id: i.produceId,
+          merchant_id: i.merchantId,
+          produce: i.produce,
+          farm: i.farm,
+          unit: i.unit,
+          price: i.price,
+          quantity: i.quantity,
+        })),
+      );
       const result = await api.orders.place(token, {
         delivery_address: address.trim() || null,
         delivery_time: timeWindow,

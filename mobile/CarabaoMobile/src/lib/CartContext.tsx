@@ -2,6 +2,9 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 export interface CartItem {
   id: string;
+  /** Backend produce id — required for checkout (/orders/me/place). */
+  produceId: number;
+  merchantId: number | null;
   farm: string;
   produce: string;
   unit: string;

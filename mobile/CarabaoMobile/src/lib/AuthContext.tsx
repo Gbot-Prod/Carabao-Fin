@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { request } from './api';
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/$/, '');
 const TOKEN_KEY = 'carabao_token';
 const USER_KEY = 'carabao_user';
 const TOKEN_EXPIRY_KEY = 'carabao_token_expiry';
@@ -112,16 +112,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const res = await fetch(`${API_BASE}/auth/mobile/sign-in`, {
+    const data = await request<MobileAuthResponse>('/auth/mobile/sign-in', null, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: email.trim(), password }),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({})) as { detail?: string };
-      throw new Error(err.detail ?? 'Sign in failed');
-    }
-    const data = await res.json() as MobileAuthResponse;
     const u = buildUser(data);
     const expiry = Date.now() + (data.expires_in ?? 3600) * 1000;
     // Set all three together so isAuthenticated becomes true in one render
@@ -132,16 +126,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
-    const res = await fetch(`${API_BASE}/auth/mobile/sign-up`, {
+    const data = await request<MobileAuthResponse>('/auth/mobile/sign-up', null, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, first_name: firstName, last_name: lastName }),
+      body: JSON.stringify({ email: email.trim(), password, first_name: firstName, last_name: lastName }),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({})) as { detail?: string };
-      throw new Error(err.detail ?? 'Sign up failed');
-    }
-    const data = await res.json() as MobileAuthResponse;
     const u = buildUser(data);
     const expiry = Date.now() + (data.expires_in ?? 3600) * 1000;
     setToken(data.access_token);

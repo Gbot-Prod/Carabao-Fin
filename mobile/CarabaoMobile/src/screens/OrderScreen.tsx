@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import FarmCard from '../components/FarmCard';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
-import { api, type ApiMerchant } from '../lib/api';
+import { api, merchantLocation, type ApiMerchant } from '../lib/api';
 import { type Farm } from '../lib/mockData';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
@@ -20,7 +20,7 @@ function merchantToFarm(m: ApiMerchant): Farm {
     id: String(m.id),
     name: m.merchant_name,
     category: firstCategory ?? 'Farm Goods',
-    location: m.location ?? '',
+    location: merchantLocation(m),
     description: m.shop_page?.description ?? '',
     rating: m.rating ?? 0,
     time: m.delivery_time ? `${m.delivery_time} day${m.delivery_time > 1 ? 's' : ''}` : 'N/A',
@@ -108,6 +108,7 @@ function OrderScreenContent() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.pillsScroll}
           contentContainerStyle={styles.pills}
         >
           {categories.map((cat) => (
@@ -210,7 +211,10 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, paddingVertical: 12, fontSize: FontSize.md, color: Colors.text },
 
-  pills: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, gap: Spacing.sm },
+  // Without flexGrow: 0 a horizontal ScrollView expands to fill the column,
+  // and the default alignItems: 'stretch' makes each pill that tall.
+  pillsScroll: { flexGrow: 0, flexShrink: 0 },
+  pills: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, alignItems: 'center' },
   pill: {
     paddingHorizontal: Spacing.md, paddingVertical: 7,
     backgroundColor: Colors.white, borderRadius: Radius.full,
