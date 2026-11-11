@@ -1,3 +1,0 @@
-version,started_utc,paymongo,mapbox,users,warmup_seconds,duration_seconds,repeats,order_trials,git_commit,database_host,postgres_version,machine,cpu_count,server_workers,levels_recorded
-before_fix,20261103T024628Z,stub,stub,"[1, 10, 25, 50]",15,60,1,30,d0a0a6f9f6eee5fcc66d239d0e3015e135425089,127.0.0.1,18.2,Windows-10-10.0.19045-SP0,20,1,4
-after_fix,20261105T062833Z,stub,stub,"[1, 10, 25, 50]",15,60,1,30,d0a0a6f9f6eee5fcc66d239d0e3015e135425089,127.0.0.1,18.2,Windows-10-10.0.19045-SP0,20,1,4
