@@ -1,7 +1,5 @@
 """Tests for the shipment road-matrix fetch and the shipment size cap."""
 
-import asyncio
-
 import pytest
 from pydantic import ValidationError
 
@@ -32,7 +30,7 @@ def _fetch(monkeypatch, response=None, exc=None, token="pk.test"):
 
     monkeypatch.setenv("MAPBOX_ACCESS_TOKEN", token)
     monkeypatch.setattr(shipments._requests, "get", fake_get)
-    return asyncio.run(shipments._get_duration_matrix(COORDS)), calls
+    return shipments._get_duration_matrix(COORDS), calls
 
 
 def test_returns_duration_matrix_from_single_request(monkeypatch):

@@ -1,23 +1,81 @@
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/$/, '');
+// FastAPI backend. Not the Next.js site — that serves HTML 404s for API paths.
+// On a physical device "localhost" is the phone itself, so set EXPO_PUBLIC_API_URL
+// (e.g. your PC's LAN IP for local dev) rather than relying on this fallback.
+export const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/$/, '');
+export const WEB_BASE = (process.env.EXPO_PUBLIC_WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 
-async function request<T>(
+const REQUEST_TIMEOUT_MS = 20000;
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+// FastAPI returns `detail` as a string for HTTPException, but as a list of
+// {loc, msg} objects for 422 validation errors.
+function extractDetail(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => (d && typeof d === 'object' ? (d as { msg?: unknown }).msg : null))
+      .filter((m): m is string => typeof m === 'string');
+    if (msgs.length) return msgs.join('\n');
+  }
+  return null;
+}
+
+export async function request<T>(
   path: string,
   token: string | null,
   options?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...((options?.headers as Record<string, string>) ?? {}),
-    },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { detail?: string };
-    throw new Error(body.detail ?? `Request failed (${res.status})`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...((options?.headers as Record<string, string>) ?? {}),
+      },
+    });
+  } catch (err) {
+    const aborted = err instanceof Error && err.name === 'AbortError';
+    throw new ApiError(
+      aborted
+        ? 'The server took too long to respond. Please try again.'
+        : `Could not reach the server at ${API_BASE}. Check your connection.`,
+      0,
+    );
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json() as Promise<T>;
+
+  const text = await res.text();
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      // Non-JSON (usually an HTML page) means API_BASE points at the wrong host.
+      throw new ApiError(
+        `Unexpected response from ${API_BASE}${path} (${res.status}). Is EXPO_PUBLIC_API_URL the FastAPI backend?`,
+        res.status,
+      );
+    }
+  }
+  if (!res.ok) {
+    throw new ApiError(extractDetail(body) ?? `Request failed (${res.status})`, res.status);
+  }
+  return body as T;
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -25,7 +83,10 @@ async function request<T>(
 export type ApiMerchant = {
   id: number;
   merchant_name: string;
-  location: string | null;
+  address: string | null;
+  barangay: string | null;
+  city: string | null;
+  province: string | null;
   contact_number: string;
   operating_hours: string | null;
   delivery_price: number | null;
@@ -101,6 +162,31 @@ export type ApiUserProfile = {
   cart: { id: number; total_items: number; total_price: number } | null;
 };
 
+// Shape stored in the server-side cart (PUT /carts/me). /orders/me/place
+// reads this cart, not the request body, and needs produce_id on each item.
+export type ServerCartItem = {
+  id: string;
+  produce_id: number;
+  merchant_id?: number | null;
+  produce: string;
+  farm: string;
+  unit: string;
+  price: number;
+  quantity: number;
+};
+
+export type ApiCart = {
+  id: number;
+  user_id: number;
+  items: ServerCartItem[];
+  total_items: number;
+  total_price: number;
+};
+
+export function merchantLocation(m: Pick<ApiMerchant, 'city' | 'province'>): string {
+  return [m.city, m.province].filter(Boolean).join(', ');
+}
+
 export type PlaceOrderPayload = {
   delivery_address?: string | null;
   delivery_time?: string | null;
@@ -125,8 +211,15 @@ export const api = {
       request<ApiMerchant>(`/merchants/${id}`, token),
     produce: (id: number, token: string | null) =>
       request<ApiProduce[]>(`/merchants/${id}/produce`, token),
-    apply: (token: string, payload: { merchant_name: string; location: string; contact_number: string }) =>
-      request<ApiMerchant>('/merchants/me', token, { method: 'POST', body: JSON.stringify(payload) }),
+  },
+  cart: {
+    get: (token: string | null) =>
+      request<ApiCart>('/carts/me', token),
+    replace: (token: string | null, items: ServerCartItem[]) =>
+      request<ApiCart>('/carts/me', token, {
+        method: 'PUT',
+        body: JSON.stringify({ items }),
+      }),
   },
   orders: {
     current: (token: string | null) =>

@@ -6,7 +6,8 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
-import { api } from '../lib/api';
+import * as WebBrowser from 'expo-web-browser';
+import { WEB_BASE } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 
@@ -46,14 +47,12 @@ function OnboardingScreenContent() {
     }
     setLoading(true);
     try {
-      await api.merchants.apply(token, {
-        merchant_name: form.farmName,
-        location: form.location,
-        contact_number: form.contactInfo,
-      });
+      // The backend's /merchant-onboarding/me needs an RSBSA document upload and
+      // an SMS-verified contact number, which only the web flow collects today.
+      await WebBrowser.openBrowserAsync(`${WEB_BASE}/onboarding`);
       Alert.alert(
-        'Application Submitted',
-        "Your merchant application is under review. We'll notify you within 1–2 business days.",
+        'Finish on the Web',
+        'Complete your merchant application (documents and phone verification) in the browser. Sign in with the same account.',
         [{ text: 'Done', onPress: () => router.back() }]
       );
     } catch (err) {

@@ -21,7 +21,7 @@ class SignupOtpEmailPayload(BaseModel):
 
 
 @router.post("/email/send-signup-otp")
-async def send_signup_otp_email_route(
+def send_signup_otp_email_route(
     payload: SignupOtpEmailPayload,
     x_internal_auth_sync_secret: str | None = Header(
         default=None,
@@ -47,7 +47,7 @@ async def send_signup_otp_email_route(
 
 
 @router.post("/email/send-verification")
-async def send_verification_email_route(
+def send_verification_email_route(
     payload: VerificationEmailPayload,
     x_internal_auth_sync_secret: str | None = Header(
         default=None,

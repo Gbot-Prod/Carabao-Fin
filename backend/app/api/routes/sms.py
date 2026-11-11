@@ -120,7 +120,7 @@ def _merchant_otp_key(user_id: int, number: str) -> str:
 
 
 @router.post("/sms/otp/send")
-async def send_otp_code(
+def send_otp_code(
     body: OTPSendRequest, current_user: User = Depends(get_current_user)
 ):
     number = _normalize_phone_number(body.number)
@@ -146,7 +146,7 @@ async def send_otp_code(
 
 
 @router.post("/sms/otp/verify")
-async def verify_otp_code(
+def verify_otp_code(
     body: OTPVerifyRequest, current_user: User = Depends(get_current_user)
 ):
     number = _normalize_phone_number(body.number)
@@ -174,7 +174,7 @@ class SignupVerificationVerifyRequest(SignupVerificationRequest):
 
 
 @router.post("/auth/signup-verification/request")
-async def request_signup_verification(body: SignupVerificationRequest):
+def request_signup_verification(body: SignupVerificationRequest):
     channel = body.channel.strip().lower()
     identifier = body.identifier.strip()
     if channel not in {"email", "phone"} or not identifier:
@@ -210,7 +210,7 @@ async def request_signup_verification(body: SignupVerificationRequest):
 
 
 @router.post("/auth/signup-verification/verify")
-async def verify_signup_verification(body: SignupVerificationVerifyRequest):
+def verify_signup_verification(body: SignupVerificationVerifyRequest):
     channel = body.channel.strip().lower()
     identifier = body.identifier.strip()
     if channel == "email":

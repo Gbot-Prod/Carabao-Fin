@@ -1,0 +1,9 @@
+version,concurrent_users,queries_measured,p50_ms,p95_ms,max_ms,target_p95_ms,target_met
+before_fix,1,2130,0.127,0.326,3.7,100,Yes
+before_fix,10,16473,0.132,0.421,7.349,100,Yes
+before_fix,25,4551,0.127,1.64,10.605,100,Yes
+before_fix,50,30,0.152,8.543,9.087,100,Yes
+after_fix,1,365,0.273,0.589,4.771,100,Yes
+after_fix,10,3981,0.289,0.845,15.451,100,Yes
+after_fix,25,9922,0.301,1.097,61.924,100,Yes
+after_fix,50,18827,0.51,17.12,170.82,100,Yes

@@ -1,0 +1,17 @@
+method,endpoint,before_mean_statements,after_mean_statements,change_percent,before_requests,after_requests
+GET,/carts/me,2.0,2.0,0.0,83,480
+GET,/merchants,102.2,3.0,-97.1,81,484
+GET,/merchants/me/orders,3.1,3.0,-3.2,36,236
+GET,/merchants/me/performance,11.0,11.0,0.0,36,236
+GET,/merchants/{merchant_id},2.9,3.0,3.4,85,484
+GET,/merchants/{merchant_id}/produce,2.0,2.0,0.0,80,484
+GET,/merchants/{merchant_id}/shoppage,1.0,1.0,0.0,81,484
+GET,/orders/me/current,77.8,7.0,-91.0,81,490
+GET,/orders/me/history,48.7,5.0,-89.7,82,490
+GET,/orders/merchant/current,27.4,8.0,-70.8,36,236
+GET,/tracking/{order_id},3.1,3.0,-3.2,69,406
+PATCH,/merchants/me/orders/{order_id}/status,11.0,11.0,0.0,31,192
+POST,/auth/mobile/sign-in,2.0,2.0,0.0,119,720
+POST,/orders/me/place,11.2,10.0,-10.7,84,481
+POST,/payments/checkout/{order_id},10.4,10.0,-3.8,81,481
+PUT,/carts/me,6.2,6.0,-3.2,82,480

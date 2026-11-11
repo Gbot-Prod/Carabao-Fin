@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
@@ -35,7 +36,8 @@ async def paymongo_webhook(request: Request, db: Session = Depends(get_db)):
     logger.info("PayMongo webhook received: %s", event_type)
 
     if event_type == "checkout_session.payment.paid":
-        _handle_checkout_paid(payload, db)
+        # Async only to read the raw body; database work must stay off the loop.
+        await run_in_threadpool(_handle_checkout_paid, payload, db)
     else:
         logger.debug("Unhandled PayMongo event: %s", event_type)
 

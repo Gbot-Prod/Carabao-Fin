@@ -1,0 +1,221 @@
+=== merchant listing (GET /merchants) ===
+SELECT merchants.id, merchants.merchant_name, merchants.contact_number, merchants.rating, merchants.created_at, merchants.updated_at, merchants.deleted_at, merchants.region, merchants.province, merchants.city, merchants.barangay, merchants.address, merchants.postal_code, merchants.available_days, merchants.operating_hours, merchants.delivery_time, merchants.delivery_price, merchants.price_range_min, merchants.price_range_max, merchants.legal_business_name, merchants.business_type, merchants.tin, merchants.registration_type, merchants.registration_number, merchants.contact_email, merchants.rsbsa_number, merchants.rsbsa_document_path, merchants.rsbsa_document_original_name, merchants.rsbsa_document_content_type, merchants.user_id 
+FROM merchants LEFT OUTER JOIN merchant_applications ON merchant_applications.user_id = merchants.user_id 
+WHERE merchants.deleted_at IS NULL AND (merchant_applications.id IS NULL OR merchant_applications.status != 'rejected') ORDER BY merchants.id ASC
+
+Sort  (cost=4.05..4.18 rows=50 width=471) (actual time=0.032..0.033 rows=50.00 loops=1)
+  Sort Key: merchants.id
+  Sort Method: quicksort  Memory: 38kB
+  Buffers: shared hit=2
+  ->  Hash Left Join  (cost=0.01..2.64 rows=50 width=471) (actual time=0.009..0.021 rows=50.00 loops=1)
+        Hash Cond: (merchants.user_id = merchant_applications.user_id)
+        Filter: ((merchant_applications.id IS NULL) OR ((merchant_applications.status)::text <> 'rejected'::text))
+        Buffers: shared hit=2
+        ->  Seq Scan on merchants  (cost=0.00..2.50 rows=50 width=471) (actual time=0.005..0.008 rows=50.00 loops=1)
+              Filter: (deleted_at IS NULL)
+              Buffers: shared hit=2
+        ->  Hash  (cost=0.00..0.00 rows=1 width=40) (actual time=0.002..0.002 rows=0.00 loops=1)
+              Buckets: 1024  Batches: 1  Memory Usage: 8kB
+              ->  Seq Scan on merchant_applications  (cost=0.00..0.00 rows=1 width=40) (actual time=0.002..0.002 rows=0.00 loops=1)
+Planning:
+  Buffers: shared hit=7
+Planning Time: 0.123 ms
+Execution Time: 0.049 ms
+
+=== product listing (GET /merchants/{id}/produce) ===
+SELECT produces.id, produces.merchant_id, produces.name, produces.description, produces.category, produces.price, produces.unit, produces.unit_quantity, produces.stock_quantity, produces.image_url 
+FROM produces 
+WHERE produces.merchant_id = 1
+
+Bitmap Heap Scan on produces  (cost=4.59..35.59 rows=40 width=100) (actual time=0.009..0.015 rows=40.00 loops=1)
+  Recheck Cond: (merchant_id = 1)
+  Heap Blocks: exact=28
+  Buffers: shared hit=30
+  ->  Bitmap Index Scan on ix_produces_merchant_id  (cost=0.00..4.58 rows=40 width=0) (actual time=0.004..0.004 rows=40.00 loops=1)
+        Index Cond: (merchant_id = 1)
+        Index Searches: 1
+        Buffers: shared hit=2
+Planning Time: 0.030 ms
+Execution Time: 0.023 ms
+
+=== buyer current orders (GET /orders/me/current) ===
+SELECT current_orders.id, current_orders.order_id, current_orders.merchant_id, current_orders.status, current_orders.time_of_arrival, current_orders.delivery_fee, current_orders.image, current_orders.created_at 
+FROM current_orders JOIN orders ON orders.id = current_orders.order_id JOIN order_histories ON order_histories.id = orders.order_history_id 
+WHERE order_histories.user_id = 180 ORDER BY current_orders.id ASC
+
+Sort  (cost=93.51..93.57 rows=25 width=73) (actual time=0.065..0.066 rows=38.00 loops=1)
+  Sort Key: current_orders.id
+  Sort Method: quicksort  Memory: 27kB
+  Buffers: shared hit=152
+  ->  Nested Loop  (cost=4.76..92.93 rows=25 width=73) (actual time=0.020..0.060 rows=38.00 loops=1)
+        Buffers: shared hit=152
+        ->  Nested Loop  (cost=4.48..84.27 rows=25 width=4) (actual time=0.018..0.029 rows=38.00 loops=1)
+              Buffers: shared hit=38
+              ->  Seq Scan on order_histories  (cost=0.00..4.50 rows=1 width=4) (actual time=0.009..0.010 rows=1.00 loops=1)
+                    Filter: (user_id = 180)
+                    Rows Removed by Filter: 199
+                    Buffers: shared hit=2
+              ->  Bitmap Heap Scan on orders  (cost=4.48..79.52 rows=25 width=8) (actual time=0.007..0.016 rows=38.00 loops=1)
+                    Recheck Cond: (order_history_id = order_histories.id)
+                    Heap Blocks: exact=34
+                    Buffers: shared hit=36
+                    ->  Bitmap Index Scan on ix_orders_order_history_id  (cost=0.00..4.47 rows=25 width=0) (actual time=0.003..0.003 rows=38.00 loops=1)
+                          Index Cond: (order_history_id = order_histories.id)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+        ->  Index Scan using ix_current_orders_order_id on current_orders  (cost=0.28..0.35 rows=1 width=73) (actual time=0.001..0.001 rows=1.00 loops=38)
+              Index Cond: (order_id = orders.id)
+              Index Searches: 38
+              Buffers: shared hit=114
+Planning:
+  Buffers: shared hit=22
+Planning Time: 0.169 ms
+Execution Time: 0.080 ms
+
+=== merchant orders (GET /merchants/me/orders) ===
+SELECT orders.id, orders.order_history_id, orders.user_id, orders.merchant_id, orders.status, orders.total_price, orders.items, orders.delivery_address, orders.ordered_at, orders.shipment_id, orders.shipped_at, orders.delivered_at, orders.delivery_confirmed_by, orders.route_waypoints, backend_users.id AS id_1, backend_users.external_auth_id, backend_users.first_name, backend_users.last_name, backend_users.email, backend_users.created_at, backend_users.updated_at, backend_users.phone_number, backend_users.region, backend_users.province, backend_users.city, backend_users.barangay, backend_users.address, backend_users.postal_code, backend_users.notifications_preferences, backend_users.profile_picture_url, backend_users.paymongo_customer_id, backend_users.is_admin, current_orders.id AS id_2, current_orders.order_id, current_orders.merchant_id AS merchant_id_1, current_orders.status AS status_1, current_orders.time_of_arrival, current_orders.delivery_fee, current_orders.image, current_orders.created_at AS created_at_1 
+FROM orders LEFT OUTER JOIN backend_users ON backend_users.id = orders.user_id LEFT OUTER JOIN current_orders ON current_orders.order_id = orders.id 
+WHERE orders.merchant_id = 1 ORDER BY orders.ordered_at DESC 
+ LIMIT 200
+
+Limit  (cost=331.39..331.65 rows=105 width=804) (actual time=0.503..0.510 rows=105.00 loops=1)
+  Buffers: shared hit=138
+  ->  Sort  (cost=331.39..331.65 rows=105 width=804) (actual time=0.503..0.506 rows=105.00 loops=1)
+        Sort Key: orders.ordered_at DESC
+        Sort Method: quicksort  Memory: 114kB
+        Buffers: shared hit=138
+        ->  Hash Left Join  (cost=222.45..327.86 rows=105 width=804) (actual time=0.105..0.447 rows=105.00 loops=1)
+              Hash Cond: (orders.user_id = backend_users.id)
+              Buffers: shared hit=138
+              ->  Hash Right Join  (cost=211.83..316.96 rows=105 width=477) (actual time=0.067..0.390 rows=105.00 loops=1)
+                    Hash Cond: (current_orders.order_id = orders.id)
+                    Buffers: shared hit=133
+                    ->  Seq Scan on current_orders  (cost=0.00..92.00 rows=5000 width=73) (actual time=0.003..0.132 rows=5000.00 loops=1)
+                          Buffers: shared hit=42
+                    ->  Hash  (cost=210.51..210.51 rows=105 width=404) (actual time=0.055..0.056 rows=105.00 loops=1)
+                          Buckets: 1024  Batches: 1  Memory Usage: 53kB
+                          Buffers: shared hit=91
+                          ->  Bitmap Heap Scan on orders  (cost=5.10..210.51 rows=105 width=404) (actual time=0.013..0.034 rows=105.00 loops=1)
+                                Recheck Cond: (merchant_id = 1)
+                                Heap Blocks: exact=89
+                                Buffers: shared hit=91
+                                ->  Bitmap Index Scan on ix_orders_merchant_id  (cost=0.00..5.07 rows=105 width=0) (actual time=0.004..0.004 rows=105.00 loops=1)
+                                      Index Cond: (merchant_id = 1)
+                                      Index Searches: 1
+                                      Buffers: shared hit=2
+              ->  Hash  (cost=7.50..7.50 rows=250 width=327) (actual time=0.030..0.030 rows=250.00 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 45kB
+                    Buffers: shared hit=5
+                    ->  Seq Scan on backend_users  (cost=0.00..7.50 rows=250 width=327) (actual time=0.002..0.010 rows=250.00 loops=1)
+                          Buffers: shared hit=5
+Planning:
+  Buffers: shared hit=20
+Planning Time: 0.198 ms
+Execution Time: 0.554 ms
+
+=== merchant paid queue (GET /orders/merchant/current) ===
+SELECT current_orders.id, current_orders.order_id, current_orders.merchant_id, current_orders.status, current_orders.time_of_arrival, current_orders.delivery_fee, current_orders.image, current_orders.created_at 
+FROM current_orders JOIN orders ON current_orders.order_id = orders.id JOIN transactions ON transactions.order_id = orders.id 
+WHERE current_orders.merchant_id = 1 AND current_orders.status IN ('pending', 'processing', 'shipped', 'out_for_delivery') AND transactions.status = 'paid' ORDER BY current_orders.created_at ASC
+
+Sort  (cost=214.64..214.70 rows=24 width=73) (actual time=0.084..0.084 rows=17.00 loops=1)
+  Sort Key: current_orders.created_at
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=141
+  ->  Nested Loop  (cost=5.64..214.09 rows=24 width=73) (actual time=0.034..0.079 rows=17.00 loops=1)
+        Join Filter: (current_orders.order_id = orders.id)
+        Buffers: shared hit=141
+        ->  Nested Loop  (cost=5.36..200.73 rows=24 width=77) (actual time=0.027..0.058 rows=17.00 loops=1)
+              Buffers: shared hit=90
+              ->  Bitmap Heap Scan on current_orders  (cost=5.08..48.91 rows=25 width=73) (actual time=0.019..0.036 rows=17.00 loops=1)
+                    Recheck Cond: (merchant_id = 1)
+                    Filter: ((status)::text = ANY ('{pending,processing,shipped,out_for_delivery}'::text[]))
+                    Rows Removed by Filter: 88
+                    Heap Blocks: exact=37
+                    Buffers: shared hit=39
+                    ->  Bitmap Index Scan on ix_current_orders_merchant_id  (cost=0.00..5.07 rows=105 width=0) (actual time=0.009..0.009 rows=105.00 loops=1)
+                          Index Cond: (merchant_id = 1)
+                          Index Searches: 1
+                          Buffers: shared hit=2
+              ->  Index Scan using ix_transactions_order_id on transactions  (cost=0.28..6.06 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=17)
+                    Index Cond: (order_id = current_orders.order_id)
+                    Filter: ((status)::text = 'paid'::text)
+                    Index Searches: 17
+                    Buffers: shared hit=51
+        ->  Index Only Scan using ix_orders_id on orders  (cost=0.28..0.54 rows=1 width=4) (actual time=0.001..0.001 rows=1.00 loops=17)
+              Index Cond: (id = transactions.order_id)
+              Heap Fetches: 17
+              Index Searches: 17
+              Buffers: shared hit=51
+Planning:
+  Buffers: shared hit=36
+Planning Time: 0.221 ms
+Execution Time: 0.106 ms
+
+=== stale reservation scan (POST /orders/me/place) ===
+SELECT orders.id 
+FROM orders 
+WHERE orders.status = 'pending' AND orders.ordered_at < now()
+
+Index Scan using ix_orders_status on orders  (cost=0.28..7.16 rows=1 width=4) (actual time=0.007..0.007 rows=0.00 loops=1)
+  Index Cond: ((status)::text = 'pending'::text)
+  Filter: (ordered_at < now())
+  Index Searches: 1
+  Buffers: shared hit=2
+Planning Time: 0.043 ms
+Execution Time: 0.013 ms
+
+=== order lookup (GET /tracking/{id}) ===
+SELECT orders.id, orders.order_history_id, orders.user_id, orders.merchant_id, orders.status, orders.total_price, orders.items, orders.delivery_address, orders.ordered_at, orders.shipment_id, orders.shipped_at, orders.delivered_at, orders.delivery_confirmed_by, orders.route_waypoints 
+FROM orders JOIN order_histories ON order_histories.id = orders.order_history_id 
+WHERE orders.id = 5000 AND order_histories.user_id = 180 
+ LIMIT 1
+
+Limit  (cost=0.28..12.81 rows=1 width=404) (actual time=0.012..0.012 rows=0.00 loops=1)
+  Buffers: shared hit=5
+  ->  Nested Loop  (cost=0.28..12.81 rows=1 width=404) (actual time=0.011..0.011 rows=0.00 loops=1)
+        Join Filter: (orders.order_history_id = order_histories.id)
+        Rows Removed by Join Filter: 1
+        Buffers: shared hit=5
+        ->  Index Scan using ix_orders_id on orders  (cost=0.28..8.30 rows=1 width=404) (actual time=0.002..0.002 rows=1.00 loops=1)
+              Index Cond: (id = 5000)
+              Index Searches: 1
+              Buffers: shared hit=3
+        ->  Seq Scan on order_histories  (cost=0.00..4.50 rows=1 width=4) (actual time=0.008..0.009 rows=1.00 loops=1)
+              Filter: (user_id = 180)
+              Rows Removed by Filter: 199
+              Buffers: shared hit=2
+Planning:
+  Buffers: shared hit=10
+Planning Time: 0.097 ms
+Execution Time: 0.021 ms
+
+=== stock lock (POST /orders/me/place) ===
+SELECT produces.id, produces.merchant_id, produces.name, produces.description, produces.category, produces.price, produces.unit, produces.unit_quantity, produces.stock_quantity, produces.image_url 
+FROM produces 
+WHERE produces.id = 1 
+ LIMIT 1 FOR UPDATE
+
+Limit  (cost=0.28..8.30 rows=1 width=106) (actual time=0.009..0.009 rows=1.00 loops=1)
+  Buffers: shared hit=4
+  ->  LockRows  (cost=0.28..8.30 rows=1 width=106) (actual time=0.009..0.009 rows=1.00 loops=1)
+        Buffers: shared hit=4
+        ->  Index Scan using ix_produces_id on produces  (cost=0.28..8.29 rows=1 width=106) (actual time=0.004..0.004 rows=1.00 loops=1)
+              Index Cond: (id = 1)
+              Index Searches: 1
+              Buffers: shared hit=3
+Planning Time: 0.031 ms
+Execution Time: 0.018 ms
+
+=== stock update (POST /orders/me/place) ===
+UPDATE produces SET stock_quantity=(produces.stock_quantity - 1) WHERE produces.id = 1
+
+Update on produces  (cost=0.28..8.30 rows=0 width=0) (actual time=0.031..0.031 rows=0.00 loops=1)
+  Buffers: shared hit=21
+  ->  Index Scan using ix_produces_id on produces  (cost=0.28..8.30 rows=1 width=10) (actual time=0.007..0.008 rows=1.00 loops=1)
+        Index Cond: (id = 1)
+        Index Searches: 1
+        Buffers: shared hit=5
+Planning Time: 0.030 ms
+Execution Time: 0.039 ms
+

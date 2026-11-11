@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import hashlib
 import hmac
@@ -14,6 +13,7 @@ import bcrypt as _bcrypt
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -89,7 +89,7 @@ class AuthSyncResponse(BaseModel):
 
 
 @router.post("/auth/sync")
-async def sync_auth(
+def sync_auth(
     payload: AuthSyncPayload,
     db: Session = Depends(get_db),
     x_internal_auth_sync_secret: str | None = Header(
@@ -182,7 +182,21 @@ async def sync_auth(
         if payload.role is not None:
             user.is_admin = is_admin
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent sync for the same login created the row first.
+        db.rollback()
+        user = (
+            db.query(User)
+            .filter(User.external_auth_id == payload.provider_user_id)
+            .first()
+        )
+        if user is None:
+            raise HTTPException(
+                status_code=409,
+                detail="This email is already linked to another account",
+            ) from None
     db.refresh(user)
 
     access_token = create_access_token(
@@ -205,7 +219,7 @@ async def sync_auth(
 
 
 @router.get("/auth/me")
-async def get_me(current_user: User = Depends(get_current_user)):
+def get_me(current_user: User = Depends(get_current_user)):
     return {
         "id": current_user.id,
         "external_auth_id": current_user.external_auth_id,
@@ -345,7 +359,7 @@ def _sync_backend_user_from_better_auth(
 
 
 @router.post("/auth/mobile/sign-up", response_model=AuthSyncResponse)
-async def mobile_sign_up(
+def mobile_sign_up(
     payload: MobileSignUpPayload,
     db: Session = Depends(get_db),
 ) -> AuthSyncResponse:
@@ -401,7 +415,7 @@ async def mobile_sign_up(
 
 
 @router.post("/auth/mobile/sign-in", response_model=AuthSyncResponse)
-async def mobile_sign_in(
+def mobile_sign_in(
     payload: MobileSignInPayload,
     db: Session = Depends(get_db),
 ) -> AuthSyncResponse:
@@ -417,7 +431,7 @@ async def mobile_sign_in(
 
     if credential is not None:
         if not _bcrypt_verify(payload.password, credential.password_hash):
-            await asyncio.sleep(1)
+            time.sleep(1)
             raise HTTPException(status_code=401, detail="Invalid email or password")
     else:
         if (
@@ -429,12 +443,12 @@ async def mobile_sign_in(
             # directly in external_auth_id as "mobile:<hash>".
             stored_hash = user.external_auth_id[len("mobile:") :]
             if not _bcrypt_verify(payload.password, stored_hash):
-                await asyncio.sleep(1)
+                time.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
         else:
             better_auth_account = _find_better_auth_account(db, payload.email)
             if better_auth_account is None:
-                await asyncio.sleep(1)
+                time.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
 
             better_auth_user_id, better_auth_name, better_auth_password_hash = (
@@ -443,7 +457,7 @@ async def mobile_sign_in(
             if not _verify_better_auth_password(
                 better_auth_password_hash, payload.password
             ):
-                await asyncio.sleep(1)
+                time.sleep(1)
                 raise HTTPException(status_code=401, detail="Invalid email or password")
 
             user = _sync_backend_user_from_better_auth(
@@ -455,7 +469,7 @@ async def mobile_sign_in(
             )
 
     if user is None or not user.external_auth_id:
-        await asyncio.sleep(1)
+        time.sleep(1)
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     access_token = create_access_token(
@@ -483,7 +497,7 @@ class MobileSetPasswordPayload(BaseModel):
 
 
 @router.post("/auth/mobile/set-password")
-async def mobile_set_password(
+def mobile_set_password(
     payload: MobileSetPasswordPayload,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

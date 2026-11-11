@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/merchant-applications/me", response_model=MerchantApplicationResponse)
-async def get_my_merchant_application_route(
+def get_my_merchant_application_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -39,7 +39,7 @@ async def get_my_merchant_application_route(
 
 
 @router.post("/merchant-onboarding/me", response_model=MerchantApplicationResponse)
-async def submit_my_merchant_onboarding_route(
+def submit_my_merchant_onboarding_route(
     payload: str = Form(...),
     rsbsa_file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -80,7 +80,7 @@ async def submit_my_merchant_onboarding_route(
             status_code=400, detail="RSBSA file must be an image or PDF"
         )
 
-    content = await rsbsa_file.read()
+    content = rsbsa_file.file.read()
     if len(content) > 20 * 1024 * 1024:
         raise HTTPException(
             status_code=413, detail="RSBSA document must be under 20 MB"

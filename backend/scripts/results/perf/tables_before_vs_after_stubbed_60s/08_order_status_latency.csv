@@ -1,0 +1,9 @@
+version,buyer_poll_interval_ms,status_transition,trials_n,not_seen,lower_bound_p50_ms,upper_bound_p50_ms,upper_bound_p95_ms,upper_bound_max_ms,status_update_request_p95_ms,target_p95_ms,target_met
+before_fix,50,out_for_delivery,30,0,68.1,77.1,100.0,101.6,25.1,5000,Yes
+before_fix,50,shipped,30,0,63.3,71.2,97.6,103.7,28.9,5000,Not judged (stubbed)
+before_fix,3000,out_for_delivery,30,0,1441.0,1453.5,2871.0,2993.9,13.6,5000,Yes
+before_fix,3000,shipped,30,0,1853.7,1866.8,2892.5,2896.0,14.2,5000,Not judged (stubbed)
+after_fix,50,out_for_delivery,30,0,32.3,41.4,68.1,70.9,12.5,5000,Yes
+after_fix,50,shipped,30,0,39.3,46.9,63.3,65.3,10.7,5000,Not judged (stubbed)
+after_fix,3000,out_for_delivery,30,0,1485.4,1495.2,2822.5,2932.8,13.4,5000,Yes
+after_fix,3000,shipped,30,0,1590.2,1601.3,2778.1,2912.7,13.2,5000,Not judged (stubbed)

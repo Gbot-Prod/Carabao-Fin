@@ -37,6 +37,8 @@ from app.services.sms_service import notify_order_shipped
 from ._order_helpers import (
     _extract_item_int,
     _to_int,
+    current_order_load,
+    get_history_orders,
     get_or_create_cart,
     get_or_create_order_history,
     get_order_history,
@@ -48,7 +50,7 @@ from ._order_helpers import (
 router = APIRouter(tags=["orders"])
 
 @router.post("/orders/me/place", response_model=PlaceOrderResponse)
-async def place_order_from_cart(
+def place_order_from_cart(
     payload: PlaceOrderRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -61,6 +63,25 @@ async def place_order_from_cart(
         raise HTTPException(status_code=400, detail="Cart is empty")
 
     history = get_or_create_order_history(db, current_user.id)
+    # Lock stock rows in id order so two carts sharing items can't deadlock.
+    locked_produce = {
+        produce.id: produce
+        for produce in db.query(Produce)
+        .filter(
+            Produce.id.in_(
+                {
+                    _extract_item_int(item, "produce_id", "produceId", "id")
+                    for item in cart_items
+                    if isinstance(item, dict)
+                }
+                - {None}
+            )
+        )
+        .order_by(Produce.id)
+        .with_for_update()
+        .populate_existing()
+        .all()
+    }
     produce_by_id: dict[int, Produce] = {}
     order_items = []
     fresh_total = 0
@@ -72,12 +93,7 @@ async def place_order_from_cart(
         if produce_id is None:
             raise HTTPException(status_code=400, detail="Cart item is missing a produce ID")
 
-        produce = (
-            db.query(Produce)
-            .filter(Produce.id == produce_id)
-            .with_for_update()
-            .first()
-        )
+        produce = locked_produce.get(produce_id)
         if produce is None:
             raise HTTPException(
                 status_code=400, detail=f"Produce ID {produce_id} not found"
@@ -158,7 +174,7 @@ async def place_order_from_cart(
 
 
 @router.get("/orders/me/history", response_model=list[OrderItemResponse])
-async def get_my_order_history(
+def get_my_order_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -167,7 +183,9 @@ async def get_my_order_history(
         return []
 
     orders = sorted(
-        history.orders, key=lambda order: order.ordered_at or datetime.min, reverse=True
+        get_history_orders(db, history),
+        key=lambda order: order.ordered_at or datetime.min,
+        reverse=True,
     )
     return [to_order_history_item(order) for order in orders]
 
@@ -176,7 +194,7 @@ _REMOVABLE_ORDER_STATUSES = {"delivered", "cancelled"}
 
 
 @router.delete("/orders/me/history/{order_id}", status_code=204)
-async def delete_order_from_history(
+def delete_order_from_history(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -212,12 +230,13 @@ async def delete_order_from_history(
 
 
 @router.get("/orders/me/current", response_model=list[CurrentOrderResponse])
-async def get_my_current_orders(
+def get_my_current_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     current_orders = (
         db.query(CurrentOrder)
+        .options(*current_order_load())
         .join(Order)
         .join(OrderHistory)
         .filter(OrderHistory.user_id == current_user.id)
@@ -238,7 +257,9 @@ async def get_my_current_orders(
     active_orders = [
         order
         for order in sorted(
-            history.orders, key=lambda item: item.ordered_at, reverse=True
+            get_history_orders(db, history),
+            key=lambda item: item.ordered_at,
+            reverse=True,
         )
         if order.status.lower() in active_statuses
     ]
@@ -248,7 +269,7 @@ async def get_my_current_orders(
 @router.post(
     "/orders/me/{order_id}/confirm-received", response_model=CurrentOrderResponse
 )
-async def confirm_order_received(
+def confirm_order_received(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -295,7 +316,7 @@ class OrderStatusUpdate(BaseModel):
 
 
 @router.get("/orders/merchant/current", response_model=list[CurrentOrderResponse])
-async def get_merchant_current_orders(
+def get_merchant_current_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -305,6 +326,7 @@ async def get_merchant_current_orders(
 
     current_orders = (
         db.query(CurrentOrder)
+        .options(*current_order_load())
         .join(Order, CurrentOrder.order_id == Order.id)
         .join(Transaction, Transaction.order_id == Order.id)
         .filter(
@@ -319,7 +341,7 @@ async def get_merchant_current_orders(
 
 
 @router.patch("/orders/{order_id}/status")
-async def update_order_status(
+def update_order_status(
     order_id: int,
     body: OrderStatusUpdate,
     db: Session = Depends(get_db),
