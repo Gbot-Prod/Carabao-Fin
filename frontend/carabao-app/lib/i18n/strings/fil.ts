@@ -354,6 +354,15 @@ const fil: Strings = {
     closed: 'Nagsara ang chat na ito 7 araw matapos ang delivery. Makipag-ugnayan sa Carabao support para sa tulong.',
     closesOn: 'Magsasara ang chat na ito sa {date}.',
   },
+  errors: {
+    errorTitle: 'May nangyaring mali',
+    errorBody: 'Nagkaproblema ang pahinang ito. Subukang muli, o bumalik sa home page. Ligtas ang iyong cart at mga order.',
+    notFoundTitle: 'Hindi makita ang pahina',
+    notFoundBody: 'Hindi namin makita ang pahinang iyan. Maaaring inilipat ito, o mali ang link.',
+    retry: 'Subukang muli',
+    home: 'Pumunta sa home',
+    reference: 'Reference',
+  },
   support: {
     setting: 'Makipag-ugnayan sa support',
     title: 'Makipag-chat sa Carabao support',

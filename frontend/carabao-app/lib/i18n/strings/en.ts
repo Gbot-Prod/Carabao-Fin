@@ -345,6 +345,15 @@ const en = {
     closed: 'This chat closed 7 days after delivery. Contact Carabao support for help.',
     closesOn: 'This chat closes on {date}.',
   },
+  errors: {
+    errorTitle: 'Something went wrong',
+    errorBody: 'This page ran into a problem. Try again, or go back to the home page. Your cart and orders are safe.',
+    notFoundTitle: 'Page not found',
+    notFoundBody: "We couldn't find that page. It may have moved, or the link may be wrong.",
+    retry: 'Try again',
+    home: 'Go to home',
+    reference: 'Reference',
+  },
   support: {
     setting: 'Contact support',
     title: 'Chat with Carabao support',
