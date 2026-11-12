@@ -10,6 +10,7 @@ import {
 } from '@/util/api';
 import LocationSelects from '@/components/LocationSelects/LocationSelects';
 import PageLoader from '@/components/PageLoader/PageLoader';
+import TwoFactorSettings from '@/components/TwoFactorSettings/TwoFactorSettings';
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 function UserAvatar({ pictureUrl, uploading, onUpload }: {
@@ -505,6 +506,9 @@ export default function Profile() {
               </Link>
             )}
           </section>
+
+          {/* Two-step verification (E8a): offered to merchants and admins */}
+          {(hasMerchant || profile?.is_admin) && <TwoFactorSettings />}
 
           {/* Danger zone */}
           <section className={styles.profileDangerZone}>

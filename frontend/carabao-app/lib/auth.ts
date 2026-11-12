@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
-import { admin } from "better-auth/plugins";
+import { admin, twoFactor } from "better-auth/plugins";
 import { Pool } from "pg";
 
 const rawPostgresUrl =
@@ -116,7 +116,8 @@ function readSignupVerification(token: string | null | undefined): SignupVerific
 }
 
 export const auth = betterAuth({
-  plugins: [admin()],
+  // E8: TOTP two-step verification ("Carabao" is the name shown in authenticator apps).
+  plugins: [admin(), twoFactor({ issuer: "Carabao" })],
   databaseHooks: {
     user: {
       create: {

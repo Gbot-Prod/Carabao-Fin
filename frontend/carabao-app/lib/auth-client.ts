@@ -1,8 +1,16 @@
 import { createAuthClient } from "better-auth/react";
-import { adminClient } from "better-auth/client/plugins";
+import { adminClient, twoFactorClient } from "better-auth/client/plugins";
 
 const authClient = createAuthClient({
-  plugins: [adminClient()],
+  plugins: [
+    adminClient(),
+    // E8: a sign-in that needs a second factor continues on the code page.
+    twoFactorClient({
+      onTwoFactorRedirect: () => {
+        window.location.href = "/two-factor";
+      },
+    }),
+  ],
 });
 
 const syncBackendSession = async () => {
@@ -125,4 +133,27 @@ export const resetPassword = async (newPassword: string, token: string) => {
     if (code === "INVALID_TOKEN") throw new Error("INVALID_TOKEN");
     throw new Error(getErrorMessage(error, "Could not reset the password"));
   }
+};
+
+// Two-step verification (E8a). Enabling returns the authenticator URI and
+// backup codes; the plugin only turns it on after a first code is verified.
+export const getTwoFactorEnabled = async (): Promise<boolean> => {
+  const { data } = await authClient.getSession();
+  return Boolean((data?.user as { twoFactorEnabled?: boolean | null } | undefined)?.twoFactorEnabled);
+};
+
+export const enableTwoFactor = async (password: string) => {
+  const { data, error } = await authClient.twoFactor.enable({ password });
+  if (error || !data) throw new Error(getErrorMessage(error, "Could not start two-step verification"));
+  return data;
+};
+
+export const verifyTwoFactorSetup = async (code: string) => {
+  const { error } = await authClient.twoFactor.verifyTotp({ code });
+  if (error) throw new Error(getErrorMessage(error, "That code didn't match. Try the newest code."));
+};
+
+export const disableTwoFactor = async (password: string) => {
+  const { error } = await authClient.twoFactor.disable({ password });
+  if (error) throw new Error(getErrorMessage(error, "Could not turn off two-step verification"));
 };

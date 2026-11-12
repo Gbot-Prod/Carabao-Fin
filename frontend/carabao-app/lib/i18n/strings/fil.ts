@@ -260,6 +260,25 @@ const fil: Strings = {
     requestNew: 'Humiling ng bagong link',
     genericError: 'May nangyaring mali. Pakisubukang muli.',
   },
+  twoFactor: {
+    title: 'Dalawang-hakbang na pag-verify',
+    on: 'Naka-on',
+    off: 'Naka-off',
+    intro: 'Protektahan ang iyong account gamit ang 6-digit na code mula sa isang authenticator app (Google Authenticator, Microsoft Authenticator, Authy) tuwing mag-sign in ka.',
+    turnOn: 'I-on',
+    turnOff: 'I-off',
+    passwordLabel: 'Ang iyong password',
+    continue: 'Magpatuloy',
+    cancel: 'Kanselahin',
+    setupHelp: 'Sa iyong authenticator app, magdagdag ng account at ilagay ang setup key na ito (o buksan ang link sa device na ito). Pagkatapos, i-type ang 6-digit na code na ipinapakita nito.',
+    setupKey: 'Setup key',
+    openApp: 'Buksan sa authenticator app',
+    codeLabel: '6-digit na code',
+    confirm: 'Kumpirmahin at i-on',
+    backupHelp: 'Naka-on na ang dalawang-hakbang na pag-verify. Itago ang mga backup code na ito sa ligtas na lugar: bawat isa ay magagamit nang isang beses kung mawala ang iyong telepono. Hindi na ito ipapakita muli.',
+    savedCodes: 'Na-save ko na ang mga code',
+    genericError: 'May nangyaring mali. Pakisubukang muli.',
+  },
 };
 
 export default fil;

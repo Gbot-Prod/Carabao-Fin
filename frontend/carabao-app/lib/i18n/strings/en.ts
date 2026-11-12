@@ -251,6 +251,25 @@ const en = {
     requestNew: 'Request a new link',
     genericError: 'Something went wrong. Please try again.',
   },
+  twoFactor: {
+    title: 'Two-step verification',
+    on: 'On',
+    off: 'Off',
+    intro: 'Protect your account with a 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, Authy) each time you sign in.',
+    turnOn: 'Turn on',
+    turnOff: 'Turn off',
+    passwordLabel: 'Your password',
+    continue: 'Continue',
+    cancel: 'Cancel',
+    setupHelp: 'In your authenticator app, add an account and enter this setup key (or open the link on this device). Then type the 6-digit code it shows.',
+    setupKey: 'Setup key',
+    openApp: 'Open in authenticator app',
+    codeLabel: '6-digit code',
+    confirm: 'Confirm and turn on',
+    backupHelp: 'Two-step verification is on. Save these backup codes somewhere safe: each one signs you in once if you lose your phone. They will not be shown again.',
+    savedCodes: "I've saved these codes",
+    genericError: 'Something went wrong. Please try again.',
+  },
 };
 
 export type Strings = typeof en;
