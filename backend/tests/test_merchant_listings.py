@@ -107,3 +107,31 @@ def test_mobile_edit_form_payload_is_accepted(db, merchant):  # noqa: F811
     assert (body["name"], body["price"], body["stock_quantity"], body["unit"], body["category"]) == (
         "Okra (fresh)", 45, 0, "lbs", None,
     )
+
+
+def test_mobile_create_form_payload_is_accepted(db, merchant):  # noqa: F811
+    res = _client(db, merchant.user_id).post(
+        "/produce/",
+        json={
+            "name": "Ampalaya",
+            "price": 90,
+            "stock_quantity": 8,
+            "unit": "kg",
+            "category": None,
+        },
+    )
+
+    assert res.status_code == 200, res.text
+    assert res.json()["merchant_id"] == merchant.id
+    assert db.query(Produce).filter_by(merchant_id=merchant.id, name="Ampalaya").count() == 1
+
+
+def test_non_merchant_cannot_create_produce(db, merchant):  # noqa: F811
+    buyer = User(email="shopper@example.com")
+    db.add(buyer)
+    db.commit()
+
+    res = _client(db, buyer.id).post("/produce/", json={"name": "Mais", "price": 30})
+
+    assert res.status_code == 404
+    assert db.query(Produce).filter_by(name="Mais").count() == 0

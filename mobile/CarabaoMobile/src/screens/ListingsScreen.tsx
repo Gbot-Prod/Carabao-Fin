@@ -9,7 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
-import { api, type ApiProduce, type ProduceUpdatePayload } from '../lib/api';
+import { api, type ApiProduce, type ProduceCreatePayload } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -44,22 +44,28 @@ function ListingsScreenContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<ApiProduce | null>(null);
+  // null = closed, 'new' = create form, otherwise the listing being edited.
+  const [editing, setEditing] = useState<ApiProduce | 'new' | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const openEdit = (item: ApiProduce) => {
+  const openEdit = (item: ApiProduce | 'new') => {
     setSaveError(null);
     setEditing(item);
   };
 
-  const handleSave = async (payload: ProduceUpdatePayload) => {
+  const handleSave = async (payload: ProduceCreatePayload) => {
     if (!token || !editing) return;
     setSaving(true);
     setSaveError(null);
     try {
-      const updated = await api.produce.update(token, editing.id, payload);
-      setItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      if (editing === 'new') {
+        const created = await api.produce.create(token, payload);
+        setItems((prev) => [...prev, created]);
+      } else {
+        const updated = await api.produce.update(token, editing.id, payload);
+        setItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      }
       setEditing(null);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Could not save this listing');
@@ -125,7 +131,7 @@ function ListingsScreenContent() {
           <EmptyState
             icon={<Ionicons name="leaf-outline" size={48} color={Colors.textLight} />}
             title="No listings yet"
-            message="Your produce listings will appear here."
+            message="Tap “New listing” to add your first produce."
           />
         }
       />
@@ -139,11 +145,18 @@ function ListingsScreenContent() {
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.navTitle}>{merchantName ? `My listings · ${merchantName}` : 'My listings'}</Text>
-        <View style={{ width: 30 }} />
+        {merchantName ? (
+          <TouchableOpacity onPress={() => openEdit('new')} accessibilityLabel="New listing">
+            <Ionicons name="add-circle" size={28} color={Colors.primary} />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 28 }} />
+        )}
       </View>
       {body}
       <ListingForm
-        produce={editing}
+        visible={editing !== null}
+        produce={editing === 'new' ? null : editing}
         saving={saving}
         error={saveError}
         onCancel={() => setEditing(null)}

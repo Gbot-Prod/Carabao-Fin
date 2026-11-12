@@ -1,5 +1,5 @@
 // src/components/ListingForm.tsx
-// Edit form for one produce listing, shown in a modal from My listings.
+// Create/edit form for one produce listing, shown in a modal from My listings.
 // Field rules mirror backend ProduceUpdate (app/schemas/produce.py):
 // price and stock are whole numbers, unit is kg|lbs, category is Vegetables|Fruits.
 import React, { useEffect, useState } from 'react';
@@ -10,18 +10,20 @@ import {
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { Button } from './UI';
 import type {
-  ApiProduce, ProduceCategory, ProduceUnit, ProduceUpdatePayload,
+  ApiProduce, ProduceCategory, ProduceCreatePayload, ProduceUnit,
 } from '../lib/api';
 
 const UNITS: ProduceUnit[] = ['kg', 'lbs'];
 const CATEGORIES: ProduceCategory[] = ['Vegetables', 'Fruits'];
 
 type Props = {
-  produce: ApiProduce | null; // null = closed
+  visible: boolean;
+  produce: ApiProduce | null; // null = new listing
   saving: boolean;
   error: string | null;
   onCancel: () => void;
-  onSave: (payload: ProduceUpdatePayload) => void;
+  // Every field is always sent, so the same payload works for POST and PATCH.
+  onSave: (payload: ProduceCreatePayload) => void;
 };
 
 function parseWhole(value: string): number | null {
@@ -29,7 +31,7 @@ function parseWhole(value: string): number | null {
   return Number(value.trim());
 }
 
-export function ListingForm({ produce, saving, error, onCancel, onSave }: Props) {
+export function ListingForm({ visible, produce, saving, error, onCancel, onSave }: Props) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('');
@@ -38,16 +40,16 @@ export function ListingForm({ produce, saving, error, onCancel, onSave }: Props)
   const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!produce) return;
-    setName(produce.name ?? '');
-    setPrice(String(produce.price));
-    setStock(String(produce.stock_quantity));
-    setUnit(produce.unit === 'lbs' ? 'lbs' : 'kg');
+    if (!visible) return;
+    setName(produce?.name ?? '');
+    setPrice(produce ? String(produce.price) : '');
+    setStock(produce ? String(produce.stock_quantity) : '');
+    setUnit(produce?.unit === 'lbs' ? 'lbs' : 'kg');
     setCategory(
-      produce.category === 'Vegetables' || produce.category === 'Fruits' ? produce.category : null,
+      produce?.category === 'Vegetables' || produce?.category === 'Fruits' ? produce.category : null,
     );
     setLocalError(null);
-  }, [produce]);
+  }, [visible, produce]);
 
   const handleSave = () => {
     const parsedPrice = parseWhole(price);
@@ -70,14 +72,14 @@ export function ListingForm({ produce, saving, error, onCancel, onSave }: Props)
   const shownError = localError ?? error;
 
   return (
-    <Modal visible={!!produce} animationType="slide" transparent onRequestClose={onCancel}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onCancel}>
       <KeyboardAvoidingView
         style={styles.backdrop}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.sheet}>
           <ScrollView keyboardShouldPersistTaps="handled">
-            <Text style={styles.title}>Edit listing</Text>
+            <Text style={styles.title}>{produce ? 'Edit listing' : 'New listing'}</Text>
 
             <Text style={styles.label}>Name</Text>
             <TextInput style={styles.input} value={name} onChangeText={setName} />
@@ -131,7 +133,7 @@ export function ListingForm({ produce, saving, error, onCancel, onSave }: Props)
               <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} disabled={saving}>
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Button label="Save" onPress={handleSave} loading={saving} style={styles.saveBtn} />
+              <Button label={produce ? 'Save' : 'Create'} onPress={handleSave} loading={saving} style={styles.saveBtn} />
             </View>
           </ScrollView>
         </View>
