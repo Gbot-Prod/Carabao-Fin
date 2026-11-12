@@ -9,6 +9,7 @@ import styles from "./layout.module.css";
 const NAV_ITEMS = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/users", label: "Users" },
+  { href: "/admin/orders", label: "Orders" },
   { href: "/admin/merchants", label: "Merchants" },
   { href: "/admin/review", label: "Review" },
   { href: "/admin/payouts", label: "Payouts" },

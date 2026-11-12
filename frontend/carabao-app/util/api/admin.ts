@@ -176,3 +176,72 @@ export const fetchWalletBalance = async (): Promise<WalletBalance> => {
   const res = await apiClient.get<WalletBalance>('/admin/wallet');
   return res.data;
 };
+
+// ── Orders (A1) ──────────────────────────────────────────────────────────────
+
+export type AdminOrderStatus = 'pending' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
+export type AdminPaymentStatus = 'awaiting_payment' | 'paid' | 'refund_pending' | 'refunded' | 'unpaid';
+
+export type AdminOrderSummary = {
+  id: number;
+  status: AdminOrderStatus;
+  payment_status: AdminPaymentStatus;
+  total_price: number;
+  delivery_fee: number;
+  ordered_at: string;
+  merchant_id: number | null;
+  merchant_name: string | null;
+  buyer_id: number | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  shipment_id: number | null;
+};
+
+export type AdminOrderDetail = AdminOrderSummary & {
+  items: Record<string, unknown>[];
+  notes: string | null;
+  transactions: {
+    id: number;
+    status: string;
+    amount: number;
+    platform_fee: number;
+    merchant_amount: number;
+    paymongo_payment_id: string | null;
+    created_at: string;
+    paid_at: string | null;
+  }[];
+  shipment: { id: number; status: string; stop_count: number; shipped_at: string | null } | null;
+  delivery: {
+    delivery_address: string | null;
+    requested_delivery_date: string | null;
+    delivery_window: string | null;
+    time_of_arrival: string | null;
+    shipped_at: string | null;
+    delivered_at: string | null;
+    delivery_confirmed_by: string | null;
+  };
+};
+
+export type AdminOrderFilters = {
+  status?: AdminOrderStatus;
+  merchant_id?: number;
+  payment_status?: AdminPaymentStatus;
+  date_from?: string; // YYYY-MM-DD
+  date_to?: string; // YYYY-MM-DD, inclusive
+};
+
+export const fetchAdminOrders = async (
+  filters: AdminOrderFilters,
+  page = 1,
+  pageSize = ADMIN_PAGE_SIZE,
+): Promise<Paginated<AdminOrderSummary>> => {
+  const res = await apiClient.get<Paginated<AdminOrderSummary>>('/admin/orders', {
+    params: { ...filters, page, page_size: pageSize },
+  });
+  return res.data;
+};
+
+export const fetchAdminOrder = async (orderId: number): Promise<AdminOrderDetail> => {
+  const res = await apiClient.get<AdminOrderDetail>(`/admin/orders/${orderId}`);
+  return res.data;
+};
