@@ -171,6 +171,22 @@ export const fetchMySales = async (days: 30 | 90): Promise<MerchantSales> => {
   return response.data;
 };
 
+// F3: demand insight (most ordered / searched in the merchant's province).
+export type DemandSearchedTerm = { query: string; searches: number; no_result_searches: number };
+
+export type DemandInsight = {
+  province: string;
+  days: number;
+  most_ordered: { name: string; orders: number; quantity: number }[];
+  most_searched: DemandSearchedTerm[];
+  most_searched_luzon: DemandSearchedTerm[];
+};
+
+export const fetchMyDemand = async (): Promise<DemandInsight> => {
+  const response = await apiClient.get<DemandInsight>('/merchants/me/demand');
+  return response.data;
+};
+
 export const deleteMyMerchant = async (): Promise<void> => {
   await apiClient.delete('/merchants/me');
 };

@@ -4,6 +4,7 @@ import { formatDate, formatPeso } from "../lib/format";
 import type { MerchantPerformance, Produce } from "@/util/api";
 import StockAlertsPanel from "./StockAlertsPanel";
 import SalesCharts from "./SalesCharts";
+import DemandInsight from "./DemandInsight";
 
 type Props = {
   performance: MerchantPerformance;
@@ -107,6 +108,8 @@ export default function OverviewTab({ performance, produces, onOpenReviews, onOp
       </div>
 
       <SalesCharts />
+
+      <DemandInsight />
 
       <StockAlertsPanel refreshKey={produces} onThreshold={setThreshold} />
 
