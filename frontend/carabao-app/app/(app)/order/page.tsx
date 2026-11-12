@@ -7,6 +7,7 @@ import { Clock, Search, ShoppingCart, Star, Store, Truck, X } from 'lucide-react
 import styles from './page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import { fetchMerchants, fetchMerchantShopPage, fetchMyCart } from '@/util/api';
+import { fetchMyFollows } from '@/util/api/merchants';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
 import ProduceResults from './ProduceResults';
 import { fmt, plural } from '@/lib/i18n/format';
@@ -63,6 +64,8 @@ function OrderContent() {
   const [sortKey, setSortKey] = useState<SortKey>('recommended');
   // U2: browse shops (client-side) or produce (server-side search).
   const [view, setView] = useState<'shops' | 'produce'>('shops');
+  // Favourite farms (U4): listed first. Empty when signed out.
+  const [followed, setFollowed] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -118,6 +121,9 @@ function OrderContent() {
     };
 
     void loadMerchants();
+    fetchMyFollows()
+      .then((ids) => { if (!cancelled) setFollowed(new Set(ids)); })
+      .catch(() => { /* signed out: no favourites */ });
     void loadCart();
 
     return () => {
@@ -160,8 +166,10 @@ function OrderContent() {
     } else if (sortKey === 'fee') {
       sorted.sort((a, b) => a.deliveryFee - b.deliveryFee);
     }
+    // Followed farms first, keeping the chosen order within each group (stable sort).
+    sorted.sort((a, b) => Number(followed.has(b.merchantId)) - Number(followed.has(a.merchantId)));
     return sorted;
-  }, [farmList, searchTerm, activeFilters, sortKey]);
+  }, [farmList, searchTerm, activeFilters, sortKey, followed]);
 
   const merchantCountLabel = plural(filteredFarms.length, t.browse.shopCountOne, t.browse.shopCountMany);
   const hasQuery = searchTerm.trim().length > 0;
@@ -301,6 +309,7 @@ function OrderContent() {
                 </div>
                 <div className={styles.cardTitleRow}>
                   <h3 className={styles.cardTitle}>{farm.name}</h3>
+                  {followed.has(farm.merchantId) && <span className={styles.followTag}>{t.follow.badge}</span>}
                   {farm.rating > 0 && (
                     <span className={styles.rating}>
                       <Star size={13} aria-hidden />

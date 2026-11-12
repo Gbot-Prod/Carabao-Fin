@@ -8,6 +8,7 @@ import PageLoader from '@/components/PageLoader/PageLoader';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
 import { useAuth } from '@/hooks/useAuth';
 import { useAuthPrompt } from '@/components/AuthPrompt/AuthPromptContext';
+import { fetchMyFollows, followFarm, unfollowFarm } from '@/util/api/merchants';
 import { fmt } from '@/lib/i18n/format';
 import ReferencePriceHint, { useReferencePrices } from '@/components/ReferencePrice/ReferencePriceHint';
 import { formatRequestedDate } from '@/app/(app)/merchantDashboard/lib/format';
@@ -20,6 +21,31 @@ export default function MerchantDetailPage() {
   const { t } = useLanguage();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { showPrompt } = useAuthPrompt();
+  // Favourite farms (U4)
+  const [following, setFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  useEffect(() => {
+    if (!isAuthenticated || !hasValidMerchantId) return;
+    fetchMyFollows()
+      .then((ids) => setFollowing(ids.includes(merchantID)))
+      .catch(() => setFollowing(false));
+  }, [isAuthenticated, hasValidMerchantId, merchantID]);
+  const toggleFollow = async () => {
+    if (!isAuthenticated) {
+      showPrompt();
+      return;
+    }
+    setFollowBusy(true);
+    try {
+      if (following) await unfollowFarm(merchantID);
+      else await followFarm(merchantID);
+      setFollowing(!following);
+    } catch {
+      // leave the button as it was
+    } finally {
+      setFollowBusy(false);
+    }
+  };
   // Market reference ranges (P1), fetched once and matched per card.
   const referencePrices = useReferencePrices();
 
@@ -144,7 +170,19 @@ export default function MerchantDetailPage() {
                 <img src={shopPage.logo_url} alt={merchant.merchant_name} className={styles.merchantImage} />
               ) : null}
               <div className={styles.merchantInfo}>
-                <h1 className={styles.merchantName}>{merchant.merchant_name}</h1>
+                <div className={styles.merchantNameRow}>
+                  <h1 className={styles.merchantName}>{merchant.merchant_name}</h1>
+                  <button
+                    type="button"
+                    className={`${styles.followBtn} ${following ? styles.followBtnOn : ''}`}
+                    aria-pressed={following}
+                    onClick={() => void toggleFollow()}
+                    disabled={followBusy}
+                    title={following ? t.follow.unfollow : undefined}
+                  >
+                    {following ? `✓ ${t.follow.following}` : `+ ${t.follow.follow}`}
+                  </button>
+                </div>
                 <dl className={styles.ownerInfo}>
                   <div className={styles.ownerRow}>
                     <dt>{t.shop.owner}</dt>

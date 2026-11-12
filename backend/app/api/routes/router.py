@@ -9,6 +9,7 @@ from .admin_produce import router as admin_produce_router
 from .auth import router as auth_router
 from .carts import router as carts_router
 from .email import router as email_router
+from .follows import router as follows_router
 from .merchant_onboarding import router as merchant_onboarding_router
 from .merchants import router as merchants_router
 from .misc import router as misc_router
@@ -28,6 +29,7 @@ router = APIRouter()
 # Keep paths exactly the same by not using prefixes here.
 router.include_router(produce_search_router)
 router.include_router(reorder_router)
+router.include_router(follows_router)
 router.include_router(admin_router)
 router.include_router(admin_orders_router)
 router.include_router(admin_audit_router)

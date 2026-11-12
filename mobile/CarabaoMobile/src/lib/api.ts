@@ -387,6 +387,14 @@ export const api = {
         token,
       ),
   },
+  follows: {
+    // Favourite farms (U4).
+    mine: (token: string | null) => request<number[]>('/users/me/follows', token),
+    follow: (token: string | null, merchantId: number) =>
+      request<null>(`/merchants/${merchantId}/follow`, token, { method: 'PUT' }),
+    unfollow: (token: string | null, merchantId: number) =>
+      request<null>(`/merchants/${merchantId}/follow`, token, { method: 'DELETE' }),
+  },
   reorder: {
     // "Buy again" (U3); the response's cart lines feed the app's local cart.
     order: (token: string | null, orderId: number) =>

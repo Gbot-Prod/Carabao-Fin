@@ -109,6 +109,36 @@ function MerchantScreenContent() {
 
   const displayName = merchant?.merchant_name ?? farmName ?? 'Merchant';
 
+  // Favourite farms (U4)
+  const [following, setFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  useEffect(() => {
+    if (!token || !farmId) return;
+    api.follows
+      .mine(token)
+      .then((ids) => setFollowing(ids.includes(Number(farmId))))
+      .catch(() => setFollowing(false));
+  }, [token, farmId]);
+  const toggleFollow = async () => {
+    if (!isAuthenticated) {
+      Alert.alert('Sign in to follow farms', 'Followed farms are listed first when you browse.', [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Sign in', onPress: () => router.push('/auth') },
+      ]);
+      return;
+    }
+    setFollowBusy(true);
+    try {
+      if (following) await api.follows.unfollow(token, Number(farmId));
+      else await api.follows.follow(token, Number(farmId));
+      setFollowing(!following);
+    } catch (err) {
+      Alert.alert('Could not update', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.root}>
       {/* Nav bar */}
@@ -117,6 +147,17 @@ function MerchantScreenContent() {
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.navTitle} numberOfLines={1}>{displayName}</Text>
+        <TouchableOpacity
+          style={[styles.followBtn, following && styles.followBtnOn]}
+          onPress={() => void toggleFollow()}
+          disabled={followBusy}
+          accessibilityRole="button"
+          accessibilityState={{ selected: following }}
+        >
+          <Text style={[styles.followText, following && styles.followTextOn]}>
+            {following ? '✓ Following' : '+ Follow'}
+          </Text>
+        </TouchableOpacity>
         <View style={styles.cartPill}>
           <Text style={styles.cartPillText}>🛒 {itemCount}</Text>
         </View>
@@ -284,6 +325,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   backBtn: { padding: 4 },
+  followBtn: {
+    borderWidth: 1, borderColor: Colors.primary, borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md, paddingVertical: 4, marginRight: Spacing.sm,
+  },
+  followBtnOn: { backgroundColor: Colors.primary },
+  followText: { color: Colors.primary, fontWeight: '700', fontSize: FontSize.xs },
+  followTextOn: { color: Colors.white },
   backIcon: { fontSize: 22, color: Colors.text },
   navTitle: { flex: 1, fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginHorizontal: Spacing.md },
   cartPill: { backgroundColor: Colors.primaryLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full },

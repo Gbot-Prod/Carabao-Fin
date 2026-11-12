@@ -321,6 +321,12 @@ const en = {
     next: 'Next',
     pageOf: 'Page {page} of {pages}',
   },
+  follow: {
+    follow: 'Follow farm',
+    following: 'Following',
+    unfollow: 'Unfollow',
+    badge: 'Following',
+  },
 };
 
 export type Strings = typeof en;

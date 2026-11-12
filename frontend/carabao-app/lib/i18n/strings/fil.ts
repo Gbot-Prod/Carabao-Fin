@@ -330,6 +330,12 @@ const fil: Strings = {
     next: 'Susunod',
     pageOf: 'Pahina {page} ng {pages}',
   },
+  follow: {
+    follow: 'Sundan ang bukid',
+    following: 'Sinusundan',
+    unfollow: 'Huwag nang sundan',
+    badge: 'Sinusundan',
+  },
 };
 
 export default fil;

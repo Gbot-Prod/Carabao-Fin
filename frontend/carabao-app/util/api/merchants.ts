@@ -379,3 +379,17 @@ export const fetchmMerchantShipmentTracking = async (shipmentId: number) => {
   const response = await apiClient.get<MerchantShipmentTracking | null>(`/shipments/${shipmentId}`);
   return response.data as MerchantShipmentTracking;
 };
+
+// Favourite farms (U4).
+export const fetchMyFollows = async (): Promise<number[]> => {
+  const response = await apiClient.get<number[]>('/users/me/follows');
+  return response.data;
+};
+
+export const followFarm = async (merchantId: number): Promise<void> => {
+  await apiClient.put(`/merchants/${merchantId}/follow`);
+};
+
+export const unfollowFarm = async (merchantId: number): Promise<void> => {
+  await apiClient.delete(`/merchants/${merchantId}/follow`);
+};

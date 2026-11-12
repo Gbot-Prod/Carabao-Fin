@@ -40,6 +40,15 @@ function OrderScreenContent() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  // U4: followed farms are listed first.
+  const [followed, setFollowed] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!token) return;
+    api.follows
+      .mine(token)
+      .then((ids) => setFollowed(new Set(ids.map(String))))
+      .catch(() => setFollowed(new Set()));
+  }, [token]);
   // U2: produce matching the search box, from the server (debounced).
   const [produceHits, setProduceHits] = useState<ApiProduceSearchResult[]>([]);
   useEffect(() => {
@@ -86,8 +95,8 @@ function OrderScreenContent() {
         f.category.toLowerCase().includes(search.toLowerCase());
       const matchCat = activeCategory === 'All' || f.category === activeCategory;
       return matchSearch && matchCat;
-    });
-  }, [farms, search, activeCategory]);
+    }).sort((a, b) => Number(followed.has(b.id)) - Number(followed.has(a.id)));
+  }, [farms, search, activeCategory, followed]);
 
   return (
     <SafeAreaView style={styles.root}>
