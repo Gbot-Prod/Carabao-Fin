@@ -279,6 +279,19 @@ const fil: Strings = {
     savedCodes: 'Na-save ko na ang mga code',
     genericError: 'May nangyaring mali. Pakisubukang muli.',
   },
+  twoFactorSignIn: {
+    title: 'Ilagay ang iyong verification code',
+    body: 'Buksan ang iyong authenticator app at i-type ang 6-digit na code para sa Carabao.',
+    backupBody: 'I-type ang isa sa mga backup code na na-save mo noong in-on mo ang dalawang-hakbang na pag-verify.',
+    codeLabel: 'Verification code',
+    backupLabel: 'Backup code',
+    trustDevice: 'Pagkatiwalaan ang device na ito sa loob ng 30 araw',
+    verify: 'I-verify at mag-sign in',
+    useBackup: 'Gumamit ng backup code',
+    useApp: 'Gamitin ang authenticator app',
+    expired: 'Nag-time out ang pag-sign in na ito. Mag-sign in muli.',
+    backToSignIn: 'Bumalik sa pag-sign in',
+  },
 };
 
 export default fil;

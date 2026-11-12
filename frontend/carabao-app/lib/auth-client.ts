@@ -59,6 +59,12 @@ export const signIn = {
       throw new Error(getErrorMessage(error, "Login failed"));
     }
 
+    // Two-step verification (E8b): no session until the code page succeeds,
+    // so skip the backend sync; the client plugin is already on its way there.
+    if ((data as { twoFactorRedirect?: boolean }).twoFactorRedirect) {
+      return { twoFactorRedirect: true as const };
+    }
+
     await syncBackendSession();
     return data;
   },
@@ -156,4 +162,21 @@ export const verifyTwoFactorSetup = async (code: string) => {
 export const disableTwoFactor = async (password: string) => {
   const { error } = await authClient.twoFactor.disable({ password });
   if (error) throw new Error(getErrorMessage(error, "Could not turn off two-step verification"));
+};
+
+// Second step of a two-step sign-in (E8b): an authenticator or backup code
+// finishes the BetterAuth session; then the FastAPI token is synced as usual.
+export const completeTwoFactorSignIn = async (
+  code: string,
+  { backup = false, trustDevice = false }: { backup?: boolean; trustDevice?: boolean } = {},
+) => {
+  const { error } = backup
+    ? await authClient.twoFactor.verifyBackupCode({ code, trustDevice })
+    : await authClient.twoFactor.verifyTotp({ code, trustDevice });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "INVALID_TWO_FACTOR_COOKIE") throw new Error("SIGN_IN_AGAIN");
+    throw new Error(getErrorMessage(error, "That code didn't work."));
+  }
+  await syncBackendSession();
 };

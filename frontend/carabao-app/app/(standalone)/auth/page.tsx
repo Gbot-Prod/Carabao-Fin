@@ -78,10 +78,12 @@ export default function SignupPage() {
         sessionStorage.setItem("pending_signup", JSON.stringify({ channel, identifier }));
         router.push("/onboarding?signup=1");
       } else {
-        await signIn.email({
+        const result = await signIn.email({
           email: formData.email,
           password: formData.password,
         });
+        // Two-step verification: the client plugin opens /two-factor (E8b).
+        if ("twoFactorRedirect" in result && result.twoFactorRedirect) return;
         router.push("/");
       }
     } catch (err) {

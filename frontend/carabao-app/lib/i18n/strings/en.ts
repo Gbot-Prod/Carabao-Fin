@@ -270,6 +270,19 @@ const en = {
     savedCodes: "I've saved these codes",
     genericError: 'Something went wrong. Please try again.',
   },
+  twoFactorSignIn: {
+    title: 'Enter your verification code',
+    body: 'Open your authenticator app and type the 6-digit code for Carabao.',
+    backupBody: 'Type one of the backup codes you saved when you turned on two-step verification.',
+    codeLabel: 'Verification code',
+    backupLabel: 'Backup code',
+    trustDevice: 'Trust this device for 30 days',
+    verify: 'Verify and sign in',
+    useBackup: 'Use a backup code instead',
+    useApp: 'Use the authenticator app instead',
+    expired: 'This sign-in has timed out. Please sign in again.',
+    backToSignIn: 'Back to sign in',
+  },
 };
 
 export type Strings = typeof en;

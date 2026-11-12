@@ -446,3 +446,23 @@
   text-align: center;
   text-decoration: none;
 }
+
+/* Two-step sign-in page (E8b) */
+.auth-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.auth-link--button {
+  display: block;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
