@@ -22,7 +22,11 @@ from app.services.order_reservations import (
     reservation_ttl_minutes,
     settle_checkout_payment,
 )
-from app.services.paymongo import create_checkout_session, retrieve_checkout_session
+from app.services.paymongo import (
+    create_checkout_session,
+    paid_payment_from_session,
+    retrieve_checkout_session,
+)
 from app.services.sms_service import notify_merchant_new_order
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -50,12 +54,10 @@ def _reconcile_transaction_from_paymongo(txn: Transaction, db: Session) -> None:
         logger.error("Payment configuration error during reconciliation: %s", exc)
         return
 
-    attributes = session.get("attributes", {})
-    if attributes.get("status") != "paid":
+    paid, payment_id = paid_payment_from_session(session)
+    if not paid:
         return
 
-    payments = attributes.get("payments", [])
-    payment_id = payments[0].get("id") if payments else None
     outcome = settle_checkout_payment(txn, payment_id, db)
     if outcome == "duplicate":
         return
@@ -89,6 +91,24 @@ def create_payment_checkout(
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    # A retry after a missed webhook: settle a session that was already paid
+    # instead of opening a second one the buyer could pay again.
+    if order.status == OrderStatus.PENDING:
+        open_txns = (
+            db.query(Transaction)
+            .filter(
+                Transaction.order_id == order_id,
+                Transaction.status == TransactionStatus.PENDING,
+            )
+            .all()
+        )
+        for open_txn in open_txns:
+            _reconcile_transaction_from_paymongo(open_txn, db)
+            if open_txn.status != TransactionStatus.PENDING:
+                break
+        db.refresh(order)
+
     if order.status != OrderStatus.PENDING:
         raise HTTPException(status_code=400, detail="This order is no longer awaiting payment")
 

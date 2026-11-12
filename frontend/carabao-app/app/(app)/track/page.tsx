@@ -7,8 +7,17 @@ import { useRef, useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import mapboxgl from 'mapbox-gl';
 import OrderCard from './components/orderCard';
-import { fetchCurrentOrders, fetchTracking, isInTransit as isInTransitStatus, type TrackingData, type Waypoint } from '@/util/api';
-import { fetchShipmentTracking } from '@/util/api';
+import {
+  CLOSED_ORDER_STATUSES,
+  ORDER_STATUS_LABELS,
+  fetchCurrentOrders,
+  fetchShipmentTracking,
+  fetchTracking,
+  isInTransit as isInTransitStatus,
+  type OrderStatus,
+  type TrackingData,
+  type Waypoint,
+} from '@/util/api';
 import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
 import getApiErrorMessage, { getApiErrorStatus } from '@/util/errorHelper';
 import PageLoader from '@/components/PageLoader/PageLoader';
@@ -16,6 +25,32 @@ import SkeletonList, { LoadError } from '@/components/Skeleton/Skeleton';
 
 // Progress and ETA are estimated from the route schedule; there is no live GPS.
 const WAITING_MESSAGE = 'Waiting for shipment. Estimated progress will appear after the merchant dispatches this order.';
+const POLL_MS = 30_000;
+
+const PICKUP_COLOR = '#3b82f6';
+const ACTIVE_STOP_COLOR = '#f59e0b';
+const OTHER_STOP_COLOR = '#ef4444';
+const CLOSED_STOP_COLOR = '#6b7280';
+const POSITION_COLOR = '#22c55e';
+
+const isClosedStatus = (status: string | null | undefined) =>
+  !!status && (CLOSED_ORDER_STATUSES as readonly string[]).includes(status);
+
+const statusLabel = (status: string | null | undefined) =>
+  status ? ORDER_STATUS_LABELS[status as OrderStatus] ?? status.replaceAll('_', ' ') : 'Status unknown';
+
+const waypointColor = (wp: Waypoint, activeOrderId: number | null) => {
+  if (wp.type === 'pickup') return PICKUP_COLOR;
+  if (isClosedStatus(wp.status)) return CLOSED_STOP_COLOR;
+  return wp.order_id && wp.order_id === activeOrderId ? ACTIVE_STOP_COLOR : OTHER_STOP_COLOR;
+};
+
+const waypointText = (wp: Waypoint) =>
+  wp.type === 'pickup' ? wp.label : `${wp.label} · ${statusLabel(wp.status)}`;
+
+// Every stop is delivered or cancelled: nothing left to refresh.
+const isRouteFinished = (data: TrackingData) =>
+  data.stops.length > 0 && data.stops.every((stop) => isClosedStatus(stop.status));
 
 type TrackOrder = {
   id: number;
@@ -92,8 +127,6 @@ function FallbackRouteMap({
       </svg>
       {waypoints.map((waypoint, index) => {
         const point = points[index];
-        const isPickup = waypoint.type === "pickup";
-        const isActive = waypoint.order_id === activeOrderId;
         return (
           <div
             className={styles.fallbackMarker}
@@ -101,9 +134,9 @@ function FallbackRouteMap({
             style={{
               left: `${point.x}%`,
               top: `${point.y}%`,
-              backgroundColor: isPickup ? "#3b82f6" : isActive ? "#f59e0b" : "#ef4444",
+              backgroundColor: waypointColor(waypoint, activeOrderId),
             }}
-            title={waypoint.label}
+            title={waypointText(waypoint)}
           />
         );
       })}
@@ -123,7 +156,8 @@ function Track() {
   const routeRef = useRef<RouteGeoJSON | null>(null);
   const pendingRouteRef = useRef<RouteGeoJSON | null>(null);
   const stopMarkersPlacedRef = useRef(false);
-  const activeStopOrderIdRef = useRef<number | null>(null);
+  // Active stop + each stop's status; markers are redrawn when this changes.
+  const stopMarkersKeyRef = useRef<string | null>(null);
   const routeAttemptedRef = useRef(false);
   const mapUnavailableRef = useRef(false);
   const [tracking, setTracking] = useState<TrackingData | null>(null);
@@ -192,15 +226,12 @@ function Track() {
     stopMarkersRef.current = [];
 
     waypoints.forEach(wp => {
-      const color = wp.type === 'pickup'
-        ? '#3b82f6'
-        : wp.order_id && wp.order_id === activeOrderId
-          ? '#f59e0b'
-          : '#ef4444';
-      const marker = new mapboxgl.Marker({ color })
+      const text = waypointText(wp);
+      const marker = new mapboxgl.Marker({ color: waypointColor(wp, activeOrderId) })
         .setLngLat([wp.lng, wp.lat])
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(wp.label))
+        .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(text))
         .addTo(map);
+      marker.getElement().setAttribute('aria-label', text);
       stopMarkersRef.current.push(marker);
     });
   }, []);
@@ -208,10 +239,12 @@ function Track() {
   const updateDriverMarker = useCallback((map: mapboxgl.Map, lngLat: [number, number]) => {
     if (!driverMarkerRef.current) {
       const el = document.createElement('div');
-      el.style.cssText = 'background:#22c55e;width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)';
+      el.style.cssText = `background:${POSITION_COLOR};width:14px;height:14px;border-radius:50%;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)`;
+      // Estimated from the route schedule, not GPS, so don't call it the driver.
+      el.setAttribute('aria-label', 'Estimated position');
       driverMarkerRef.current = new mapboxgl.Marker({ element: el })
         .setLngLat(lngLat)
-        .setPopup(new mapboxgl.Popup({ offset: 20 }).setText('Driver'))
+        .setPopup(new mapboxgl.Popup({ offset: 20 }).setText('Estimated position'))
         .addTo(map);
     } else {
       driverMarkerRef.current.setLngLat(lngLat);
@@ -223,11 +256,12 @@ function Track() {
     const origin = data.origin;
     const activeOrderId = data.stops[data.active_stop_index]?.order_id ?? null;
 
-    // Place stop markers once per order — markers are DOM elements and work
-    // regardless of whether the map style is ready.
-    if (data.waypoints.length > 0 && activeStopOrderIdRef.current !== activeOrderId) {
+    // Redraw stop markers when the active stop or any stop's status changes —
+    // markers are DOM elements and work regardless of whether the style is ready.
+    const markersKey = `${activeOrderId}|${data.waypoints.map(w => `${w.order_id ?? 'p'}:${w.status ?? ''}`).join(',')}`;
+    if (data.waypoints.length > 0 && stopMarkersKeyRef.current !== markersKey) {
       placeStopMarkers(map, data.waypoints, activeOrderId);
-      activeStopOrderIdRef.current = activeOrderId;
+      stopMarkersKeyRef.current = markersKey;
     }
 
     if (!stopMarkersPlacedRef.current && data.waypoints.length > 0) {
@@ -279,7 +313,7 @@ function Track() {
     routeRef.current = null;
     pendingRouteRef.current = null;
     stopMarkersPlacedRef.current = false;
-    activeStopOrderIdRef.current = null;
+    stopMarkersKeyRef.current = null;
     driverMarkerRef.current?.remove();
     driverMarkerRef.current = null;
     stopMarkersRef.current.forEach(m => m.remove());
@@ -294,87 +328,57 @@ function Track() {
     const shipmentId = shipmentIdParam ? Number(shipmentIdParam) : null;
     const orderId = selectedOrder?.orderId;
 
-    // If a shipment_id is present in the URL, poll shipment endpoint instead
+    // A shipment_id in the URL (merchant view) polls the shipment endpoint instead.
+    let fetchData: () => Promise<TrackingData>;
     if (shipmentId) {
-      let attempts = 0;
-      let timerId: ReturnType<typeof setTimeout>;
-      let inFlight = false;
-      let active = true;
-      let hasTracking = false;
-      const maxAttempts = 5;
-
-      const pollShipment = async () => {
-        if (!active || inFlight) return;
-        inFlight = true;
-        try {
-          setTrackingError(null);
-          const data = await fetchShipmentTracking(shipmentId);
-          if (!active) return;
-          if (data.tracking_state === 'waiting_for_shipment') {
-            setTrackingError(WAITING_MESSAGE);
-            return;
-          }
-          setTracking(data);
-          hasTracking = true;
-          const map = mapRef.current;
-          if (map) await updateTracking(data, map);
-        } catch (err) {
-          if (getApiErrorStatus(err) === 412) {
-            setTrackingError('Shipment route is not ready yet. Tracking will appear after dispatch.');
-          } else {
-            setTrackingError(getApiErrorMessage(err, 'Tracking data is not ready yet.'));
-            console.error('[tracking] fetch failed:', err);
-          }
-        } finally {
-          inFlight = false;
-          attempts += 1;
-          if (active && attempts < maxAttempts) {
-            timerId = setTimeout(() => void pollShipment(), 3000);
-          } else if (active && !hasTracking) {
-            setTrackingError('Tracking is not available yet. Try again after the merchant dispatches this order.');
-          }
-        }
-      };
-
-      void pollShipment();
-      return () => {
-        active = false;
-        cleanupMap(timerId);
-      };
+      fetchData = () => fetchShipmentTracking(shipmentId);
+    } else {
+      if (!orderId) return;
+      if (!selectedOrder?.shipped) {
+        setTrackingError('Tracking will appear after the merchant dispatches this order.');
+        return;
+      }
+      fetchData = () => fetchTracking(orderId);
     }
 
-    if (!orderId) return;
-
-    if (!selectedOrder?.shipped) {
-      setTrackingError('Tracking will appear after the merchant dispatches this order.');
-      return;
-    }
-
-    let attempts = 0;
     let timerId: ReturnType<typeof setTimeout>;
     let inFlight = false;
     let active = true;
-    let hasTracking = false;
-    const maxAttempts = 5;
+    let finished = false;
+    // Retry quickly a few times so the route line appears once the map style
+    // loads, then settle into the regular refresh.
+    let quickRetries = 5;
+
+    const schedule = () => {
+      clearTimeout(timerId);
+      if (!active || finished) return;
+      const quick = quickRetries > 0 && !routeRef.current && !mapUnavailableRef.current;
+      if (quick) quickRetries -= 1;
+      timerId = setTimeout(() => void poll(), quick ? 3000 : POLL_MS);
+    };
 
     const poll = async () => {
-      if (!active || inFlight) return;
+      if (!active || inFlight || finished) return;
+      // Hidden tab: skip, and resume from the visibilitychange handler.
+      if (document.hidden) return;
       inFlight = true;
       try {
-        setTrackingError(null);
-        const data = await fetchTracking(orderId);
+        const data = await fetchData();
         if (!active) return;
+        setCurrentTime(Date.now());
         if (data.tracking_state === 'waiting_for_shipment') {
           setTrackingError(WAITING_MESSAGE);
           return;
         }
+        setTrackingError(null);
         setTracking(data);
-        hasTracking = true;
+        finished = isRouteFinished(data);
         // Read mapRef AFTER the await — if the map was removed while fetching
         // (order changed, component unmounted), mapRef.current will be null here.
         const map = mapRef.current;
         if (map) await updateTracking(data, map);
       } catch (err) {
+        if (!active) return;
         if (getApiErrorStatus(err) === 412) {
           setTrackingError('Shipment route is not ready yet. Tracking will appear after dispatch.');
         } else {
@@ -383,18 +387,21 @@ function Track() {
         }
       } finally {
         inFlight = false;
-        attempts += 1;
-        if (active && attempts < maxAttempts) {
-          timerId = setTimeout(() => void poll(), 3000);
-        } else if (active && !hasTracking) {
-          setTrackingError('Tracking is not available yet. Try again after the merchant dispatches this order.');
-        }
+        schedule();
       }
     };
+
+    const onVisibilityChange = () => {
+      if (document.hidden) return;
+      clearTimeout(timerId);
+      void poll();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     void poll();
     return () => {
       active = false;
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       cleanupMap(timerId);
     };
   }, [selectedOrder?.orderId, selectedOrder?.shipped, updateTracking, searchParams, cleanupMap]);
@@ -442,6 +449,9 @@ function Track() {
   const activeStopNumber = tracking
     ? Math.min(tracking.active_stop_index + 1, tracking.stops.length)
     : 0;
+  // The tracking response carries the order's current status; the order list
+  // was only loaded once, so prefer this when we have it.
+  const liveOrderStatus = tracking?.stops.find((stop) => stop.order_id === selectedOrder?.orderId)?.status ?? null;
   const etaMinutes = tracking?.eta_minutes ?? null;
   const progressPercent = tracking ? Math.round(tracking.progress * 100) : 0;
   const estimatedArrival = etaMinutes !== null && currentTime
@@ -514,10 +524,11 @@ function Track() {
             )}
 
             <ul className={styles.mapLegend} aria-label="Map legend">
-              <li><span className={styles.legendDot} style={{ backgroundColor: '#3b82f6' }} />Pickup</li>
-              <li><span className={styles.legendDot} style={{ backgroundColor: '#f59e0b' }} />Active stop</li>
-              <li><span className={styles.legendDot} style={{ backgroundColor: '#ef4444' }} />Other stops</li>
-              <li><span className={styles.legendDot} style={{ backgroundColor: '#22c55e' }} />Driver</li>
+              <li><span className={styles.legendDot} style={{ backgroundColor: PICKUP_COLOR }} />Pickup</li>
+              <li><span className={styles.legendDot} style={{ backgroundColor: ACTIVE_STOP_COLOR }} />Active stop</li>
+              <li><span className={styles.legendDot} style={{ backgroundColor: OTHER_STOP_COLOR }} />Other stops</li>
+              <li><span className={styles.legendDot} style={{ backgroundColor: CLOSED_STOP_COLOR }} />Delivered or cancelled</li>
+              <li><span className={styles.legendDot} style={{ backgroundColor: POSITION_COLOR }} />Estimated position</li>
             </ul>
           </section>
 
@@ -536,7 +547,11 @@ function Track() {
               </div>
               <div className={styles.detailItem}>
                 <span className={styles.detailLabel}>Status</span>
-                <p className={styles.detailValue}>{selectedOrder.shipped ? 'Shipped' : 'Not shipped yet'}</p>
+                <p className={styles.detailValue}>
+                  {liveOrderStatus
+                    ? statusLabel(liveOrderStatus)
+                    : selectedOrder.shipped ? 'Shipped' : 'Not shipped yet'}
+                </p>
               </div>
               <div className={styles.detailItem}>
                 <span className={styles.detailLabel}>Date bought</span>
@@ -582,7 +597,7 @@ function Track() {
                     <li key={`${stop.order_id}-${stop.sequence}`} className={`${styles.shipmentStopItem} ${index === tracking.active_stop_index ? styles.shipmentStopActive : ''}`}>
                       <div className={styles.shipmentStopHeader}>
                         <span className={styles.shipmentStopBadge}>Stop {stop.sequence}</span>
-                        <span className={styles.shipmentStopStatus}>{index === tracking.active_stop_index ? 'Active' : stop.status.replaceAll('_', ' ')}</span>
+                        <span className={styles.shipmentStopStatus}>{statusLabel(stop.status)}</span>
                       </div>
                       <p className={styles.shipmentStopName}>{stop.buyer_name ?? stop.label}</p>
                       <p className={styles.shipmentStopAddress}>{stop.delivery_address ?? 'Delivery address unavailable'}</p>

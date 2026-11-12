@@ -42,6 +42,28 @@ def _waiting_for_shipment(
     )
 
 
+def with_current_order_statuses(db: Session, route_waypoints: list[dict]) -> list[dict]:
+    """Replace the status saved in the route at dispatch with each order's status now.
+
+    The stored route is a snapshot, so without this every stop would read
+    "in_transit" forever, even after it was delivered or cancelled.
+    """
+    order_ids = {
+        int(p["order_id"]) for p in route_waypoints if p.get("order_id") is not None
+    }
+    if not order_ids:
+        return route_waypoints
+    current = dict(
+        db.query(Order.id, Order.status).filter(Order.id.in_(order_ids)).all()
+    )
+    return [
+        {**p, "status": current[int(p["order_id"])]}
+        if p.get("order_id") is not None and int(p["order_id"]) in current
+        else p
+        for p in route_waypoints
+    ]
+
+
 def _response_from_stored_route(
     route_waypoints: list[dict],
     *,
@@ -148,7 +170,7 @@ def get_order_tracking(
                 shipment_id=shipment.id if shipment else 0,
             )
         return _response_from_stored_route(
-            shipment.route_waypoints,
+            with_current_order_statuses(db, shipment.route_waypoints),
             shipment_id=shipment.id,
             order_id=order_id,
             merchant_name=merchant_name,
@@ -160,7 +182,7 @@ def get_order_tracking(
     # Single-order manual dispatch — route stored when merchant marked it shipped
     if order.route_waypoints:
         return _response_from_stored_route(
-            order.route_waypoints,
+            with_current_order_statuses(db, order.route_waypoints),
             shipment_id=0,
             order_id=order_id,
             merchant_name=merchant_name,

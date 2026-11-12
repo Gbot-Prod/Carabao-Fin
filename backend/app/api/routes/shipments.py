@@ -10,6 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_current_user, get_db
+from app.api.routes.tracking import with_current_order_statuses
 from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.shipment import Shipment
@@ -109,6 +110,7 @@ def _get_duration_matrix(
 
 
 def _shipment_response(
+    db: Session,
     shipment: Shipment,
     merchant_name: str,
     selected_order_id: int,
@@ -119,6 +121,7 @@ def _shipment_response(
         raise HTTPException(
             status_code=412, detail="Shipment route is not available yet"
         )
+    route_waypoints = with_current_order_statuses(db, route_waypoints)
 
     waypoints = [Waypoint(**point) for point in route_waypoints]
     stop_points = [point for point in route_waypoints if point.get("type") != "pickup"]
@@ -394,7 +397,7 @@ def create_merchant_shipment(
     selected_order = ordered_stops[0] if ordered_stops else stops[0]
     selected_destination = (selected_order.lat, selected_order.lng)
     return _shipment_response(
-        shipment, merchant_name, selected_order.order_id, selected_destination
+        db, shipment, merchant_name, selected_order.order_id, selected_destination
     )
 
 
@@ -435,6 +438,7 @@ def get_shipment_tracking(
     )
 
     return _shipment_response(
+        db=db,
         shipment=shipment,
         merchant_name=merchant.merchant_name or "Merchant",
         selected_order_id=first_order.id,
