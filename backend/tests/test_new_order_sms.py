@@ -206,7 +206,12 @@ def test_missed_webhook_reconcile_also_notifies(sent, monkeypatch):
     monkeypatch.setattr(
         payments,
         "retrieve_checkout_session",
-        lambda _sid: {"attributes": {"status": "paid", "payments": [{"id": "pay_test_1"}]}},
+        lambda _sid: {
+            "attributes": {
+                "status": "active",
+                "payments": [{"id": "pay_test_1", "attributes": {"status": "paid"}}],
+            }
+        },
     )
 
     payments._reconcile_transaction_from_paymongo(txn, FakeDB(txn, order))

@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_db
 from app.models.transaction import Transaction
 from app.services.order_reservations import settle_checkout_payment
-from app.services.paymongo import get_webhook_secret, verify_webhook_signature
+from app.services.paymongo import (
+    get_webhook_secret,
+    is_test_mode,
+    verify_webhook_signature,
+)
 from app.services.payout_service import handle_transfer_event
 from app.services.sms_service import notify_merchant_new_order
 
@@ -26,6 +30,20 @@ async def paymongo_webhook(request: Request, db: Session = Depends(get_db)):
     if not signature:
         raise HTTPException(status_code=400, detail="Missing webhook signature")
     if not verify_webhook_signature(raw_body, signature):
+        # Say why without logging secrets: which mode we check and which
+        # signature parts PayMongo actually filled in.
+        filled = sorted(
+            key.strip()
+            for key, _, value in (p.partition("=") for p in signature.split(","))
+            if value.strip()
+        )
+        logger.warning(
+            "PayMongo webhook rejected: bad signature"
+            " (checking %s mode, header has %s). Is PAYMONGO_WEBHOOK_SECRET"
+            " the secret of the webhook registered with this mode's keys?",
+            "test (te)" if is_test_mode() else "live (li)",
+            filled,
+        )
         raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     try:

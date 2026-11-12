@@ -13,7 +13,11 @@ from app.models.produce import Produce
 from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.services import notifications
-from app.services.paymongo import expire_checkout_session
+from app.services.paymongo import (
+    expire_checkout_session,
+    paid_payment_from_session,
+    retrieve_checkout_session,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -229,10 +233,50 @@ def settle_checkout_payment(
     return "paid"
 
 
-def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
+def settle_paid_sessions(order: Order, db: Session) -> bool:
+    """Settle a pending order whose PayMongo checkout was paid but never recorded.
+
+    Covers a missed or rejected webhook: PayMongo won't expire a paid session,
+    so without this the order would sit in ``pending`` forever. The caller
+    commits. Returns True if the order was settled as paid.
+    """
+    open_txns = (
+        db.query(Transaction)
+        .filter(
+            Transaction.order_id == order.id,
+            Transaction.status == TransactionStatus.PENDING,
+            Transaction.paymongo_session_id.isnot(None),
+        )
+        .all()
+    )
+    for txn in open_txns:
+        try:
+            session = retrieve_checkout_session(txn.paymongo_session_id)
+        except Exception:
+            logger.exception(
+                "Could not check checkout session %s", txn.paymongo_session_id
+            )
+            continue
+        paid, payment_id = paid_payment_from_session(session)
+        if paid and settle_checkout_payment(txn, payment_id, db) == "paid":
+            logger.warning(
+                "Order %s was paid (session %s) but never settled; settled by sweep",
+                order.id,
+                txn.paymongo_session_id,
+            )
+            return True
+    return False
+
+
+def expire_stale_reservations(
+    db: Session, ttl_minutes: int, paid_orders: list[Order] | None = None
+) -> int:
     """Expire pending orders whose checkout reservation has elapsed.
 
-    The row lock makes this safe when multiple API workers run the sweep.
+    An elapsed order whose checkout was in fact paid is settled instead and,
+    if ``paid_orders`` is given, appended to it so the caller can notify the
+    merchant after committing. The row lock makes this safe when multiple API
+    workers run the sweep.
     """
     cutoff = datetime.now(UTC) - timedelta(minutes=ttl_minutes)
     stale_order_ids = [
@@ -261,6 +305,11 @@ def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
             .first()
         )
         if has_live_checkout:
+            continue
+
+        if settle_paid_sessions(order, db):
+            if paid_orders is not None:
+                paid_orders.append(order)
             continue
 
         if release_order_reservation(

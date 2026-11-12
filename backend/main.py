@@ -32,6 +32,7 @@ from app.services.order_reservations import (
     reservation_ttl_minutes,
 )
 from app.services.order_status import auto_confirm_days, auto_confirm_delivered_orders
+from app.services.sms_service import notify_merchant_new_order
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,8 +43,13 @@ async def lifespan(_: FastAPI):
         # Each API worker runs this sweep. Row locks prevent double releases.
         db = SessionLocal()
         try:
-            released = expire_stale_reservations(db, reservation_ttl_minutes())
+            paid_orders: list = []
+            released = expire_stale_reservations(
+                db, reservation_ttl_minutes(), paid_orders
+            )
             db.commit()
+            for paid_order in paid_orders:
+                notify_merchant_new_order(order=paid_order)
             if released:
                 logger.info("Released %s expired checkout reservation(s)", released)
         except Exception:

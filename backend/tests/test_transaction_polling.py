@@ -50,7 +50,8 @@ def _session(monkeypatch, status, payments_list=None):
 
 
 def test_pending_txn_becomes_paid_when_session_paid(monkeypatch, settled):
-    _session(monkeypatch, "paid", [{"id": "pay_9"}])
+    # Real PayMongo shape: the session stays "active"; its payment is "paid".
+    _session(monkeypatch, "active", [{"id": "pay_9", "attributes": {"status": "paid"}}])
     txn, db = _txn(), FakeDB()
 
     payments._reconcile_transaction_from_paymongo(txn, db)
@@ -58,6 +59,35 @@ def test_pending_txn_becomes_paid_when_session_paid(monkeypatch, settled):
     assert settled == [(7, "pay_9")]
     assert txn.status == TransactionStatus.PAID
     assert db.commits == 1
+
+
+def test_paid_intent_counts_as_paid(monkeypatch, settled):
+    monkeypatch.setattr(
+        payments,
+        "retrieve_checkout_session",
+        lambda _id: {
+            "attributes": {
+                "status": "active",
+                "payments": [{"id": "pay_5"}],
+                "payment_intent": {"attributes": {"status": "succeeded"}},
+            }
+        },
+    )
+    txn, db = _txn(), FakeDB()
+
+    payments._reconcile_transaction_from_paymongo(txn, db)
+
+    assert settled == [(7, "pay_5")]
+
+
+def test_failed_payment_leaves_txn_pending(monkeypatch, settled):
+    _session(monkeypatch, "active", [{"id": "pay_1", "attributes": {"status": "failed"}}])
+    txn, db = _txn(), FakeDB()
+
+    payments._reconcile_transaction_from_paymongo(txn, db)
+
+    assert settled == []
+    assert db.commits == 0
 
 
 def test_unpaid_session_leaves_txn_pending(monkeypatch, settled):

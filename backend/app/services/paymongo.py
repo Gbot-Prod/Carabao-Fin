@@ -19,7 +19,7 @@ SUPPORTED_METHODS = [
 
 # Settings are read per call rather than at import time so they don't depend on
 # load_dotenv() having run before this module was first imported.
-def _use_test_mode() -> bool:
+def is_test_mode() -> bool:
     return os.getenv("PAYMONGO_USE_TEST", "false").lower() == "true"
 
 
@@ -28,7 +28,7 @@ def get_webhook_secret() -> str:
 
 
 def _auth_header() -> dict:
-    key_name = "PAYMONGO_SECRET_TEST_KEY" if _use_test_mode() else "PAYMONGO_SECRET_KEY"
+    key_name = "PAYMONGO_SECRET_TEST_KEY" if is_test_mode() else "PAYMONGO_SECRET_KEY"
     secret_key = os.getenv(key_name)
     if not secret_key:
         raise RuntimeError(f"{key_name} is not set")
@@ -92,6 +92,23 @@ def retrieve_checkout_session(session_id: str) -> dict:
     )
     response.raise_for_status()
     return response.json()["data"]
+
+
+def paid_payment_from_session(session: dict) -> tuple[bool, str | None]:
+    """Whether a checkout session has been paid, and the paid payment's ID.
+
+    A session's own ``status`` is only ever ``active`` or ``expired``; the paid
+    state lives on its payments (``paid``) and payment intent (``succeeded``).
+    """
+    attributes = session.get("attributes") or {}
+    for payment in attributes.get("payments") or []:
+        if (payment.get("attributes") or {}).get("status") == "paid":
+            return True, payment.get("id")
+    intent = attributes.get("payment_intent") or {}
+    if (intent.get("attributes") or {}).get("status") == "succeeded":
+        payments = attributes.get("payments") or []
+        return True, payments[0].get("id") if payments else None
+    return False, None
 
 
 def expire_checkout_session(session_id: str) -> bool:
@@ -376,7 +393,7 @@ def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
 
     timestamp_str = parts.get("t")
     # Test-mode events are signed in `te`, live-mode events in `li`.
-    sig = parts.get("te") if _use_test_mode() else parts.get("li")
+    sig = parts.get("te") if is_test_mode() else parts.get("li")
 
     if not timestamp_str or not sig:
         return False

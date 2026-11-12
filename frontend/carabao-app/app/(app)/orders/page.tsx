@@ -11,6 +11,7 @@ import {
   reorderOrder,
   type ReorderResult,
   confirmOrderReceived,
+  createPaymentCheckout,
   isInTransit,
   ORDER_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
@@ -132,6 +133,23 @@ function OrderCard({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const awaitingConfirmation = isInTransit(order.status);
+  const awaitingPayment = order.status === "pending";
+  const [paying, setPaying] = useState(false);
+
+  // Reopens (or recreates) the order's PayMongo checkout. If an earlier session
+  // was already paid, the backend settles it and refuses, so reload to show it.
+  const handlePayNow = async () => {
+    setPaying(true);
+    setError(null);
+    try {
+      const checkout = await createPaymentCheckout(order.order_id);
+      window.location.href = checkout.checkout_url;
+    } catch {
+      setError("This order could not be paid now. It may already be paid or have expired. Refreshing…");
+      setTimeout(() => window.location.reload(), 2000);
+      setPaying(false);
+    }
+  };
 
   const handleConfirmReceived = async () => {
     setSubmitting(true);
@@ -186,6 +204,11 @@ function OrderCard({
       <OrderDetails order={{ ...order, total: order.total_amount }} />
 
       <div className={styles.cardActions}>
+        {awaitingPayment && (
+          <button type="button" className={styles.receivedBtn} onClick={() => void handlePayNow()} disabled={paying}>
+            {paying ? "Opening payment…" : "Pay now"}
+          </button>
+        )}
         <Link href="/track" className={styles.trackBtn}>Live Tracking</Link>
         <Link href={`/orders/${order.order_id}`} className={styles.receivedBtn}>View order</Link>
         {awaitingConfirmation && !confirming && (

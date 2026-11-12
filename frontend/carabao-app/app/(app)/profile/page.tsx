@@ -3,19 +3,32 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import styles from './page.module.css';
-import {
-  fetchMyProfile, updateMyProfile, uploadProfilePicture, type UserProfile, type NotificationPrefs,
-  fetchPaymentMethods, attachPaymentMethod, detachPaymentMethod, tokenizeCard, type SavedCard,
-  deleteMyAccount,
-} from '@/util/api';
+import { fetchMyProfile, updateMyProfile, uploadProfilePicture, deleteMyAccount, type UserProfile } from '@/util/api';
 import LocationSelects from '@/components/LocationSelects/LocationSelects';
 import MapPinPicker from '@/components/MapPinPicker/MapPinPicker';
 import type { Pin } from '@/util/reverseGeocode';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import TwoFactorSettings from '@/components/TwoFactorSettings/TwoFactorSettings';
 import { TWO_FACTOR_ENABLED } from '@/lib/features';
-import OrderChat from '@/components/OrderChat/OrderChat';
-import { useLanguage } from '@/lib/i18n/LanguageProvider';
+
+// Hidden for now — kept as components in ./components so they can be re-enabled:
+//   PaymentPanel        (💳 Payment Methods)  <PaymentPanel userEmail={profile?.email} />
+//   NotificationsPanel  (🔔 Notifications)    <NotificationsPanel profile={profile} onSaved={setProfile} />
+//   SupportPanel        (💬 Contact support)  <SupportPanel />
+// The "View Merchant Page" / "Merchant Dashboard" links were also removed from
+// the left column; merchants reach the dashboard from the main navigation.
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const formatDate = (v: string | null | undefined) => {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+const formatPeso = (v: number) =>
+  new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(v);
+
+const NoData = ({ text = 'No data' }: { text?: string }) => <em className={styles.noData}>{text}</em>;
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 function UserAvatar({ pictureUrl, uploading, onUpload }: {
@@ -55,75 +68,54 @@ function UserAvatar({ pictureUrl, uploading, onUpload }: {
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const formatDate = (v: string | null | undefined) => {
-  if (!v) return null;
-  const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? v : d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
-};
-
-const formatPeso = (v: number) =>
-  new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(v);
-
-const DEFAULT_NOTIF: NotificationPrefs = { order_updates: true, promotions: false, email_alerts: true };
-
-function resolveNotifPrefs(raw: Partial<NotificationPrefs> | null | undefined): NotificationPrefs {
-  return { ...DEFAULT_NOTIF, ...raw };
-}
-
 // ─── Address panel ────────────────────────────────────────────────────────────
 type AddressForm = { address: string; barangay: string; city: string; province: string; region: string; postal_code: string };
+
+const addressFromProfile = (p: UserProfile | null): AddressForm => ({
+  address: p?.address ?? '',
+  barangay: p?.barangay ?? '',
+  city: p?.city ?? '',
+  province: p?.province ?? '',
+  region: p?.region ?? '',
+  postal_code: p?.postal_code ?? '',
+});
+
+const pinFromProfile = (p: UserProfile | null): Pin | null =>
+  p?.lat != null && p?.lng != null ? { lat: p.lat, lng: p.lng } : null;
+
+const ADDRESS_ROWS: { label: string; key: keyof AddressForm }[] = [
+  { label: 'Region', key: 'region' },
+  { label: 'Province', key: 'province' },
+  { label: 'City / Municipality', key: 'city' },
+  { label: 'Barangay', key: 'barangay' },
+  { label: 'Street / House No.', key: 'address' },
+  { label: 'Postal code', key: 'postal_code' },
+];
 
 function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSaved: (p: UserProfile) => void }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<AddressForm>({ 
-    address: '', 
-    barangay: '', 
-    city: '', 
-    province: '', 
-    region: '', 
-    postal_code: '' 
-  });
+  const [form, setForm] = useState<AddressForm>(() => addressFromProfile(profile));
   // Map pin for the address (U1b); null until the user drops one.
   const [pin, setPin] = useState<Pin | null>(null);
-  const savedPin = (p: UserProfile): Pin | null =>
-    p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null;
 
-  useEffect(() => {
-    if (profile) {
-      setForm({ 
-        address: profile.address ?? '', 
-        barangay: profile.barangay ?? '', 
-        province: profile.province ?? '', 
-        region: profile.region ?? '', 
-        city: profile.city ?? '', 
-        postal_code: profile.postal_code ?? '' 
-      });
-    }
-  }, [profile]);
+  useEffect(() => { if (profile) setForm(addressFromProfile(profile)); }, [profile]);
 
-  const startEdit = () => { setError(null); setPin(profile ? savedPin(profile) : null); setEditing(true); };
-  const cancel = () => { if (profile) setForm({ 
-        address: profile.address ?? '', 
-        barangay: profile.barangay ?? '', 
-        province: profile.province ?? '', 
-        region: profile.region ?? '', 
-        city: profile.city ?? '', 
-        postal_code: profile.postal_code ?? '' 
-      }); setEditing(false); setError(null); };
+  const startEdit = () => { setError(null); setPin(pinFromProfile(profile)); setEditing(true); };
+  const cancel = () => { setForm(addressFromProfile(profile)); setEditing(false); setError(null); };
 
   const save = async () => {
     setSaving(true); setError(null);
     try {
-      const updated = await updateMyProfile({ 
-        region: form.region.trim() || null,
-        province: form.province.trim() || null,
-        city: form.city.trim() || null,
-        barangay: form.barangay.trim() || null,
-        address: form.address.trim() || null,
-        postal_code: form.postal_code.trim() || null,
+      const clean = (v: string) => v.trim() || null;
+      const updated = await updateMyProfile({
+        region: clean(form.region),
+        province: clean(form.province),
+        city: clean(form.city),
+        barangay: clean(form.barangay),
+        address: clean(form.address),
+        postal_code: clean(form.postal_code),
         lat: pin?.lat ?? null,
         lng: pin?.lng ?? null,
       });
@@ -133,296 +125,90 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
     finally { setSaving(false); }
   };
 
-  const setField = (f: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [f]: e.target.value }));
+  const setField = (f: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm(p => ({ ...p, [f]: e.target.value }));
 
   if (!profile) return <PageLoader variant="compact" />;
 
-  return editing ? (
-    <div className={styles.panelForm}>
-      <LocationSelects
-        value={{
-          region: form.region,
-          province: form.province,
-          city: form.city,
-          barangay: form.barangay,
-        }}
-        onChange={(location) => setForm(previous => ({ ...previous, ...location }))}
-        selectClassName={styles.formInput}
-        labelClassName={styles.formLabel}
-        wrapClassName={styles.panelFormField}
-      />
-      <div className={styles.panelFormField}>
-        <label htmlFor="profile-address" className={styles.formLabel}>Street / House No.</label>
-        <input id="profile-address" className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave, Unit 4B" />
-      </div>
-      <div className={styles.panelFormField}>
-        <label htmlFor="profile-postal-code" className={styles.formLabel}>Postal code</label>
-        <input id="profile-postal-code" className={styles.formInput} value={form.postal_code} onChange={setField('postal_code')} placeholder="1634" />
-      </div>
-      <div className={styles.panelFormField}>
-        <MapPinPicker
-          value={pin}
-          onChange={(next, found) => {
-            setPin(next);
-            // Fill what the pin tells us; keep anything the user already typed.
-            setForm((prev) => ({
-              ...prev,
-              address: prev.address || found?.street || '',
-              postal_code: prev.postal_code || found?.postcode || '',
-            }));
-          }}
+  if (editing) {
+    return (
+      <div className={styles.panelForm}>
+        <LocationSelects
+          value={{ region: form.region, province: form.province, city: form.city, barangay: form.barangay }}
+          onChange={(location) => setForm(prev => ({ ...prev, ...location }))}
+          selectClassName={styles.formInput}
+          labelClassName={styles.formLabel}
+          wrapClassName={styles.panelFormField}
         />
+        <div className={styles.panelFormField}>
+          <label htmlFor="profile-address" className={styles.formLabel}>Street / House No.</label>
+          <input id="profile-address" className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave, Unit 4B" />
+        </div>
+        <div className={styles.panelFormField}>
+          <label htmlFor="profile-postal-code" className={styles.formLabel}>Postal code</label>
+          <input id="profile-postal-code" className={styles.formInput} value={form.postal_code} onChange={setField('postal_code')} placeholder="1634" />
+        </div>
+        <div className={styles.panelFormField}>
+          <MapPinPicker
+            value={pin}
+            onChange={(next, found) => {
+              setPin(next);
+              // Fill what the pin tells us; keep anything the user already typed.
+              setForm(prev => ({
+                ...prev,
+                address: prev.address || found?.street || '',
+                postal_code: prev.postal_code || found?.postcode || '',
+              }));
+            }}
+          />
+        </div>
+        {error && <p className={styles.panelError}>{error}</p>}
+        <div className={styles.panelActions}>
+          <button className={styles.saveBtn} onClick={save} disabled={saving} type="button">{saving ? 'Saving…' : 'Save'}</button>
+          <button className={styles.cancelBtn} onClick={cancel} disabled={saving} type="button">Cancel</button>
+        </div>
       </div>
-      {error && <p className={styles.panelError}>{error}</p>}
-      <div className={styles.panelActions}>
-        <button className={styles.saveBtn} onClick={save} disabled={saving} type="button">{saving ? 'Saving…' : 'Save'}</button>
-        <button className={styles.cancelBtn} onClick={cancel} disabled={saving} type="button">Cancel</button>
-      </div>
-    </div>
-  ) : (
+    );
+  }
+
+  const savedPin = pinFromProfile(profile);
+
+  return (
     <div className={styles.panelView}>
       <div className={styles.panelRows}>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Region</span><span className={styles.panelRowValue}>{profile.region ?? <em className={styles.noData}>No data</em>}</span></div>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Province</span><span className={styles.panelRowValue}>{profile.province ?? <em className={styles.noData}>No data</em>}</span></div>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>City / Municipality</span><span className={styles.panelRowValue}>{profile.city ?? <em className={styles.noData}>No data</em>}</span></div>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Barangay</span><span className={styles.panelRowValue}>{profile.barangay ?? <em className={styles.noData}>No data</em>}</span></div>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Street / House No.</span><span className={styles.panelRowValue}>{profile.address ?? <em className={styles.noData}>No data</em>}</span></div>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Postal code</span><span className={styles.panelRowValue}>{profile.postal_code ?? <em className={styles.noData}>No data</em>}</span></div>
-        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Map pin</span><span className={styles.panelRowValue}>{profile.lat != null && profile.lng != null ? `${profile.lat.toFixed(5)}, ${profile.lng.toFixed(5)}` : <em className={styles.noData}>Not pinned</em>}</span></div>
+        {ADDRESS_ROWS.map(({ label, key }) => (
+          <div key={key} className={styles.panelRow}>
+            <span className={styles.panelRowLabel}>{label}</span>
+            <span className={styles.panelRowValue}>{profile[key] ?? <NoData />}</span>
+          </div>
+        ))}
+        <div className={styles.panelRow}>
+          <span className={styles.panelRowLabel}>Map pin</span>
+          <span className={styles.panelRowValue}>
+            {savedPin ? `${savedPin.lat.toFixed(5)}, ${savedPin.lng.toFixed(5)}` : <NoData text="Not pinned" />}
+          </span>
+        </div>
       </div>
       <button className={styles.panelEditBtn} onClick={startEdit} type="button">Edit address</button>
     </div>
   );
 }
-  
-// ─── Notifications panel ──────────────────────────────────────────────────────
-const NOTIF_ITEMS: { key: keyof NotificationPrefs; label: string; desc: string }[] = [
-  { key: 'order_updates', label: 'Order updates', desc: 'Status changes for your active orders' },
-  { key: 'promotions', label: 'Promotions', desc: 'Weekly deals and special offers' },
-  { key: 'email_alerts', label: 'Email alerts', desc: 'Transaction receipts and account notices' },
-];
 
-function NotificationsPanel({ profile, onSaved }: { profile: UserProfile | null; onSaved: (p: UserProfile) => void }) {
-  const [prefs, setPrefs] = useState<NotificationPrefs>(DEFAULT_NOTIF);
-  const [saving, setSaving] = useState<keyof NotificationPrefs | null>(null);
+// ─── Edit profile form ────────────────────────────────────────────────────────
+type EditForm = { first_name: string; last_name: string; phone_number: string };
 
-  useEffect(() => {
-    if (profile) setPrefs(resolveNotifPrefs(profile.notifications_preferences));
-  }, [profile]);
-
-  const toggle = async (key: keyof NotificationPrefs) => {
-    const next = { ...prefs, [key]: !prefs[key] };
-    setPrefs(next);
-    setSaving(key);
-    try {
-      const updated = await updateMyProfile({ notifications_preferences: next });
-      onSaved(updated);
-    } catch {
-      setPrefs(prefs); // revert on failure
-    } finally {
-      setSaving(null);
-    }
-  };
-
-  if (!profile) return <PageLoader variant="compact" />;
-
-  return (
-    <div className={styles.notifList}>
-      {NOTIF_ITEMS.map(({ key, label, desc }) => (
-        <div key={key} className={styles.notifRow}>
-          <div className={styles.notifText}>
-            <span className={styles.notifLabel}>{label}</span>
-            <span className={styles.notifDesc}>{desc}</span>
-          </div>
-          <button
-            type="button"
-            className={`${styles.toggle} ${prefs[key] ? styles.toggleOn : ''}`}
-            onClick={() => toggle(key)}
-            disabled={saving === key}
-            aria-label={`${prefs[key] ? 'Disable' : 'Enable'} ${label}`}
-          >
-            <span className={styles.toggleThumb} />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Card brand icon (text fallback) ─────────────────────────────────────────
-const BRAND_LABEL: Record<string, string> = { visa: 'VISA', mastercard: 'MC', jcb: 'JCB', amex: 'AMEX' };
-function brandLabel(brand: string) { return BRAND_LABEL[brand.toLowerCase()] ?? brand.toUpperCase(); }
-
-// ─── Payment panel ────────────────────────────────────────────────────────────
-type CardForm = { card_number: string; exp_month: string; exp_year: string; cvc: string; name: string };
-const EMPTY_CARD: CardForm = { card_number: '', exp_month: '', exp_year: '', cvc: '', name: '' };
-
-function PaymentPanel({ userEmail }: { userEmail: string | undefined }) {
-  const [cards, setCards] = useState<SavedCard[]>([]);
-  const [loadingCards, setLoadingCards] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<CardForm>(EMPTY_CARD);
-  const [saving, setSaving] = useState(false);
-  const [removing, setRemoving] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchPaymentMethods()
-      .then(setCards)
-      .catch(() => setCards([]))
-      .finally(() => setLoadingCards(false));
-  }, []);
-
-  const setField = (f: keyof CardForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(p => ({ ...p, [f]: e.target.value }));
-
-  // Format card number with spaces every 4 digits
-  const handleCardNumber = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '').slice(0, 16);
-    setForm(p => ({ ...p, card_number: digits.replace(/(.{4})/g, '$1 ').trim() }));
-  };
-
-  const handleAdd = async () => {
-    setError(null);
-    const expMonth = parseInt(form.exp_month, 10);
-    const expYear = parseInt(form.exp_year, 10);
-    if (!form.card_number || !form.cvc || !form.name || !expMonth || !expYear) {
-      setError('Please fill in all card fields.'); return;
-    }
-    setSaving(true);
-    try {
-      const pmId = await tokenizeCard({
-        card_number: form.card_number,
-        exp_month: expMonth,
-        exp_year: expYear,
-        cvc: form.cvc,
-        name: form.name,
-        email: userEmail ?? '',
-      });
-      const saved = await attachPaymentMethod(pmId);
-      setCards(prev => [...prev, saved]);
-      setForm(EMPTY_CARD);
-      setShowForm(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add card.');
-    } finally { setSaving(false); }
-  };
-
-  const handleRemove = async (pmId: string) => {
-    setRemoving(pmId);
-    try {
-      await detachPaymentMethod(pmId);
-      setCards(prev => prev.filter(c => c.id !== pmId));
-    } catch { setError('Could not remove card. Please try again.'); }
-    finally { setRemoving(null); }
-  };
-
-  if (loadingCards) return <PageLoader variant="compact" />;
-
-  return (
-    <div className={styles.paymentPanel}>
-      {cards.length === 0 && !showForm && (
-        <p className={styles.panelNote}>No saved cards yet.</p>
-      )}
-
-      {cards.map(card => (
-        <div key={card.id} className={styles.cardRow}>
-          <span className={styles.cardBrand}>{brandLabel(card.brand)}</span>
-          <span className={styles.cardNumber}>•••• {card.last4}</span>
-          <span className={styles.cardExpiry}>{String(card.exp_month).padStart(2, '0')}/{card.exp_year}</span>
-          <button
-            className={styles.cardRemoveBtn}
-            onClick={() => handleRemove(card.id)}
-            disabled={removing === card.id}
-            type="button"
-          >
-            {removing === card.id ? '…' : 'Remove'}
-          </button>
-        </div>
-      ))}
-
-      {showForm ? (
-        <div className={styles.panelForm}>
-          <div className={styles.panelFormField}>
-            <label htmlFor="profile-name" className={styles.formLabel}>Name on card</label>
-            <input id="profile-name" className={styles.formInput} value={form.name} onChange={setField('name')} placeholder="Juan dela Cruz" />
-          </div>
-          <div className={styles.panelFormField}>
-            <label htmlFor="profile-card-number" className={styles.formLabel}>Card number</label>
-            <input id="profile-card-number" className={styles.formInput} value={form.card_number} onChange={handleCardNumber} placeholder="1234 5678 9012 3456" maxLength={19} inputMode="numeric" />
-          </div>
-          <div className={styles.panelFormRow}>
-            <div className={styles.panelFormField}>
-              <label htmlFor="profile-exp-month" className={styles.formLabel}>Exp month</label>
-              <input id="profile-exp-month" className={styles.formInput} value={form.exp_month} onChange={setField('exp_month')} placeholder="12" maxLength={2} inputMode="numeric" />
-            </div>
-            <div className={styles.panelFormField}>
-              <label htmlFor="profile-exp-year" className={styles.formLabel}>Exp year</label>
-              <input id="profile-exp-year" className={styles.formInput} value={form.exp_year} onChange={setField('exp_year')} placeholder="2028" maxLength={4} inputMode="numeric" />
-            </div>
-            <div className={styles.panelFormField}>
-              <label htmlFor="profile-cvc" className={styles.formLabel}>CVC</label>
-              <input id="profile-cvc" className={styles.formInput} value={form.cvc} onChange={setField('cvc')} placeholder="123" maxLength={4} inputMode="numeric" type="password" />
-            </div>
-          </div>
-          {error && <p className={styles.panelError}>{error}</p>}
-          <div className={styles.panelActions}>
-            <button className={styles.saveBtn} onClick={handleAdd} disabled={saving} type="button">{saving ? 'Saving…' : 'Save card'}</button>
-            <button className={styles.cancelBtn} onClick={() => { setShowForm(false); setError(null); setForm(EMPTY_CARD); }} disabled={saving} type="button">Cancel</button>
-          </div>
-        </div>
-      ) : (
-        <button className={styles.panelEditBtn} onClick={() => { setError(null); setShowForm(true); }} type="button">
-          + Add card
-        </button>
-      )}
-
-      {error && !showForm && <p className={styles.panelError}>{error}</p>}
-    </div>
-  );
-}
-
-// ─── Edit form type ───────────────────────────────────────────────────────────
-type EditForm = { first_name: string; last_name: string; phone_number: string};
-
-function profileToForm(p: UserProfile): EditForm {
-  return { first_name: p.first_name ?? '', last_name: p.last_name ?? '', phone_number: p.phone_number ?? '' };
-}
+const profileToForm = (p: UserProfile): EditForm =>
+  ({ first_name: p.first_name ?? '', last_name: p.last_name ?? '', phone_number: p.phone_number ?? '' });
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-// CH2: the user's own support conversation with the admins.
-function SupportPanel() {
-  const { t } = useLanguage();
-  const [open, setOpen] = useState(false);
-  return (
-    <div className={styles.settingCard}>
-      <button
-        type="button"
-        className={styles.settingHeader}
-        style={{ width: '100%', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        <span className={styles.settingLabel}>💬 {t.support.setting}</span>
-      </button>
-      {open && (
-        <div className={styles.settingDetails}>
-          <OrderChat endpoint="/support/messages" title={t.support.title} emptyText={t.support.empty} />
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function Profile() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-
   const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<EditForm>({ first_name: '', last_name: '', phone_number: ''});
+  const [form, setForm] = useState<EditForm>({ first_name: '', last_name: '', phone_number: '' });
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -430,24 +216,16 @@ export default function Profile() {
   const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
-      setIsLoading(true); setLoadError(null);
-      try {
-        const data = await fetchMyProfile();
-        setProfile(data);
-        setForm(profileToForm(data));
-      } catch {
-        setLoadError('Could not load profile. Please refresh.');
-      } finally { setIsLoading(false); }
-    };
-    void load();
+    fetchMyProfile()
+      .then(data => { setProfile(data); setForm(profileToForm(data)); })
+      .catch(() => setLoadError('Could not load profile. Please refresh.'))
+      .finally(() => setIsLoading(false));
   }, []);
 
   const handleAvatarUpload = async (file: File) => {
     setAvatarUploading(true);
     try {
-      const updated = await uploadProfilePicture(file);
-      setProfile(updated);
+      setProfile(await uploadProfilePicture(file));
     } catch {
       // silently fail — avatar stays as-is
     } finally {
@@ -461,17 +239,19 @@ export default function Profile() {
   const handleSave = async () => {
     setIsSaving(true); setSaveError(null);
     try {
-      const updated = await updateMyProfile({ 
-        first_name: form.first_name.trim() || null, 
-        last_name: form.last_name.trim() || null, 
-        phone_number: form.phone_number.trim() || null, 
+      const updated = await updateMyProfile({
+        first_name: form.first_name.trim() || null,
+        last_name: form.last_name.trim() || null,
+        phone_number: form.phone_number.trim() || null,
       });
-      setProfile(updated); setModalOpen(false);
+      setProfile(updated);
+      setModalOpen(false);
     } catch { setSaveError('Failed to save. Please try again.'); }
     finally { setIsSaving(false); }
   };
 
-  const set = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(p => ({ ...p, [field]: e.target.value }));
+  const set = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm(p => ({ ...p, [field]: e.target.value }));
 
   const handleDeleteAccount = async () => {
     setDeletingAccount(true);
@@ -482,12 +262,12 @@ export default function Profile() {
     } catch {
       setDeletingAccount(false);
       setConfirmDeleteAccount(false);
-      
     }
   };
 
   const fullName = profile ? [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() || 'Carabao User' : null;
   const hasMerchant = !!profile?.merchant?.id;
+  const cart = profile?.cart;
 
   if (isLoading) return <PageLoader label="Loading your profile…" />;
 
@@ -497,8 +277,6 @@ export default function Profile() {
 
         {/* ── Left column ── */}
         <div className={styles.leftCol}>
-
-          {/* Profile card */}
           <section className={styles.profileSection}>
             <UserAvatar
               pictureUrl={profile?.profile_picture_url ?? null}
@@ -524,7 +302,6 @@ export default function Profile() {
               Edit Profile
             </button>
 
-            {/* 3-card snapshot — auth link removed */}
             <div className={styles.profileSnapshot}>
               <div className={styles.snapshotCard}>
                 <span className={styles.snapshotLabel}>Member since</span>
@@ -537,38 +314,28 @@ export default function Profile() {
               <div className={`${styles.snapshotCard} ${styles.snapshotCardWide}`}>
                 <span className={styles.snapshotLabel}>Cart</span>
                 <strong className={styles.snapshotValue}>
-                  {profile?.cart ?`${profile.cart.total_items} item${profile.cart.total_items === 1 ? '' : 's'} · ${formatPeso(profile.cart.total_price)}` : 'No data'}
+                  {cart ? `${cart.total_items} item${cart.total_items === 1 ? '' : 's'} · ${formatPeso(cart.total_price)}` : 'No data'}
                 </strong>
               </div>
             </div>
           </section>
 
-          {/* Merchant actions — anchored below profile card */}
-          <section className={styles.merchantSection}>
-            {hasMerchant ? (
-              <>
-                <Link className={styles.merchantBtn} href={`/merchant/${profile!.merchant!.id}`}>View Merchant Page</Link>
-                <Link className={styles.merchantBtn} href="/merchantDashboard">Merchant Dashboard</Link>
-              </>
-            ) : (
+          {/* Non-merchants get an entry point to onboarding */}
+          {!hasMerchant && (
+            <section className={styles.merchantSection}>
               <Link className={`${styles.merchantBtn} ${styles.merchantBtnPrimary}`} href="/merchantOnboarding">
                 Apply as Merchant
               </Link>
-            )}
-          </section>
+            </section>
+          )}
 
           {/* Two-step verification (E8a): offered to merchants and admins */}
           {TWO_FACTOR_ENABLED && (hasMerchant || profile?.is_admin) && <TwoFactorSettings />}
 
-          {/* Danger zone */}
           <section className={styles.profileDangerZone}>
             <p className={styles.profileDangerLabel}>Danger Zone</p>
             {!confirmDeleteAccount ? (
-              <button
-                className={styles.profileDangerBtn}
-                onClick={() => setConfirmDeleteAccount(true)}
-                type="button"
-              >
+              <button className={styles.profileDangerBtn} onClick={() => setConfirmDeleteAccount(true)} type="button">
                 Delete account
               </button>
             ) : (
@@ -609,26 +376,6 @@ export default function Profile() {
                 <AddressPanel profile={profile} onSaved={setProfile} />
               </div>
             </div>
-
-            <div className={styles.settingCard}>
-              <div className={styles.settingHeader}>
-                <span className={styles.settingLabel}>💳 Payment Methods</span>
-              </div>
-              <div className={styles.settingDetails}>
-                <PaymentPanel userEmail={profile?.email} />
-              </div>
-            </div>
-
-            <div className={styles.settingCard}>
-              <div className={styles.settingHeader}>
-                <span className={styles.settingLabel}>🔔 Notifications</span>
-              </div>
-              <div className={styles.settingDetails}>
-                <NotificationsPanel profile={profile} onSaved={setProfile} />
-              </div>
-            </div>
-
-            <SupportPanel />
           </div>
         </section>
       </main>

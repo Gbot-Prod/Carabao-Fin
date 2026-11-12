@@ -20,15 +20,21 @@ class FakeQuery:
     def first(self):
         return self._result
 
+    def all(self):
+        return self._result
+
 
 class FakeSession:
-    def __init__(self, order, shipment=None):
+    def __init__(self, order, shipment=None, order_statuses=None):
         self._order = order
         self._shipment = shipment
+        self._order_statuses = order_statuses or {}
 
-    def query(self, entity):
+    def query(self, entity, *columns):
         if entity is tracking.Shipment:
             return FakeQuery(self._shipment)
+        if columns:  # query(Order.id, Order.status): the current-status lookup
+            return FakeQuery(list(self._order_statuses.items()))
         return FakeQuery(self._order)
 
 
@@ -127,3 +133,52 @@ def test_route_without_arrival_estimate_has_no_eta():
     response = _track(FakeSession(_order(status="Shipped", route_waypoints=waypoints)))
     assert response.eta_minutes is None
     assert response.progress == 0.0
+
+
+def _two_stop_route():
+    return [
+        {"type": "pickup", "lat": 14.6, "lng": 121.0, "label": "Farm", "sequence": 0},
+        {
+            "type": "delivery",
+            "order_id": 5,
+            "lat": 14.61,
+            "lng": 121.01,
+            "label": "Stop 1",
+            "sequence": 1,
+            "status": "in_transit",
+        },
+        {
+            "type": "delivery",
+            "order_id": 6,
+            "lat": 14.62,
+            "lng": 121.02,
+            "label": "Stop 2",
+            "sequence": 2,
+            "status": "in_transit",
+        },
+    ]
+
+
+def test_stop_status_is_the_orders_current_status_not_the_dispatch_snapshot():
+    shipment = SimpleNamespace(
+        id=9, status="in_transit", route_waypoints=_two_stop_route(), shipped_at=None
+    )
+    db = FakeSession(
+        _order(shipment_id=9),
+        shipment,
+        order_statuses={5: "delivered", 6: "out_for_delivery"},
+    )
+    response = _track(db)
+    assert [s.status for s in response.stops] == ["delivered"]
+    delivery = [w for w in response.waypoints if w.type == "delivery"]
+    assert [w.status for w in delivery] == ["delivered"]
+
+
+def test_current_statuses_leave_pickup_and_unknown_orders_alone():
+    db = FakeSession(None, order_statuses={6: "cancelled"})
+    route = _two_stop_route()
+    updated = tracking.with_current_order_statuses(db, route)
+    assert "status" not in updated[0]
+    assert updated[1]["status"] == "in_transit"  # order 5 not found: keep snapshot
+    assert updated[2]["status"] == "cancelled"
+    assert route[2]["status"] == "in_transit"  # the stored route is not mutated
