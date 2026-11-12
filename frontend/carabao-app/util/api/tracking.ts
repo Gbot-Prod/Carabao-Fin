@@ -21,6 +21,8 @@ export type ShipmentStop = {
   lng: number;
   label: string;
   status: string;
+  /** Planned arrival (ISO) from the route schedule. Merchant view only. */
+  estimated_arrival_at?: string | null;
 };
 
 // 'estimated': progress and ETA come from the planned route schedule (no live GPS).
@@ -40,6 +42,8 @@ export type TrackingData = {
   progress: number;
   eta_minutes: number | null;
   active_stop_index: number;
+  /** Planned drive time for the whole route. Merchant view only. */
+  total_duration_seconds?: number | null;
   tracking_state: TrackingState;
 };
 

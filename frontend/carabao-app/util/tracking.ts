@@ -1,6 +1,8 @@
 import along from '@turf/along';
 import length from '@turf/length';
 import type { Feature, LineString } from 'geojson';
+import { CLOSED_ORDER_STATUSES, ORDER_STATUS_LABELS, type OrderStatus } from '@/util/api/statuses';
+import type { TrackingData } from '@/util/api/tracking';
 
 export type RouteGeoJSON = Feature<LineString>;
 
@@ -52,3 +54,16 @@ export function getPositionAlongRoute(
   const [lng, lat] = point.geometry.coordinates as [number, number];
   return [lng, lat];
 }
+
+/** A stop is finished once its order is delivered or cancelled. */
+export const isClosedStatus = (status: string | null | undefined): boolean =>
+  !!status && (CLOSED_ORDER_STATUSES as readonly string[]).includes(status);
+
+export const statusLabel = (status: string | null | undefined): string =>
+  status
+    ? ORDER_STATUS_LABELS[status as OrderStatus] ?? status.replaceAll('_', ' ')
+    : 'Status unknown';
+
+/** Every stop is delivered or cancelled: nothing left to refresh. */
+export const isRouteFinished = (data: TrackingData): boolean =>
+  data.stops.length > 0 && data.stops.every((stop) => isClosedStatus(stop.status));
