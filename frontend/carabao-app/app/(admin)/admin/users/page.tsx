@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ADMIN_PAGE_SIZE, fetchAdminUsers, setUserAdminRole, type UserProfile } from "@/util/api/admin";
 import Pagination from "../../Pagination";
+import SuspendControl from "../../SuspendControl";
 import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
@@ -74,6 +75,7 @@ function AdminUsersContent() {
               <th>Merchant</th>
               <th>Joined</th>
               <th>Role</th>
+              <th>Account</th>
             </tr>
           </thead>
           <tbody>
@@ -98,6 +100,19 @@ function AdminUsersContent() {
                       <span className={styles.toggleThumb} />
                     </span>
                   </label>
+                </td>
+                <td>
+                  <SuspendControl
+                    userId={u.id}
+                    suspendedAt={u.suspended_at}
+                    reason={u.suspension_reason}
+                    isMerchant={Boolean(u.merchant)}
+                    onChange={(suspendedAt, reason) =>
+                      setUsers((prev) =>
+                        prev.map((x) => (x.id === u.id ? { ...x, suspended_at: suspendedAt, suspension_reason: reason } : x)),
+                      )
+                    }
+                  />
                 </td>
               </tr>
             ))}

@@ -1,7 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
-import { admin } from "better-auth/plugins";
+import { admin, twoFactor } from "better-auth/plugins";
+import { TWO_FACTOR_ENABLED } from "@/lib/features";
 import { Pool } from "pg";
 
 const rawPostgresUrl =
@@ -116,7 +117,10 @@ function readSignupVerification(token: string | null | undefined): SignupVerific
 }
 
 export const auth = betterAuth({
-  plugins: [admin()],
+  // E8: TOTP two-step verification ("Carabao" is the name shown in authenticator apps).
+  // Switched off for now (lib/features.ts): without the plugin, sign-in never asks
+  // for a code, even for accounts that turned it on earlier.
+  plugins: TWO_FACTOR_ENABLED ? [admin(), twoFactor({ issuer: "Carabao" })] : [admin()],
   databaseHooks: {
     user: {
       create: {
@@ -141,6 +145,20 @@ export const auth = betterAuth({
     },
   },
   database: pool,
+  // E7: BetterAuth limits by client IP. Defaults to production only; stricter
+  // rules for the credential endpoints. (Per-email limits for the app and the
+  // OTP steps live in the FastAPI backend, app/services/rate_limit.py.)
+  rateLimit: {
+    enabled: process.env.NODE_ENV === "production" || process.env.BETTER_AUTH_RATE_LIMIT === "true",
+    window: 60,
+    max: 100,
+    customRules: {
+      "/sign-in/email": { window: 900, max: 10 },
+      "/sign-up/email": { window: 3600, max: 10 },
+      "/request-password-reset": { window: 900, max: 5 },
+      "/reset-password": { window: 900, max: 10 },
+    },
+  },
   session: {
     cookieCache: {
       enabled: true,
@@ -159,6 +177,23 @@ export const auth = betterAuth({
     // Whoever proves the inbox via a reset kicks out anyone who registered
     // the address first.
     revokeSessionsOnPasswordReset: true,
+    // Forgot-password (E6): the link goes out through the backend's email service.
+    sendResetPassword: async ({ user, url }) => {
+      const sharedSecret = process.env.AUTH_SYNC_SHARED_SECRET;
+      if (!apiBaseUrl || !sharedSecret) {
+        console.info(`[password-reset] Email not configured. Reset link for ${user.email}: ${url}`);
+        return;
+      }
+      const res = await fetch(`${apiBaseUrl}/email/send-password-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Internal-Auth-Sync-Secret": sharedSecret },
+        body: JSON.stringify({ to: user.email, reset_url: url }),
+      }).catch((err) => {
+        console.error("[password-reset] Failed to reach backend email service", err);
+        return null;
+      });
+      if (!res?.ok) console.error(`[password-reset] Backend returned ${res?.status} for ${user.email}`);
+    },
   },
   emailVerification: {
     sendOnSignUp: true,

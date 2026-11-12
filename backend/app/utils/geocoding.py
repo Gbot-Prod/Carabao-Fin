@@ -6,7 +6,10 @@ from urllib.parse import quote
 
 import requests as _requests
 
-_PH_BBOX = "116.928,4.587,126.604,21.321"
+from app.services.service_area import LUZON_BBOX, in_luzon_bbox
+
+# Carabao serves the Luzon island group only (B2).
+_LUZON_BBOX = ",".join(str(v) for v in LUZON_BBOX)
 _METRO_MANILA_PROXIMITY = "120.9842,14.5995"
 _GEOCODE_ATTEMPTS = 3
 _GEOCODE_TIMEOUT_SECONDS = 10
@@ -30,7 +33,7 @@ def _geocode_sync(address: str) -> tuple[float, float] | None:
     url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{quote(normalised)}.json"
     params = {
         "country": "PH",
-        "bbox": _PH_BBOX,
+        "bbox": _LUZON_BBOX,
         "proximity": _METRO_MANILA_PROXIMITY,
         "types": "address,poi,place,locality,neighborhood",
         "limit": 1,
@@ -76,6 +79,9 @@ def _geocode_sync(address: str) -> tuple[float, float] | None:
             )
 
         lng, lat = feature["center"]
+        if not in_luzon_bbox(lat, lng):
+            print(f"[geocode] Result outside Luzon for {normalised!r}: ({lat}, {lng})")
+            return None
         print(
             f"[geocode] {normalised!r} → ({lat:.5f}, {lng:.5f})  place={
                 feature.get('place_name')!r

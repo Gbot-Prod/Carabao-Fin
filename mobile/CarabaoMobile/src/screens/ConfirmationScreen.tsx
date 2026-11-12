@@ -1,12 +1,96 @@
 // src/screens/ConfirmationScreen.tsx
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
-  TouchableOpacity, Animated, ScrollView,
+  TouchableOpacity, Animated, ScrollView, Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { useAuth } from '../lib/AuthContext';
+import { api, ApiError, type TransactionStatus } from '../lib/api';
+import { parsePendingOrders, type PendingOrder } from '../lib/cartGroups';
+
+/** Another farm's order from the same checkout (C1): paid in its own PayMongo session. */
+function OtherOrderRow({ order, token }: { order: PendingOrder; token: string | null }) {
+  const [status, setStatus] = useState<TransactionStatus | null>(null);
+  const [paying, setPaying] = useState(false);
+  const view = toPaymentView(status);
+
+  const refresh = useCallback(async () => {
+    if (!token) return;
+    try {
+      setStatus((await api.payments.transactionByOrder(token, order.id)).status);
+    } catch (err) {
+      // 404 = no checkout session yet: still unpaid.
+      if (!(err instanceof ApiError && err.status === 404)) console.warn('Status check failed', err);
+    }
+  }, [token, order.id]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const pay = async () => {
+    if (!token) return;
+    setPaying(true);
+    try {
+      const checkout = await api.payments.checkout(token, order.id);
+      await WebBrowser.openBrowserAsync(checkout.checkout_url);
+    } catch (err) {
+      Alert.alert('Payment not started', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      await refresh();
+      setPaying(false);
+    }
+  };
+
+  return (
+    <View style={styles.otherRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.otherFarm}>{order.farm}</Text>
+        <Text style={styles.otherMeta}>{order.ref} · ₱{order.total.toLocaleString()} · {PAYMENT_COPY[view].badge}</Text>
+      </View>
+      {view === 'pending' ? (
+        <TouchableOpacity style={styles.otherPayBtn} onPress={pay} disabled={paying}>
+          <Text style={styles.primaryBtnText}>{paying ? 'Opening…' : 'Pay'}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
+
+type PaymentView = 'paid' | 'pending' | 'expired';
+
+// failed/expired both mean the checkout closed without payment; refunds only
+// happen after a successful payment.
+function toPaymentView(status: TransactionStatus | null): PaymentView {
+  if (status === 'paid' || status === 'refund_pending' || status === 'refunded') return 'paid';
+  if (status === 'failed' || status === 'expired') return 'expired';
+  return 'pending';
+}
+
+const PAYMENT_COPY: Record<PaymentView, { title: string; sub: string; badge: string }> = {
+  paid: {
+    title: 'Payment Received!',
+    sub: 'Your order has been paid and sent to the farm for preparation.',
+    badge: 'Paid',
+  },
+  pending: {
+    title: 'Order Placed',
+    sub: 'We are waiting for PayMongo to confirm your payment. This page updates automatically.',
+    badge: 'Pending Payment',
+  },
+  expired: {
+    title: 'Payment Expired',
+    sub: 'The payment window closed before payment was received, so the reserved stock was released. Please place the order again.',
+    badge: 'Expired',
+  },
+};
+
+const POLL_INTERVAL_MS = 4000;
+const MAX_POLLS = 30; // ~2 minutes; the buyer can tap "Check again" after that.
 
 const STEPS = [
   { icon: '✅', label: 'Merchant confirms stock' },
@@ -16,7 +100,54 @@ const STEPS = [
 
 function ConfirmationScreenContent() {
   const router = useRouter();
-  const { orderId } = useLocalSearchParams<{ orderId?: string }>();
+  const { orderId, orderRef, more } = useLocalSearchParams<{ orderId?: string; orderRef?: string; more?: string }>();
+  const otherOrders = parsePendingOrders(more);
+  const { token } = useAuth();
+  const numericOrderId = Number(orderId);
+  const [txnStatus, setTxnStatus] = useState<TransactionStatus | null>(null);
+  const [polls, setPolls] = useState(0);
+  const [paying, setPaying] = useState(false);
+  const view = toPaymentView(txnStatus);
+  const copy = PAYMENT_COPY[view];
+
+  const checkStatus = useCallback(async () => {
+    if (!token || !Number.isFinite(numericOrderId)) return;
+    try {
+      const txn = await api.payments.transactionByOrder(token, numericOrderId);
+      setTxnStatus(txn.status);
+    } catch (err) {
+      // 404 = checkout session not created yet; keep showing pending.
+      if (!(err instanceof ApiError && err.status === 404)) {
+        console.warn('Payment status check failed', err);
+      }
+    }
+  }, [token, numericOrderId]);
+
+  useEffect(() => {
+    if (view !== 'pending' || polls >= MAX_POLLS) return;
+    const timer = setTimeout(
+      () => {
+        void checkStatus().finally(() => setPolls((p) => p + 1));
+      },
+      polls === 0 ? 0 : POLL_INTERVAL_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [view, polls, checkStatus]);
+
+  const handlePayNow = async () => {
+    if (!token || !Number.isFinite(numericOrderId)) return;
+    setPaying(true);
+    try {
+      const checkout = await api.payments.checkout(token, numericOrderId);
+      await WebBrowser.openBrowserAsync(checkout.checkout_url);
+      setPolls(0); // restart polling after the browser closes
+    } catch (err) {
+      Alert.alert('Payment not started', err instanceof Error ? err.message : 'Please try again.');
+      await checkStatus();
+    } finally {
+      setPaying(false);
+    }
+  };
 
   const scale = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -38,13 +169,11 @@ function ConfirmationScreenContent() {
         {/* Check animation */}
         <View style={styles.heroArea}>
           <Animated.View style={[styles.checkCircle, { transform: [{ scale }] }]}>
-            <Text style={styles.checkEmoji}>✓</Text>
+            <Text style={styles.checkEmoji}>{view === 'paid' ? '✓' : view === 'pending' ? '…' : '!'}</Text>
           </Animated.View>
           <Animated.View style={{ opacity, transform: [{ translateY: slideY }] }}>
-            <Text style={styles.heroTitle}>Order Confirmed!</Text>
-            <Text style={styles.heroSub}>
-              Your request has been sent to the farm and is queued for processing.
-            </Text>
+            <Text style={styles.heroTitle}>{copy.title}</Text>
+            <Text style={styles.heroSub}>{copy.sub}</Text>
           </Animated.View>
         </View>
 
@@ -55,7 +184,7 @@ function ConfirmationScreenContent() {
             <View style={styles.detailsGrid}>
               <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>Order Reference</Text>
-                <Text style={styles.detailValue}>{orderId}</Text>
+                <Text style={styles.detailValue}>{orderRef ?? orderId}</Text>
               </View>
               <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>Estimated Delivery</Text>
@@ -63,12 +192,37 @@ function ConfirmationScreenContent() {
               </View>
               <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>Payment Status</Text>
-                <View style={styles.statusBadge}>
-                  <Text style={styles.statusText}>Pending Confirmation</Text>
+                <View style={[styles.statusBadge, view === 'paid' && styles.badgePaid, view === 'expired' && styles.badgeExpired]}>
+                  <Text style={[styles.statusText, view === 'paid' && styles.textPaid, view === 'expired' && styles.textExpired]}>
+                    {copy.badge}
+                  </Text>
                 </View>
               </View>
             </View>
+            {view === 'pending' && (
+              <View style={styles.payActions}>
+                <TouchableOpacity style={styles.primaryBtn} onPress={handlePayNow} disabled={paying}>
+                  <Text style={styles.primaryBtnText}>{paying ? 'Opening…' : 'Pay now'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPolls(0)}>
+                  <Text style={styles.secondaryBtnText}>Check again</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
+
+          {otherOrders.length > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>More orders to pay</Text>
+              <Text style={styles.otherHint}>
+                Your cart had produce from {otherOrders.length + 1} farms, so it became {otherOrders.length + 1} orders.
+                Each is paid separately; unpaid orders are cancelled automatically after a while.
+              </Text>
+              {otherOrders.map((o) => (
+                <OtherOrderRow key={o.id} order={o} token={token} />
+              ))}
+            </View>
+          )}
 
           {/* Timeline */}
           <View style={styles.card}>
@@ -128,6 +282,17 @@ export default function ConfirmationScreen() {
 }
 
 const styles = StyleSheet.create({
+  otherHint: { fontSize: FontSize.sm, color: Colors.textMuted, marginBottom: Spacing.sm },
+  otherRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight,
+  },
+  otherFarm: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
+  otherMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  otherPayBtn: {
+    backgroundColor: Colors.primary, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
+  },
   root: { flex: 1, backgroundColor: Colors.offWhite },
   scroll: { paddingBottom: 40 },
 
@@ -177,6 +342,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 3, borderRadius: Radius.full,
   },
   statusText: { fontSize: FontSize.xs, color: Colors.warning, fontWeight: '700' },
+  badgePaid: { backgroundColor: Colors.successBg },
+  textPaid: { color: Colors.success },
+  badgeExpired: { backgroundColor: Colors.errorBg },
+  textExpired: { color: Colors.error },
+  payActions: { gap: Spacing.sm, marginTop: Spacing.md },
 
   timelineStep: { flexDirection: 'row', gap: Spacing.md, marginBottom: 4 },
   timelineLeft: { alignItems: 'center', width: 28 },

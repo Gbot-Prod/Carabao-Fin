@@ -17,7 +17,6 @@ from app.api.routes import merchants
 from app.api.routes.router import router
 from app.models import (  # noqa: F401  (registers related mappers)
     cart,
-    current_orders,
     merchant_application,
     merchant_payout,
     mobile_credential,

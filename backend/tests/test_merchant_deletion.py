@@ -273,7 +273,12 @@ def test_deleted_merchant_is_hidden_everywhere(db, seller, buyer):
     assert client.get(f"/merchants/{merchant.id}/shoppage").status_code == 404
     # Owner endpoints treat a closed profile as missing.
     assert client.get("/merchants/me/performance").status_code == 404
-    assert client.post("/produce/", json={"name": "Onion"}).status_code == 404
+    new_produce = {
+        "name": "Onion",
+        "harvest_date": "2026-01-01",
+        "best_before": "2026-01-10",
+    }
+    assert client.post("/produce/", json=new_produce).status_code == 404
     assert client.delete("/merchants/me").status_code == 404
 
 
@@ -298,7 +303,7 @@ def test_checkout_rejected_for_deleted_merchant(db, seller, buyer):
     resp = _client(db, buyer_user).post("/orders/me/place", json={})
 
     assert resp.status_code == 400
-    assert resp.json()["detail"] == "This merchant is no longer accepting orders"
+    assert "no longer accepting orders" in resp.json()["detail"]
     db.rollback()
     assert db.query(Order).count() == 0
     assert db.get(Produce, produce.id).stock_quantity == 5

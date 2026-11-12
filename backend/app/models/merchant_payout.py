@@ -14,7 +14,9 @@ class MerchantPayoutInfo(Base):
     )
 
     payout_type = Column(String, nullable=False)  # bank | gcash | maya
-    bank_code = Column(String, nullable=True)  # BDO, BPI, etc.
+    # PayMongo receiving-institution code (BIC), e.g. BNORPHMMXXX for BDO.
+    bank_code = Column(String, nullable=True)
+    bank_name = Column(String, nullable=True)
     account_number = Column(String, nullable=True)
     account_name = Column(String, nullable=True)
     # mobile number for GCash/Maya

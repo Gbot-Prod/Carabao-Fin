@@ -8,12 +8,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.cart import Cart
-from app.models.current_orders import CurrentOrder
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.produce import Produce
-from app.services.order_status import auto_confirm_at
+from app.services.order_status import (
+    SHIPPED_STATUSES,
+    auto_confirm_at,
+    payment_status,
+)
 
 
 def _to_int(value: Any, default: int = 0) -> int:
@@ -63,23 +66,21 @@ def get_or_create_order_history(db: Session, user_id: int) -> OrderHistory:
 def get_history_orders(db: Session, history: OrderHistory) -> list[Order]:
     return (
         db.query(Order)
-        .options(selectinload(Order.merchant).selectinload(Merchant.shop_page))
+        .options(*order_item_load())
         .filter(Order.order_history_id == history.id)
         .all()
     )
 
 
-def current_order_load() -> tuple:
-    """What to_current_order_item reads, loaded in batches instead of per row.
+def order_item_load() -> tuple:
+    """What the order serializers read, loaded in batches instead of per row.
 
     A function because building these at import time configures the mappers before
     main.py has imported every model.
     """
     return (
-        selectinload(CurrentOrder.order)
-        .selectinload(Order.merchant)
-        .selectinload(Merchant.shop_page),
-        selectinload(CurrentOrder.merchant).selectinload(Merchant.shop_page),
+        selectinload(Order.merchant).selectinload(Merchant.shop_page),
+        selectinload(Order.transactions),
     )
 
 
@@ -146,6 +147,22 @@ def _get_merchant_page_slug(merchant: Merchant | None) -> str | None:
     return merchant.shop_page.slug
 
 
+def _get_merchant_logo_url(merchant: Merchant | None) -> str | None:
+    if merchant is None or merchant.shop_page is None:
+        return None
+    return merchant.shop_page.logo_url
+
+
+def _schedule_fields(order: Order) -> dict[str, Any]:
+    """What the buyer chose at checkout, shared by every order serializer."""
+    return {
+        "delivery_address": order.delivery_address,
+        "requested_delivery_date": order.requested_delivery_date,
+        "delivery_window": order.delivery_window,
+        "notes": order.notes,
+    }
+
+
 def to_order_history_item(order: Order) -> dict[str, Any]:
     items = order.items or []
     merchant = order.merchant
@@ -158,20 +175,24 @@ def to_order_history_item(order: Order) -> dict[str, Any]:
         ),
         "merchant_id": merchant.id if merchant is not None else None,
         "merchant_page_slug": _get_merchant_page_slug(merchant),
+        "merchant_logo_url": _get_merchant_logo_url(merchant),
         "total_amount": order.total_price,
         "order_date": order.ordered_at,
         "status": order.status,
+        "payment_status": payment_status(order),
         "items": items,
+        **_schedule_fields(order),
     }
 
 
-def to_current_order_item_from_order(order: Order) -> dict[str, Any]:
+def to_current_order_item(order: Order) -> dict[str, Any]:
     items = order.items or []
     first_item = items[0] if items and isinstance(items[0], dict) else {}
     merchant = order.merchant
-    merchant_name = derive_merchant_name(
-        items,
-        merchant.merchant_name if merchant is not None else f"Order #{order.id}",
+    merchant_name = (
+        merchant.merchant_name
+        if merchant is not None
+        else derive_merchant_name(items, f"Order #{order.id}")
     )
     return {
         "id": order.id,
@@ -179,41 +200,21 @@ def to_current_order_item_from_order(order: Order) -> dict[str, Any]:
         "merchant": merchant_name,
         "merchant_id": merchant.id if merchant is not None else None,
         "merchant_page_slug": _get_merchant_page_slug(merchant),
-        "shipped": order.status.lower() in {"shipped", "out_for_delivery", "delivered"},
+        "merchant_logo_url": _get_merchant_logo_url(merchant),
+        "shipped": order.status in SHIPPED_STATUSES,
         "date_bought": order.ordered_at,
-        "time_of_arrival": None,
+        "time_of_arrival": order.time_of_arrival,
         "shipped_at": order.shipped_at,
         "auto_confirm_at": auto_confirm_at(order),
-        "delivery_fee": int(
-            first_item.get("deliveryFee", 0) if isinstance(first_item, dict) else 0
-        ),
-        "image": first_item.get("image") if isinstance(first_item, dict) else None,
+        # Orders placed before delivery_fee existed kept it on the item.
+        "delivery_fee": order.delivery_fee
+        or _to_int(first_item.get("deliveryFee", 0)),
+        "image": order.image or first_item.get("image"),
         "status": order.status,
+        "payment_status": payment_status(order),
         "items": items,
-    }
-
-
-def to_current_order_item(current_order: CurrentOrder) -> dict[str, Any]:
-    order = current_order.order
-    items = order.items or []
-    first_item = items[0] if items and isinstance(items[0], dict) else {}
-    merchant = current_order.merchant or order.merchant
-    return {
-        "id": current_order.id,
-        "order_id": current_order.order_id,
-        "merchant": current_order.merchant_name,
-        "merchant_id": merchant.id if merchant is not None else None,
-        "merchant_page_slug": _get_merchant_page_slug(merchant),
-        "shipped": current_order.shipped,
-        "date_bought": order.ordered_at,
-        "time_of_arrival": current_order.time_of_arrival,
-        "shipped_at": order.shipped_at,
-        "auto_confirm_at": auto_confirm_at(order),
-        "delivery_fee": current_order.delivery_fee,
-        "image": current_order.image
-        or (first_item.get("image") if isinstance(first_item, dict) else None),
-        "status": current_order.status,
-        "items": items,
+        "total_amount": order.total_price,
+        **_schedule_fields(order),
     }
 
 

@@ -21,7 +21,13 @@ export type ShipmentStop = {
   lng: number;
   label: string;
   status: string;
+  /** Planned arrival (ISO) from the route schedule. Merchant view only. */
+  estimated_arrival_at?: string | null;
 };
+
+// 'estimated': progress and ETA come from the planned route schedule (no live GPS).
+// 'waiting_for_shipment': no route yet, so there is no ETA to show.
+export type TrackingState = 'estimated' | 'waiting_for_shipment';
 
 export type TrackingData = {
   shipment_id: number;
@@ -31,11 +37,14 @@ export type TrackingData = {
   order_ids: number[];
   waypoints: Waypoint[];
   stops: ShipmentStop[];
-  origin: TrackingPosition;
-  destination: TrackingPosition;
+  origin: TrackingPosition | null;
+  destination: TrackingPosition | null;
   progress: number;
-  eta_minutes: number;
+  eta_minutes: number | null;
   active_stop_index: number;
+  /** Planned drive time for the whole route. Merchant view only. */
+  total_duration_seconds?: number | null;
+  tracking_state: TrackingState;
 };
 
 export const fetchTracking = async (orderId: number): Promise<TrackingData> => {

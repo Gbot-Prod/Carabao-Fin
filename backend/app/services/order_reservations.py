@@ -10,8 +10,14 @@ from app.models.cart import Cart
 from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.produce import Produce
+from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
-from app.services.paymongo import expire_checkout_session
+from app.services import notifications
+from app.services.paymongo import (
+    expire_checkout_session,
+    paid_payment_from_session,
+    retrieve_checkout_session,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +50,7 @@ def close_checkout_sessions(order: Order, db: Session) -> bool:
             db.query(Transaction.paymongo_session_id)
             .filter(
                 Transaction.order_id == order.id,
-                Transaction.status == "pending",
+                Transaction.status == TransactionStatus.PENDING,
                 Transaction.paymongo_session_id.isnot(None),
             )
             .all()
@@ -66,14 +72,14 @@ def close_checkout_sessions(order: Order, db: Session) -> bool:
 
 
 def release_order_reservation(
-    order: Order, db: Session, transaction_status: str
+    order: Order, db: Session, transaction_status: TransactionStatus
 ) -> bool:
     """Return an unpaid order's stock exactly once and close its checkout.
 
     Returns False (and keeps the stock held) while one of its PayMongo sessions
     may still be paid; the webhook or a later sweep settles it.
     """
-    if order.status != "pending":
+    if order.status != OrderStatus.PENDING:
         return False
     if not close_checkout_sessions(order, db):
         return False
@@ -83,7 +89,10 @@ def release_order_reservation(
 
     (
         db.query(Transaction)
-        .filter(Transaction.order_id == order.id, Transaction.status == "pending")
+        .filter(
+            Transaction.order_id == order.id,
+            Transaction.status == TransactionStatus.PENDING,
+        )
         .update({Transaction.status: transaction_status}, synchronize_session=False)
     )
     return True
@@ -103,19 +112,14 @@ def restore_order_stock(order: Order, db: Session) -> None:
     # Same lock order as placing an order, so the two can't deadlock.
     for produce_id, quantity in sorted(lines):
         produce = (
-            db.query(Produce)
-            .filter(Produce.id == produce_id)
-            .with_for_update()
-            .first()
+            db.query(Produce).filter(Produce.id == produce_id).with_for_update().first()
         )
         if produce:
             produce.stock_quantity += quantity
 
 
 def _mark_cancelled(order: Order) -> None:
-    order.status = "cancelled"
-    if order.current_order:
-        order.current_order.status = "cancelled"
+    order.status = OrderStatus.CANCELLED
 
 
 def cancel_order(order: Order, db: Session) -> bool:
@@ -126,16 +130,24 @@ def cancel_order(order: Order, db: Session) -> bool:
     Paid transactions move to ``refund_pending`` so they are never paid out to
     the merchant.
     """
-    if order.status == "pending":
-        return release_order_reservation(order, db, transaction_status="expired")
+    if order.status == OrderStatus.PENDING:
+        return release_order_reservation(
+            order, db, transaction_status=TransactionStatus.EXPIRED
+        )
 
     restore_order_stock(order, db)
     _mark_cancelled(order)
 
     (
         db.query(Transaction)
-        .filter(Transaction.order_id == order.id, Transaction.status == "paid")
-        .update({Transaction.status: "refund_pending"}, synchronize_session=False)
+        .filter(
+            Transaction.order_id == order.id,
+            Transaction.status == TransactionStatus.PAID,
+        )
+        .update(
+            {Transaction.status: TransactionStatus.REFUND_PENDING},
+            synchronize_session=False,
+        )
     )
     return True
 
@@ -155,20 +167,43 @@ def settle_checkout_payment(
     order = db.query(Order).filter(Order.id == txn.order_id).with_for_update().first()
     db.refresh(txn, with_for_update=True)
 
-    if txn.status in ("paid", "refund_pending", "refunded"):
+    if txn.status in (
+        TransactionStatus.PAID,
+        TransactionStatus.REFUND_PENDING,
+        TransactionStatus.REFUNDED,
+    ):
         return "duplicate"
 
     txn.paymongo_payment_id = payment_id
     txn.paid_at = datetime.now(UTC)
 
-    if txn.status != "pending" or not order or order.status != "pending":
-        txn.status = "refund_pending"
+    if (
+        txn.status != TransactionStatus.PENDING
+        or not order
+        or order.status != OrderStatus.PENDING
+    ):
+        txn.status = TransactionStatus.REFUND_PENDING
         return "refund"
 
-    txn.status = "paid"
-    order.status = "processing"
-    if order.current_order:
-        order.current_order.status = "processing"
+    txn.status = TransactionStatus.PAID
+    order.status = OrderStatus.PROCESSING
+    ref = notifications.order_ref(order)
+    notifications.notify(
+        db,
+        notifications.buyer_id(order),
+        notifications.ORDER_PAID,
+        f"Payment received for {ref}",
+        "The farm is now preparing your order.",
+        notifications.order_link(order),
+    )
+    notifications.notify(
+        db,
+        notifications.merchant_user_id(order),
+        notifications.NEW_ORDER,
+        f"New paid order {ref}",
+        f"PHP {getattr(order, 'total_price', 0):,}. Open your dashboard to prepare it.",
+        "/merchantDashboard",
+    )
     if order.order_history_id:
         history = (
             db.query(OrderHistory)
@@ -178,36 +213,85 @@ def settle_checkout_payment(
         if history:
             history.last_order_at = datetime.now(UTC)
 
+    # Drop only what this order bought: a multi-merchant checkout (C1) leaves
+    # the other merchants' items in the cart until their orders are paid.
     cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()
     if cart:
-        cart.items = []
+        bought = {
+            _item_value(item, "produce_id", "produceId", "id")
+            for item in order.items or []
+            if isinstance(item, dict)
+        }
+        cart.items = [
+            item
+            for item in cart.items or []
+            if not (
+                isinstance(item, dict)
+                and _item_value(item, "produce_id", "produceId", "id") in bought
+            )
+        ]
     return "paid"
 
 
-def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
+def settle_paid_sessions(order: Order, db: Session) -> bool:
+    """Settle a pending order whose PayMongo checkout was paid but never recorded.
+
+    Covers a missed or rejected webhook: PayMongo won't expire a paid session,
+    so without this the order would sit in ``pending`` forever. The caller
+    commits. Returns True if the order was settled as paid.
+    """
+    open_txns = (
+        db.query(Transaction)
+        .filter(
+            Transaction.order_id == order.id,
+            Transaction.status == TransactionStatus.PENDING,
+            Transaction.paymongo_session_id.isnot(None),
+        )
+        .all()
+    )
+    for txn in open_txns:
+        try:
+            session = retrieve_checkout_session(txn.paymongo_session_id)
+        except Exception:
+            logger.exception(
+                "Could not check checkout session %s", txn.paymongo_session_id
+            )
+            continue
+        paid, payment_id = paid_payment_from_session(session)
+        if paid and settle_checkout_payment(txn, payment_id, db) == "paid":
+            logger.warning(
+                "Order %s was paid (session %s) but never settled; settled by sweep",
+                order.id,
+                txn.paymongo_session_id,
+            )
+            return True
+    return False
+
+
+def expire_stale_reservations(
+    db: Session, ttl_minutes: int, paid_orders: list[Order] | None = None
+) -> int:
     """Expire pending orders whose checkout reservation has elapsed.
 
-    The row lock makes this safe when multiple API workers run the sweep.
+    An elapsed order whose checkout was in fact paid is settled instead and,
+    if ``paid_orders`` is given, appended to it so the caller can notify the
+    merchant after committing. The row lock makes this safe when multiple API
+    workers run the sweep.
     """
     cutoff = datetime.now(UTC) - timedelta(minutes=ttl_minutes)
     stale_order_ids = [
         order_id
         for (order_id,) in (
             db.query(Order.id)
-            .filter(Order.status == "pending", Order.ordered_at < cutoff)
+            .filter(Order.status == OrderStatus.PENDING, Order.ordered_at < cutoff)
             .all()
         )
     ]
     released = 0
 
     for order_id in stale_order_ids:
-        order = (
-            db.query(Order)
-            .filter(Order.id == order_id)
-            .with_for_update()
-            .first()
-        )
-        if not order or order.status != "pending":
+        order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
+        if not order or order.status != OrderStatus.PENDING:
             continue
 
         # A newer checkout session may have been created for an older order.
@@ -215,7 +299,7 @@ def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
             db.query(Transaction.id)
             .filter(
                 Transaction.order_id == order.id,
-                Transaction.status == "pending",
+                Transaction.status == TransactionStatus.PENDING,
                 Transaction.created_at >= cutoff,
             )
             .first()
@@ -223,7 +307,14 @@ def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
         if has_live_checkout:
             continue
 
-        if release_order_reservation(order, db, transaction_status="expired"):
+        if settle_paid_sessions(order, db):
+            if paid_orders is not None:
+                paid_orders.append(order)
+            continue
+
+        if release_order_reservation(
+            order, db, transaction_status=TransactionStatus.EXPIRED
+        ):
             released += 1
 
     return released

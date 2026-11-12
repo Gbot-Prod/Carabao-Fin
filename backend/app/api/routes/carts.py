@@ -5,8 +5,9 @@ from app.api.dependencies import get_current_user, get_db
 from app.models.produce import Produce
 from app.models.user import User
 from app.schemas.cart import CartResponse, CartUpdate
+from app.services.produce_pricing import unit_price_for
 
-from ._order_helpers import _extract_item_int, get_or_create_cart
+from ._order_helpers import _extract_item_int, _to_int, get_or_create_cart
 
 router = APIRouter(tags=["carts"])
 
@@ -39,7 +40,17 @@ def replace_my_cart(
                 continue
             produce = db.query(Produce).filter(Produce.id == produce_id).first()
             if produce is not None:
-                item["price"] = produce.price
+                # Shown in the cart; place-order recomputes both from the listing.
+                quantity = _to_int(item.get("quantity"), 0)
+                item["price"] = unit_price_for(produce, quantity)
+                item["min_order_qty"] = produce.min_order_qty
+                # Lets clients group a multi-merchant cart (C1) the way
+                # place-order splits it, with each merchant's delivery fee.
+                merchant = produce.merchant
+                if merchant is not None:
+                    item["merchant_id"] = merchant.id
+                    item["farm"] = merchant.merchant_name
+                    item["delivery_fee"] = merchant.delivery_price or 0
         cart.items = items
 
     db.commit()

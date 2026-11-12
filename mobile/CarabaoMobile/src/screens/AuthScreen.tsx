@@ -3,17 +3,27 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Dimensions,
+  Dimensions, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
+import { ApiError, WEB_BASE } from '../lib/api';
+import { PasswordResetSheet } from '../components/PasswordResetSheet';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 const { width } = Dimensions.get('window');
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  // "Create account" from the cart prompt (E4) opens on sign-up.
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [mode, setMode] = useState<'signin' | 'signup'>(params.mode === 'signup' ? 'signup' : 'signin');
+  // Forgot password (E6).
+  const [resetOpen, setResetOpen] = useState(false);
+  const [notice, setNotice] = useState('');
+  // E8d: accounts with two-step verification sign in on the website for now.
+  const [needsWeb, setNeedsWeb] = useState(false);
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -54,6 +64,7 @@ export default function AuthScreen() {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Authentication failed. Please try again.';
+      setNeedsWeb(err instanceof ApiError && err.status === 403 && /two-step verification/i.test(msg));
       setError(msg);
     } finally {
       setLoading(false);
@@ -119,6 +130,15 @@ export default function AuthScreen() {
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
+          {needsWeb ? (
+            <TouchableOpacity
+              style={styles.webBtn}
+              onPress={() => void Linking.openURL(`${WEB_BASE}/auth`)}
+              accessibilityRole="link"
+            >
+              <Text style={styles.webBtnText}>Open the Carabao website to sign in</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {/* Fields */}
           {mode === 'signup' && (
@@ -174,6 +194,13 @@ export default function AuthScreen() {
             />
           )}
 
+          {mode === 'signin' && (
+            <TouchableOpacity onPress={() => { setNotice(''); setResetOpen(true); }} style={styles.forgotWrap}>
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
+          {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
+
           {/* Submit */}
           <TouchableOpacity
             style={[styles.submitBtn, loading && styles.submitDisabled]}
@@ -198,12 +225,32 @@ export default function AuthScreen() {
           </Text>
         </View>
       </ScrollView>
+      <PasswordResetSheet
+        visible={resetOpen}
+        initialEmail={form.email}
+        onClose={() => setResetOpen(false)}
+        onDone={(email) => {
+          setResetOpen(false);
+          setError('');
+          handleChange('email', email);
+          handleChange('password', '');
+          setNotice('Password changed. Sign in with your new password.');
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.offWhite },
+  webBtn: {
+    borderWidth: 1, borderColor: Colors.primary, borderRadius: Radius.md,
+    paddingVertical: Spacing.sm, alignItems: 'center', marginBottom: Spacing.sm,
+  },
+  webBtnText: { color: Colors.primary, fontWeight: '700', fontSize: FontSize.sm },
+  forgotWrap: { alignSelf: 'flex-end', paddingVertical: 4 },
+  forgotText: { color: Colors.primary, fontWeight: '600', fontSize: FontSize.sm },
+  noticeText: { color: Colors.success, fontSize: FontSize.sm, marginTop: 4 },
   scroll: { flexGrow: 1 },
 
   heroBg: {

@@ -302,7 +302,7 @@
 .dropzoneMeta {
   margin-top: 4px;
   font-size: 11px;
-  color: #8a9b8d;
+  color: var(--text-faint);
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;

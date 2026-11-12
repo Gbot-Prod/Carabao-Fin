@@ -3,32 +3,124 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
-import PageLoader from "@/components/PageLoader/PageLoader";
+import SkeletonList, { LoadError } from "@/components/Skeleton/Skeleton";
 import {
   fetchCurrentOrders,
   fetchOrderHistory,
   deleteOrderFromHistory,
+  reorderOrder,
+  type ReorderResult,
   confirmOrderReceived,
+  createPaymentCheckout,
+  isInTransit,
+  ORDER_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
   type CurrentOrderItem,
   type OrderHistoryItem,
+  type OrderStatus,
+  type PaymentStatus,
 } from "@/util/api";
+
+// ── Shop avatar ───────────────────────────────────────────────────────────────
+
+const getInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
+
+function ShopAvatar({ name, logoUrl, href }: { name: string; logoUrl?: string | null; href: string | null }) {
+  const content = logoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={logoUrl} alt="" className={styles.avatarImg} loading="lazy" />
+  ) : (
+    <span className={styles.avatarInitials}>{getInitials(name) || "?"}</span>
+  );
+
+  // Hidden from screen readers: the merchant name link right beside it says the same thing.
+  return href ? (
+    <Link href={href} className={styles.avatar} aria-hidden tabIndex={-1}>{content}</Link>
+  ) : (
+    <div className={styles.avatar} aria-hidden>{content}</div>
+  );
+}
 
 // ── Current orders ────────────────────────────────────────────────────────────
 
-function StatusBadge({ shipped, status }: { shipped: boolean; status: string }) {
-  const normalized = status.toLowerCase();
-  let cls = styles.badgePending;
-  if (shipped || normalized === "shipped" || normalized === "delivered") cls = styles.badgeShipped;
-  else if (normalized === "cancelled") cls = styles.badgeCancelled;
+function StatusBadge({ status }: { status: OrderStatus }) {
+  const cls = status === "cancelled" ? styles.badgeCancelled
+    : status === "pending" || status === "processing" ? styles.badgePending
+    : styles.badgeShipped;
+  return <span className={`${styles.badge} ${cls}`}>{ORDER_STATUS_LABELS[status]}</span>;
+}
 
-  const label = normalized === "delivered"
-    ? "Delivered"
-    : shipped ? "Shipped" : status.charAt(0).toUpperCase() + status.slice(1);
-  return <span className={`${styles.badge} ${cls}`}>{label}</span>;
+// Shown beside the order status. A pending order's badge already says
+// "Awaiting payment", so it gets no second label.
+function PaymentLabel({ status, payment }: { status: OrderStatus; payment: PaymentStatus }) {
+  if (status === "pending") return null;
+  return <><span className={styles.dot}>•</span><span>{PAYMENT_STATUS_LABELS[payment]}</span></>;
 }
 
 const formatShortDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
+
+// "2026-11-14" parsed as local midnight; new Date("YYYY-MM-DD") would be UTC and can shift a day.
+const formatCalendarDate = (value: string) => {
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-PH", {
+    weekday: "short", year: "numeric", month: "short", day: "numeric",
+  });
+};
+
+type OrderDetailsData = Pick<
+  OrderHistoryItem,
+  "items" | "delivery_address" | "requested_delivery_date" | "delivery_window" | "notes"
+> & { total?: number };
+
+function OrderDetails({ order }: { order: OrderDetailsData }) {
+  const schedule = order.requested_delivery_date
+    ? [formatCalendarDate(order.requested_delivery_date), order.delivery_window].filter(Boolean).join(", ")
+    : order.delivery_window ?? null;
+
+  return (
+    <details className={styles.details}>
+      <summary className={styles.detailsSummary}>Order details</summary>
+      <dl className={styles.detailsList}>
+        <dt>Delivery date/time</dt>
+        <dd>{schedule ?? <span className={styles.detailsEmpty}>Not specified</span>}</dd>
+
+        <dt>Delivery address</dt>
+        <dd>{order.delivery_address || <span className={styles.detailsEmpty}>Not specified</span>}</dd>
+
+        <dt>Notes</dt>
+        <dd className={styles.detailsNotes}>
+          {order.notes || <span className={styles.detailsEmpty}>None</span>}
+        </dd>
+
+        <dt>Items</dt>
+        <dd>
+          <ul className={styles.detailsItems}>
+            {order.items.map((item, index) => (
+              <li key={`${item.id}-${index}`}>
+                <span>{item.quantity} × {item.produce}{item.unit ? ` (${item.unit})` : ""}</span>
+                <span>₱{(item.quantity * item.price).toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        </dd>
+
+        {order.total != null && (
+          <>
+            <dt>Total</dt>
+            <dd className={styles.detailsTotal}>₱{order.total.toLocaleString()}</dd>
+          </>
+        )}
+      </dl>
+    </details>
+  );
+}
 
 function OrderCard({
   order,
@@ -40,7 +132,24 @@ function OrderCard({
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const awaitingConfirmation = ["shipped", "out_for_delivery"].includes(order.status.toLowerCase());
+  const awaitingConfirmation = isInTransit(order.status);
+  const awaitingPayment = order.status === "pending";
+  const [paying, setPaying] = useState(false);
+
+  // Reopens (or recreates) the order's PayMongo checkout. If an earlier session
+  // was already paid, the backend settles it and refuses, so reload to show it.
+  const handlePayNow = async () => {
+    setPaying(true);
+    setError(null);
+    try {
+      const checkout = await createPaymentCheckout(order.order_id);
+      window.location.href = checkout.checkout_url;
+    } catch {
+      setError("This order could not be paid now. It may already be paid or have expired. Refreshing…");
+      setTimeout(() => window.location.reload(), 2000);
+      setPaying(false);
+    }
+  };
 
   const handleConfirmReceived = async () => {
     setSubmitting(true);
@@ -72,6 +181,8 @@ function OrderCard({
 
   return (
     <li className={styles.card}>
+      <ShopAvatar name={order.merchant} logoUrl={order.merchant_logo_url} href={merchantHref} />
+      <div className={styles.cardBody}>
       <div className={styles.cardTop}>
         <div>
           <h3 className={styles.merchant}>
@@ -79,18 +190,27 @@ function OrderCard({
           </h3>
           {itemSummary && <p className={styles.itemSummary}>{itemSummary}</p>}
         </div>
-        <StatusBadge shipped={order.shipped} status={order.status} />
+        <StatusBadge status={order.status} />
       </div>
 
       <div className={styles.cardMeta}>
         <span>Ordered {dateBought}</span>
+        <PaymentLabel status={order.status} payment={order.payment_status} />
         {eta && <><span className={styles.dot}>•</span><span>ETA {eta}</span></>}
         <span className={styles.dot}>•</span>
         <span>₱{order.delivery_fee.toLocaleString()} delivery</span>
       </div>
 
+      <OrderDetails order={{ ...order, total: order.total_amount }} />
+
       <div className={styles.cardActions}>
+        {awaitingPayment && (
+          <button type="button" className={styles.receivedBtn} onClick={() => void handlePayNow()} disabled={paying}>
+            {paying ? "Opening payment…" : "Pay now"}
+          </button>
+        )}
         <Link href="/track" className={styles.trackBtn}>Live Tracking</Link>
+        <Link href={`/orders/${order.order_id}`} className={styles.receivedBtn}>View order</Link>
         {awaitingConfirmation && !confirming && (
           <button type="button" className={styles.receivedBtn} onClick={() => setConfirming(true)}>
             Order Received
@@ -126,6 +246,7 @@ function OrderCard({
         </div>
       )}
       {error && <p className={styles.confirmError}>{error}</p>}
+      </div>
     </li>
   );
 }
@@ -142,6 +263,22 @@ function PastOrderCard({
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const merchantHref = order.merchant_id ? `/merchant/${order.merchant_id}` : null;
+  // "Buy again" (U3)
+  const [reordering, setReordering] = useState(false);
+  const [reorder, setReorder] = useState<ReorderResult | null>(null);
+  const [reorderError, setReorderError] = useState(false);
+
+  const handleReorder = async () => {
+    setReordering(true);
+    setReorderError(false);
+    try {
+      setReorder(await reorderOrder(order.order_id));
+    } catch {
+      setReorderError(true);
+    } finally {
+      setReordering(false);
+    }
+  };
 
   const handleConfirm = async () => {
     setDeleting(true);
@@ -160,6 +297,8 @@ function PastOrderCard({
 
   return (
     <li className={styles.card}>
+      <ShopAvatar name={order.merchant} logoUrl={order.merchant_logo_url} href={merchantHref} />
+      <div className={styles.cardBody}>
       <div className={styles.cardTop}>
         <div>
           <p className={styles.orderId}>Order #{order.order_id}</p>
@@ -168,7 +307,7 @@ function PastOrderCard({
           </h3>
         </div>
         <div className={styles.pastCardRight}>
-          <span className={`${styles.badge} ${styles.badgeShipped}`}>{order.status}</span>
+          <StatusBadge status={order.status} />
           {!confirming && (
             <button type="button" className={styles.deleteBtn} onClick={() => setConfirming(true)}>
               Remove
@@ -179,9 +318,53 @@ function PastOrderCard({
 
       <div className={styles.cardMeta}>
         <span>{orderDate}</span>
+        <PaymentLabel status={order.status} payment={order.payment_status} />
         <span className={styles.dot}>•</span>
         <span>₱{order.total_amount.toLocaleString()}</span>
       </div>
+
+      <OrderDetails order={{ ...order, total: order.total_amount }} />
+
+      <div className={styles.cardActions}>
+        <Link href={`/orders/${order.order_id}`} className={styles.receivedBtn}>
+          {order.status === "delivered" ? "View & review" : "View order"}
+        </Link>
+        <button type="button" className={styles.trackBtn} onClick={() => void handleReorder()} disabled={reordering}>
+          {reordering ? "Adding…" : "Buy again"}
+        </button>
+      </div>
+
+      {(reorder || reorderError) && (
+        <div className={styles.reorderResult} role="status">
+          {reorderError ? (
+            <p>Couldn&apos;t add these items right now. Please try again.</p>
+          ) : reorder && (
+            <>
+              <p>
+                {reorder.added.length > 0
+                  ? `Added ${reorder.added.length} item${reorder.added.length === 1 ? "" : "s"} to your cart.`
+                  : "None of these items can be ordered right now."}{" "}
+                {reorder.added.length > 0 && <Link href="/cart">Go to cart</Link>}
+              </p>
+              {reorder.added.some((a) => a.reduced_from) && (
+                <ul>
+                  {reorder.added.filter((a) => a.reduced_from).map((a) => (
+                    <li key={a.produce_id}>{a.name}: only {a.quantity} left (you had {a.reduced_from})</li>
+                  ))}
+                </ul>
+              )}
+              {reorder.unavailable.length > 0 && (
+                <>
+                  <p>Not added:</p>
+                  <ul>
+                    {reorder.unavailable.map((u, i) => <li key={`${u.name}-${i}`}>{u.name}: {u.reason}</li>)}
+                  </ul>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {confirming && (
         <div className={styles.confirmRow}>
@@ -204,6 +387,7 @@ function PastOrderCard({
           </button>
         </div>
       )}
+      </div>
     </li>
   );
 }
@@ -217,24 +401,38 @@ export default function Orders() {
   const [orders, setOrders] = useState<CurrentOrderItem[]>([]);
   const [pastOrders, setPastOrders] = useState<OrderHistoryItem[]>([]);
   const [loadingCurrent, setLoadingCurrent] = useState(true);
+  const [currentError, setCurrentError] = useState(false);
+  const [currentAttempt, setCurrentAttempt] = useState(0);
   const [historyFetched, setHistoryFetched] = useState(false);
+  const [historyError, setHistoryError] = useState(false);
   const loadingHistory = tab === "history" && !historyFetched;
 
   useEffect(() => {
     fetchCurrentOrders()
-      .then(setOrders)
-      .catch(() => setOrders([]))
+      .then((rows) => {
+        setOrders(rows);
+        setCurrentError(false);
+      })
+      .catch(() => setCurrentError(true))
       .finally(() => setLoadingCurrent(false));
-  }, []);
+  }, [currentAttempt]);
 
   useEffect(() => {
     if (tab === "history" && !historyFetched) {
       fetchOrderHistory()
-        .then(setPastOrders)
-        .catch(() => setPastOrders([]))
+        .then((rows) => {
+          setPastOrders(rows);
+          setHistoryError(false);
+        })
+        .catch(() => setHistoryError(true))
         .finally(() => { setHistoryFetched(true); });
     }
   }, [tab, historyFetched]);
+
+  const retryCurrent = () => {
+    setLoadingCurrent(true);
+    setCurrentAttempt((n) => n + 1);
+  };
 
   const handleConfirmed = (updated: CurrentOrderItem) => {
     setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
@@ -271,7 +469,9 @@ export default function Orders() {
 
       {tab === "current" && (
         loadingCurrent ? (
-          <PageLoader variant="inline" label="Loading your orders…" />
+          <SkeletonList label="Loading your orders…" rows={3} />
+        ) : currentError ? (
+          <LoadError message="We couldn't load your orders. Check your connection and try again." onRetry={retryCurrent} />
         ) : orders.length === 0 ? (
           <div className={styles.empty}>
             <p className={styles.emptyTitle}>No active orders</p>
@@ -289,7 +489,9 @@ export default function Orders() {
 
       {tab === "history" && (
         loadingHistory ? (
-          <PageLoader variant="inline" label="Loading order history…" />
+          <SkeletonList label="Loading order history…" rows={3} />
+        ) : historyError ? (
+          <LoadError message="We couldn't load your order history. Check your connection and try again." onRetry={() => setHistoryFetched(false)} />
         ) : pastOrders.length === 0 ? (
           <div className={styles.empty}>
             <p className={styles.emptyTitle}>No past orders</p>

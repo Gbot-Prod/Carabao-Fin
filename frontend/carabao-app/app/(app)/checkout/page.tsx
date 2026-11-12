@@ -5,20 +5,44 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 import { cancelPaymentCheckout, createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
-import { SERVICE_FEE } from "@/lib/constants";
+import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
+import { clearPendingPayments, loadPendingPayments, savePendingPayments } from "@/util/pendingPayments";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
+import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
+import type { Pin } from "@/util/reverseGeocode";
+import { isLuzonRegion } from "@/util/serviceArea";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { fmt } from "@/lib/i18n/format";
 import { getApiErrorStatus } from "@/util/errorHelper";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
+// Same windows the mobile app offers, so both clients store comparable values.
+const TIME_WINDOWS = ["08:00 – 10:00", "10:00 – 12:00", "13:00 – 15:00", "16:00 – 18:00"];
+
+// YYYY-MM-DD in the buyer's local calendar (en-CA formats as ISO).
+const localIsoDate = (offsetDays = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toLocaleDateString("en-CA");
+};
+
 export default function CheckoutPage() {
+  const { t } = useLanguage();
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
   const [isLoadingCart, setIsLoadingCart] = useState(true);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set by the mount-only payment-return effect; translated at render time so it
+  // follows the language toggle without re-running that effect.
+  const [returnNotice, setReturnNotice] = useState<"errPaymentProcessing" | "errPaymentCancelled" | null>(null);
   const [street, setStreet] = useState("");
   const [postal, setPostal] = useState("");
   const [paymentMethod] = useState("online");
   const [notes, setNotes] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState(() => localIsoDate(1));
+  const [deliveryWindow, setDeliveryWindow] = useState(TIME_WINDOWS[0]);
+  // Delivery pin (U1b): starts at the profile's saved pin, if any.
+  const [pin, setPin] = useState<Pin | null>(null);
   const [addressForm, setAddressForm] = useState<LocationSelectsValue>({
     region: "",
     province: "",
@@ -43,6 +67,7 @@ export default function CheckoutPage() {
         const profile = await fetchMyProfile();
         if (profile.address) setStreet(profile.address);
         if (profile.postal_code) setPostal(profile.postal_code);
+        if (profile.lat != null && profile.lng != null) setPin({ lat: profile.lat, lng: profile.lng });
         setAddressForm({
           region: profile.region ?? "",
           province: profile.province ?? "",
@@ -67,21 +92,26 @@ export default function CheckoutPage() {
 
     void cancelPaymentCheckout(orderId).catch((err) => {
       if (getApiErrorStatus(err) === 409) {
-        setError("A payment for this order is still being processed. Check your orders before trying again.");
+        setReturnNotice("errPaymentProcessing");
       }
       // Otherwise the server-side expiry sweep will still release stock.
     });
-    setError("Payment was cancelled. Your items are available in your cart.");
+    // A multi-farm checkout (C1): release the other farms' unpaid orders too, so
+    // the buyer can check out again from the cart without stock being held.
+    const rest = loadPendingPayments().filter((o) => o.order_id !== orderId);
+    clearPendingPayments();
+    for (const other of rest) {
+      void cancelPaymentCheckout(other.order_id).catch(() => {
+        // The expiry sweep releases it anyway.
+      });
+    }
+    setReturnNotice("errPaymentCancelled");
     window.history.replaceState({}, "", "/checkout");
   }, []);
 
-  const subtotal = useMemo(
-    () =>
-      checkoutItems.reduce((sum, item) => sum + item.quantity * item.price, 0),
-    [checkoutItems],
-  );
-  const serviceFee = SERVICE_FEE;
-  const grandTotal = subtotal + serviceFee;
+  // Checkout creates one order per farm (C1), each with its own delivery fee.
+  const groups = useMemo(() => groupCartByMerchant(checkoutItems), [checkoutItems]);
+  const { itemTotal: subtotal, deliveryTotal, grandTotal } = cartTotals(groups);
 
   const handlePlaceOrder = async () => {
     if (checkoutItems.length === 0 || isPlacingOrder) {
@@ -89,28 +119,48 @@ export default function CheckoutPage() {
     }
 
     if (!street.trim() || !addressForm.city || !addressForm.barangay) {
-      setError("Please enter your street address, city, and barangay before placing an order.");
+      setError(t.checkout.errAddressMissing);
+      return;
+    }
+
+    if (!isLuzonRegion(addressForm.region)) {
+      setError(t.checkout.errOutsideLuzon);
+      return;
+    }
+
+    if (!deliveryDate || deliveryDate < localIsoDate()) {
+      setError(t.checkout.errDate);
       return;
     }
 
     setIsPlacingOrder(true);
     setError(null);
+    setReturnNotice(null);
 
     try {
       const deliveryAddress = [street, addressForm.barangay, addressForm.city, addressForm.province, postal, 'Philippines'].filter(Boolean).join(', ') || null;
       const result = await placeOrderFromCart({
-        delivery_date: null,
-        delivery_time: null,
+        delivery_date: deliveryDate,
+        delivery_time: deliveryWindow,
         delivery_address: deliveryAddress,
+        delivery_region: addressForm.region,
+        delivery_lat: pin?.lat ?? null,
+        delivery_lng: pin?.lng ?? null,
         payment_method: paymentMethod,
         notes: notes || null,
-        service_fee: serviceFee,
+        // Ignored by the server, which charges each merchant's own delivery fee.
+        service_fee: deliveryTotal,
       });
 
-      const checkout = await createPaymentCheckout(result.order_id);
+      // PayMongo takes one order per checkout, so a multi-farm cart is paid in
+      // turn: pay the first now, the success page offers the rest.
+      const placed = result.orders?.length ? result.orders : null;
+      if (placed && placed.length > 1) savePendingPayments(placed.slice(1));
+      else clearPendingPayments();
+      const checkout = await createPaymentCheckout(placed ? placed[0].order_id : result.order_id);
       window.location.href = checkout.checkout_url;
     } catch (err) {
-      let message = "Unable to place order right now. Please try again.";
+      let message = t.checkout.errGeneric;
 
       if (axios.isAxiosError(err)) {
         const data = err.response?.data as unknown;
@@ -131,16 +181,16 @@ export default function CheckoutPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1>Checkout</h1>
-        <p>Confirm your delivery details before paying.</p>
+        <h1>{t.checkout.title}</h1>
+        <p>{t.checkout.subtitle}</p>
       </header>
 
       <div className={styles.layout}>
         <section className={styles.formCard}>
           <div className={styles.block}>
-            <h2>Delivery Information</h2>
+            <h2>{t.checkout.deliveryInfo}</h2>
             <label>
-              Street / House No.
+              {t.checkout.street}
               <input
                 type="text"
                 value={street}
@@ -160,7 +210,7 @@ export default function CheckoutPage() {
             </div>
 
             <label>
-              Postal code
+              {t.checkout.postal}
               <input
                 type="text"
                 value={postal}
@@ -168,57 +218,106 @@ export default function CheckoutPage() {
                 placeholder="1634"
               />
             </label>
+
+            <MapPinPicker
+              value={pin}
+              onChange={(next, found) => {
+                setPin(next);
+                if (!street.trim() && found?.street) setStreet(found.street);
+                if (!postal.trim() && found?.postcode) setPostal(found.postcode);
+              }}
+            />
           </div>
 
           <div className={styles.block}>
-            <h2>Order Notes</h2>
+            <h2>{t.checkout.schedule}</h2>
+            <div className={styles.gridTwo}>
+              <label>
+                {t.checkout.preferredDate}
+                <input
+                  type="date"
+                  value={deliveryDate}
+                  min={localIsoDate()}
+                  onChange={(event) => setDeliveryDate(event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                {t.checkout.timeWindow}
+                <select value={deliveryWindow} onChange={(event) => setDeliveryWindow(event.target.value)}>
+                  {TIME_WINDOWS.map((slot) => (
+                    <option key={slot} value={slot}>{slot}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className={styles.block}>
+            <h2>{t.checkout.notesTitle}</h2>
             <label>
-              Notes for merchant or rider
+              {t.checkout.notesLabel}
               <textarea
                 rows={3}
                 value={notes}
+                maxLength={500}
                 onChange={(event) => setNotes(event.target.value)}
-                placeholder="Include gate instructions, preferred contact method, or handling requests."
+                placeholder={t.checkout.notesPlaceholder}
               />
             </label>
           </div>
         </section>
 
         <aside className={styles.summaryCard}>
-          <h2>Order Summary</h2>
+          <h2>{t.checkout.summary}</h2>
           {isLoadingCart ? (
-            <PageLoader variant="compact" label="Loading cart items…" />
+            <PageLoader variant="compact" label={t.checkout.loading} />
           ) : checkoutItems.length === 0 ? (
-            <p>Your cart is empty. Add items before checkout.</p>
+            <p>{t.checkout.empty}</p>
           ) : (
-            <ul className={styles.itemList}>
-              {checkoutItems.map((item) => (
-                <li key={item.id}>
-                  <span>
-                    {item.quantity} x {item.produce}
-                  </span>
-                  <strong>PHP {(item.quantity * item.price).toFixed(2)}</strong>
-                </li>
-              ))}
-            </ul>
+            groups.map((group) => (
+              <div key={group.key} className={styles.farmGroup}>
+                {groups.length > 1 && <h3 className={styles.farmGroupName}>{group.farm}</h3>}
+                <ul className={styles.itemList}>
+                  {group.items.map((item) => (
+                    <li key={item.id}>
+                      <span>
+                        {item.quantity} x {item.produce}
+                      </span>
+                      <strong>PHP {(item.quantity * item.price).toFixed(2)}</strong>
+                    </li>
+                  ))}
+                  <li className={styles.farmGroupFee}>
+                    <span>{groups.length > 1 ? fmt(t.checkout.deliveryFrom, { farm: group.farm }) : t.checkout.deliveryFee}</span>
+                    <strong>PHP {group.deliveryFee.toFixed(2)}</strong>
+                  </li>
+                </ul>
+              </div>
+            ))
           )}
 
           <div className={styles.totals}>
             <p>
-              <span>Subtotal</span>
+              <span>{t.checkout.subtotal}</span>
               <strong>PHP {subtotal.toFixed(2)}</strong>
             </p>
             <p>
-              <span>Service fee</span>
-              <strong>PHP {serviceFee.toFixed(2)}</strong>
+              <span>{groups.length > 1 ? fmt(t.checkout.deliveryFeesFarms, { count: groups.length }) : t.checkout.deliveryFees}</span>
+              <strong>PHP {deliveryTotal.toFixed(2)}</strong>
             </p>
             <p className={styles.grandTotal}>
-              <span>Total</span>
+              <span>{t.checkout.total}</span>
               <strong>PHP {grandTotal.toFixed(2)}</strong>
             </p>
           </div>
 
-          {error && <p className={styles.errorMessage}>{error}</p>}
+          {groups.length > 1 && (
+            <p className={styles.multiFarmNote}>{fmt(t.checkout.multiFarmNote, { count: groups.length })}</p>
+          )}
+
+          {(error ?? returnNotice) && (
+            <p className={styles.errorMessage}>{error ?? (returnNotice ? t.checkout[returnNotice] : null)}</p>
+          )}
 
           <button
             type="button"
@@ -226,10 +325,10 @@ export default function CheckoutPage() {
             onClick={() => void handlePlaceOrder()}
             disabled={checkoutItems.length === 0 || isLoadingCart || isPlacingOrder}
           >
-            {isPlacingOrder ? "Redirecting to payment..." : "Place Order"}
+            {isPlacingOrder ? t.checkout.redirecting : t.checkout.placeOrder}
           </button>
           <Link href="/cart" className={styles.secondaryButton}>
-            Back to Cart
+            {t.checkout.backToCart}
           </Link>
         </aside>
       </div>

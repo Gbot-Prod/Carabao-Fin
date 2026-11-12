@@ -7,6 +7,9 @@ import Link from "next/link";
 import "./sidebar.css";
 import Logo from "@/public/images/icons/carabaoLogo.png";
 import { LogoutButton } from "@/components/LogoutButton";
+import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
+import NotificationBell from "@/components/NotificationBell/NotificationBell";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
 import { SidebarFilterChips } from "./SidebarFilterChips";
@@ -61,10 +64,33 @@ function TrackIcon() {
   );
 }
 
+function StoreIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l1.5-5h15L21 9" />
+      <path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0" />
+      <path d="M5 12v8h14v-8" />
+      <path d="M10 20v-5h4v5" />
+    </svg>
+  );
+}
+
+function DashboardIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </svg>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
   const { showPrompt } = useAuthPrompt();
+  const { t } = useLanguage();
 
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -80,6 +106,9 @@ export default function Sidebar() {
   const displayName = profileName || user?.name || (isAuthenticated ? "Carabao User" : "Guest");
   const displayEmail = profile?.email ?? user?.email ?? null;
   const avatarUrl = profile?.profile_picture_url ?? null;
+  const profileBlocked = !isLoading && !isAuthenticated;
+  // A merchant row only exists once an admin approves the application.
+  const merchantId = isBackendAuthenticated ? profile?.merchant?.id ?? null : null;
   const initials = displayName
     .split(/\s+/)
     .map((part) => part[0])
@@ -156,7 +185,14 @@ export default function Sidebar() {
           <span className="sidebarBrandName">Carabao</span>
         </div>
 
-        <div className="sidebar__account">
+        
+        <Link
+          href={profileBlocked ? "#" : "/profile"}
+          className={`sidebar__account${pathname === "/profile" ? " sidebar__account--active" : ""}`}
+          onClick={profileBlocked ? (e) => { e.preventDefault(); showPrompt(); } : () => setIsMobileOpen(false)}
+          aria-label={t.nav.openProfile}
+        >
+          
           <div className="sidebar__avatar">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -166,21 +202,32 @@ export default function Sidebar() {
             )}
           </div>
           <div className="sidebar__account-text">
-            <span className="sidebar__account-name">{isLoading ? "Loading..." : displayName}</span>
+            <span className="sidebar__account-name">{isLoading ? t.nav.loading : displayName}</span>
             {displayEmail && <span className="sidebar__account-email">{displayEmail}</span>}
           </div>
-        </div>
+        </Link>
 
         <nav className="sidebar__nav">
           <div className="sidebar__section">
             <ul className="sidebar__nav-list">
-              {renderNavLink("/profile", "Profile", <UserIcon />, true)}
-              {renderNavLink("/order", "Shops", <ShopIcon />)}
-              {renderNavLink("/cart", "Cart", <CartIcon />)}
-              {renderNavLink("/track", "Track", <TrackIcon />, true)}
-              {renderNavLink("/orders", "Orders", <ReceiptIcon />, true)}
+              {renderNavLink("/order", t.nav.shops, <ShopIcon />)}
+              {renderNavLink("/cart", t.nav.cart, <CartIcon />)}
+              {renderNavLink("/track", t.nav.track, <TrackIcon />, true)}
+              {renderNavLink("/orders", t.nav.orders, <ReceiptIcon />, true)}
             </ul>
           </div>
+
+          {merchantId != null && (
+            <div className="sidebar__section sidebar__section--divided">
+              <div className="sidebar__merchant">
+                <span className="sidebar__merchant-label">{t.nav.merchant}</span>
+                <ul className="sidebar__nav-list">
+                  {renderNavLink(`/merchant/${merchantId}`, t.nav.myShopPage, <StoreIcon />, true)}
+                  {renderNavLink("/merchantDashboard", t.nav.dashboard, <DashboardIcon />, true)}
+                </ul>
+              </div>
+            </div>
+          )}
 
           <div className="sidebar__section sidebar__section--divided">
             <SidebarFilterChips />
@@ -188,6 +235,10 @@ export default function Sidebar() {
         </nav>
 
         <div className="sidebar__footer">
+          <div className="sidebar__footer-tools">
+            <LanguageToggle className="sidebar__language" />
+            {isAuthenticated && <NotificationBell />}
+          </div>
           {!isLoading && (
             isAuthenticated ? (
               <LogoutButton className="sidebar__logout sidebar__logout-button">
@@ -198,10 +249,10 @@ export default function Sidebar() {
                     <line x1="21" y1="12" x2="9" y2="12" />
                   </svg>
                 </span>
-                <span>Sign Out</span>
+                <span>{t.nav.signOut}</span>
               </LogoutButton>
             ) : (
-              <Link href="/auth" className="sidebar__nav-link">Sign In</Link>
+              <Link href="/auth" className="sidebar__nav-link">{t.nav.signIn}</Link>
             )
           )}
         </div>

@@ -2,14 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, SafeAreaView, ActivityIndicator,
+  StyleSheet, SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
-import { api, type ApiCurrentOrder } from '../lib/api';
+import { api, type ApiCurrentOrder, type ApiTracking } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, Divider } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { SkeletonList, LoadError } from '../components/Skeleton';
 
 const STATUS_STEPS = ['Order Placed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
 
@@ -95,6 +96,8 @@ function TrackScreenContent() {
   const { token } = useAuth();
   const [orders, setOrders] = useState<ApiCurrentOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState(0);
 
   useEffect(() => {
@@ -103,16 +106,32 @@ function TrackScreenContent() {
       try {
         const data = await api.orders.current(token);
         setOrders(data);
+        setFailed(false);
       } catch {
-        // Show empty state on error
+        setFailed(true);
       } finally {
         setLoading(false);
       }
     };
     void load();
-  }, [token]);
+  }, [token, attempt]);
 
   const selected = orders[selectedIdx];
+  const [tracking, setTracking] = useState<ApiTracking | null>(null);
+
+  useEffect(() => {
+    setTracking(null);
+    if (!selected) return;
+    let active = true;
+    api.tracking
+      .forOrder(token, selected.order_id)
+      .then((data) => { if (active) setTracking(data); })
+      .catch(() => { /* leave the "waiting for shipment" state */ });
+    return () => { active = false; };
+  }, [token, selected]);
+
+  const hasEstimate =
+    tracking?.tracking_state === 'estimated' && tracking.eta_minutes !== null;
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(n);
 
@@ -122,9 +141,21 @@ function TrackScreenContent() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Track Orders</Text>
         </View>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+        <SkeletonList label="Loading your deliveries" rows={2} />
+      </SafeAreaView>
+    );
+  }
+
+  if (failed && orders.length === 0) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Track Orders</Text>
         </View>
+        <LoadError
+          message="We couldn't load your deliveries. Check your connection and try again."
+          onRetry={() => setAttempt((n) => n + 1)}
+        />
       </SafeAreaView>
     );
   }
@@ -152,8 +183,14 @@ function TrackScreenContent() {
                 <Text style={styles.detailCardTitle}>Delivery Details</Text>
                 <View style={styles.mapPlaceholder}>
                   <Ionicons name="map-outline" size={36} color={Colors.textLight} />
-                  <Text style={styles.mapPlaceholderText}>Live map tracking</Text>
-                  <Text style={styles.mapPlaceholderSub}>Coming soon</Text>
+                  <Text style={styles.mapPlaceholderText}>
+                    {hasEstimate ? 'Estimated progress' : 'Waiting for shipment'}
+                  </Text>
+                  <Text style={styles.mapPlaceholderSub}>
+                    {hasEstimate && tracking
+                      ? `${Math.round(tracking.progress * 100)}% · about ${tracking.eta_minutes} min to arrival`
+                      : 'Estimated progress will appear after the merchant dispatches this order.'}
+                  </Text>
                 </View>
 
                 <View style={styles.detailsGrid}>

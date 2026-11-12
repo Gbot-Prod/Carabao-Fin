@@ -21,6 +21,49 @@ from app.schemas.shipment import (
 router = APIRouter(tags=["tracking"])
 
 
+def _waiting_for_shipment(
+    *, order_id: int, merchant_name: str, status: str, shipment_id: int = 0
+) -> ShipmentTrackingResponse:
+    """No route yet: report that honestly instead of a made-up ETA."""
+    return ShipmentTrackingResponse(
+        shipment_id=shipment_id,
+        order_id=order_id,
+        merchant_name=merchant_name,
+        status=status,
+        order_ids=[order_id],
+        waypoints=[],
+        stops=[],
+        origin=None,
+        destination=None,
+        progress=0.0,
+        eta_minutes=None,
+        active_stop_index=0,
+        tracking_state="waiting_for_shipment",
+    )
+
+
+def with_current_order_statuses(db: Session, route_waypoints: list[dict]) -> list[dict]:
+    """Replace the status saved in the route at dispatch with each order's status now.
+
+    The stored route is a snapshot, so without this every stop would read
+    "in_transit" forever, even after it was delivered or cancelled.
+    """
+    order_ids = {
+        int(p["order_id"]) for p in route_waypoints if p.get("order_id") is not None
+    }
+    if not order_ids:
+        return route_waypoints
+    current = dict(
+        db.query(Order.id, Order.status).filter(Order.id.in_(order_ids)).all()
+    )
+    return [
+        {**p, "status": current[int(p["order_id"])]}
+        if p.get("order_id") is not None and int(p["order_id"]) in current
+        else p
+        for p in route_waypoints
+    ]
+
+
 def _response_from_stored_route(
     route_waypoints: list[dict],
     *,
@@ -120,9 +163,14 @@ def get_order_tracking(
     if order.shipment_id:
         shipment = db.query(Shipment).filter(Shipment.id == order.shipment_id).first()
         if not shipment or not shipment.route_waypoints:
-            raise HTTPException(status_code=412, detail="Shipment route not ready yet")
+            return _waiting_for_shipment(
+                order_id=order_id,
+                merchant_name=merchant_name,
+                status=shipment.status if shipment else order.status,
+                shipment_id=shipment.id if shipment else 0,
+            )
         return _response_from_stored_route(
-            shipment.route_waypoints,
+            with_current_order_statuses(db, shipment.route_waypoints),
             shipment_id=shipment.id,
             order_id=order_id,
             merchant_name=merchant_name,
@@ -134,7 +182,7 @@ def get_order_tracking(
     # Single-order manual dispatch — route stored when merchant marked it shipped
     if order.route_waypoints:
         return _response_from_stored_route(
-            order.route_waypoints,
+            with_current_order_statuses(db, order.route_waypoints),
             shipment_id=0,
             order_id=order_id,
             merchant_name=merchant_name,
@@ -143,7 +191,6 @@ def get_order_tracking(
             highlight_order_id=order_id,
         )
 
-    raise HTTPException(
-        status_code=412,
-        detail="Order has not been dispatched yet",
+    return _waiting_for_shipment(
+        order_id=order_id, merchant_name=merchant_name, status=order.status
     )

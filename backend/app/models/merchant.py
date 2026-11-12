@@ -12,7 +12,9 @@ class Merchant(Base):
     id = Column(Integer, primary_key=True, index=True)
     merchant_name = Column(String, nullable=False, index=True)
     contact_number = Column(String, unique=True, index=True)
+    # Cached average of reviews.rating; recomputed by review_service.
     rating = Column(Float, nullable=True, index=True)
+    rating_count = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -33,12 +35,17 @@ class Merchant(Base):
     barangay = Column(String, nullable=True, index=True)
     address = Column(String, nullable=False, index=True)
     postal_code = Column(String, nullable=False, index=True)
+    # Map pin (U1).
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
 
     available_days = Column(JSON, nullable=False, default=list)
     operating_hours = Column(JSON, nullable=False)
     delivery_time = Column(Integer, nullable=True, index=True)
 
     delivery_price = Column(Integer, nullable=True, index=True)  # pesos
+    # F1: listings at or below this stock are flagged on the dashboard (0 = off).
+    low_stock_threshold = Column(Integer, nullable=False, default=5, server_default="5")
     price_range_min = Column(Integer, nullable=False)
     price_range_max = Column(Integer, nullable=False)
 
@@ -70,4 +77,4 @@ class Merchant(Base):
         "Produce", back_populates="merchant", cascade="all, delete-orphan"
     )
     orders = relationship("Order", back_populates="merchant")
-    current_orders = relationship("CurrentOrder", back_populates="merchant")
+    reviews = relationship("Review", back_populates="merchant", passive_deletes=True)

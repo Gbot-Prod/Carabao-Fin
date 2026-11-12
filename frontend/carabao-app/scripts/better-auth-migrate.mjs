@@ -3,7 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { getMigrations } from "better-auth/db/migration";
-import { admin } from "better-auth/plugins";
+import { admin, twoFactor } from "better-auth/plugins";
 import { Pool } from "pg";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -69,7 +69,7 @@ const pool = new Pool({
 });
 
 const config = {
-  plugins: [admin()],
+  plugins: [admin(), twoFactor()],
   database: pool,
   baseURL:
     env.NEXT_PUBLIC_APP_URL || env.BETTER_AUTH_URL || "http://localhost:3000",

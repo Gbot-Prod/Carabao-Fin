@@ -1,0 +1,130 @@
+.wrap {
+  position: relative;
+}
+
+.bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--bg-white);
+  color: var(--green-900);
+  cursor: pointer;
+}
+
+.bell:focus-visible,
+.item:focus-visible,
+.markAll:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.panel {
+  position: absolute;
+  bottom: 44px;
+  left: 0;
+  z-index: 60;
+  width: min(320px, 85vw);
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
+  background: var(--bg-white);
+  box-shadow: 0 12px 28px var(--color-shadow);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--green-border);
+  font-size: 14px;
+  color: var(--green-900);
+}
+
+.markAll {
+  border: none;
+  background: none;
+  color: var(--green-600);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.empty {
+  margin: 0;
+  padding: 16px 12px;
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--surface-muted);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover {
+  background: var(--green-50);
+}
+
+.unread {
+  background: #f0fdf4;
+}
+
+.unread .itemTitle::before {
+  content: "● ";
+  color: var(--green-600);
+}
+
+.itemTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.itemBody {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.itemTime {
+  font-size: 11px;
+  color: var(--text-faint);
+}

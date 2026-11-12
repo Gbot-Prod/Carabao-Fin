@@ -21,7 +21,6 @@ from sqlalchemy import insert, text  # noqa: E402
 from app.api.routes.auth import _bcrypt_hash  # noqa: E402
 from app.core.database import Base, engine  # noqa: E402
 from app.models.cart import Cart  # noqa: E402
-from app.models.current_orders import CurrentOrder  # noqa: E402
 from app.models.merchant import Merchant  # noqa: E402
 from app.models.mobile_credential import MobileCredential  # noqa: E402
 from app.models.order import Order  # noqa: E402
@@ -160,12 +159,12 @@ def build_orders(
     produce: list[dict],
     merchants: list[dict],
     now: datetime,
-) -> tuple[list[dict], list[dict], list[dict]]:
+) -> tuple[list[dict], list[dict]]:
     by_merchant: dict[int, list[dict]] = {}
     for row in produce:
         by_merchant.setdefault(row["merchant_id"], []).append(row)
 
-    orders, current_orders, transactions = [], [], []
+    orders, transactions = [], []
     statuses, weights = zip(*STATUS_WEIGHTS.items(), strict=True)
     for order_id in range(1, n_orders + 1):
         buyer_id = rng.randint(1, n_buyers)
@@ -211,16 +210,7 @@ def build_orders(
                 "route_waypoints": route_for(order_id, merchant["merchant_name"], rng)
                 if status == "shipped"
                 else None,
-            }
-        )
-        current_orders.append(
-            {
-                "id": order_id,
-                "order_id": order_id,
-                "merchant_id": merchant["id"],
-                "status": status,
                 "delivery_fee": merchant["delivery_price"],
-                "created_at": ordered_at,
             }
         )
         if status != "cancelled":
@@ -242,7 +232,7 @@ def build_orders(
                     "paid_at": ordered_at,
                 }
             )
-    return orders, current_orders, transactions
+    return orders, transactions
 
 
 def main() -> None:
@@ -253,7 +243,7 @@ def main() -> None:
     users = build_users(args.buyers, args.merchants, now)
     merchants = build_merchants(args.merchants, args.buyers + 1, now)
     produce = build_produce(rng, args.produce, args.merchants)
-    orders, current_orders, transactions = build_orders(
+    orders, transactions = build_orders(
         rng, args.orders, args.buyers, produce, merchants, now
     )
     password_hash = _bcrypt_hash(common.PERF_PASSWORD)
@@ -304,7 +294,6 @@ def main() -> None:
         ),
         (Produce, produce),
         (Order, orders),
-        (CurrentOrder, current_orders),
         (Transaction, transactions),
     ]
     with engine.begin() as conn:

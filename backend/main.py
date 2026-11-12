@@ -12,7 +12,6 @@ from app.api.routes.router import router
 from app.core.database import SessionLocal
 from app.models import (  # noqa: F401
     cart,
-    current_orders,
     merchant,
     merchant_application,
     merchant_payout,
@@ -21,16 +20,19 @@ from app.models import (  # noqa: F401
     order_history,
     payout_batch,
     produce,
+    review,
     shipment,
     shopPage,
     transaction,
     user,
 )
+from app.services.chat import send_unread_merchant_sms
 from app.services.order_reservations import (
     expire_stale_reservations,
     reservation_ttl_minutes,
 )
 from app.services.order_status import auto_confirm_days, auto_confirm_delivered_orders
+from app.services.sms_service import notify_merchant_new_order
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,8 +43,13 @@ async def lifespan(_: FastAPI):
         # Each API worker runs this sweep. Row locks prevent double releases.
         db = SessionLocal()
         try:
-            released = expire_stale_reservations(db, reservation_ttl_minutes())
+            paid_orders: list = []
+            released = expire_stale_reservations(
+                db, reservation_ttl_minutes(), paid_orders
+            )
             db.commit()
+            for paid_order in paid_orders:
+                notify_merchant_new_order(order=paid_order)
             if released:
                 logger.info("Released %s expired checkout reservation(s)", released)
         except Exception:
@@ -64,11 +71,26 @@ async def lifespan(_: FastAPI):
         finally:
             db.close()
 
+    def text_merchants_about_unread_chat() -> None:
+        # CH1: a buyer message still unread after 15 minutes texts the farm once.
+        db = SessionLocal()
+        try:
+            sent = send_unread_merchant_sms(db)
+            db.commit()
+            if sent:
+                logger.info("Texted %s merchant(s) about unread chat", sent)
+        except Exception:
+            db.rollback()
+            logger.exception("Could not send unread-chat texts")
+        finally:
+            db.close()
+
     async def reservation_cleanup_loop() -> None:
         while True:
             # DB and PayMongo calls block, so keep them off the event loop.
             await asyncio.to_thread(release_expired_reservations)
             await asyncio.to_thread(confirm_unconfirmed_deliveries)
+            await asyncio.to_thread(text_merchants_about_unread_chat)
             await asyncio.sleep(60)
 
     cleanup_task = asyncio.create_task(reservation_cleanup_loop())
@@ -120,6 +142,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Lets the browser read the CSV export filename.
+    expose_headers=["Content-Disposition"],
 )
 
 app.include_router(router)

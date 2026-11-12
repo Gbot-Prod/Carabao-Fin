@@ -9,9 +9,15 @@ import styles from "./layout.module.css";
 const NAV_ITEMS = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/users", label: "Users" },
+  { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/transactions", label: "Transactions" },
   { href: "/admin/merchants", label: "Merchants" },
+  { href: "/admin/listings", label: "Listings" },
   { href: "/admin/review", label: "Review" },
   { href: "/admin/payouts", label: "Payouts" },
+  { href: "/admin/refunds", label: "Refunds" },
+  { href: "/admin/support", label: "Support" },
+  { href: "/admin/audit-log", label: "Audit log" },
 ];
 
 export default function AdminSidebar() {

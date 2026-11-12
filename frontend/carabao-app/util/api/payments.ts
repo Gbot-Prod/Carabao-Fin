@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { TransactionStatus } from './statuses';
 
 export type CheckoutSessionResponse = {
   transaction_id: number;
@@ -6,13 +7,13 @@ export type CheckoutSessionResponse = {
   checkout_url: string;
   paymongo_session_id: string;
   amount: number;
-  status: string;
+  status: TransactionStatus;
 };
 
 export type TransactionStatusResponse = {
   id: number;
   order_id: number;
-  status: string;
+  status: TransactionStatus;
   amount: number;
   platform_fee: number;
   merchant_amount: number;

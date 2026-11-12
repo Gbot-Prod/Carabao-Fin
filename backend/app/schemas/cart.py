@@ -13,6 +13,8 @@ class CartItem(BaseModel):
     image: str | None = None
     farm: str | None = None
     merchant: str | None = None
+    # Set by the server on save (C1): the merchant's delivery fee for its order.
+    delivery_fee: int | None = None
 
     model_config = ConfigDict(extra="allow")
 

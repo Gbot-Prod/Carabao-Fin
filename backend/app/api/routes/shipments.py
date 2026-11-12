@@ -6,12 +6,15 @@ from datetime import UTC, datetime, timedelta
 
 import requests as _requests
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_current_user, get_db
+from app.api.routes.tracking import with_current_order_statuses
 from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.shipment import Shipment
+from app.models.statuses import OrderStatus
 from app.models.user import User
 from app.routing.eta import _eta_from_waypoints
 from app.routing.service import compute_route
@@ -24,12 +27,16 @@ from app.schemas.shipment import (
     Waypoint,
 )
 from app.services.merchant_service import get_active_merchant
-from app.services.order_status import mark_shipped
+from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
+from app.services.pinned_location import delivery_point, merchant_point
 from app.utils.geocoding import _geocode
 
 router = APIRouter(tags=["shipments"])
 
 GEOCODE_WORKERS = 8
+
+SHIPPABLE_ORDER_STATUSES = frozenset({OrderStatus.PROCESSING})
+# A stop is finished once its order is in CLOSED_ORDER_STATUSES.
 
 
 def _resolve_delivery_address(order: Order, buyer: User | None) -> str | None:
@@ -103,6 +110,7 @@ def _get_duration_matrix(
 
 
 def _shipment_response(
+    db: Session,
     shipment: Shipment,
     merchant_name: str,
     selected_order_id: int,
@@ -113,6 +121,7 @@ def _shipment_response(
         raise HTTPException(
             status_code=412, detail="Shipment route is not available yet"
         )
+    route_waypoints = with_current_order_statuses(db, route_waypoints)
 
     waypoints = [Waypoint(**point) for point in route_waypoints]
     stop_points = [point for point in route_waypoints if point.get("type") != "pickup"]
@@ -126,6 +135,7 @@ def _shipment_response(
             lng=float(point["lng"]),
             label=point.get("label", "Stop"),
             status=point.get("status", "in_transit"),
+            estimated_arrival_at=point.get("estimated_arrival_at"),
         )
         for index, point in enumerate(stop_points)
     ]
@@ -152,6 +162,7 @@ def _shipment_response(
         progress=progress,
         eta_minutes=eta_minutes,
         active_stop_index=active_stop_index,
+        total_duration_seconds=route_waypoints[0].get("total_duration_seconds"),
     )
 
 
@@ -184,15 +195,19 @@ def create_merchant_shipment(
             detail="One or more orders were not found for this merchant",
         )
 
+    # Only paid, merchant-confirmed orders that are not already on a route can
+    # ship. Pending orders are unpaid; anything later is already shipped/closed.
     blocked = [
         order.id
         for order in orders
-        if order.status.lower() in {"shipped", "delivered", "cancelled"}
+        if order.status not in SHIPPABLE_ORDER_STATUSES
+        or order.shipment_id is not None
     ]
     if blocked:
         raise HTTPException(
             status_code=400,
-            detail=f"Orders already shipped or closed: {', '.join(map(str, blocked))}",
+            detail="Only confirmed (processing) orders not already in a shipment "
+            f"can be shipped. Not eligible: {', '.join(map(str, blocked))}",
         )
 
     merchant_address = ", ".join(
@@ -207,10 +222,11 @@ def create_merchant_shipment(
         if part
     )
 
-    if not merchant_address:
+    if not merchant_address and merchant.lat is None:
         raise HTTPException(status_code=422, detail="Merchant has no location set")
 
-    origin_coords = _geocode(merchant_address)
+    # Saved map pins first (U1); geocode the address text only without one.
+    origin_coords = merchant_point(merchant, merchant_address, _geocode)
     if not origin_coords:
         raise HTTPException(
             status_code=422,
@@ -221,7 +237,7 @@ def create_merchant_shipment(
     for order in orders:
         buyer = order.order_history.user if order.order_history else None
         delivery_address = _resolve_delivery_address(order, buyer)
-        if not delivery_address:
+        if not delivery_address and order.delivery_lat is None:
             raise HTTPException(
                 status_code=422, detail=f"Order {order.id} has no delivery address"
             )
@@ -237,7 +253,10 @@ def create_merchant_shipment(
     with ThreadPoolExecutor(max_workers=GEOCODE_WORKERS) as pool:
         destination_results = list(
             pool.map(
-                _geocode, [str(ctx["delivery_address"]) for ctx in order_contexts]
+                lambda ctx: delivery_point(
+                    ctx["order"], ctx["buyer"], ctx["delivery_address"], _geocode
+                ),
+                order_contexts,
             )
         )
     if any(result is None for result in destination_results):
@@ -370,12 +389,9 @@ def create_merchant_shipment(
         assert isinstance(order, Order)
         order.shipment_id = shipment.id
         mark_shipped(order)
-        if order.current_order:
-            wp = next((w for w in waypoints if w.get("order_id") == order.id), None)
-            if wp and wp.get("estimated_arrival_at"):
-                order.current_order.time_of_arrival = datetime.fromisoformat(
-                    wp["estimated_arrival_at"]
-                )
+        wp = next((w for w in waypoints if w.get("order_id") == order.id), None)
+        if wp and wp.get("estimated_arrival_at"):
+            order.time_of_arrival = datetime.fromisoformat(wp["estimated_arrival_at"])
 
     db.commit()
     db.refresh(shipment)
@@ -383,7 +399,7 @@ def create_merchant_shipment(
     selected_order = ordered_stops[0] if ordered_stops else stops[0]
     selected_destination = (selected_order.lat, selected_order.lng)
     return _shipment_response(
-        shipment, merchant_name, selected_order.order_id, selected_destination
+        db, shipment, merchant_name, selected_order.order_id, selected_destination
     )
 
 
@@ -424,6 +440,7 @@ def get_shipment_tracking(
     )
 
     return _shipment_response(
+        db=db,
         shipment=shipment,
         merchant_name=merchant.merchant_name or "Merchant",
         selected_order_id=first_order.id,
@@ -450,11 +467,24 @@ def list_my_shipments(
         .all()
     )
 
+    # Shipment.status is never advanced after creation, so the merchant's
+    # active/past split is derived from how many of its orders are closed.
+    closed_counts = dict(
+        db.query(Order.shipment_id, func.count(Order.id))
+        .filter(
+            Order.shipment_id.in_([s.id for s in rows]),
+            Order.status.in_(CLOSED_ORDER_STATUSES),
+        )
+        .group_by(Order.shipment_id)
+        .all()
+    ) if rows else {}
+
     return [
         {
             "id": s.id,
             "status": s.status,
             "stop_count": s.stop_count,
+            "completed_stop_count": closed_counts.get(s.id, 0),
             "created_at": s.created_at,
             "shipped_at": s.shipped_at,
         }

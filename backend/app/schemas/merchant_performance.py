@@ -8,7 +8,8 @@ from pydantic import BaseModel, ConfigDict
 class MerchantPerformanceResponse(BaseModel):
     merchant_id: int
     merchant_name: str
-    rating: int | None = None
+    rating: float | None = None
+    rating_count: int = 0
 
     total_products: int = 0
     total_orders: int = 0

@@ -24,7 +24,6 @@ def _order(order_id: int, status: str, shipped_days_ago: float | None = None):
         shipped_at=shipped_at,
         delivered_at=None,
         delivery_confirmed_by=None,
-        current_order=SimpleNamespace(status=status),
     )
 
 
@@ -84,7 +83,7 @@ def test_mark_shipped_sets_timestamp_once():
     order = _order(1, "processing")
     mark_shipped(order)
     first = order.shipped_at
-    assert order.status == order.current_order.status == "shipped"
+    assert order.status == "shipped"
     assert first is not None
 
     mark_shipped(order)
@@ -94,7 +93,7 @@ def test_mark_shipped_sets_timestamp_once():
 def test_mark_delivered_records_who_confirmed():
     order = _order(1, "shipped", shipped_days_ago=1)
     mark_delivered(order, confirmed_by="buyer")
-    assert order.status == order.current_order.status == "delivered"
+    assert order.status == "delivered"
     assert order.delivered_at is not None
     assert order.delivery_confirmed_by == "buyer"
 

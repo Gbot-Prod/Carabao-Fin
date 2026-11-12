@@ -67,7 +67,7 @@ def test_release_keeps_stock_when_session_cannot_be_closed(monkeypatch):
     monkeypatch.setattr(
         order_reservations, "close_checkout_sessions", lambda _order, _db: False
     )
-    order = SimpleNamespace(id=1, status="pending", items=[], current_order=None)
+    order = SimpleNamespace(id=1, status="pending", items=[])
 
     released = order_reservations.release_order_reservation(
         order, db=None, transaction_status="expired"

@@ -62,6 +62,7 @@ class Fixture:
     """One merchant and a rotating set of buyers, so no order list keeps growing."""
 
     def __init__(self, base_url: str) -> None:
+        self.base_url = base_url
         self.merchant = Client(base_url, common.merchant_email(0))
         self.buyers = [
             Client(base_url, common.buyer_email(i)) for i in range(N_BUYER_SESSIONS)
@@ -93,6 +94,26 @@ class Fixture:
             json={"delivery_address": "12 Sampaguita St, Quezon City"},
         )
         return placed.json()["order_id"]
+
+    def pay_order(self, buyer: Client, order_id: int) -> requests.Response:
+        """Pay through the real path: open a checkout, then replay its webhook.
+
+        Payment is the only way an order leaves "pending"; merchants can't
+        move unpaid orders.
+        """
+        checkout = buyer.request("POST", f"/payments/checkout/{order_id}").json()
+        body, signature = signed_webhook(
+            checkout["paymongo_session_id"], webhook_secret()
+        )
+        return requests.post(
+            f"{self.base_url}/webhooks/paymongo",
+            data=body,
+            headers={
+                "Paymongo-Signature": signature,
+                "Content-Type": "application/json",
+            },
+            timeout=60,
+        )
 
     def set_status(self, order_id: int, status: str) -> None:
         self.merchant.request(
@@ -179,7 +200,7 @@ def run_status(
             for trial in range(trials):
                 buyer = fixture.buyers[trial % len(fixture.buyers)]
                 order_id = fixture.place_order(buyer)
-                fixture.set_status(order_id, "processing")
+                fixture.pay_order(buyer, order_id)
                 for transition in TRANSITIONS:
                     row = timed_transition(
                         fixture, buyer, order_id, transition, poll_ms
@@ -229,10 +250,15 @@ def signed_webhook(session_id: str, secret: str) -> tuple[bytes, str]:
     return body, f"t={now},te={digest},li="
 
 
-def run_webhook(fixture: Fixture, base_url: str, out_dir: Path, trials: int) -> None:
+def webhook_secret() -> str:
     secret = dotenv_values(common.BACKEND_ROOT / ".env").get("PAYMONGO_WEBHOOK_SECRET")
     if not secret:
         raise SystemExit("PAYMONGO_WEBHOOK_SECRET is not set in .env.")
+    return secret
+
+
+def run_webhook(fixture: Fixture, base_url: str, out_dir: Path, trials: int) -> None:
+    secret = webhook_secret()
 
     with (out_dir / "webhook.csv").open("w", newline="") as f:
         writer = csv.DictWriter(f, ["trial", "order_id", "http", "ms", "settled"])

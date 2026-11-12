@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -54,6 +54,9 @@ class MerchantApplication(Base):
     barangay = Column(String, nullable=True)
     address = Column(String, nullable=False)
     postal_code = Column(String, nullable=False)
+    # Map pin (U1).
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
     delivery_time = Column(Integer, nullable=False)
     delivery_price = Column(Integer, nullable=False)
     price_range_min = Column(Integer, nullable=False)

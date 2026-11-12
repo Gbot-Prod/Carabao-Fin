@@ -50,6 +50,9 @@ export async function POST(req: NextRequest) {
 
   const session = await auth.api.getSession({
     headers: req.headers,
+    // Fresh from the database: the 5-minute cookie cache could still say
+    // two-step verification is off right after it was turned on (E8c).
+    query: { disableCookieCache: true },
   });
 
   if (!session) {
@@ -92,6 +95,8 @@ export async function POST(req: NextRequest) {
         first_name: firstName || null,
         last_name: lastName || null,
         role: session.user.role ?? null,
+        // E8c: admin endpoints require two-step verification.
+        two_factor_enabled: Boolean((session.user as { twoFactorEnabled?: boolean | null }).twoFactorEnabled),
         verification_token: req.cookies.get("pending_signup_verification")?.value ?? null,
       }),
     }

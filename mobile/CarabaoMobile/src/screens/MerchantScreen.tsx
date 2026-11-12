@@ -2,28 +2,55 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, Image, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, ActivityIndicator,
+  StyleSheet, SafeAreaView, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
 import { api, merchantLocation, type ApiMerchant, type ApiProduce } from '../lib/api';
+import { matchReferencePrice, referenceLabel, type ApiReferencePrice } from '../lib/referencePrices';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
+
+// "YYYY-MM-DD" → "Nov 20", read as a calendar date so no timezone shifts the day.
+function formatDay(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return Number.isNaN(date.getTime())
+    ? ymd
+    : date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+}
+
+function freshnessLabel(product: ApiProduce): string {
+  const harvested = product.harvest_date
+    ? `Harvested ${formatDay(product.harvest_date)}`
+    : 'Harvest date not set';
+  return product.best_before
+    ? `${harvested} · Best before ${formatDay(product.best_before)}`
+    : harvested;
+}
+
+function orderTermsLabel(product: ApiProduce): string | null {
+  const parts: string[] = [];
+  if (product.min_order_qty > 1) parts.push(`Min. order ${product.min_order_qty}`);
+  for (const tier of product.price_tiers) parts.push(`${tier.min_qty}+ at ₱${tier.unit_price}`);
+  return parts.length ? parts.join(' · ') : null;
+}
 
 function MerchantScreenContent() {
   const router = useRouter();
   const { farmId, farmName } = useLocalSearchParams<{ farmId: string; farmName: string }>();
   const { addItem, itemCount } = useCart();
-  const { token } = useAuth();
+  const { token, isAuthenticated } = useAuth();
 
   const [merchant, setMerchant] = useState<ApiMerchant | null>(null);
   const [products, setProducts] = useState<ApiProduce[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
+  const [referencePrices, setReferencePrices] = useState<ApiReferencePrice[]>([]);
 
   useEffect(() => {
     if (!farmId) return;
@@ -38,6 +65,11 @@ function MerchantScreenContent() {
         ]);
         setMerchant(m);
         setProducts(p);
+        // Optional fair-price info (P1); the shop works without it.
+        api.referencePrices
+          .list(token)
+          .then(setReferencePrices)
+          .catch(() => setReferencePrices([]));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load merchant');
       } finally {
@@ -48,6 +80,20 @@ function MerchantScreenContent() {
   }, [farmId, token]);
 
   const handleAdd = (product: ApiProduce) => {
+    // Orders and saved carts belong to an account: explain instead of letting a
+    // signed-out buyer fill a cart they can't check out (E4).
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Sign in to save your cart and order',
+        'Your cart is kept on your Carabao account, so sign in or create a free account before adding produce.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Create account', onPress: () => router.push({ pathname: '/auth', params: { mode: 'signup' } }) },
+          { text: 'Sign in', onPress: () => router.push('/auth') },
+        ],
+      );
+      return;
+    }
     addItem({
       id: String(product.id),
       produceId: product.id,
@@ -56,11 +102,42 @@ function MerchantScreenContent() {
       produce: product.name ?? 'Produce',
       unit: product.unit,
       price: product.price,
-    });
+      deliveryFee: merchant?.delivery_price ?? null,
+    }, product.min_order_qty);
     setAddedIds((prev) => new Set([...prev, product.id]));
   };
 
   const displayName = merchant?.merchant_name ?? farmName ?? 'Merchant';
+
+  // Favourite farms (U4)
+  const [following, setFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  useEffect(() => {
+    if (!token || !farmId) return;
+    api.follows
+      .mine(token)
+      .then((ids) => setFollowing(ids.includes(Number(farmId))))
+      .catch(() => setFollowing(false));
+  }, [token, farmId]);
+  const toggleFollow = async () => {
+    if (!isAuthenticated) {
+      Alert.alert('Sign in to follow farms', 'Followed farms are listed first when you browse.', [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Sign in', onPress: () => router.push('/auth') },
+      ]);
+      return;
+    }
+    setFollowBusy(true);
+    try {
+      if (following) await api.follows.unfollow(token, Number(farmId));
+      else await api.follows.follow(token, Number(farmId));
+      setFollowing(!following);
+    } catch (err) {
+      Alert.alert('Could not update', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setFollowBusy(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.root}>
@@ -70,6 +147,17 @@ function MerchantScreenContent() {
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.navTitle} numberOfLines={1}>{displayName}</Text>
+        <TouchableOpacity
+          style={[styles.followBtn, following && styles.followBtnOn]}
+          onPress={() => void toggleFollow()}
+          disabled={followBusy}
+          accessibilityRole="button"
+          accessibilityState={{ selected: following }}
+        >
+          <Text style={[styles.followText, following && styles.followTextOn]}>
+            {following ? '✓ Following' : '+ Follow'}
+          </Text>
+        </TouchableOpacity>
         <View style={styles.cartPill}>
           <Text style={styles.cartPillText}>🛒 {itemCount}</Text>
         </View>
@@ -164,6 +252,7 @@ function MerchantScreenContent() {
             ) : (
               products.map((product) => {
                 const isAdded = addedIds.has(product.id);
+                const terms = orderTermsLabel(product);
                 return (
                   <View key={product.id} style={styles.productRow}>
                     {product.image_url ? (
@@ -183,6 +272,12 @@ function MerchantScreenContent() {
                       {product.description ? (
                         <Text style={styles.productDesc} numberOfLines={2}>{product.description}</Text>
                       ) : null}
+                      <Text style={styles.productFreshness}>{freshnessLabel(product)}</Text>
+                      {terms ? <Text style={styles.productFreshness}>{terms}</Text> : null}
+                      {(() => {
+                        const ref = matchReferencePrice(referencePrices, product.name, product.unit);
+                        return ref ? <Text style={styles.productReference}>{referenceLabel(ref)}</Text> : null;
+                      })()}
                       <View style={styles.productFooter}>
                         <Text style={styles.productPrice}>₱{product.price.toLocaleString()}</Text>
                         <TouchableOpacity
@@ -230,6 +325,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   backBtn: { padding: 4 },
+  followBtn: {
+    borderWidth: 1, borderColor: Colors.primary, borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md, paddingVertical: 4, marginRight: Spacing.sm,
+  },
+  followBtnOn: { backgroundColor: Colors.primary },
+  followText: { color: Colors.primary, fontWeight: '700', fontSize: FontSize.xs },
+  followTextOn: { color: Colors.white },
   backIcon: { fontSize: 22, color: Colors.text },
   navTitle: { flex: 1, fontSize: FontSize.md, fontWeight: '700', color: Colors.text, marginHorizontal: Spacing.md },
   cartPill: { backgroundColor: Colors.primaryLight, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full },
@@ -294,8 +396,10 @@ const styles = StyleSheet.create({
   productCatText: { fontSize: 10, color: Colors.primary, fontWeight: '700' },
   productName: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   productDesc: { fontSize: FontSize.xs, color: Colors.textMuted, lineHeight: 16 },
+  productFreshness: { fontSize: FontSize.xs, color: Colors.textMuted },
   productFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   productPrice: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.primary },
+  productReference: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   addBtn: { backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.md },
   addBtnAdded: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   addBtnText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '700' },

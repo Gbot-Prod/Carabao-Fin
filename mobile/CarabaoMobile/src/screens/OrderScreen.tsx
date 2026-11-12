@@ -2,16 +2,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, FlatList, TextInput, StyleSheet,
-  TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator,
+  TouchableOpacity, ScrollView, SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import FarmCard from '../components/FarmCard';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
-import { api, merchantLocation, type ApiMerchant } from '../lib/api';
+import { api, merchantLocation, type ApiMerchant, type ApiProduceSearchResult } from '../lib/api';
 import { type Farm } from '../lib/mockData';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
+import { SkeletonList, LoadError } from '../components/Skeleton';
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
 
 function merchantToFarm(m: ApiMerchant): Farm {
@@ -38,8 +39,47 @@ function OrderScreenContent() {
   const [farms, setFarms] = useState<Farm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  // U5: unread count for the bell, refreshed every minute.
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    const load = () =>
+      api.notifications.list(token).then((r) => { if (active) setUnread(r.unread); }).catch(() => {});
+    void load();
+    const timer = setInterval(load, 60_000);
+    return () => { active = false; clearInterval(timer); };
+  }, [token]);
+
+  // U4: followed farms are listed first.
+  const [followed, setFollowed] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!token) return;
+    api.follows
+      .mine(token)
+      .then((ids) => setFollowed(new Set(ids.map(String))))
+      .catch(() => setFollowed(new Set()));
+  }, [token]);
+  // U2: produce matching the search box, from the server (debounced).
+  const [produceHits, setProduceHits] = useState<ApiProduceSearchResult[]>([]);
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) {
+      setProduceHits([]);
+      return;
+    }
+    let active = true;
+    const timer = setTimeout(() => {
+      api.search
+        .produce(token, q)
+        .then((res) => { if (active) setProduceHits(res.items); })
+        .catch(() => { if (active) setProduceHits([]); });
+    }, 300);
+    return () => { active = false; clearTimeout(timer); };
+  }, [search, token]);
 
   useEffect(() => {
     const load = async () => {
@@ -55,7 +95,7 @@ function OrderScreenContent() {
       }
     };
     void load();
-  }, [token]);
+  }, [token, attempt]);
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(farms.map((f) => f.category)));
@@ -69,8 +109,8 @@ function OrderScreenContent() {
         f.category.toLowerCase().includes(search.toLowerCase());
       const matchCat = activeCategory === 'All' || f.category === activeCategory;
       return matchSearch && matchCat;
-    });
-  }, [farms, search, activeCategory]);
+    }).sort((a, b) => Number(followed.has(b.id)) - Number(followed.has(a.id)));
+  }, [farms, search, activeCategory, followed]);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -80,6 +120,21 @@ function OrderScreenContent() {
           <Text style={styles.greeting}>Good morning</Text>
           <Text style={styles.headerTitle}>Find Fresh Farms</Text>
         </View>
+        <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+        {token ? (
+          <TouchableOpacity
+            style={styles.cartBtn}
+            onPress={() => router.push('/notifications')}
+            accessibilityLabel={unread ? `Notifications, ${unread} unread` : 'Notifications'}
+          >
+            <Ionicons name="notifications-outline" size={22} color={Colors.primary} />
+            {unread > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{unread > 9 ? '9+' : unread}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity style={styles.cartBtn} onPress={() => router.push('/(tabs)/cart')}>
           <Ionicons name="cart-outline" size={22} color={Colors.primary} />
           {itemCount > 0 && (
@@ -88,6 +143,7 @@ function OrderScreenContent() {
             </View>
           )}
         </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search */}
@@ -135,15 +191,9 @@ function OrderScreenContent() {
       )}
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading farms…</Text>
-        </View>
+        <SkeletonList label="Loading farms" rows={4} grid />
       ) : error ? (
-        <View style={styles.center}>
-          <Ionicons name="warning-outline" size={36} color={Colors.warning} />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
+        <LoadError message={error} onRetry={() => setAttempt((n) => n + 1)} />
       ) : (
         <FlatList
           data={filtered}
@@ -165,6 +215,34 @@ function OrderScreenContent() {
               />
             </View>
           )}
+          ListHeaderComponent={
+            produceHits.length > 0 ? (
+              <View style={styles.hits}>
+                <Text style={styles.hitsTitle}>Produce matching “{search.trim()}”</Text>
+                {produceHits.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={styles.hitRow}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/merchant',
+                        params: { farmId: String(p.merchant_id), farmName: p.merchant_name },
+                      })
+                    }
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.hitName}>{p.name ?? 'Produce'}</Text>
+                      <Text style={styles.hitMeta}>
+                        {p.merchant_name}{p.merchant_province ? ` · ${p.merchant_province}` : ''}
+                      </Text>
+                    </View>
+                    <Text style={styles.hitPrice}>₱{p.price.toLocaleString()}/{p.unit}</Text>
+                  </TouchableOpacity>
+                ))}
+                <Text style={styles.hitsTitle}>Farms</Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="leaf-outline" size={48} color={Colors.textLight} />
@@ -203,6 +281,16 @@ const styles = StyleSheet.create({
   },
   cartBadgeText: { color: Colors.white, fontSize: 10, fontWeight: '800' },
 
+  hits: { width: '100%', marginBottom: Spacing.md, gap: Spacing.xs },
+  hitsTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.textMuted, marginTop: Spacing.sm },
+  hitRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    backgroundColor: Colors.white, borderRadius: Radius.md, padding: Spacing.md,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  hitName: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
+  hitMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  hitPrice: { fontSize: FontSize.sm, fontWeight: '800', color: Colors.primary },
   searchWrap: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white,
     marginHorizontal: Spacing.lg, marginTop: Spacing.md,

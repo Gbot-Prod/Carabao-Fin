@@ -1,8 +1,16 @@
 import { createAuthClient } from "better-auth/react";
-import { adminClient } from "better-auth/client/plugins";
+import { adminClient, twoFactorClient } from "better-auth/client/plugins";
 
 const authClient = createAuthClient({
-  plugins: [adminClient()],
+  plugins: [
+    adminClient(),
+    // E8: a sign-in that needs a second factor continues on the code page.
+    twoFactorClient({
+      onTwoFactorRedirect: () => {
+        window.location.href = "/two-factor";
+      },
+    }),
+  ],
 });
 
 const syncBackendSession = async () => {
@@ -43,8 +51,18 @@ export const signIn = {
   email: async (credentials: { email: string; password: string }) => {
     const { data, error } = await authClient.signIn.email(credentials);
 
+    // BetterAuth's admin plugin reports an account an admin suspended as BANNED_USER.
+    if (error?.code === "BANNED_USER") {
+      throw new Error("This account has been suspended. Contact Carabao support.");
+    }
     if (error || !data) {
       throw new Error(getErrorMessage(error, "Login failed"));
+    }
+
+    // Two-step verification (E8b): no session until the code page succeeds,
+    // so skip the backend sync; the client plugin is already on its way there.
+    if ((data as { twoFactorRedirect?: boolean }).twoFactorRedirect) {
+      return { twoFactorRedirect: true as const };
     }
 
     await syncBackendSession();
@@ -105,4 +123,63 @@ export const signOut = async () => {
   });
 
   return data;
+};
+
+// Forgot password (E6). BetterAuth answers the same whether or not the email
+// has an account, so the page can't be used to discover accounts.
+export const requestPasswordReset = async (email: string) => {
+  const { error } = await authClient.requestPasswordReset({ email, redirectTo: "/reset-password" });
+  if (error) throw new Error(getErrorMessage(error, "Could not send the reset email"));
+};
+
+export const resetPassword = async (newPassword: string, token: string) => {
+  const { error } = await authClient.resetPassword({ newPassword, token });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "INVALID_TOKEN") throw new Error("INVALID_TOKEN");
+    throw new Error(getErrorMessage(error, "Could not reset the password"));
+  }
+};
+
+// Two-step verification (E8a). Enabling returns the authenticator URI and
+// backup codes; the plugin only turns it on after a first code is verified.
+export const getTwoFactorEnabled = async (): Promise<boolean> => {
+  const { data } = await authClient.getSession();
+  return Boolean((data?.user as { twoFactorEnabled?: boolean | null } | undefined)?.twoFactorEnabled);
+};
+
+export const enableTwoFactor = async (password: string) => {
+  const { data, error } = await authClient.twoFactor.enable({ password });
+  if (error || !data) throw new Error(getErrorMessage(error, "Could not start two-step verification"));
+  return data;
+};
+
+export const verifyTwoFactorSetup = async (code: string) => {
+  const { error } = await authClient.twoFactor.verifyTotp({ code });
+  if (error) throw new Error(getErrorMessage(error, "That code didn't match. Try the newest code."));
+  // Tell the backend straight away (admin access depends on it, E8c).
+  await syncBackendSession();
+};
+
+export const disableTwoFactor = async (password: string) => {
+  const { error } = await authClient.twoFactor.disable({ password });
+  if (error) throw new Error(getErrorMessage(error, "Could not turn off two-step verification"));
+  await syncBackendSession();
+};
+
+// Second step of a two-step sign-in (E8b): an authenticator or backup code
+// finishes the BetterAuth session; then the FastAPI token is synced as usual.
+export const completeTwoFactorSignIn = async (
+  code: string,
+  { backup = false, trustDevice = false }: { backup?: boolean; trustDevice?: boolean } = {},
+) => {
+  const { error } = backup
+    ? await authClient.twoFactor.verifyBackupCode({ code, trustDevice })
+    : await authClient.twoFactor.verifyTotp({ code, trustDevice });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "INVALID_TWO_FACTOR_COOKIE") throw new Error("SIGN_IN_AGAIN");
+    throw new Error(getErrorMessage(error, "That code didn't work."));
+  }
+  await syncBackendSession();
 };

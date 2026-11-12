@@ -5,12 +5,49 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
+import { useLanguage } from '@/lib/i18n/LanguageProvider';
+import { useAuth } from '@/hooks/useAuth';
+import { useAuthPrompt } from '@/components/AuthPrompt/AuthPromptContext';
+import { fetchMyFollows, followFarm, unfollowFarm } from '@/util/api/merchants';
+import { fmt } from '@/lib/i18n/format';
+import ReferencePriceHint, { useReferencePrices } from '@/components/ReferencePrice/ReferencePriceHint';
+import { formatRequestedDate } from '@/app/(app)/merchantDashboard/lib/format';
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
 
 export default function MerchantDetailPage() {
   const params = useParams<{ merchantID?: string }>();
   const merchantID = Number(params?.merchantID ?? '0');
   const hasValidMerchantId = Number.isFinite(merchantID) && merchantID > 0;
+  const { t } = useLanguage();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { showPrompt } = useAuthPrompt();
+  // Favourite farms (U4)
+  const [following, setFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
+  useEffect(() => {
+    if (!isAuthenticated || !hasValidMerchantId) return;
+    fetchMyFollows()
+      .then((ids) => setFollowing(ids.includes(merchantID)))
+      .catch(() => setFollowing(false));
+  }, [isAuthenticated, hasValidMerchantId, merchantID]);
+  const toggleFollow = async () => {
+    if (!isAuthenticated) {
+      showPrompt();
+      return;
+    }
+    setFollowBusy(true);
+    try {
+      if (following) await unfollowFarm(merchantID);
+      else await followFarm(merchantID);
+      setFollowing(!following);
+    } catch {
+      // leave the button as it was
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+  // Market reference ranges (P1), fetched once and matched per card.
+  const referencePrices = useReferencePrices();
 
   const [merchant, setMerchant] = useState<Merchant | undefined>(undefined);
   const [shopPage, setShopPage] = useState<ShopPage | null>(null);
@@ -54,6 +91,11 @@ export default function MerchantDetailPage() {
 
   const handleAddToCart = async (produce: Produce) => {
     if (addingRef.current) return;
+    // The cart lives on the buyer's account: say so instead of failing silently (E4).
+    if (!authLoading && !isAuthenticated) {
+      showPrompt('cart');
+      return;
+    }
     addingRef.current = true;
     setAddingId(produce.id);
 
@@ -75,7 +117,8 @@ export default function MerchantDetailPage() {
                 farm: merchant?.merchant_name ?? '',
                 produce: produce.name ?? 'Item',
                 unit: produce.unit,
-                quantity: 1,
+                // A first add starts at the listing's minimum order.
+                quantity: produce.min_order_qty,
                 price: produce.price,
                 stock_quantity: produce.stock_quantity,
               },
@@ -93,16 +136,16 @@ export default function MerchantDetailPage() {
   };
 
   if (!merchant && !error) {
-    return <PageLoader label="Loading shop…" />;
+    return <PageLoader label={t.shop.loading} />;
   }
 
   return (
     <div className={styles.page}>
       {notification && (
         <div className={styles.cartToast} role="status">
-          <span>&#10003; {notification} added to cart</span>
+          <span>&#10003; {fmt(t.shop.addedToCart, { name: notification })}</span>
           <Link href="/cart">
-            View Cart
+            {t.shop.viewCart}
           </Link>
         </div>
       )}
@@ -127,27 +170,59 @@ export default function MerchantDetailPage() {
                 <img src={shopPage.logo_url} alt={merchant.merchant_name} className={styles.merchantImage} />
               ) : null}
               <div className={styles.merchantInfo}>
-                <h1 className={styles.merchantName}>{merchant.merchant_name}</h1>
-                <p className={styles.merchantLocation}>Location: {merchantLocation ?? 'Not specified'}</p>
+                <div className={styles.merchantNameRow}>
+                  <h1 className={styles.merchantName}>{merchant.merchant_name}</h1>
+                  <button
+                    type="button"
+                    className={`${styles.followBtn} ${following ? styles.followBtnOn : ''}`}
+                    aria-pressed={following}
+                    onClick={() => void toggleFollow()}
+                    disabled={followBusy}
+                    title={following ? t.follow.unfollow : undefined}
+                  >
+                    {following ? `✓ ${t.follow.following}` : `+ ${t.follow.follow}`}
+                  </button>
+                </div>
+                <dl className={styles.ownerInfo}>
+                  <div className={styles.ownerRow}>
+                    <dt>{t.shop.owner}</dt>
+                    <dd>{merchant.owner_name || t.shop.notProvided}</dd>
+                  </div>
+                  <div className={styles.ownerRow}>
+                    <dt>{t.shop.contact}</dt>
+                    <dd>
+                      {merchant.contact_number ? (
+                        <a href={`tel:${merchant.contact_number}`}>{merchant.contact_number}</a>
+                      ) : (
+                        t.shop.notProvided
+                      )}
+                    </dd>
+                  </div>
+                  {merchant.contact_email && (
+                    <div className={styles.ownerRow}>
+                      <dt>{t.shop.email}</dt>
+                      <dd>
+                        <a href={`mailto:${merchant.contact_email}`}>{merchant.contact_email}</a>
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+                <p className={styles.merchantLocation}>{fmt(t.shop.location, { place: merchantLocation || t.shop.notSpecified })}</p>
                 {(shopPage?.description) && (
                   <p className={styles.merchantDesc}>{shopPage.description}</p>
                 )}
                 <div className={styles.details}>
                   <div className={styles.detailItem}>
-                    <span className={styles.label}>Rating</span>
-                    <span className={styles.value}>{merchant.rating ?? 'N/A'}</span>
+                    <span className={styles.label}>{t.shop.rating}</span>
+                    <span className={styles.value}>{merchant.rating ?? t.shop.na}</span>
                   </div>
                   <div className={styles.detailItem}>
-                    <span className={styles.label}>Delivery</span>
-                    <span className={styles.value}>{merchant.delivery_time ? `${merchant.delivery_time} day(s)` : 'N/A'}</span>
+                    <span className={styles.label}>{t.shop.delivery}</span>
+                    <span className={styles.value}>{merchant.delivery_time ? fmt(t.shop.deliveryDays, { count: merchant.delivery_time }) : t.shop.na}</span>
                   </div>
                   <div className={styles.detailItem}>
-                    <span className={styles.label}>Hours</span>
-                    <span className={styles.value}>{merchant.operating_hours != null ? (typeof merchant.operating_hours === 'string' ? merchant.operating_hours : JSON.stringify(merchant.operating_hours)) : 'Not available'}</span>
-                  </div>
-                  <div className={styles.detailItem}>
-                    <span className={styles.label}>Contact</span>
-                    <span className={styles.value}>{merchant.contact_number}</span>
+                    <span className={styles.label}>{t.shop.hours}</span>
+                    <span className={styles.value}>{merchant.operating_hours != null ? (typeof merchant.operating_hours === 'string' ? merchant.operating_hours : JSON.stringify(merchant.operating_hours)) : t.shop.notAvailable}</span>
                   </div>
                 </div>
               </div>
@@ -155,7 +230,7 @@ export default function MerchantDetailPage() {
           </header>
 
           <section className={styles.productsSection}>
-            <h2>Available Produce</h2>
+            <h2>{t.shop.availableProduce}</h2>
 
             <div className={styles.productsGrid}>
               {produces.map((produce) => (
@@ -163,22 +238,41 @@ export default function MerchantDetailPage() {
                   <div className={styles.productImage}>
                     {produce.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={produce.image_url} alt={produce.name ?? ''} />
+                      <img src={produce.image_url} alt={produce.name ? `Photo of ${produce.name}` : 'Produce photo'} />
                     ) : null}
                     {produce.category && (
                       <span className={styles.badge}>{produce.category}</span>
                     )}
                   </div>
                   <div className={styles.productBody}>
-                    <h3>{produce.name ?? 'Unnamed Produce'}</h3>
+                    <h3>{produce.name ?? t.shop.unnamedProduce}</h3>
                     {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
+                    <p className={styles.freshness}>
+                      {produce.harvest_date
+                        ? fmt(t.shop.harvested, { date: formatRequestedDate(produce.harvest_date) })
+                        : t.shop.harvestNotSet}
+                      {produce.best_before && ` · ${fmt(t.shop.bestBefore, { date: formatRequestedDate(produce.best_before) })}`}
+                    </p>
+                    {produce.min_order_qty > 1 && (
+                      <p className={styles.freshness}>{fmt(t.shop.minOrder, { qty: produce.min_order_qty })}</p>
+                    )}
+                    {produce.price_tiers.length > 0 && (
+                      <p className={styles.freshness}>
+                        {fmt(t.shop.bulk, {
+                          tiers: produce.price_tiers
+                            .map((tier) => fmt(t.shop.bulkTier, { qty: tier.min_qty, price: tier.unit_price }))
+                            .join(' · '),
+                        })}
+                      </p>
+                    )}
                     <p className={styles.price}>₱{produce.price} / {produce.unit_quantity && produce.unit_quantity !== 1 ? produce.unit_quantity : ""}{produce.unit}</p>
+                    <ReferencePriceHint name={produce.name} unit={produce.unit} variant="card" prices={referencePrices} />
                     <button
                       className={styles.addBtn}
                       disabled={addingId === produce.id}
                       onClick={() => void handleAddToCart(produce)}
                     >
-                      {addingId === produce.id ? 'Adding…' : 'Add to Cart'}
+                      {addingId === produce.id ? t.shop.adding : t.shop.addToCart}
                     </button>
                   </div>
                 </article>

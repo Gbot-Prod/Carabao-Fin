@@ -1,4 +1,8 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+TrackingState = Literal["estimated", "waiting_for_shipment"]
 
 
 class TrackingPosition(BaseModel):
@@ -25,6 +29,8 @@ class ShipmentStop(BaseModel):
     lng: float
     label: str
     status: str
+    # Planned arrival from the route schedule (merchant view only); not GPS.
+    estimated_arrival_at: str | None = None
 
 
 class ShipmentTrackingResponse(BaseModel):
@@ -35,11 +41,15 @@ class ShipmentTrackingResponse(BaseModel):
     order_ids: list[int]
     waypoints: list[Waypoint]
     stops: list[ShipmentStop]
-    origin: TrackingPosition
-    destination: TrackingPosition
+    origin: TrackingPosition | None
+    destination: TrackingPosition | None
+    # Estimated from the route schedule; there is no live vehicle location.
     progress: float
-    eta_minutes: int
+    eta_minutes: int | None
     active_stop_index: int
+    # Planned drive time for the whole route (merchant view only).
+    total_duration_seconds: float | None = None
+    tracking_state: TrackingState = "estimated"
 
 
 # Pickup + 20 stops = 21 points, inside the Mapbox Matrix API's 25-point
