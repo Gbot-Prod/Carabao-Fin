@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, Image, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, ActivityIndicator,
+  StyleSheet, SafeAreaView, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -43,7 +43,7 @@ function MerchantScreenContent() {
   const router = useRouter();
   const { farmId, farmName } = useLocalSearchParams<{ farmId: string; farmName: string }>();
   const { addItem, itemCount } = useCart();
-  const { token } = useAuth();
+  const { token, isAuthenticated } = useAuth();
 
   const [merchant, setMerchant] = useState<ApiMerchant | null>(null);
   const [products, setProducts] = useState<ApiProduce[]>([]);
@@ -80,6 +80,20 @@ function MerchantScreenContent() {
   }, [farmId, token]);
 
   const handleAdd = (product: ApiProduce) => {
+    // Orders and saved carts belong to an account: explain instead of letting a
+    // signed-out buyer fill a cart they can't check out (E4).
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Sign in to save your cart and order',
+        'Your cart is kept on your Carabao account, so sign in or create a free account before adding produce.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Create account', onPress: () => router.push({ pathname: '/auth', params: { mode: 'signup' } }) },
+          { text: 'Sign in', onPress: () => router.push('/auth') },
+        ],
+      );
+      return;
+    }
     addItem({
       id: String(product.id),
       produceId: product.id,

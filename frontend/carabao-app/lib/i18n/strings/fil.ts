@@ -118,6 +118,8 @@ const fil: Strings = {
     within: 'Pasok ang presyo mo sa saklaw na ito.',
   },
   cart: {
+    signedOutTitle: 'Mag-sign in para magamit ang basket',
+    signedOutBody: 'Naka-save ang iyong basket sa iyong Carabao account, kaya makakapag-order ka mula sa kahit anong device. Mag-sign in o gumawa ng libreng account para makapagdagdag ng ani.',
     title: 'Iyong Basket',
     subtitle: 'Suriin ang iyong mga ani bago mag-checkout.',
     loading: 'Nilo-load ang iyong basket…',
@@ -220,6 +222,19 @@ const fil: Strings = {
     removeTier: 'Alisin',
     addTier: '+ Magdagdag ng presyong pakyawan',
     description: 'Paglalarawan',
+  },
+  authPrompt: {
+    default: {
+      title: 'Kailangan mong mag-sign in para riyan',
+      body: 'Gumawa ng libreng account o mag-sign in para magpatuloy.',
+    },
+    cart: {
+      title: 'Mag-sign in para ma-save ang iyong basket at makapag-order',
+      body: 'Nakatago ang iyong basket sa iyong Carabao account, kaya kailangan mong mag-sign in o gumawa ng libreng account bago magdagdag ng ani.',
+    },
+    signIn: 'Mag-sign in',
+    signUp: 'Gumawa ng account',
+    later: 'Mamaya na',
   },
 };
 

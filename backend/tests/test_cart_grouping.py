@@ -45,3 +45,15 @@ def test_saved_cart_lines_carry_merchant_and_delivery_fee(db, merchant, buyer): 
     # Read back on GET as stored.
     again = {i["id"]: i for i in client.get("/carts/me").json()["items"]}
     assert again[str(mangga.id)]["farm"] == "Other Farm"
+
+
+def test_cart_needs_a_signed_in_buyer(db):  # noqa: F811
+    # E4: the cart lives on the account, which is why clients ask a signed-out
+    # buyer to sign in before adding produce.
+    app = FastAPI()
+    app.include_router(carts.router)
+    app.dependency_overrides[get_db] = lambda: db
+    client = TestClient(app)
+
+    assert client.get("/carts/me").status_code == 401
+    assert client.put("/carts/me", json={"items": []}).status_code == 401

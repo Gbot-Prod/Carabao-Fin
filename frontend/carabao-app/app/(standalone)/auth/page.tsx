@@ -5,7 +5,7 @@ import { apiClient } from "@/util/api";
 import { Mail, Phone } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Logo from "@/public/images/icons/carabaoLogo.png";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -29,6 +29,13 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [verificationStep, setVerificationStep] = useState<"identifier" | "code">("identifier");
+
+  // "Create an account" links (E4) open the page on sign-up.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("mode") === "signup") {
+      queueMicrotask(() => setMode("signup"));
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({

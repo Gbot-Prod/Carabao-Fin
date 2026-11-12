@@ -6,6 +6,8 @@ import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
+import { useAuth } from '@/hooks/useAuth';
+import { useAuthPrompt } from '@/components/AuthPrompt/AuthPromptContext';
 import { fmt } from '@/lib/i18n/format';
 import ReferencePriceHint, { useReferencePrices } from '@/components/ReferencePrice/ReferencePriceHint';
 import { formatRequestedDate } from '@/app/(app)/merchantDashboard/lib/format';
@@ -16,6 +18,8 @@ export default function MerchantDetailPage() {
   const merchantID = Number(params?.merchantID ?? '0');
   const hasValidMerchantId = Number.isFinite(merchantID) && merchantID > 0;
   const { t } = useLanguage();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { showPrompt } = useAuthPrompt();
   // Market reference ranges (P1), fetched once and matched per card.
   const referencePrices = useReferencePrices();
 
@@ -61,6 +65,11 @@ export default function MerchantDetailPage() {
 
   const handleAddToCart = async (produce: Produce) => {
     if (addingRef.current) return;
+    // The cart lives on the buyer's account: say so instead of failing silently (E4).
+    if (!authLoading && !isAuthenticated) {
+      showPrompt('cart');
+      return;
+    }
     addingRef.current = true;
     setAddingId(produce.id);
 

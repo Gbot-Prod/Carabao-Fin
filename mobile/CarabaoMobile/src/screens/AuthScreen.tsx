@@ -6,6 +6,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
@@ -13,7 +14,9 @@ const { width } = Dimensions.get('window');
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  // "Create account" from the cart prompt (E4) opens on sign-up.
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [mode, setMode] = useState<'signin' | 'signup'>(params.mode === 'signup' ? 'signup' : 'signin');
   const [form, setForm] = useState({
     email: '',
     password: '',

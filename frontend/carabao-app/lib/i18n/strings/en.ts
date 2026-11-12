@@ -109,6 +109,8 @@ const en = {
     within: 'Your price is within this range.',
   },
   cart: {
+    signedOutTitle: 'Sign in to use your cart',
+    signedOutBody: 'Your cart is saved on your Carabao account, so you can order from any device. Sign in or create a free account to start adding produce.',
     title: 'Your Cart',
     subtitle: 'Review your produce before proceeding to checkout.',
     loading: 'Loading your cart…',
@@ -211,6 +213,19 @@ const en = {
     removeTier: 'Remove',
     addTier: '+ Add bulk price',
     description: 'Description',
+  },
+  authPrompt: {
+    default: {
+      title: 'You need to be signed in for that',
+      body: 'Create a free account or sign in to continue.',
+    },
+    cart: {
+      title: 'Sign in to save your cart and order',
+      body: 'Your cart is kept on your Carabao account, so you need to sign in or create a free account before adding produce.',
+    },
+    signIn: 'Sign in',
+    signUp: 'Create an account',
+    later: 'Not now',
   },
 };
 

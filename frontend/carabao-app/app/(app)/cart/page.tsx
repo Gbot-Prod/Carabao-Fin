@@ -8,6 +8,7 @@ import { fetchMyCart, replaceMyCart } from "@/util/api";
 import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt, plural } from "@/lib/i18n/format";
+import { useAuth } from "@/hooks/useAuth";
 
 type CartItem = {
   id: string;
@@ -24,6 +25,7 @@ type CartItem = {
 
 export default function CartPage() {
   const { t } = useLanguage();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [isHydrating, setIsHydrating] = useState(true);
   const hasSyncedRef = useRef(false);
@@ -137,8 +139,19 @@ export default function CartPage() {
 
       <div className={styles.layout}>
         <section className={styles.itemsCard}>
-          {isHydrating ? (
+          {isHydrating || authLoading ? (
             <PageLoader variant="inline" label={t.cart.loading} />
+          ) : !isAuthenticated ? (
+            <div className={styles.emptyState}>
+              <h2>{t.cart.signedOutTitle}</h2>
+              <p>{t.cart.signedOutBody}</p>
+              <Link href="/auth" className={styles.primaryButton}>
+                {t.authPrompt.signIn}
+              </Link>
+              <Link href="/auth?mode=signup" className={styles.secondaryButton}>
+                {t.authPrompt.signUp}
+              </Link>
+            </div>
           ) : items.length === 0 ? (
             <div className={styles.emptyState}>
               <h2>{t.cart.emptyTitle}</h2>
