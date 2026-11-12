@@ -81,3 +81,29 @@ def test_cannot_update_another_merchants_produce(db, merchant):  # noqa: F811
     assert res.status_code == 404
     db.refresh(theirs)
     assert theirs.price == 50
+
+
+def test_mobile_edit_form_payload_is_accepted(db, merchant):  # noqa: F811
+    """The mobile form always sends all five fields; category may be cleared."""
+    produce = Produce(
+        merchant_id=merchant.id, name="Okra", price=40, stock_quantity=2, category="Vegetables"
+    )
+    db.add(produce)
+    db.commit()
+
+    res = _client(db, merchant.user_id).patch(
+        f"/produce/{produce.id}",
+        json={
+            "name": "Okra (fresh)",
+            "price": 45,
+            "stock_quantity": 0,
+            "unit": "lbs",
+            "category": None,
+        },
+    )
+
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert (body["name"], body["price"], body["stock_quantity"], body["unit"], body["category"]) == (
+        "Okra (fresh)", 45, 0, "lbs", None,
+    )

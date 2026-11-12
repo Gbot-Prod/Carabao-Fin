@@ -9,15 +9,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
-import { api, type ApiProduce } from '../lib/api';
+import { api, type ApiProduce, type ProduceUpdatePayload } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { ListingForm } from '../components/ListingForm';
 
-function ListingRow({ item }: { item: ApiProduce }) {
+function ListingRow({ item, onPress }: { item: ApiProduce; onPress: () => void }) {
   const outOfStock = item.stock_quantity <= 0;
   return (
-    <View style={styles.row}>
+    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.rowInfo}>
         <Text style={styles.rowName}>{item.name ?? 'Untitled listing'}</Text>
         <Text style={styles.rowMeta}>
@@ -29,7 +30,8 @@ function ListingRow({ item }: { item: ApiProduce }) {
         label={outOfStock ? 'Out of stock' : `${item.stock_quantity} in stock`}
         color={outOfStock ? 'gray' : 'green'}
       />
-    </View>
+      <Ionicons name="create-outline" size={18} color={Colors.textLight} />
+    </TouchableOpacity>
   );
 }
 
@@ -42,6 +44,29 @@ function ListingsScreenContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<ApiProduce | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const openEdit = (item: ApiProduce) => {
+    setSaveError(null);
+    setEditing(item);
+  };
+
+  const handleSave = async (payload: ProduceUpdatePayload) => {
+    if (!token || !editing) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await api.produce.update(token, editing.id, payload);
+      setItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setEditing(null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not save this listing');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -93,7 +118,7 @@ function ListingsScreenContent() {
       <FlatList
         data={items}
         keyExtractor={(p) => String(p.id)}
-        renderItem={({ item }) => <ListingRow item={item} />}
+        renderItem={({ item }) => <ListingRow item={item} onPress={() => openEdit(item)} />}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
@@ -117,6 +142,13 @@ function ListingsScreenContent() {
         <View style={{ width: 30 }} />
       </View>
       {body}
+      <ListingForm
+        produce={editing}
+        saving={saving}
+        error={saveError}
+        onCancel={() => setEditing(null)}
+        onSave={handleSave}
+      />
     </SafeAreaView>
   );
 }
