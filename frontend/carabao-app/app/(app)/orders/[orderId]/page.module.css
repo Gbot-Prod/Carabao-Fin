@@ -70,7 +70,7 @@
 .badgePending { background: #fef9c3; color: #854d0e; }
 .badgeShipped { background: #dbeafe; color: #1d4ed8; }
 .badgeDelivered { background: #dcfce7; color: #15803d; }
-.badgeCancelled { background: #fee2e2; color: #dc2626; }
+.badgeCancelled { background: #fee2e2; color: #b91c1c; }
 
 /* ── Cards ────────────────────────────────────────────────────────────────── */
 
@@ -131,7 +131,7 @@
 
 .stepDone + .stepDone::before,
 .stepDone + .stepCurrent::before {
-  background: #0a8b3a;
+  background: #057a2d;
 }
 
 .stepDot {
@@ -150,12 +150,12 @@
 }
 
 .stepDone .stepDot {
-  background: #0a8b3a;
-  border-color: #0a8b3a;
+  background: #057a2d;
+  border-color: #057a2d;
 }
 
 .stepCurrent .stepDot {
-  border-color: #0a8b3a;
+  border-color: #057a2d;
   box-shadow: 0 0 0 4px rgba(10, 139, 58, 0.15);
 }
 
@@ -170,7 +170,7 @@
 
 .cancelledNote {
   margin: 0;
-  color: #dc2626;
+  color: #b91c1c;
   font-weight: 600;
   font-size: 0.9rem;
 }
@@ -195,15 +195,15 @@
 }
 
 .primaryBtn {
-  border: 1px solid #0a8b3a;
-  background: #0a8b3a;
+  border: 1px solid #057a2d;
+  background: #057a2d;
   color: #fff;
 }
 
 .secondaryBtn {
-  border: 1px solid #0a8b3a;
+  border: 1px solid #057a2d;
   background: none;
-  color: #0a8b3a;
+  color: #057a2d;
 }
 
 .primaryBtn:disabled,
@@ -251,7 +251,7 @@
 .error {
   margin: 0;
   font-size: 0.8rem;
-  color: #dc2626;
+  color: #b91c1c;
 }
 
 /* ── Items & totals ───────────────────────────────────────────────────────── */
@@ -351,8 +351,8 @@
   box-shadow: var(--focus-ring);
 }
 
-.starOn { color: #f59e0b; }
-.starOff { color: #d6dcd7; }
+.starOn { color: #d97706; }
+.starOff { color: #7e8f81; }
 
 .reviewForm,
 .reviewShown {

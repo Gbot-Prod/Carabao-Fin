@@ -1,23 +1,26 @@
 // src/screens/CartScreen.tsx
 import React from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
+  View, Text, SectionList, TouchableOpacity,
   StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useCart } from '../lib/CartContext';
+import { cartTotals, groupCartByFarm } from '../lib/cartGroups';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { StatRow, Divider, Button, EmptyState } from '../components/UI';
 
 function CartScreenContent() {
   const router = useRouter();
-  const { items, updateQuantity, removeItem, total, itemCount, clearCart } = useCart();
+  const { items, updateQuantity, removeItem, itemCount, clearCart } = useCart();
   const insets = useSafeAreaInsets();
 
-  const serviceFee = total > 0 ? 40 : 0;
-  const grandTotal = total + serviceFee;
+  // Checkout makes one order per farm (C1), each with that farm's delivery fee.
+  const groups = groupCartByFarm(items);
+  const { itemTotal: total, deliveryTotal, grandTotal } = cartTotals(groups);
+  const sections = groups.map((g) => ({ key: g.key, farm: g.farm, fee: g.deliveryFee, subtotal: g.total, data: g.items }));
 
   const handleCheckout = () => {
     if (items.length === 0) return;
@@ -70,15 +73,26 @@ function CartScreenContent() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={items}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <View style={styles.farmHeader}>
+            <Text style={styles.itemFarm}>{section.farm}</Text>
+            <Text style={styles.farmMeta}>Delivery ₱{section.fee.toLocaleString()}</Text>
+          </View>
+        )}
+        renderSectionFooter={({ section }) =>
+          groups.length > 1 ? (
+            <Text style={styles.farmSubtotal}>Subtotal for {section.farm}: ₱{section.subtotal.toLocaleString()}</Text>
+          ) : null
+        }
         renderItem={({ item }) => (
           <View style={styles.itemCard}>
             <View style={styles.itemInfo}>
-              <Text style={styles.itemFarm}>{item.farm}</Text>
               <Text style={styles.itemName}>{item.produce}</Text>
               <Text style={styles.itemPrice}>₱{item.price.toLocaleString()} / {item.unit}</Text>
             </View>
@@ -116,7 +130,15 @@ function CartScreenContent() {
           <View style={styles.summary}>
             <Text style={styles.summaryTitle}>Order Summary</Text>
             <StatRow label={`Items (${itemCount})`} value={`₱${total.toLocaleString()}`} />
-            <StatRow label="Service fee" value={`₱${serviceFee.toLocaleString()}`} />
+            <StatRow
+              label={groups.length > 1 ? `Delivery fees (${groups.length} farms)` : 'Delivery fee'}
+              value={`₱${deliveryTotal.toLocaleString()}`}
+            />
+            {groups.length > 1 && (
+              <Text style={styles.farmMeta}>
+                Each farm delivers and is paid separately: checkout creates {groups.length} orders.
+              </Text>
+            )}
             <Divider style={{ marginVertical: Spacing.sm }} />
             <StatRow label="Grand Total" value={`₱${grandTotal.toLocaleString()}`} bold />
           </View>
@@ -158,6 +180,12 @@ const styles = StyleSheet.create({
     padding: Spacing.md, ...Shadow.sm,
   },
   itemInfo: { marginBottom: Spacing.md },
+  farmHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',
+    marginTop: Spacing.md, marginBottom: Spacing.xs,
+  },
+  farmMeta: { fontSize: FontSize.xs, color: Colors.textMuted },
+  farmSubtotal: { fontSize: FontSize.xs, color: Colors.textMuted, textAlign: 'right', marginTop: Spacing.xs },
   itemFarm: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase' },
   itemName: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
   itemPrice: { fontSize: FontSize.sm, color: Colors.textMuted },

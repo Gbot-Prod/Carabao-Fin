@@ -95,3 +95,60 @@ def test_status_update_keeps_schedule_and_notes(db, merchant, buyer):  # noqa: F
     assert body["requested_delivery_date"] == "2026-11-20"
     assert body["delivery_window"] == "14:00 – 16:00"
     assert body["notes"] == "Call on arrival"
+
+
+# --- mobile "Incoming orders" (M3) ---------------------------------------------
+
+MOBILE_SCREEN = (
+    __import__("pathlib").Path(__file__).resolve().parents[2]
+    / "mobile/CarabaoMobile/src/screens/MerchantOrdersScreen.tsx"
+)
+
+
+def test_mobile_offers_only_moves_the_server_allows():
+    import re
+
+    from app.services.order_status import MERCHANT_TRANSITIONS
+
+    source = MOBILE_SCREEN.read_text(encoding="utf-8")
+    steps = source.split("const NEXT_STEPS", 1)[1].split("};", 1)[0]
+    offered = {
+        (frm, to)
+        for frm, block in re.findall(r"(\w+): \[([^\]]*)\]", steps)
+        for to in re.findall(r"to: '(\w+)'", block)
+    }
+    cancellable = re.search(r"const CANCELLABLE[^=]*= \[([^\]]*)\]", source).group(1)
+    offered |= {(frm, "cancelled") for frm in re.findall(r"'(\w+)'", cancellable)}
+
+    assert offered, "could not read the mobile transitions"
+    for frm, to in offered:
+        assert OrderStatus(to) in MERCHANT_TRANSITIONS[OrderStatus(frm)], (frm, to)
+
+
+def test_mobile_status_update_moves_order_on(db, merchant, buyer):  # noqa: F811
+    order = _scheduled_order(db, merchant, buyer)
+    order.status = OrderStatus.SHIPPED
+    db.commit()
+
+    resp = _merchant_client(db, merchant).patch(
+        f"/merchants/me/orders/{order.id}/status", json={"status": "out_for_delivery"}
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "out_for_delivery"
+
+
+def test_merchant_cannot_update_another_merchants_order(db, merchant, buyer):  # noqa: F811
+    from tests.test_merchant_listings import _other_merchant
+
+    order = _scheduled_order(db, merchant, buyer)
+    rival = _other_merchant(db)
+
+    resp = _merchant_client(db, rival).patch(
+        f"/merchants/me/orders/{order.id}/status", json={"status": "cancelled"}
+    )
+
+    assert resp.status_code == 404
+    db.expire_all()
+    assert db.get(Order, order.id).status == OrderStatus.PROCESSING
+    assert _merchant_client(db, rival).get("/merchants/me/orders").json() == []

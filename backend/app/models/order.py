@@ -1,4 +1,14 @@
-from sqlalchemy import JSON, Column, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -30,6 +40,9 @@ class Order(Base):
     total_price = Column(Integer, nullable=False, default=0)
     items = Column(JSON, nullable=False, default=list)
     delivery_address = Column(String, nullable=True)
+    # Map pin for the delivery address (U1).
+    delivery_lat = Column(Float, nullable=True)
+    delivery_lng = Column(Float, nullable=True)
     # What the buyer asked for at checkout; the route ETA is time_of_arrival.
     requested_delivery_date = Column(Date, nullable=True, index=True)
     delivery_window = Column(String, nullable=True)  # e.g. "08:00 – 10:00"

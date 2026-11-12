@@ -1,21 +1,37 @@
 // src/screens/ListingsScreen.tsx
 // Merchant's own produce listings. Uses the same endpoints as the web
-// merchant dashboard: /users/me to find the merchant, then /merchants/{id}/produce.
+// merchant dashboard: /users/me to find the merchant, then /merchants/me/produce
+// (which, unlike the public list, includes expired and admin-hidden listings).
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, FlatList, StyleSheet, SafeAreaView,
-  TouchableOpacity, RefreshControl, ActivityIndicator,
+  TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
-import { api, type ApiProduce, type ProduceCreatePayload } from '../lib/api';
+import { api, type ApiProduce, type ApiStockAlerts, type ProduceCreatePayload } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { SkeletonList, LoadError } from '../components/Skeleton';
 import { ListingForm } from '../components/ListingForm';
 
-function ListingRow({ item, onPress }: { item: ApiProduce; onPress: () => void }) {
+// F1: why a listing needs attention, from /merchants/me/stock-alerts.
+function alertFor(alerts: ApiStockAlerts | null, id: number): string | null {
+  if (!alerts) return null;
+  if (alerts.expired.some((i) => i.id === id)) return 'Past its best-before date: hidden from buyers.';
+  const notes: string[] = [];
+  const soon = alerts.expiring_soon.find((i) => i.id === id);
+  if (soon) {
+    const d = soon.days_left ?? 0;
+    notes.push(`Best before ${d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`}`);
+  }
+  if (alerts.low_stock.some((i) => i.id === id)) notes.push('Low stock');
+  return notes.length ? notes.join(' · ') : null;
+}
+
+function ListingRow({ item, alert, onPress }: { item: ApiProduce; alert: string | null; onPress: () => void }) {
   const outOfStock = item.stock_quantity <= 0;
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.8}>
@@ -25,6 +41,13 @@ function ListingRow({ item, onPress }: { item: ApiProduce; onPress: () => void }
           ₱{item.price.toLocaleString()} / {item.unit_quantity && item.unit_quantity !== 1 ? `${item.unit_quantity} ` : ''}{item.unit}
           {item.category ? ` · ${item.category}` : ''}
         </Text>
+        {alert ? <Text style={styles.rowAlert}>{alert}</Text> : null}
+        {item.hidden_at ? (
+          <Text style={styles.rowHidden}>
+            Hidden by Carabao admin: buyers can't see or order it.
+            {item.hidden_reason ? ` Reason: ${item.hidden_reason}` : ''}
+          </Text>
+        ) : null}
       </View>
       <Badge
         label={outOfStock ? 'Out of stock' : `${item.stock_quantity} in stock`}
@@ -39,6 +62,7 @@ function ListingsScreenContent() {
   const router = useRouter();
   const { token } = useAuth();
   const [items, setItems] = useState<ApiProduce[]>([]);
+  const [alerts, setAlerts] = useState<ApiStockAlerts | null>(null);
   const [merchantName, setMerchantName] = useState<string | null>(null);
   const [notMerchant, setNotMerchant] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -67,6 +91,7 @@ function ListingsScreenContent() {
         setItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       }
       setEditing(null);
+      api.merchants.stockAlerts(token).then(setAlerts).catch(() => {});
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Could not save this listing');
     } finally {
@@ -84,7 +109,12 @@ function ListingsScreenContent() {
         return;
       }
       setMerchantName(profile.merchant.merchant_name);
-      setItems(await api.merchants.produce(profile.merchant.id, token));
+      const [produce, stockAlerts] = await Promise.all([
+        api.merchants.myProduce(token),
+        api.merchants.stockAlerts(token).catch(() => null),
+      ]);
+      setItems(produce);
+      setAlerts(stockAlerts);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load your listings');
     }
@@ -102,7 +132,7 @@ function ListingsScreenContent() {
 
   let body: React.ReactNode;
   if (loading) {
-    body = <ActivityIndicator style={{ marginTop: 40 }} color={Colors.primary} />;
+    body = <SkeletonList label="Loading your listings" rows={4} />;
   } else if (notMerchant) {
     body = (
       <EmptyState
@@ -113,10 +143,12 @@ function ListingsScreenContent() {
     );
   } else if (error) {
     body = (
-      <EmptyState
-        icon={<Ionicons name="alert-circle-outline" size={48} color={Colors.error} />}
-        title="Something went wrong"
+      <LoadError
         message={error}
+        onRetry={() => {
+          setLoading(true);
+          void load().finally(() => setLoading(false));
+        }}
       />
     );
   } else {
@@ -124,7 +156,23 @@ function ListingsScreenContent() {
       <FlatList
         data={items}
         keyExtractor={(p) => String(p.id)}
-        renderItem={({ item }) => <ListingRow item={item} onPress={() => openEdit(item)} />}
+        renderItem={({ item }) => (
+          <ListingRow item={item} alert={alertFor(alerts, item.id)} onPress={() => openEdit(item)} />
+        )}
+        ListHeaderComponent={
+          alerts && (alerts.low_stock.length || alerts.expiring_soon.length || alerts.expired.length) ? (
+            <View style={styles.alertBanner}>
+              <Ionicons name="warning-outline" size={18} color={Colors.warning} />
+              <Text style={styles.alertBannerText}>
+                {[
+                  alerts.low_stock.length ? `${alerts.low_stock.length} low on stock (≤ ${alerts.low_stock_threshold})` : null,
+                  alerts.expiring_soon.length ? `${alerts.expiring_soon.length} near best-before` : null,
+                  alerts.expired.length ? `${alerts.expired.length} expired` : null,
+                ].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+          ) : null
+        }
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
@@ -192,4 +240,12 @@ const styles = StyleSheet.create({
   rowInfo: { flex: 1 },
   rowName: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   rowMeta: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 2 },
+  rowHidden: { fontSize: FontSize.xs, color: Colors.error, fontWeight: '600', marginTop: 4 },
+  rowAlert: { fontSize: FontSize.xs, color: Colors.warning, fontWeight: '700', marginTop: 4 },
+  alertBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.warningBg, borderRadius: Radius.md, padding: Spacing.md,
+    borderWidth: 1, borderColor: Colors.warning,
+  },
+  alertBannerText: { flex: 1, fontSize: FontSize.sm, color: Colors.text, fontWeight: '600' },
 });

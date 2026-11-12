@@ -69,7 +69,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6b806b;
+  color: var(--text-faint);
 }
 
 .ownerRow dd {
@@ -114,7 +114,7 @@
 
 .label {
   font-size: 0.85rem;
-  color: #6b7d6b;
+  color: var(--text-faint);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -307,4 +307,34 @@
   color: #86efac;
   text-decoration: underline;
   white-space: nowrap;
+}
+
+/* Follow farm (U4) */
+.merchantNameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.followBtn {
+  padding: 6px 14px;
+  border: 1px solid var(--green-600);
+  border-radius: var(--radius-pill);
+  background: var(--bg-white);
+  color: var(--green-600);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.followBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.followBtnOn {
+  background: var(--green-600);
+  color: var(--bg-white);
 }

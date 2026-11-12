@@ -126,6 +126,8 @@ def create_merchant_from_application(
         "barangay": application.barangay,
         "address": application.address,
         "postal_code": application.postal_code,
+        "lat": application.lat,
+        "lng": application.lng,
         "available_days": application.available_days,
         "delivery_time": application.delivery_time,
         "delivery_price": application.delivery_price,

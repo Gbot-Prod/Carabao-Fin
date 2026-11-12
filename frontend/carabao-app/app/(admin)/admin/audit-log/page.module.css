@@ -1,0 +1,38 @@
+.intro {
+  max-width: 720px;
+  margin: -12px 0 20px;
+  color: var(--text-subtle);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.changeCell {
+  white-space: normal !important;
+  min-width: 260px;
+}
+
+.changes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field {
+  color: var(--text-subtle);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.from {
+  color: var(--danger);
+  text-decoration: line-through;
+  word-break: break-word;
+}
+
+.to {
+  color: var(--success-text);
+  word-break: break-word;
+}

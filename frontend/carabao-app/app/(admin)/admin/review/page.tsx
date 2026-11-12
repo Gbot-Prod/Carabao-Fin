@@ -191,6 +191,7 @@ function ApplicationCard({
             {action === "clarification" && (
               <textarea
                 className={styles.noteInput}
+                aria-label="Clarification request for the applicant"
                 placeholder="Describe what additional information or corrections are needed from the applicant…"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}

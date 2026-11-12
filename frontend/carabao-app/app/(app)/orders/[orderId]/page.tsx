@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
+import OrderChat from "@/components/OrderChat/OrderChat";
 import {
   confirmOrderReceived,
   createOrderReview,
@@ -174,6 +175,7 @@ function ReviewSection({
         <Stars value={rating} onChange={setRating} />
         <textarea
           className={styles.reviewInput}
+          aria-label="Your review (optional)"
           placeholder={`How was your order from ${order.merchant}? (optional)`}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
@@ -384,6 +386,9 @@ export default function OrderDetailPage() {
       </div>
 
       <ReviewSection key={order.review?.id ?? "new"} order={order} onSaved={handleReviewSaved} />
+
+      {/* Chat with the farm (CH1b) */}
+      <OrderChat orderId={order.order_id} />
     </div>
   );
 }

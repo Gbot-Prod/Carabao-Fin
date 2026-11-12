@@ -1,6 +1,7 @@
 import { useState } from "react";
 import styles from "../page.module.css";
 import s from "./orders.module.css";
+import OrderChat from "@/components/OrderChat/OrderChat";
 import {
   ORDER_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
@@ -92,6 +93,8 @@ export default function OrderCard({ order, today, focused, updating, onUpdateSta
 
       {open && (
         <div id={detailsId} className={s.orderDetails}>
+          {/* Chat with the buyer (CH1b); mounted only while expanded. */}
+          <OrderChat orderId={order.id} />
           <div className={styles.orderBuyer}>
             <span className={styles.orderBuyerLabel}>Buyer</span>
             <span className={styles.orderBuyerName}>{order.buyer_name ?? "—"}</span>

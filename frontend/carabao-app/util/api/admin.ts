@@ -2,6 +2,7 @@ import { apiClient } from './client';
 import type { UserProfile } from './users';
 import type { Merchant, MerchantPayoutBatch, PayoutProvider, PayoutType } from './merchants';
 import type { OrderStatus, PayoutStatus } from './statuses';
+import type { Produce } from './produce';
 
 export type MerchantApplication = {
   id: number;
@@ -56,6 +57,18 @@ export type PayoutSummaryItem = {
   total_amount: number;
 };
 
+export type WeeklySignups = {
+  week_start: string; // Monday, YYYY-MM-DD (Manila)
+  buyers: number;
+  merchants: number;
+};
+
+export type CategorySales = {
+  category: string;
+  revenue: number; // item revenue in pesos, delivery fee excluded
+  quantity: number;
+};
+
 export type AdminStats = {
   total_revenue: number;
   platform_fees: number;
@@ -63,6 +76,13 @@ export type AdminStats = {
   total_users: number;
   active_merchants: number;
   pending_applications: number;
+  pending_work: {
+    applications: number;
+    payouts_to_send: number;
+    refunds_pending: number;
+  };
+  weekly_signups: WeeklySignups[];
+  top_categories: CategorySales[];
   daily_revenue: DailyRevenue[];
   order_breakdown: OrderStatusCount[];
   payout_summary: PayoutSummaryItem[];
@@ -102,8 +122,13 @@ export const fetchAdminUsers = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Pro
   return res.data;
 };
 
-export const fetchAdminMerchantsPage = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Promise<Paginated<Merchant>> => {
-  const res = await apiClient.get<Paginated<Merchant>>('/admin/merchants', {
+export type AdminMerchant = Merchant & {
+  owner_suspended_at: string | null;
+  owner_suspension_reason: string | null;
+};
+
+export const fetchAdminMerchantsPage = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Promise<Paginated<AdminMerchant>> => {
+  const res = await apiClient.get<Paginated<AdminMerchant>>('/admin/merchants', {
     params: { page, page_size: pageSize },
   });
   return res.data;
@@ -174,5 +199,191 @@ export type WalletBalance = { available: number; pending: number };
 
 export const fetchWalletBalance = async (): Promise<WalletBalance> => {
   const res = await apiClient.get<WalletBalance>('/admin/wallet');
+  return res.data;
+};
+
+// ── Orders (A1) ──────────────────────────────────────────────────────────────
+
+export type AdminOrderStatus = 'pending' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
+export type AdminPaymentStatus = 'awaiting_payment' | 'paid' | 'refund_pending' | 'refunded' | 'unpaid';
+
+export type AdminOrderSummary = {
+  id: number;
+  status: AdminOrderStatus;
+  payment_status: AdminPaymentStatus;
+  total_price: number;
+  delivery_fee: number;
+  ordered_at: string;
+  merchant_id: number | null;
+  merchant_name: string | null;
+  buyer_id: number | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  shipment_id: number | null;
+};
+
+export type AdminOrderDetail = AdminOrderSummary & {
+  items: Record<string, unknown>[];
+  notes: string | null;
+  transactions: {
+    id: number;
+    status: string;
+    amount: number;
+    platform_fee: number;
+    merchant_amount: number;
+    paymongo_payment_id: string | null;
+    created_at: string;
+    paid_at: string | null;
+    refund_method: string | null;
+    refund_reference: string | null;
+    refunded_at: string | null;
+  }[];
+  shipment: { id: number; status: string; stop_count: number; shipped_at: string | null } | null;
+  delivery: {
+    delivery_address: string | null;
+    requested_delivery_date: string | null;
+    delivery_window: string | null;
+    time_of_arrival: string | null;
+    shipped_at: string | null;
+    delivered_at: string | null;
+    delivery_confirmed_by: string | null;
+  };
+};
+
+export type AdminOrderFilters = {
+  status?: AdminOrderStatus;
+  merchant_id?: number;
+  payment_status?: AdminPaymentStatus;
+  date_from?: string; // YYYY-MM-DD
+  date_to?: string; // YYYY-MM-DD, inclusive
+};
+
+export const fetchAdminOrders = async (
+  filters: AdminOrderFilters,
+  page = 1,
+  pageSize = ADMIN_PAGE_SIZE,
+): Promise<Paginated<AdminOrderSummary>> => {
+  const res = await apiClient.get<Paginated<AdminOrderSummary>>('/admin/orders', {
+    params: { ...filters, page, page_size: pageSize },
+  });
+  return res.data;
+};
+
+export const fetchAdminOrder = async (orderId: number): Promise<AdminOrderDetail> => {
+  const res = await apiClient.get<AdminOrderDetail>(`/admin/orders/${orderId}`);
+  return res.data;
+};
+
+// ── Refunds (A2) ─────────────────────────────────────────────────────────────
+
+export type RefundMethod = 'paymongo' | 'gcash' | 'maya' | 'bank_transfer' | 'cash';
+
+export const REFUND_METHOD_LABELS: Record<RefundMethod, string> = {
+  paymongo: 'PayMongo refund',
+  gcash: 'GCash',
+  maya: 'Maya',
+  bank_transfer: 'Bank transfer',
+  cash: 'Cash',
+};
+
+export type AdminRefund = {
+  transaction_id: number;
+  order_id: number;
+  order_status: string;
+  status: 'refund_pending' | 'refunded';
+  amount: number;
+  paymongo_payment_id: string | null;
+  paid_at: string | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  buyer_phone: string | null;
+  merchant_name: string | null;
+  refund_method: RefundMethod | null;
+  refund_reference: string | null;
+  refund_notes: string | null;
+  refunded_at: string | null;
+};
+
+export const fetchAdminRefunds = async (
+  status: 'refund_pending' | 'refunded' = 'refund_pending',
+): Promise<AdminRefund[]> => {
+  const res = await apiClient.get<AdminRefund[]>('/admin/refunds', { params: { status } });
+  return res.data;
+};
+
+export const recordRefund = async (
+  transactionId: number,
+  payload: { method: RefundMethod; reference: string; notes?: string },
+): Promise<AdminRefund> => {
+  const res = await apiClient.post<AdminRefund>(`/admin/refunds/${transactionId}`, payload);
+  return res.data;
+};
+
+// ── Suspension (A3) ──────────────────────────────────────────────────────────
+
+export const suspendUser = async (userId: number, reason: string): Promise<UserProfile> => {
+  const res = await apiClient.post<UserProfile>(`/admin/users/${userId}/suspend`, { reason });
+  return res.data;
+};
+
+export const reinstateUser = async (userId: number): Promise<UserProfile> => {
+  const res = await apiClient.post<UserProfile>(`/admin/users/${userId}/reinstate`);
+  return res.data;
+};
+
+// ── Audit log (A4) ───────────────────────────────────────────────────────────
+
+export type AuditLogEntry = {
+  id: number;
+  admin_id: number | null;
+  admin_email: string;
+  action: string;
+  target_type: string;
+  target_id: number | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export const AUDIT_PAGE_SIZE = 50;
+
+export const fetchAuditLog = async (
+  filters: { action?: string },
+  page = 1,
+  pageSize = AUDIT_PAGE_SIZE,
+): Promise<Paginated<AuditLogEntry>> => {
+  const res = await apiClient.get<Paginated<AuditLogEntry>>('/admin/audit-log', {
+    params: { ...filters, page, page_size: pageSize },
+  });
+  return res.data;
+};
+
+export const fetchAuditActions = async (): Promise<string[]> => {
+  const res = await apiClient.get<string[]>('/admin/audit-log/actions');
+  return res.data;
+};
+
+// ── Listing moderation (A6) ──────────────────────────────────────────────────
+
+export type AdminProduce = Produce & { merchant_name: string | null };
+
+export const fetchAdminProduce = async (
+  filters: { hidden?: boolean; q?: string; merchant_id?: number },
+  page = 1,
+  pageSize = ADMIN_PAGE_SIZE,
+): Promise<Paginated<AdminProduce>> => {
+  const res = await apiClient.get<Paginated<AdminProduce>>('/admin/produce', {
+    params: { ...filters, page, page_size: pageSize },
+  });
+  return res.data;
+};
+
+export const hideProduce = async (produceId: number, reason: string): Promise<AdminProduce> => {
+  const res = await apiClient.post<AdminProduce>(`/admin/produce/${produceId}/hide`, { reason });
+  return res.data;
+};
+
+export const unhideProduce = async (produceId: number): Promise<AdminProduce> => {
+  const res = await apiClient.post<AdminProduce>(`/admin/produce/${produceId}/unhide`);
   return res.data;
 };

@@ -16,6 +16,8 @@ class MerchantUpdate(BaseModel):
     barangay: str | None = None
     address: str | None = None
     postal_code: str | None = None
+    lat: float | None = None
+    lng: float | None = None
     operating_hours: Any | None = None
     delivery_price: int | None = None
     delivery_time: int | None = None
@@ -45,6 +47,9 @@ class MerchantResponse(BaseModel):
     barangay: str | None = None
     address: str
     postal_code: str
+    # Map pin (U1).
+    lat: float | None = None
+    lng: float | None = None
 
     available_days: list[str]
     operating_hours: Any
@@ -60,6 +65,12 @@ class MerchantResponse(BaseModel):
     produces: list[ProduceResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AdminMerchantResponse(MerchantResponse):
+    # The owner's account suspension (A3); a suspended merchant is hidden.
+    owner_suspended_at: datetime | None = None
+    owner_suspension_reason: str | None = None
 
 
 class MerchantDetailResponse(MerchantResponse):

@@ -7,7 +7,7 @@
   /* Colors */
   --bg-primary: #eef2ec;
   --bg-white: #fdfdfb;
-  --color-primary: #079135fa;
+  --color-primary: #057a2d; /* Q2c: was #079135 (4.1:1) */
   --color-text-light: #d6cfcffa;
   --color-text-dark: #1a2e20;
   --color-border: #e0ece5;
@@ -15,7 +15,7 @@
 
   /* Brand palette (use these instead of raw hex values) */
   --green-900: #173d25;
-  --green-600: #31925d;
+  --green-600: #277a4d; /* Q2c: was #31925d (3.9:1) */
   --green-50: #f7fcf8;
   --green-border: #e0ece5;
   --text-muted: #5c6a5e;
@@ -23,10 +23,12 @@
   --danger: #b91c1c;
   --success-text: #166534;
   --text-strong: #1a2e20;
-  --text-faint: #9aab9d;
+  --text-faint: #5f6f62; /* Q2c: was #9aab9d (2.4:1) */
   --border-strong: #d0e4d5;
   --surface-muted: #f0f5f2;
-  --focus-ring: 0 0 0 3px rgba(49, 146, 93, 0.35);
+  /* Q2a: solid two-tone ring (white gap + dark green) so focus shows on any
+     background and meets WCAG 3:1 for non-text contrast. */
+  --focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px var(--green-900);
 
   /* Spacing */
   --spacing-sm: 0.5rem;
@@ -130,8 +132,10 @@ button:disabled {
 /* Keyboard focus indicator (mouse clicks stay clean) */
 button:focus-visible,
 a:focus-visible,
-[role="button"]:focus-visible {
-  outline: 2px solid var(--green-600);
+summary:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--green-900);
   outline-offset: 2px;
 }
 

@@ -10,6 +10,8 @@ export interface CartItem {
   unit: string;
   price: number;
   quantity: number;
+  /** The farm's delivery fee for its order (C1); null if unknown. */
+  deliveryFee?: number | null;
 }
 
 interface CartContextType {

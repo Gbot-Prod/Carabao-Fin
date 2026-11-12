@@ -13,6 +13,9 @@ export type Merchant = {
   barangay: string | null;
   address: string | null;
   postal_code: string | null;
+  // Farm map pin (U1).
+  lat?: number | null;
+  lng?: number | null;
   category: string | null;
   contact_number: string;
   contact_email?: string | null;
@@ -40,6 +43,9 @@ export type MerchantOnboardingPayload = {
   barangay?: string;
   address: string;
   postal_code?: string;
+  // Farm map pin (U1c), optional.
+  lat?: number | null;
+  lng?: number | null;
   price_range_min: number;
   price_range_max: number;
   delivery_time: number;
@@ -93,6 +99,8 @@ export type MerchantUpdatePayload = {
   barangay?: string | null;
   address?: string | null;
   postal_code?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   contact_email?: string | null;
   contact_number?: string | null;
   operating_hours?: string | null;
@@ -118,6 +126,64 @@ export const submitMyMerchantOnboarding = async (
 
 export const fetchMyMerchantPerformance = async (): Promise<MerchantPerformance> => {
   const response = await apiClient.get<MerchantPerformance>('/merchants/me/performance');
+  return response.data;
+};
+
+// F1: low-stock and best-before alerts for the merchant dashboard.
+export type StockAlertItem = {
+  id: number;
+  name: string;
+  unit: string;
+  stock_quantity: number;
+  best_before: string | null;
+  days_left: number | null;
+};
+
+export type StockAlerts = {
+  low_stock_threshold: number;
+  expiry_warning_days: number;
+  low_stock: StockAlertItem[];
+  expiring_soon: StockAlertItem[];
+  expired: StockAlertItem[];
+};
+
+export const fetchMyStockAlerts = async (): Promise<StockAlerts> => {
+  const response = await apiClient.get<StockAlerts>('/merchants/me/stock-alerts');
+  return response.data;
+};
+
+export const updateMyLowStockThreshold = async (low_stock_threshold: number): Promise<StockAlerts> => {
+  const response = await apiClient.patch<StockAlerts>('/merchants/me/stock-alerts', { low_stock_threshold });
+  return response.data;
+};
+
+// F2: sales charts on the merchant dashboard.
+export type MerchantSales = {
+  days: number;
+  total_revenue: number;
+  total_orders: number;
+  daily: { date: string; revenue: number; orders: number }[];
+  top_products: { produce_id: number | null; name: string; quantity: number; revenue: number }[];
+};
+
+export const fetchMySales = async (days: 30 | 90): Promise<MerchantSales> => {
+  const response = await apiClient.get<MerchantSales>('/merchants/me/sales', { params: { days } });
+  return response.data;
+};
+
+// F3: demand insight (most ordered / searched in the merchant's province).
+export type DemandSearchedTerm = { query: string; searches: number; no_result_searches: number };
+
+export type DemandInsight = {
+  province: string;
+  days: number;
+  most_ordered: { name: string; orders: number; quantity: number }[];
+  most_searched: DemandSearchedTerm[];
+  most_searched_luzon: DemandSearchedTerm[];
+};
+
+export const fetchMyDemand = async (): Promise<DemandInsight> => {
+  const response = await apiClient.get<DemandInsight>('/merchants/me/demand');
   return response.data;
 };
 
@@ -340,7 +406,7 @@ export type MerchantShipmentTracking = {
   origin: { lat: number; lng: number };
   destination: { lat: number; lng: number };
   progress: number;
-  eta_minutes: number;
+  eta_minutes: number | null;
   active_stop_index: number;
 };
 
@@ -370,4 +436,18 @@ export const fetchMyShipments = async (): Promise<MerchantShipmentSummary[]> => 
 export const fetchmMerchantShipmentTracking = async (shipmentId: number) => {
   const response = await apiClient.get<MerchantShipmentTracking | null>(`/shipments/${shipmentId}`);
   return response.data as MerchantShipmentTracking;
+};
+
+// Favourite farms (U4).
+export const fetchMyFollows = async (): Promise<number[]> => {
+  const response = await apiClient.get<number[]>('/users/me/follows');
+  return response.data;
+};
+
+export const followFarm = async (merchantId: number): Promise<void> => {
+  await apiClient.put(`/merchants/${merchantId}/follow`);
+};
+
+export const unfollowFarm = async (merchantId: number): Promise<void> => {
+  await apiClient.delete(`/merchants/${merchantId}/follow`);
 };

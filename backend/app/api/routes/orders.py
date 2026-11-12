@@ -18,9 +18,11 @@ from app.schemas.order import (
     CurrentOrderResponse,
     OrderDetailResponse,
     OrderItemResponse,
+    PlacedOrder,
     PlaceOrderRequest,
     PlaceOrderResponse,
 )
+from app.services import notifications
 from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
     expire_stale_reservations,
@@ -33,12 +35,19 @@ from app.services.order_status import (
     mark_delivered,
     money_received_clause,
 )
+from app.services.pinned_location import validate_pin
 from app.services.produce_freshness import is_expired, ph_today
 from app.services.produce_pricing import unit_price_for
 from app.services.review_service import (
     can_review,
     review_deadline,
     to_review_response,
+)
+from app.services.service_area import (
+    DELIVERY_OUTSIDE_LUZON_DETAIL,
+    OUTSIDE_LUZON_DETAIL,
+    address_in_luzon,
+    is_luzon_region,
 )
 
 from ._order_helpers import (
@@ -64,6 +73,14 @@ def place_order_from_cart(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Carabao delivers within Luzon only (B2).
+    if payload.delivery_region is not None:
+        if not is_luzon_region(payload.delivery_region):
+            raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
+    elif payload.delivery_address and not address_in_luzon(payload.delivery_address):
+        raise HTTPException(status_code=400, detail=DELIVERY_OUTSIDE_LUZON_DETAIL)
+    delivery_pin = validate_pin(payload.delivery_lat, payload.delivery_lng)
+
     # Release any elapsed checkout holds before checking availability.
     expire_stale_reservations(db, reservation_ttl_minutes())
     cart = get_or_create_cart(db, current_user.id)
@@ -96,9 +113,8 @@ def place_order_from_cart(
         .populate_existing()
         .all()
     }
-    produce_by_id: dict[int, Produce] = {}
-    order_items = []
-    fresh_total = 0
+    items_by_merchant: dict[int, list[dict]] = {}
+    subtotal_by_merchant: dict[int, int] = {}
     for item in cart_items:
         if not isinstance(item, dict):
             raise HTTPException(status_code=400, detail="Invalid cart item")
@@ -111,6 +127,11 @@ def place_order_from_cart(
         if produce is None:
             raise HTTPException(
                 status_code=400, detail=f"Produce ID {produce_id} not found"
+            )
+        if produce.hidden_at is not None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{produce.name}' is no longer available",
             )
         if is_expired(produce, today):
             raise HTTPException(
@@ -138,61 +159,91 @@ def place_order_from_cart(
                 ),
             )
 
-        produce_by_id[produce_id] = produce
         produce.stock_quantity -= quantity
         unit_price = unit_price_for(produce, quantity)
-        fresh_total += unit_price * quantity
-        order_items.append({**item, "price": unit_price})
-
-    merchant_ids = {produce.merchant_id for produce in produce_by_id.values()}
-    if len(merchant_ids) != 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Your cart can contain products from only one merchant.",
+        line = {**item, "price": unit_price}
+        items_by_merchant.setdefault(produce.merchant_id, []).append(line)
+        subtotal_by_merchant[produce.merchant_id] = (
+            subtotal_by_merchant.get(produce.merchant_id, 0) + unit_price * quantity
         )
 
-    # Shared lock: checkouts don't block each other, but a concurrent merchant
-    # deletion either waits for this order or is seen here as deleted.
-    merchant = (
-        db.query(Merchant)
-        .filter(Merchant.id == next(iter(merchant_ids)))
-        .with_for_update(read=True)
-        .populate_existing()
-        .first()
-    )
-    if merchant is None or merchant.deleted_at is not None:
-        raise HTTPException(
-            status_code=400, detail="This merchant is no longer accepting orders"
+    # One order per merchant (C1); all of them or none (single commit below).
+    # Shared locks, in id order: checkouts don't block each other, but a
+    # concurrent merchant deletion either waits for these orders or is seen here.
+    orders: list[tuple[Order, Merchant]] = []
+    for merchant_id in sorted(items_by_merchant):
+        merchant = (
+            db.query(Merchant)
+            .filter(Merchant.id == merchant_id)
+            .with_for_update(read=True)
+            .populate_existing()
+            .first()
         )
-    service_fee = merchant.delivery_price or 0
-    total_price = fresh_total + service_fee
+        if (
+            merchant is None
+            or merchant.deleted_at is not None
+            or (merchant.user is not None and merchant.user.suspended_at is not None)
+        ):
+            name = merchant.merchant_name if merchant is not None else "A merchant"
+            raise HTTPException(
+                status_code=400,
+                detail=f"{name} is no longer accepting orders. Remove their items "
+                "from your cart to continue.",
+            )
+        service_fee = merchant.delivery_price or 0
+        order = Order(
+            order_history_id=history.id,
+            user_id=current_user.id,
+            merchant_id=merchant.id,
+            status=OrderStatus.PENDING,
+            total_price=subtotal_by_merchant[merchant_id] + service_fee,
+            items=items_by_merchant[merchant_id],
+            delivery_address=payload.delivery_address,
+            delivery_lat=delivery_pin[0] if delivery_pin else None,
+            delivery_lng=delivery_pin[1] if delivery_pin else None,
+            requested_delivery_date=payload.delivery_date,
+            delivery_window=(payload.delivery_time or "").strip() or None,
+            notes=(payload.notes or "").strip() or None,
+            delivery_fee=service_fee,
+            image=payload.image,
+        )
+        db.add(order)
+        orders.append((order, merchant))
 
-    order = Order(
-        order_history_id=history.id,
-        user_id=current_user.id,
-        merchant_id=merchant.id if merchant is not None else None,
-        status=OrderStatus.PENDING,
-        total_price=total_price,
-        items=order_items,
-        delivery_address=payload.delivery_address,
-        requested_delivery_date=payload.delivery_date,
-        delivery_window=(payload.delivery_time or "").strip() or None,
-        notes=(payload.notes or "").strip() or None,
-        delivery_fee=service_fee,
-        image=payload.image,
-    )
-    db.add(order)
+    db.flush()  # ids for the notifications below
+    for order, merchant in orders:
+        notifications.notify(
+            db,
+            current_user.id,
+            notifications.ORDER_PLACED,
+            f"Order {notifications.order_ref(order)} placed",
+            f"From {merchant.merchant_name}. Pay to confirm it.",
+            f"/orders/{order.id}",
+        )
 
     db.commit()
-    db.refresh(order)
+    placed = []
+    for order, merchant in orders:
+        db.refresh(order)
+        ordered_year = order.ordered_at.year if order.ordered_at else 0
+        placed.append(
+            PlacedOrder(
+                order_id=order.id,
+                order_reference=f"CB-{ordered_year}-{order.id:04d}",
+                status=order.status,
+                merchant_id=merchant.id,
+                merchant_name=merchant.merchant_name,
+                total_price=order.total_price,
+                delivery_fee=order.delivery_fee,
+            )
+        )
 
-    ordered_year = order.ordered_at.year if order.ordered_at else 0
-    order_reference = f"CB-{ordered_year}-{order.id:04d}"
-
+    first = placed[0]
     return PlaceOrderResponse(
-        order_id=order.id,
-        order_reference=order_reference,
-        status=order.status,
+        order_id=first.order_id,
+        order_reference=first.order_reference,
+        status=first.status,
+        orders=placed,
     )
 
 

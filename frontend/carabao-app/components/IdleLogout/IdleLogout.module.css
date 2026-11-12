@@ -1,0 +1,49 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(23, 61, 37, 0.35);
+}
+
+.card {
+  width: min(380px, 100%);
+  padding: 24px;
+  border-radius: var(--radius-md);
+  background: var(--bg-white);
+  box-shadow: 0 12px 32px var(--color-shadow);
+  text-align: center;
+}
+
+.card h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--green-900);
+}
+
+.card p {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.stay {
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--green-600);
+  color: var(--bg-white);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stay:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}

@@ -10,11 +10,17 @@ export type UserProfile = {
   id: number;
   external_auth_id: string | null;
   is_admin: boolean;
+  // Set when an admin suspends the account (A3).
+  suspended_at?: string | null;
+  suspension_reason?: string | null;
   first_name: string | null;
   last_name: string | null;
   email: string;
   phone_number: string | null;
   address: string | null;
+  // Map pin for the address (U1).
+  lat?: number | null;
+  lng?: number | null;
   barangay: string | null;
   city: string | null;
   province: string | null;
@@ -44,6 +50,8 @@ export type UserProfileUpdatePayload = {
   province?: string | null;
   region?: string | null;
   postal_code?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   notifications_preferences?: Partial<NotificationPrefs> | null;
 };
 

@@ -44,6 +44,13 @@ def replace_my_cart(
                 quantity = _to_int(item.get("quantity"), 0)
                 item["price"] = unit_price_for(produce, quantity)
                 item["min_order_qty"] = produce.min_order_qty
+                # Lets clients group a multi-merchant cart (C1) the way
+                # place-order splits it, with each merchant's delivery fee.
+                merchant = produce.merchant
+                if merchant is not None:
+                    item["merchant_id"] = merchant.id
+                    item["farm"] = merchant.merchant_name
+                    item["delivery_fee"] = merchant.delivery_price or 0
         cart.items = items
 
     db.commit()

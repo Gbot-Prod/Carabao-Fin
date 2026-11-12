@@ -10,6 +10,8 @@ export type CartItem = {
   stock_quantity?: number;
   // Set by the server when the cart is saved.
   min_order_qty?: number;
+  merchant_id?: number | null;
+  delivery_fee?: number | null;
 };
 
 export type Cart = {

@@ -25,6 +25,7 @@ from app.services.paymongo import (
     get_or_create_paymongo_customer,
     list_customer_payment_methods,
 )
+from app.services.pinned_location import validate_pin
 
 router = APIRouter(tags=["users"])
 logger = logging.getLogger(__name__)
@@ -42,6 +43,10 @@ def update_current_user_profile(
     current_user: User = Depends(get_current_user),
 ):
     updates = user_update.model_dump(exclude_unset=True)
+    if "lat" in updates or "lng" in updates:
+        validate_pin(
+            updates.get("lat", current_user.lat), updates.get("lng", current_user.lng)
+        )
     for field, value in updates.items():
         setattr(current_user, field, value)
 

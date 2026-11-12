@@ -8,7 +8,7 @@ listed. Dates are calendar days in Philippine time.
 
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import ColumnElement, or_
+from sqlalchemy import ColumnElement, and_, or_
 
 from app.models.produce import Produce
 
@@ -20,8 +20,14 @@ def ph_today() -> date:
 
 
 def is_listed(today: date) -> ColumnElement[bool]:
-    """SQL filter for produce buyers may see and order on ``today``."""
-    return or_(Produce.best_before.is_(None), Produce.best_before >= today)
+    """SQL filter for produce buyers may see and order on ``today``.
+
+    Leaves out expired listings and listings an admin has hidden (A6).
+    """
+    return and_(
+        Produce.hidden_at.is_(None),
+        or_(Produce.best_before.is_(None), Produce.best_before >= today),
+    )
 
 
 def is_expired(produce: Produce, today: date) -> bool:

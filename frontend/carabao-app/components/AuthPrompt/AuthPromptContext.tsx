@@ -1,21 +1,21 @@
 "use client";
 
 import { createContext, useContext, useState } from "react";
-import AuthPrompt from "./AuthPrompt";
+import AuthPrompt, { type AuthPromptReason } from "./AuthPrompt";
 
 type AuthPromptContextType = {
-  showPrompt: () => void;
+  showPrompt: (reason?: AuthPromptReason) => void;
 };
 
 const AuthPromptContext = createContext<AuthPromptContextType>({ showPrompt: () => {} });
 
 export function AuthPromptProvider({ children }: { children: React.ReactNode }) {
-  const [visible, setVisible] = useState(false);
+  const [reason, setReason] = useState<AuthPromptReason | null>(null);
 
   return (
-    <AuthPromptContext.Provider value={{ showPrompt: () => setVisible(true) }}>
+    <AuthPromptContext.Provider value={{ showPrompt: (r = "default") => setReason(r) }}>
       {children}
-      {visible && <AuthPrompt onDismiss={() => setVisible(false)} />}
+      {reason && <AuthPrompt reason={reason} onDismiss={() => setReason(null)} />}
     </AuthPromptContext.Provider>
   );
 }

@@ -160,7 +160,7 @@
 
 .merchantId {
   font-size: 11px;
-  color: #9cad9f;
+  color: var(--text-faint);
   font-family: monospace;
 }
 
@@ -255,7 +255,7 @@
 
 .emptyRow td {
   text-align: center;
-  color: #b0bdb3;
+  color: var(--text-faint);
   padding: 32px;
 }
 

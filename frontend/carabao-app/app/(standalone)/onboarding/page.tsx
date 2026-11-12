@@ -175,8 +175,8 @@ export default function OnboardingPage() {
           {pendingSignup && (
             <>
               <div>
-                <label className={styles.label}>Account email</label>
-                <input
+                <label htmlFor="onboarding-email" className={styles.label}>Account email</label>
+                <input id="onboarding-email"
                   type="email"
                   required
                   value={accountEmail}
@@ -187,12 +187,12 @@ export default function OnboardingPage() {
                 />
               </div>
               <div>
-                <label className={styles.label}>Password</label>
-                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
+                <label htmlFor="onboarding-password" className={styles.label}>Password</label>
+                <input id="onboarding-password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={styles.input} />
               </div>
               <div>
-                <label className={styles.label}>Confirm password</label>
-                <input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={styles.input} />
+                <label htmlFor="onboarding-confirm-password" className={styles.label}>Confirm password</label>
+                <input id="onboarding-confirm-password" type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={styles.input} />
               </div>
               <label className={styles.termsRow}>
                 <input
@@ -213,18 +213,18 @@ export default function OnboardingPage() {
           {/* Name row */}
           <div className={styles.nameRow}>
             <div>
-              <label className={styles.label}>First name</label>
-              <input name="firstName" value={formData.firstName} onChange={handleChange} placeholder="Juan" className={styles.input} />
+              <label htmlFor="onboarding-firstname" className={styles.label}>First name</label>
+              <input id="onboarding-firstname" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="Juan" className={styles.input} />
             </div>
             <div>
-              <label className={styles.label}>Last name</label>
-              <input name="lastName" value={formData.lastName} onChange={handleChange} placeholder="dela Cruz" className={styles.input} />
+              <label htmlFor="onboarding-lastname" className={styles.label}>Last name</label>
+              <input id="onboarding-lastname" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="dela Cruz" className={styles.input} />
             </div>
           </div>
 
           <div>
-            <label className={styles.label}>Phone number</label>
-            <input type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} placeholder="+63 912 345 6789" className={styles.input} />
+            <label htmlFor="onboarding-phonenumber" className={styles.label}>Phone number</label>
+            <input id="onboarding-phonenumber" type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} placeholder="+63 912 345 6789" className={styles.input} />
           </div>
 
           <LocationSelects
@@ -245,13 +245,13 @@ export default function OnboardingPage() {
           />
           
           <div>
-            <label className={styles.label}>Street address</label>
-            <input type="text" name="streetAddress" value={formData.streetAddress} onChange={handleChange} placeholder="123 Rizal Ave" className={styles.input} />
+            <label htmlFor="onboarding-streetaddress" className={styles.label}>Street address</label>
+            <input id="onboarding-streetaddress" type="text" name="streetAddress" value={formData.streetAddress} onChange={handleChange} placeholder="123 Rizal Ave" className={styles.input} />
           </div>
 
           <div>
-            <label className={styles.label}>ZIP code</label>
-            <input type="text" name="zipCode" value={formData.zipCode} onChange={handleChange} placeholder="1634" className={styles.input} />
+            <label htmlFor="onboarding-zipcode" className={styles.label}>ZIP code</label>
+            <input id="onboarding-zipcode" type="text" name="zipCode" value={formData.zipCode} onChange={handleChange} placeholder="1634" className={styles.input} />
           </div>
 
           {saveError && (

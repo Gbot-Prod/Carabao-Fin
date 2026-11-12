@@ -71,7 +71,7 @@
   overflow: hidden;
   flex-shrink: 0;
   background-color: #dcfce7;
-  color: #16a34a;
+  color: #166534;
 }
 
 .sidebar__avatar-img {
@@ -304,7 +304,7 @@
 
 .sidebar__logout:hover {
   background-color: #fef2f2;
-  color: #dc2626;
+  color: #b91c1c;
   border-color: #fca5a5;
 }
 
@@ -423,4 +423,22 @@
     opacity: 1;
     pointer-events: auto;
   }
+}
+
+/* English / Filipino switch (L1) */
+.sidebar__language {
+  align-self: flex-start;
+  margin-bottom: 8px;
+}
+
+/* Language switch + notification bell (U5) */
+.sidebar__footer-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sidebar__footer-tools .sidebar__language {
+  margin-bottom: 0;
 }

@@ -70,13 +70,32 @@ class PlaceOrderRequest(BaseModel):
     # A time window such as "08:00 – 10:00"; stored as Order.delivery_window.
     delivery_time: str | None = Field(default=None, max_length=50)
     delivery_address: str | None = None
+    # The region picked at checkout (web). When absent, delivery_address is checked
+    # for a Luzon province or Metro Manila city instead (B2).
+    delivery_region: str | None = Field(default=None, max_length=100)
+    # Map pin for the delivery address (U1), optional.
+    delivery_lat: float | None = None
+    delivery_lng: float | None = None
     payment_method: str | None = None
     notes: str | None = Field(default=None, max_length=500)
     service_fee: int = 40
     image: str | None = None
 
 
-class PlaceOrderResponse(BaseModel):
+class PlacedOrder(BaseModel):
     order_id: int
     order_reference: str
     status: OrderStatus
+    merchant_id: int
+    merchant_name: str
+    total_price: int
+    delivery_fee: int
+
+
+class PlaceOrderResponse(BaseModel):
+    # The first order, for clients that place one merchant's cart at a time.
+    order_id: int
+    order_reference: str
+    status: OrderStatus
+    # Every order created: one per merchant in the cart (C1), merchant id order.
+    orders: list[PlacedOrder] = []

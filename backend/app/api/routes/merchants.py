@@ -42,7 +42,8 @@ from app.schemas.payout import (
 )
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
-from app.services import paymongo, r2_service
+from app.services import notifications, paymongo, r2_service
+from app.services.account_suspension import merchant_is_public
 from app.services.merchant_service import (
     find_deletion_blockers,
     get_active_merchant,
@@ -64,8 +65,10 @@ from app.services.payout_service import (
     payout_info_problem,
     transfer_fee,
 )
+from app.services.pinned_location import delivery_point, merchant_point, validate_pin
 from app.services.produce_freshness import freshness_error, is_listed, ph_today
 from app.services.produce_pricing import parse_tiers, pricing_error, serialize_tiers
+from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
 from app.services.sms_service import notify_order_shipped
 from app.utils.geocoding import _geocode
 
@@ -140,7 +143,7 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
                 parts = [p for p in [user.address, user.city] if p]
                 delivery_address = ", ".join(parts) if parts else None
 
-    if not delivery_address:
+    if not delivery_address and order.delivery_lat is None:
         print(
             f"[route] Skipping route computation for order {
                 order.id
@@ -148,8 +151,10 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
         )
         return
 
-    origin_coords = _geocode(merchant_address)
-    dest_coords = _geocode(delivery_address)
+    # Saved map pins first (U1); geocode the address text only without one.
+    origin_coords = merchant_point(order.merchant, merchant_address, _geocode)
+    buyer = order.order_history.user if order.order_history else None
+    dest_coords = delivery_point(order, buyer, delivery_address, _geocode)
 
     if not origin_coords:
         print(
@@ -246,7 +251,7 @@ def list_merchants(db: Session = Depends(get_db)):
         )
         .outerjoin(MerchantApplication, MerchantApplication.user_id == Merchant.user_id)
         .filter(
-            Merchant.deleted_at.is_(None),
+            merchant_is_public(),
             or_(
                 MerchantApplication.id.is_(None),
                 MerchantApplication.status != "rejected",
@@ -265,7 +270,7 @@ def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
             selectinload(Merchant.user),
             selectinload(Merchant.produces.and_(is_listed(ph_today()))),
         )
-        .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
+        .filter(Merchant.id == merchant_id, merchant_is_public())
         .first()
     )
     if not merchant:
@@ -292,6 +297,10 @@ def update_my_merchant(
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
     updates = merchant_update.model_dump(exclude_unset=True)
+    if "region" in updates and not is_luzon_region(updates["region"]):
+        raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
+    if "lat" in updates or "lng" in updates:
+        validate_pin(updates.get("lat", merchant.lat), updates.get("lng", merchant.lng))
     for field, value in updates.items():
         setattr(merchant, field, value)
 
@@ -416,7 +425,7 @@ def list_merchant_produce(merchant_id: int, db: Session = Depends(get_db)):
     """The listings buyers can see: expired produce is left out."""
     merchant = (
         db.query(Merchant)
-        .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
+        .filter(Merchant.id == merchant_id, merchant_is_public())
         .first()
     )
     if not merchant:
@@ -531,7 +540,7 @@ def get_merchant_shoppage(merchant_id: int, db: Session = Depends(get_db)):
     shop_page = (
         db.query(ShopPage)
         .join(Merchant, Merchant.id == ShopPage.merchant_id)
-        .filter(ShopPage.merchant_id == merchant_id, Merchant.deleted_at.is_(None))
+        .filter(ShopPage.merchant_id == merchant_id, merchant_is_public())
         .first()
     )
     if not shop_page:
@@ -1021,7 +1030,8 @@ def update_my_merchant_order_status(
     )
 
     notify_order_shipped(
-        phone_number=user.phone_number if user else None,
+        # U5: only when the buyer accepts SMS updates.
+        phone_number=user.phone_number if user and notifications.wants(user, "sms") else None,
         merchant_name=merchant.merchant_name or "Merchant",
         order_ref=f"CB-{order.ordered_at.year if order.ordered_at else 'XXXX'}-{order.id:04d}",
         status=status,

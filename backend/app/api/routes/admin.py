@@ -1,10 +1,11 @@
-from datetime import UTC, datetime, timedelta
+import os
+from datetime import UTC, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import Date, cast, func, or_, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.merchant import Merchant
@@ -12,10 +13,11 @@ from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
 from app.models.payout_batch import PayoutBatch
+from app.models.produce import Produce
 from app.models.statuses import PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.schemas.merchant import MerchantResponse
+from app.schemas.merchant import AdminMerchantResponse
 from app.schemas.merchant_application import (
     ApplicationReviewPayload,
     MerchantApplicationResponse,
@@ -27,7 +29,9 @@ from app.schemas.payout import (
     WalletBalance,
 )
 from app.schemas.user import UserResponse
-from app.services import paymongo, r2_service
+from app.services import audit_log, paymongo, r2_service
+from app.services.account_suspension import reinstate_user, suspend_user
+from app.services.features import two_factor_enabled
 from app.services.merchant_service import create_merchant_from_application
 from app.services.payout_service import (
     PayoutError,
@@ -38,13 +42,30 @@ from app.services.payout_service import (
     send_payout,
     transfer_fee,
 )
+from app.services.produce_freshness import PH_TZ
 
 router = APIRouter(tags=["admin"])
+
+
+ADMIN_2FA_DETAIL = (
+    "Two-step verification is required for admin accounts. Turn it on in your "
+    "profile, then reload this page."
+)
+
+
+def admin_requires_two_factor() -> bool:
+    """E8c: only while two-step verification is turned on (TWO_FACTOR_ENABLED),
+    and then unless ADMIN_REQUIRE_2FA=false (e.g. for a local demo)."""
+    if not two_factor_enabled():
+        return False
+    return os.getenv("ADMIN_REQUIRE_2FA", "true").lower() not in {"0", "false", "no"}
 
 
 def _require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
+    if admin_requires_two_factor() and not current_user.two_factor_enabled:
+        raise HTTPException(status_code=403, detail=ADMIN_2FA_DETAIL)
     return current_user
 
 
@@ -65,7 +86,17 @@ def set_user_admin_role(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    before = {"is_admin": bool(user.is_admin)}
     user.is_admin = payload.is_admin
+    audit_log.record_admin_action(
+        db,
+        admin=current_admin,
+        action=audit_log.ROLE_CHANGE,
+        target_type="user",
+        target_id=user.id,
+        before=before,
+        after={"is_admin": payload.is_admin},
+    )
     if user.external_auth_id:
         ba_role = "admin" if payload.is_admin else "user"
         db.execute(
@@ -92,7 +123,7 @@ def list_all_users(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
-@router.get("/admin/merchants", response_model=Page[MerchantResponse])
+@router.get("/admin/merchants", response_model=Page[AdminMerchantResponse])
 def list_all_merchants(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -110,13 +141,65 @@ def list_all_merchants(
         )
     )
     total = q.count()
-    items = (
-        q.order_by(Merchant.id.asc())
+    merchants = (
+        q.options(selectinload(Merchant.user))
+        .order_by(Merchant.id.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
+    items = [
+        AdminMerchantResponse.model_validate(m).model_copy(
+            update={
+                "owner_suspended_at": m.user.suspended_at if m.user else None,
+                "owner_suspension_reason": (
+                    m.user.suspension_reason if m.user else None
+                ),
+            }
+        )
+        for m in merchants
+    ]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+class SuspendPayload(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+def _get_other_user(db: Session, user_id: int, admin: User) -> User:
+    if admin.id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot suspend yourself")
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.post("/admin/users/{user_id}/suspend", response_model=UserResponse)
+def suspend_account(
+    user_id: int,
+    payload: SuspendPayload,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(_require_admin),
+):
+    if not payload.reason.strip():
+        raise HTTPException(status_code=422, detail="A reason is required")
+    user = _get_other_user(db, user_id, current_admin)
+    if user.suspended_at is not None:
+        raise HTTPException(status_code=409, detail="Account is already suspended")
+    return suspend_user(db, user, admin=current_admin, reason=payload.reason)
+
+
+@router.post("/admin/users/{user_id}/reinstate", response_model=UserResponse)
+def reinstate_account(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(_require_admin),
+):
+    user = _get_other_user(db, user_id, current_admin)
+    if user.suspended_at is None:
+        raise HTTPException(status_code=409, detail="Account is not suspended")
+    return reinstate_user(db, user, admin=current_admin)
 
 
 @router.get(
@@ -131,6 +214,110 @@ def list_all_merchant_applications(
         .order_by(MerchantApplication.submitted_at.desc())
         .all()
     )
+
+
+WEEKS_SHOWN = 12
+
+
+def _weekly_signups(db: Session, now: datetime | None = None) -> list[dict]:
+    """New buyers and new merchants per Manila week (Monday start), oldest first.
+
+    A buyer is a non-admin account with no merchant profile; a merchant is
+    counted in the week its merchant profile was created.
+    """
+    today = (now or datetime.now(UTC)).astimezone(PH_TZ).date()
+    first_week = today - timedelta(days=today.weekday(), weeks=WEEKS_SHOWN - 1)
+    since = datetime.combine(first_week, time.min, tzinfo=PH_TZ)
+    weeks = {
+        first_week + timedelta(weeks=i): {"buyers": 0, "merchants": 0}
+        for i in range(WEEKS_SHOWN)
+    }
+
+    def week_of(moment: datetime):
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=UTC)
+        day = moment.astimezone(PH_TZ).date()
+        return day - timedelta(days=day.weekday())
+
+    buyers = (
+        db.query(User.created_at)
+        .outerjoin(Merchant, Merchant.user_id == User.id)
+        .filter(
+            User.created_at >= since,
+            User.is_admin.is_(False),
+            Merchant.id.is_(None),
+        )
+        .all()
+    )
+    for (created_at,) in buyers:
+        bucket = weeks.get(week_of(created_at))
+        if bucket is not None:
+            bucket["buyers"] += 1
+    merchants = db.query(Merchant.created_at).filter(Merchant.created_at >= since).all()
+    for (created_at,) in merchants:
+        bucket = weeks.get(week_of(created_at))
+        if bucket is not None:
+            bucket["merchants"] += 1
+    return [{"week_start": str(week), **counts} for week, counts in weeks.items()]
+
+
+UNCATEGORIZED = "Uncategorized"
+
+
+def _item_int(item: dict, *keys: str) -> int | None:
+    for key in keys:
+        try:
+            return int(item[key])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
+def _top_categories(db: Session, since: datetime, limit: int = 8) -> list[dict]:
+    """Item revenue and quantity by produce category, from orders paid since ``since``.
+
+    Item revenue is unit price x quantity (delivery fee excluded). Categories come
+    from the produce row as it is now; deleted produce counts as Uncategorized.
+    """
+    paid_orders = (
+        db.query(Order.items)
+        .filter(
+            Order.id.in_(
+                db.query(Transaction.order_id).filter(
+                    Transaction.status == TransactionStatus.PAID,
+                    Transaction.paid_at >= since,
+                )
+            )
+        )
+        .all()
+    )
+    lines = []
+    for (items,) in paid_orders:
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            quantity = _item_int(item, "quantity") or 0
+            price = _item_int(item, "price") or 0
+            if quantity <= 0:
+                continue
+            lines.append(
+                (_item_int(item, "produce_id", "produceId", "id"), quantity, price)
+            )
+
+    produce_ids = {pid for pid, _, _ in lines if pid is not None}
+    categories = dict(
+        db.query(Produce.id, Produce.category).filter(Produce.id.in_(produce_ids)).all()
+        if produce_ids
+        else []
+    )
+    totals: dict[str, dict[str, int]] = {}
+    for pid, quantity, price in lines:
+        name = (categories.get(pid) or "").strip() or UNCATEGORIZED
+        bucket = totals.setdefault(name, {"revenue": 0, "quantity": 0})
+        bucket["revenue"] += price * quantity
+        bucket["quantity"] += quantity
+    ranked = sorted(totals.items(), key=lambda kv: (-kv[1]["revenue"], kv[0]))
+    return [{"category": name, **values} for name, values in ranked[:limit]]
 
 
 @router.get("/admin/stats")
@@ -160,6 +347,25 @@ def get_admin_stats(
         or 0
     )
 
+    # Work waiting on an admin (A5a). Payouts: requested, approved, or failed and
+    # needing a resend; "processing" is waiting on PayMongo, not on an admin.
+    payouts_to_send = (
+        db.query(func.count(PayoutBatch.id))
+        .filter(
+            PayoutBatch.status.in_(
+                [PayoutStatus.PENDING, PayoutStatus.APPROVED, PayoutStatus.FAILED]
+            )
+        )
+        .scalar()
+        or 0
+    )
+    refunds_pending = (
+        db.query(func.count(Transaction.id))
+        .filter(Transaction.status == TransactionStatus.REFUND_PENDING)
+        .scalar()
+        or 0
+    )
+
     since = datetime.now(UTC) - timedelta(days=30)
     # Plain cast (no bound params) so SELECT and GROUP BY match under psycopg3.
     paid_day = cast(Transaction.paid_at, Date)
@@ -169,7 +375,9 @@ def get_admin_stats(
             func.sum(Transaction.amount).label("revenue"),
             func.sum(Transaction.platform_fee).label("platform_fee"),
         )
-        .filter(Transaction.status == TransactionStatus.PAID, Transaction.paid_at >= since)
+        .filter(
+            Transaction.status == TransactionStatus.PAID, Transaction.paid_at >= since
+        )
         .group_by(paid_day)
         .order_by(paid_day)
         .all()
@@ -198,6 +406,13 @@ def get_admin_stats(
         "total_users": int(total_users),
         "active_merchants": int(active_merchants),
         "pending_applications": int(pending_applications),
+        "pending_work": {
+            "applications": int(pending_applications),
+            "payouts_to_send": int(payouts_to_send),
+            "refunds_pending": int(refunds_pending),
+        },
+        "weekly_signups": _weekly_signups(db),
+        "top_categories": _top_categories(db, since),
         "daily_revenue": [
             {
                 "date": str(r.date),
@@ -307,12 +522,37 @@ def release_payout_batch(
     Returns the batch as ``processing`` once PayMongo accepts the transfer, or
     ``failed`` with a reason when PayMongo refuses it.
     """
+    existing = db.get(PayoutBatch, batch_id)
+    before = (
+        {"status": existing.status, "attempts": existing.attempts}
+        if existing is not None
+        else None
+    )
     try:
         batch = send_payout(db, batch_id, notes)
     except PayoutError as exc:
         db.rollback()
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     db.refresh(batch)
+    # send_payout commits on its own; the log is its own commit afterwards.
+    audit_log.record_admin_action(
+        db,
+        admin=admin,
+        action=audit_log.PAYOUT_RELEASE,
+        target_type="payout_batch",
+        target_id=batch.id,
+        before=before,
+        after={
+            "status": batch.status,
+            "attempts": batch.attempts,
+            "net_amount": batch.net_amount,
+            "paymongo_reference": batch.paymongo_reference,
+            "paymongo_transfer_id": batch.paymongo_transfer_id,
+            "failure_reason": batch.failure_reason,
+            "notes": notes,
+        },
+    )
+    db.commit()
     return _admin_batch_response(db, batch)
 
 
@@ -343,7 +583,7 @@ def review_merchant_application(
     app_id: int,
     payload: ApplicationReviewPayload,
     db: Session = Depends(get_db),
-    _: User = Depends(_require_admin),
+    admin: User = Depends(_require_admin),
 ):
     application = (
         db.query(MerchantApplication).filter(MerchantApplication.id == app_id).first()
@@ -351,6 +591,11 @@ def review_merchant_application(
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found")
 
+    before = {
+        "status": application.status,
+        "admin_note": application.admin_note,
+        "merchant_id": application.merchant_id,
+    }
     application.status = payload.status
     application.admin_note = payload.admin_note
 
@@ -364,6 +609,19 @@ def review_merchant_application(
                 status_code=400, detail="Failed to create merchant profile"
             ) from exc
 
+    audit_log.record_admin_action(
+        db,
+        admin=admin,
+        action=audit_log.APPLICATION_REVIEW,
+        target_type="merchant_application",
+        target_id=application.id,
+        before=before,
+        after={
+            "status": application.status,
+            "admin_note": application.admin_note,
+            "merchant_id": application.merchant_id,
+        },
+    )
     db.commit()
     db.refresh(application)
     return application

@@ -1,10 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { request } from './api';
+import { awayTooLong, idleTimeoutMs } from './idle';
 
 const TOKEN_KEY = 'carabao_token';
 const USER_KEY = 'carabao_user';
 const TOKEN_EXPIRY_KEY = 'carabao_token_expiry';
+// When the app last left the foreground; also survives the app being killed (E5).
+const LEFT_AT_KEY = 'carabao_left_at';
 
 interface User {
   id: string;
@@ -59,15 +63,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const restore = async () => {
       try {
-        const [savedToken, savedUserJson, savedExpiry] = await Promise.all([
+        const [savedToken, savedUserJson, savedExpiry, savedLeftAt] = await Promise.all([
           AsyncStorage.getItem(TOKEN_KEY),
           AsyncStorage.getItem(USER_KEY),
           AsyncStorage.getItem(TOKEN_EXPIRY_KEY),
+          AsyncStorage.getItem(LEFT_AT_KEY),
         ]);
         if (savedToken && savedUserJson) {
           const expiry = savedExpiry ? parseInt(savedExpiry, 10) : null;
-          // Check if token is still valid (not expired)
-          if (expiry && expiry > Date.now()) {
+          const leftAt = savedLeftAt ? parseInt(savedLeftAt, 10) : null;
+          // Valid token, and the app wasn't closed for longer than the idle limit.
+          if (expiry && expiry > Date.now() && !awayTooLong(leftAt, Date.now(), idleTimeoutMs())) {
             setToken(savedToken);
             setUser(JSON.parse(savedUserJson) as User);
             setTokenExpiry(expiry);
@@ -93,8 +99,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       AsyncStorage.removeItem(TOKEN_KEY),
       AsyncStorage.removeItem(USER_KEY),
       AsyncStorage.removeItem(TOKEN_EXPIRY_KEY),
+      AsyncStorage.removeItem(LEFT_AT_KEY),
     ]);
   };
+
+  // E5: leaving the app records the time; coming back after the idle limit
+  // signs out, so the next protected screen sends the user to sign in.
+  const leftAtRef = useRef<number | null>(null);
+  const signedInRef = useRef(false);
+  signedInRef.current = !!token;
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (!signedInRef.current) return;
+      if (next === 'background' || next === 'inactive') {
+        if (leftAtRef.current === null) {
+          leftAtRef.current = Date.now();
+          void AsyncStorage.setItem(LEFT_AT_KEY, String(leftAtRef.current)).catch(() => {});
+        }
+      } else if (next === 'active') {
+        const leftAt = leftAtRef.current;
+        leftAtRef.current = null;
+        void AsyncStorage.removeItem(LEFT_AT_KEY).catch(() => {});
+        if (awayTooLong(leftAt, Date.now(), idleTimeoutMs())) void clearAuth();
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const persist = async (t: string, u: User, expiry: number) => {
     await Promise.all([

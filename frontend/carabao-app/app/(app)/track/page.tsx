@@ -12,6 +12,10 @@ import { fetchShipmentTracking } from '@/util/api';
 import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
 import getApiErrorMessage, { getApiErrorStatus } from '@/util/errorHelper';
 import PageLoader from '@/components/PageLoader/PageLoader';
+import SkeletonList, { LoadError } from '@/components/Skeleton/Skeleton';
+
+// Progress and ETA are estimated from the route schedule; there is no live GPS.
+const WAITING_MESSAGE = 'Waiting for shipment. Estimated progress will appear after the merchant dispatches this order.';
 
 type TrackOrder = {
   id: number;
@@ -127,6 +131,8 @@ function Track() {
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState(false);
+  const [ordersAttempt, setOrdersAttempt] = useState(0);
   const [selectedOrderIndex, setSelectedOrderIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
 
@@ -141,19 +147,21 @@ function Track() {
     const loadCurrentOrders = async () => {
       try {
         const response = (await fetchCurrentOrders()).filter(isInTransit);
+        setOrdersError(false);
         if (response.length > 0) {
           setCurrentOrders(response.map(toTrackOrder));
           setSelectedOrderIndex(0);
         }
       } catch {
-        // orders stay empty if the backend is unavailable
+        // Say so instead of showing "nothing out for delivery".
+        setOrdersError(true);
       } finally {
         setOrdersLoading(false);
       }
     };
 
     void loadCurrentOrders();
-  }, []);
+  }, [ordersAttempt]);
 
   useEffect(() => {
     if (selectedOrderIndex >= currentOrders.length) {
@@ -211,6 +219,8 @@ function Track() {
   }, []);
 
   const updateTracking = useCallback(async (data: TrackingData, map: mapboxgl.Map) => {
+    if (!data.origin) return;
+    const origin = data.origin;
     const activeOrderId = data.stops[data.active_stop_index]?.order_id ?? null;
 
     // Place stop markers once per order — markers are DOM elements and work
@@ -254,7 +264,7 @@ function Track() {
 
     const driverLngLat: [number, number] = routeRef.current
       ? getPositionAlongRoute(routeRef.current, data.progress)
-      : [data.origin.lng, data.origin.lat];
+      : [origin.lng, origin.lat];
 
     updateDriverMarker(map, driverLngLat);
   }, [drawRouteLayer, placeStopMarkers, updateDriverMarker]);
@@ -300,6 +310,10 @@ function Track() {
           setTrackingError(null);
           const data = await fetchShipmentTracking(shipmentId);
           if (!active) return;
+          if (data.tracking_state === 'waiting_for_shipment') {
+            setTrackingError(WAITING_MESSAGE);
+            return;
+          }
           setTracking(data);
           hasTracking = true;
           const map = mapRef.current;
@@ -350,6 +364,10 @@ function Track() {
         setTrackingError(null);
         const data = await fetchTracking(orderId);
         if (!active) return;
+        if (data.tracking_state === 'waiting_for_shipment') {
+          setTrackingError(WAITING_MESSAGE);
+          return;
+        }
         setTracking(data);
         hasTracking = true;
         // Read mapRef AFTER the await — if the map was removed while fetching
@@ -424,8 +442,10 @@ function Track() {
   const activeStopNumber = tracking
     ? Math.min(tracking.active_stop_index + 1, tracking.stops.length)
     : 0;
-  const estimatedArrival = tracking && currentTime
-    ? new Date(currentTime + tracking.eta_minutes * 60_000).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+  const etaMinutes = tracking?.eta_minutes ?? null;
+  const progressPercent = tracking ? Math.round(tracking.progress * 100) : 0;
+  const estimatedArrival = etaMinutes !== null && currentTime
+    ? new Date(currentTime + etaMinutes * 60_000).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
     : selectedOrder?.shipped
       ? selectedOrder.timeOfArrival
       : 'Pending shipment';
@@ -452,7 +472,21 @@ function Track() {
   return (
     <Suspense fallback={<PageLoader label="Loading your deliveries…" />}>
       {ordersLoading ? (
-        <PageLoader label="Loading your deliveries…" />
+        <div className={styles.emptyState}>
+          <h1 className={styles.pageTitle}>Track orders</h1>
+          <SkeletonList label="Loading your deliveries…" rows={2} />
+        </div>
+      ) : ordersError && !selectedOrder ? (
+        <div className={styles.emptyState}>
+          <h1 className={styles.pageTitle}>Track orders</h1>
+          <LoadError
+            message="We couldn't load your deliveries. Check your connection and try again."
+            onRetry={() => {
+              setOrdersLoading(true);
+              setOrdersAttempt((n) => n + 1);
+            }}
+          />
+        </div>
       ) : !selectedOrder ? (
         <div className={styles.emptyState}>
           <h1 className={styles.pageTitle}>Track orders</h1>
@@ -472,10 +506,10 @@ function Track() {
               />
             )}
 
-            {tracking && (
+            {tracking && etaMinutes !== null && (
               <div className={styles.mapEtaChip}>
-                <span className={styles.mapEtaLabel}>Arriving in</span>
-                <strong className={styles.mapEtaValue}>{tracking.eta_minutes} min</strong>
+                <span className={styles.mapEtaLabel}>Estimated arrival in</span>
+                <strong className={styles.mapEtaValue}>{etaMinutes} min</strong>
               </div>
             )}
 
@@ -538,8 +572,8 @@ function Track() {
                     <strong>{activeStopNumber}/{tracking.stops.length || 1}</strong>
                   </div>
                   <div>
-                    <span className={styles.shipmentSummaryLabel}>Live ETA</span>
-                    <strong>{tracking.eta_minutes} min</strong>
+                    <span className={styles.shipmentSummaryLabel}>Estimated progress</span>
+                    <strong>{etaMinutes !== null ? `${progressPercent}% · ${etaMinutes} min` : 'No estimate yet'}</strong>
                   </div>
                 </div>
 

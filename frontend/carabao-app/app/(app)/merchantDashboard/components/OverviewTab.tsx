@@ -1,7 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import styles from "../page.module.css";
 import { formatDate, formatPeso } from "../lib/format";
 import type { MerchantPerformance, Produce } from "@/util/api";
+import StockAlertsPanel from "./StockAlertsPanel";
+import SalesCharts from "./SalesCharts";
+import DemandInsight from "./DemandInsight";
 
 type Props = {
   performance: MerchantPerformance;
@@ -11,12 +14,15 @@ type Props = {
 };
 
 export default function OverviewTab({ performance, produces, onOpenReviews, onOpenOrders }: Props) {
+  // The merchant's own low-stock threshold (F1); 5 until the alerts load.
+  const [threshold, setThreshold] = useState(5);
+  const isLow = (qty: number) => qty > 0 && threshold > 0 && qty <= threshold;
   const stock = useMemo(() => {
     const total = produces.reduce((acc, p) => acc + p.price * p.stock_quantity, 0);
     const outOfStock = produces.filter((p) => p.stock_quantity === 0).length;
-    const lowStock = produces.filter((p) => p.stock_quantity > 0 && p.stock_quantity < 5).length;
+    const lowStock = produces.filter((p) => p.stock_quantity > 0 && threshold > 0 && p.stock_quantity <= threshold).length;
     return { total, outOfStock, lowStock };
-  }, [produces]);
+  }, [produces, threshold]);
 
   const ratingLabel = performance.rating == null ? "—" : `${Number(performance.rating).toFixed(1)} / 5`;
   const ratingCount = performance.rating_count ?? 0;
@@ -101,6 +107,19 @@ export default function OverviewTab({ performance, produces, onOpenReviews, onOp
         </div>
       </div>
 
+      <SalesCharts />
+
+      <DemandInsight />
+
+      <StockAlertsPanel refreshKey={produces} onThreshold={setThreshold} />
+
+      {produces.length === 0 && (
+        <div className={styles.panel}>
+          <h2 className={styles.panelTitle}>Stock by Produce</h2>
+          <p className={styles.emptyText}>No listings yet. Add your first produce from the Produce tab.</p>
+        </div>
+      )}
+
       {produces.length > 0 && (
         <div className={styles.panel}>
           <h2 className={styles.panelTitle}>Stock by Produce</h2>
@@ -117,7 +136,7 @@ export default function OverviewTab({ performance, produces, onOpenReviews, onOp
             </thead>
             <tbody>
               {produces.map((p) => {
-                const status = p.stock_quantity === 0 ? "out" : p.stock_quantity < 5 ? "low" : "ok";
+                const status = p.stock_quantity === 0 ? "out" : isLow(p.stock_quantity) ? "low" : "ok";
                 return (
                   <tr key={p.id}>
                     <td className={styles.stockName}>{p.name}</td>

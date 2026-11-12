@@ -24,7 +24,7 @@ from app.models.order import Order
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
-from app.services import paymongo
+from app.services import notifications, paymongo
 
 logger = logging.getLogger(__name__)
 
@@ -274,6 +274,15 @@ def apply_transfer_status(
             batch.status = PayoutStatus.RELEASED
             batch.released_at = datetime.now(UTC)
             batch.failure_reason = None
+            merchant = batch.merchant
+            notifications.notify(
+                batch,
+                merchant.user_id if merchant is not None else None,
+                notifications.PAYOUT_RELEASED,
+                "Payout sent",
+                f"PHP {(batch.net_amount or batch.gross_amount):,} is on its way to your account.",
+                "/merchantDashboard",
+            )
     elif status == "failed":
         if batch.status == PayoutStatus.RELEASED:
             logger.error(

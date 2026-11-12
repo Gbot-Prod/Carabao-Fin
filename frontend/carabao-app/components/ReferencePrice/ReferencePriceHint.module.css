@@ -1,0 +1,48 @@
+.hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-sm);
+  background: var(--green-50);
+  color: var(--text-strong);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.card {
+  margin-top: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.label {
+  color: var(--text-subtle);
+}
+
+.range {
+  font-variant-numeric: tabular-nums;
+}
+
+.sample {
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.source {
+  flex-basis: 100%;
+  color: var(--text-subtle);
+}
+
+.comparison {
+  flex-basis: 100%;
+  color: var(--green-900);
+  font-weight: 600;
+}

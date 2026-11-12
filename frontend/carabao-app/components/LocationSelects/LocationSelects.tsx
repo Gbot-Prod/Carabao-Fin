@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { fetchRegions, fetchProvincesByRegion, fetchCitiesByProvince, fetchBarangaysByCity, fetchCitiesByRegion } from '@/util/psgc';
 import type { PsgcRegion, PsgcProvince, PsgcCity, PsgcBarangay } from '@/util/psgc';
+import { isLuzonRegion } from '@/util/serviceArea';
+import { useLanguage } from '@/lib/i18n/LanguageProvider';
 
 export type LocationSelectsValue = {
   region?: string;
@@ -59,7 +61,12 @@ export default function LocationSelects({
   labelStyle,
   wrapStyle,
 }: LocationSelectsProps) {
-  const { options: regions, loading: loadingRegions } = usePsgcOptions<PsgcRegion>('regions', fetchRegions);
+  const { t } = useLanguage();
+  // Q2b: ids per instance, so two pickers on one page don't collide.
+  const uid = useId();
+  const { options: allRegions, loading: loadingRegions } = usePsgcOptions<PsgcRegion>('regions', fetchRegions);
+  // Only Luzon regions can be picked (B2); a saved region outside Luzon simply shows as unselected.
+  const regions = useMemo(() => allRegions.filter((region) => isLuzonRegion(region.name)), [allRegions]);
   const selectedRegion = regions.find((region) => region.name === value.region);
   const regionCode = selectedRegion?.code;
   const isNcr = regionCode === NCR_CODE;
@@ -108,25 +115,26 @@ export default function LocationSelects({
   return (
     <>
       <div className={wrapClassName} style={wrapStyle}>
-        <label className={labelClassName} style={labelStyle}>Region</label>
+        <label htmlFor={`${uid}-region`} className={labelClassName} style={labelStyle}>{t.location.region}</label>
 
-        <select
+        <select id={`${uid}-region`}
           className={selectClassName}
           style={selectStyle}
           value={selectedRegion?.code ?? ''}
           onChange={(e) => handleRegionChange(e.target.value)}
           disabled={loadingRegions}
         >
-          <option value="">{loadingRegions ? 'Loading…' : 'Select region'}</option>
+          <option value="">{loadingRegions ? t.location.loading : t.location.selectRegion}</option>
           {regions.map((region) => (
             <option key={region.code} value={region.code}>{region.name}</option>
           ))}
         </select>
+        <small style={{ display: 'block', marginTop: 4, fontSize: 12, color: 'var(--text-subtle)' }}>{t.location.serviceAreaNote}</small>
       </div>
 
       <div className={wrapClassName} style={wrapStyle}>
-        <label className={labelClassName} style={labelStyle}>Province</label>
-        <select
+        <label htmlFor={`${uid}-province`} className={labelClassName} style={labelStyle}>{t.location.province}</label>
+        <select id={`${uid}-province`}
           className={selectClassName}
           style={selectStyle}
           value={selectedProvince?.code ?? ''}
@@ -134,7 +142,7 @@ export default function LocationSelects({
           disabled={!value.region || isNcr || loadingProvinces}
         >
           <option value="">
-            {!value.region ? 'Select a region first' : isNcr ? 'Not applicable for NCR' : loadingProvinces ? 'Loading…' : 'Select province'}
+            {!value.region ? t.location.selectRegionFirst : isNcr ? t.location.notApplicableNcr : loadingProvinces ? t.location.loading : t.location.selectProvince}
           </option>
           {provinces.map((province) => (
             <option key={province.code} value={province.code}>{province.name}</option>
@@ -143,8 +151,8 @@ export default function LocationSelects({
       </div>
 
       <div className={wrapClassName} style={wrapStyle}>
-        <label className={labelClassName} style={labelStyle}>City</label>
-        <select
+        <label htmlFor={`${uid}-city`} className={labelClassName} style={labelStyle}>{t.location.city}</label>
+        <select id={`${uid}-city`}
           className={selectClassName}
           style={selectStyle}
           value={selectedCity?.code ?? ''}
@@ -152,7 +160,7 @@ export default function LocationSelects({
           disabled={!value.region || (!isNcr && !value.province) || loadingCities}
         >
           <option value="">
-            {!value.region ? 'Select a region first' : !isNcr && !value.province ? 'Select a province first' : loadingCities ? 'Loading…' : 'Select city'}
+            {!value.region ? t.location.selectRegionFirst : !isNcr && !value.province ? t.location.selectProvinceFirst : loadingCities ? t.location.loading : t.location.selectCity}
           </option>
           {cities.map((city) => (
             <option key={city.code} value={city.code}>{city.name}</option>
@@ -161,8 +169,8 @@ export default function LocationSelects({
       </div>
 
       <div className={wrapClassName} style={wrapStyle}>
-        <label className={labelClassName} style={labelStyle}>Barangay</label>
-        <select
+        <label htmlFor={`${uid}-barangay`} className={labelClassName} style={labelStyle}>{t.location.barangay}</label>
+        <select id={`${uid}-barangay`}
           className={selectClassName}
           style={selectStyle}
           value={selectedBarangay?.code ?? ''}
@@ -170,7 +178,7 @@ export default function LocationSelects({
           disabled={!value.city || loadingBarangays}
         >
           <option value="">
-            {!value.city ? 'Select a city first' : loadingBarangays ? 'Loading…' : 'Select barangay'}
+            {!value.city ? t.location.selectCityFirst : loadingBarangays ? t.location.loading : t.location.selectBarangay}
           </option>
           {barangays.map((barangay) => (
             <option key={barangay.code} value={barangay.code}>{barangay.name}</option>

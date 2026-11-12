@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
+import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
 import {
   fetchMyProfile,
   submitMyMerchantOnboarding,
@@ -324,17 +325,17 @@ export default function MerchantOnboardingPage() {
           {step.id === "legal" && (
             <div className={styles.grid}>
               <div className={styles.field}>
-                <label className={styles.label}>Merchant name</label>
-                <input className={styles.input} value={form.merchant_name} onChange={setField("merchant_name")} placeholder="Carabao Fresh Farm" />
+                <label htmlFor="merchantonboarding-merchant-name" className={styles.label}>Merchant name</label>
+                <input id="merchantonboarding-merchant-name" className={styles.input} value={form.merchant_name} onChange={setField("merchant_name")} placeholder="Carabao Fresh Farm" />
               </div>
               <div className={styles.field}>
-                <label className={styles.label}>Legal business name</label>
-                <input className={styles.input} value={form.legal_business_name} onChange={setField("legal_business_name")} placeholder="Carabao Fresh Farm Trading" />
+                <label htmlFor="merchantonboarding-legal-business-name" className={styles.label}>Legal business name</label>
+                <input id="merchantonboarding-legal-business-name" className={styles.input} value={form.legal_business_name} onChange={setField("legal_business_name")} placeholder="Carabao Fresh Farm Trading" />
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Business type</label>
-                <select className={styles.select} value={form.business_type} onChange={setField("business_type")}>
+                <label htmlFor="merchantonboarding-business-type" className={styles.label}>Business type</label>
+                <select id="merchantonboarding-business-type" className={styles.select} value={form.business_type} onChange={setField("business_type")}>
                   <option value="Sole Proprietor">Sole Proprietor</option>
                   <option value="Partnership">Partnership</option>
                   <option value="Corporation">Corporation</option>
@@ -343,8 +344,8 @@ export default function MerchantOnboardingPage() {
                 </select>
               </div>
               <div className={styles.field}>
-                <label className={styles.label}>TIN (optional)</label>
-                <input
+                <label htmlFor="merchantonboarding-tin" className={styles.label}>TIN (optional)</label>
+                <input id="merchantonboarding-tin"
                   className={styles.input}
                   value={form.tin ?? ""}
                   onChange={handleTIN}
@@ -355,8 +356,8 @@ export default function MerchantOnboardingPage() {
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Registration type</label>
-                <select className={styles.select} value={form.registration_type ?? ""} onChange={setField("registration_type")}>
+                <label htmlFor="merchantonboarding-registration-type" className={styles.label}>Registration type</label>
+                <select id="merchantonboarding-registration-type" className={styles.select} value={form.registration_type ?? ""} onChange={setField("registration_type")}>
                   <option value="DTI">DTI</option>
                   <option value="SEC">SEC</option>
                   <option value="CDA">CDA</option>
@@ -365,8 +366,8 @@ export default function MerchantOnboardingPage() {
                 </select>
               </div>
               <div className={styles.field}>
-                <label className={styles.label}>Registration number (optional)</label>
-                <input
+                <label htmlFor="merchantonboarding-registration-number" className={styles.label}>Registration number (optional)</label>
+                <input id="merchantonboarding-registration-number"
                   className={styles.input}
                   value={form.registration_number ?? ""}
                   onChange={handleRegNum}
@@ -376,14 +377,14 @@ export default function MerchantOnboardingPage() {
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Contact email</label>
-                <input className={styles.input} type="email" value={form.contact_email} onChange={setField("contact_email")} placeholder="you@farm.com" />
+                <label htmlFor="merchantonboarding-contact-email" className={styles.label}>Contact email</label>
+                <input id="merchantonboarding-contact-email" className={styles.input} type="email" value={form.contact_email} onChange={setField("contact_email")} placeholder="you@farm.com" />
               </div>
               <div className={styles.field}>
-                <label className={styles.label}>Contact number</label>
+                <label htmlFor="merchantonboarding-contact-number" className={styles.label}>Contact number</label>
                 <div className={styles.phoneRow}>
                   <span className={styles.phonePrefix}>+63</span>
-                  <input
+                  <input id="merchantonboarding-contact-number"
                     className={styles.phoneInput}
                     value={form.contact_number}
                     onChange={handlePhone}
@@ -399,8 +400,8 @@ export default function MerchantOnboardingPage() {
           {step.id === "ops" && (
             <div className={styles.grid}>
               <div className={`${styles.field} ${styles.fieldFull}`}>
-                <label className={styles.label}>Address</label>
-                <input className={styles.input} value={form.address} onChange={setField("address")} placeholder="Street, Barangay" />
+                <label htmlFor="merchantonboarding-address" className={styles.label}>Address</label>
+                <input id="merchantonboarding-address" className={styles.input} value={form.address} onChange={setField("address")} placeholder="Street, Barangay" />
               </div>
 
               <LocationSelects
@@ -417,17 +418,33 @@ export default function MerchantOnboardingPage() {
               />
 
               <div className={styles.field}>
-                <label className={styles.label}>Postal code (optional)</label>
-                <input className={styles.input} value={form.postal_code ?? ""} onChange={setField("postal_code")} placeholder="1634" />
+                <label htmlFor="merchantonboarding-postal-code" className={styles.label}>Postal code (optional)</label>
+                <input id="merchantonboarding-postal-code" className={styles.input} value={form.postal_code ?? ""} onChange={setField("postal_code")} placeholder="1634" />
+              </div>
+
+              {/* Farm pickup point (U1c): deliveries start from this pin. */}
+              <div className={`${styles.field} ${styles.fieldFull}`}>
+                <MapPinPicker
+                  value={form.lat != null && form.lng != null ? { lat: form.lat, lng: form.lng } : null}
+                  onChange={(pin, found) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      lat: pin.lat,
+                      lng: pin.lng,
+                      address: prev.address || found?.street || prev.address,
+                      postal_code: prev.postal_code || found?.postcode || prev.postal_code,
+                    }))
+                  }
+                />
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Price range (min)</label>
-                <input className={styles.input} inputMode="numeric" value={String(form.price_range_min)} onChange={setField("price_range_min")} placeholder="0" />
+                <label htmlFor="merchantonboarding-price-range-min" className={styles.label}>Price range (min)</label>
+                <input id="merchantonboarding-price-range-min" className={styles.input} inputMode="numeric" value={String(form.price_range_min)} onChange={setField("price_range_min")} placeholder="0" />
               </div>
               <div className={styles.field}>
-                <label className={styles.label}>Price range (max)</label>
-                <input className={styles.input} inputMode="numeric" value={String(form.price_range_max)} onChange={setField("price_range_max")} placeholder="0" />
+                <label htmlFor="merchantonboarding-price-range-max" className={styles.label}>Price range (max)</label>
+                <input id="merchantonboarding-price-range-max" className={styles.input} inputMode="numeric" value={String(form.price_range_max)} onChange={setField("price_range_max")} placeholder="0" />
               </div>
 
               <div className={`${styles.field} ${styles.fieldFull}`}>
@@ -462,8 +479,8 @@ export default function MerchantOnboardingPage() {
 
               <div className={styles.grid}>
                 <div className={styles.field}>
-                  <label className={styles.label}>RSBSA number (optional)</label>
-                  <input
+                  <label htmlFor="merchantonboarding-rsbsa-number" className={styles.label}>RSBSA number (optional)</label>
+                  <input id="merchantonboarding-rsbsa-number"
                     className={styles.input}
                     value={form.rsbsa_number ?? ""}
                     onChange={handleRSBSA}
@@ -574,6 +591,7 @@ export default function MerchantOnboardingPage() {
                   </p>
                   <input
                     className={styles.otpInput}
+                    aria-label="6-digit verification code"
                     type="text"
                     inputMode="numeric"
                     maxLength={6}

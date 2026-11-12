@@ -18,6 +18,7 @@ from app.schemas.review import (
     ReviewResponse,
     ReviewUpdate,
 )
+from app.services import notifications
 from app.services.merchant_service import get_active_merchant
 from app.services.review_service import (
     ReviewError,
@@ -91,6 +92,14 @@ def create_order_review(
         comment=payload.comment,
     )
     db.add(review)
+    notifications.notify(
+        db,
+        notifications.merchant_user_id(order),
+        notifications.REVIEW_RECEIVED,
+        f"New {payload.rating}-star review",
+        (payload.comment or "")[:200] or None,
+        "/merchantDashboard",
+    )
     try:
         recompute_merchant_rating(db, order.merchant_id)
         db.commit()

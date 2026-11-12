@@ -138,10 +138,11 @@ def _txn(status="pending"):
     )
 
 
-def _settle_order(status):
+def _settle_order(status, items=None):
     return SimpleNamespace(
         status=status,
         order_history_id=None,
+        items=items if items is not None else [{"produce_id": 1, "quantity": 2}],
     )
 
 
@@ -159,6 +160,22 @@ def test_payment_moves_pending_order_to_processing():
     assert txn.paymongo_payment_id == "pay_1"
     assert order.status == "processing"
     assert cart.items == []
+
+
+def test_payment_keeps_other_merchants_items_in_cart():
+    # C1: one checkout made an order per merchant; paying one of them leaves
+    # the others' items for their own payments.
+    order = _settle_order("pending", items=[{"produce_id": 1, "quantity": 2}])
+    cart = SimpleNamespace(
+        items=[{"produce_id": 1, "quantity": 2}, {"produceId": 9, "quantity": 1}]
+    )
+
+    outcome = order_reservations.settle_checkout_payment(
+        _txn(), "pay_1", SettleDB(order, cart)
+    )
+
+    assert outcome == "paid"
+    assert cart.items == [{"produceId": 9, "quantity": 1}]
 
 
 def test_payment_on_cancelled_order_is_flagged_for_refund():

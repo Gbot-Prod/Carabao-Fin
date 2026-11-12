@@ -13,6 +13,7 @@ from app.api.dependencies import get_current_user, get_db
 from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.shipment import Shipment
+from app.models.statuses import OrderStatus
 from app.models.user import User
 from app.routing.eta import _eta_from_waypoints
 from app.routing.service import compute_route
@@ -25,8 +26,8 @@ from app.schemas.shipment import (
     Waypoint,
 )
 from app.services.merchant_service import get_active_merchant
-from app.models.statuses import OrderStatus
 from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
+from app.services.pinned_location import delivery_point, merchant_point
 from app.utils.geocoding import _geocode
 
 router = APIRouter(tags=["shipments"])
@@ -216,10 +217,11 @@ def create_merchant_shipment(
         if part
     )
 
-    if not merchant_address:
+    if not merchant_address and merchant.lat is None:
         raise HTTPException(status_code=422, detail="Merchant has no location set")
 
-    origin_coords = _geocode(merchant_address)
+    # Saved map pins first (U1); geocode the address text only without one.
+    origin_coords = merchant_point(merchant, merchant_address, _geocode)
     if not origin_coords:
         raise HTTPException(
             status_code=422,
@@ -230,7 +232,7 @@ def create_merchant_shipment(
     for order in orders:
         buyer = order.order_history.user if order.order_history else None
         delivery_address = _resolve_delivery_address(order, buyer)
-        if not delivery_address:
+        if not delivery_address and order.delivery_lat is None:
             raise HTTPException(
                 status_code=422, detail=f"Order {order.id} has no delivery address"
             )
@@ -246,7 +248,10 @@ def create_merchant_shipment(
     with ThreadPoolExecutor(max_workers=GEOCODE_WORKERS) as pool:
         destination_results = list(
             pool.map(
-                _geocode, [str(ctx["delivery_address"]) for ctx in order_contexts]
+                lambda ctx: delivery_point(
+                    ctx["order"], ctx["buyer"], ctx["delivery_address"], _geocode
+                ),
+                order_contexts,
             )
         )
     if any(result is None for result in destination_results):

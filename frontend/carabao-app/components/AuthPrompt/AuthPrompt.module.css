@@ -99,3 +99,28 @@
   from { transform: translateY(12px); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
 }
+
+/* Sign-up next to sign-in (E4) */
+.signUpBtn {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  color: var(--green-600);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+
+.signUpBtn:hover {
+  background: var(--green-50);
+}
+
+.signInBtn:focus-visible,
+.signUpBtn:focus-visible,
+.laterBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}

@@ -10,6 +10,56 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, type TransactionStatus } from '../lib/api';
+import { parsePendingOrders, type PendingOrder } from '../lib/cartGroups';
+
+/** Another farm's order from the same checkout (C1): paid in its own PayMongo session. */
+function OtherOrderRow({ order, token }: { order: PendingOrder; token: string | null }) {
+  const [status, setStatus] = useState<TransactionStatus | null>(null);
+  const [paying, setPaying] = useState(false);
+  const view = toPaymentView(status);
+
+  const refresh = useCallback(async () => {
+    if (!token) return;
+    try {
+      setStatus((await api.payments.transactionByOrder(token, order.id)).status);
+    } catch (err) {
+      // 404 = no checkout session yet: still unpaid.
+      if (!(err instanceof ApiError && err.status === 404)) console.warn('Status check failed', err);
+    }
+  }, [token, order.id]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const pay = async () => {
+    if (!token) return;
+    setPaying(true);
+    try {
+      const checkout = await api.payments.checkout(token, order.id);
+      await WebBrowser.openBrowserAsync(checkout.checkout_url);
+    } catch (err) {
+      Alert.alert('Payment not started', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      await refresh();
+      setPaying(false);
+    }
+  };
+
+  return (
+    <View style={styles.otherRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.otherFarm}>{order.farm}</Text>
+        <Text style={styles.otherMeta}>{order.ref} · ₱{order.total.toLocaleString()} · {PAYMENT_COPY[view].badge}</Text>
+      </View>
+      {view === 'pending' ? (
+        <TouchableOpacity style={styles.otherPayBtn} onPress={pay} disabled={paying}>
+          <Text style={styles.primaryBtnText}>{paying ? 'Opening…' : 'Pay'}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
 
 type PaymentView = 'paid' | 'pending' | 'expired';
 
@@ -50,7 +100,8 @@ const STEPS = [
 
 function ConfirmationScreenContent() {
   const router = useRouter();
-  const { orderId, orderRef } = useLocalSearchParams<{ orderId?: string; orderRef?: string }>();
+  const { orderId, orderRef, more } = useLocalSearchParams<{ orderId?: string; orderRef?: string; more?: string }>();
+  const otherOrders = parsePendingOrders(more);
   const { token } = useAuth();
   const numericOrderId = Number(orderId);
   const [txnStatus, setTxnStatus] = useState<TransactionStatus | null>(null);
@@ -160,6 +211,19 @@ function ConfirmationScreenContent() {
             )}
           </View>
 
+          {otherOrders.length > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>More orders to pay</Text>
+              <Text style={styles.otherHint}>
+                Your cart had produce from {otherOrders.length + 1} farms, so it became {otherOrders.length + 1} orders.
+                Each is paid separately; unpaid orders are cancelled automatically after a while.
+              </Text>
+              {otherOrders.map((o) => (
+                <OtherOrderRow key={o.id} order={o} token={token} />
+              ))}
+            </View>
+          )}
+
           {/* Timeline */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>What happens next?</Text>
@@ -218,6 +282,17 @@ export default function ConfirmationScreen() {
 }
 
 const styles = StyleSheet.create({
+  otherHint: { fontSize: FontSize.sm, color: Colors.textMuted, marginBottom: Spacing.sm },
+  otherRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    paddingVertical: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight,
+  },
+  otherFarm: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
+  otherMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  otherPayBtn: {
+    backgroundColor: Colors.primary, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
+  },
   root: { flex: 1, backgroundColor: Colors.offWhite },
   scroll: { paddingBottom: 40 },
 

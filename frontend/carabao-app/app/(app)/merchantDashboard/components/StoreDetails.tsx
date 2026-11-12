@@ -1,6 +1,7 @@
 import { useState } from "react";
 import styles from "../page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
+import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
 import { updateMyMerchant, type Merchant } from "@/util/api";
 import { formatLocalPhone } from "../lib/format";
 
@@ -15,6 +16,9 @@ type LocationDraft = {
   postal_code: string;
   contact_number: string;
   available_days: string[];
+  // Farm pickup point (U1c).
+  lat: number | null;
+  lng: number | null;
 };
 
 const operatingHoursText = (merchant: Merchant | null) => {
@@ -29,6 +33,8 @@ const draftFromMerchant = (merchant: Merchant | null): LocationDraft => ({
   barangay: merchant?.barangay ?? "",
   address: merchant?.address ?? "",
   postal_code: merchant?.postal_code ?? "",
+  lat: merchant?.lat ?? null,
+  lng: merchant?.lng ?? null,
   contact_number: formatLocalPhone((merchant?.contact_number ?? "").replace(/^\+63\s?/, "")),
   available_days: operatingHoursText(merchant)
     .split(",")
@@ -64,6 +70,8 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
         barangay: draft.barangay.trim() || null,
         address: draft.address.trim() || undefined,
         postal_code: draft.postal_code.trim() || undefined,
+        lat: draft.lat,
+        lng: draft.lng,
         contact_number: localDigits ? `+63 ${formatLocalPhone(localDigits)}` : undefined,
         operating_hours: draft.available_days.length > 0 ? draft.available_days.join(", ") : null,
       });
@@ -79,6 +87,7 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
     ["City", merchant?.city],
     ["Barangay", merchant?.barangay],
     ["Address", merchant?.address],
+    ["Map pin", merchant?.lat != null && merchant?.lng != null ? `${merchant.lat.toFixed(5)}, ${merchant.lng.toFixed(5)}` : "Not pinned"],
     ["Contact", merchant?.contact_number],
     ["Open", operatingHoursText(merchant) || null],
   ];
@@ -114,6 +123,7 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
               <span className={styles.phonePrefix}>+63</span>
               <input
                 className={styles.phoneInput}
+                aria-label="Contact number (+63)"
                 value={draft.contact_number}
                 onChange={(e) => setDraft((d) => ({ ...d, contact_number: formatLocalPhone(e.target.value) }))}
                 placeholder="912 345 6789"
@@ -132,6 +142,21 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
               placeholder="e.g. 2600"
             />
           </label>
+
+          <div className={`${styles.formLabel} ${styles.formLabelLoose}`}>
+            <MapPinPicker
+              value={draft.lat != null && draft.lng != null ? { lat: draft.lat, lng: draft.lng } : null}
+              onChange={(pin, found) =>
+                setDraft((d) => ({
+                  ...d,
+                  lat: pin.lat,
+                  lng: pin.lng,
+                  address: d.address || found?.street || d.address,
+                  postal_code: d.postal_code || found?.postcode || d.postal_code,
+                }))
+              }
+            />
+          </div>
 
           <div className={`${styles.formLabel} ${styles.formLabelLoose}`}>
             <span>Operating Days</span>

@@ -49,16 +49,33 @@ export type PlaceOrderPayload = {
   delivery_date?: string | null;
   delivery_time?: string | null;
   delivery_address?: string | null;
+  // Region picked at checkout; the server rejects regions outside Luzon (B2).
+  delivery_region?: string | null;
+  // Map pin for the delivery address (U1).
+  delivery_lat?: number | null;
+  delivery_lng?: number | null;
   payment_method?: string | null;
   notes?: string | null;
   service_fee?: number;
   image?: string | null;
 };
 
-export type PlaceOrderResponse = {
+export type PlacedOrder = {
   order_id: number;
   order_reference: string;
   status: OrderStatus;
+  merchant_id: number;
+  merchant_name: string;
+  total_price: number;
+  delivery_fee: number;
+};
+
+export type PlaceOrderResponse = {
+  // The first order; `orders` lists every one (one per merchant in the cart).
+  order_id: number;
+  order_reference: string;
+  status: OrderStatus;
+  orders?: PlacedOrder[];
 };
 
 export const fetchOrderHistory = async (): Promise<OrderHistoryItem[]> => {
@@ -95,5 +112,16 @@ export type OrderDetail = CurrentOrderItem & {
 
 export const fetchOrder = async (orderId: number): Promise<OrderDetail> => {
   const response = await apiClient.get<OrderDetail>(`/orders/me/${orderId}`);
+  return response.data;
+};
+
+// "Buy again" (U3): refills the cart with what is still available.
+export type ReorderResult = {
+  added: { produce_id: number; name: string; quantity: number; price: number; reduced_from: number | null }[];
+  unavailable: { name: string; reason: string }[];
+};
+
+export const reorderOrder = async (orderId: number): Promise<ReorderResult> => {
+  const response = await apiClient.post<ReorderResult>(`/orders/me/${orderId}/reorder`);
   return response.data;
 };

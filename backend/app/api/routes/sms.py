@@ -5,13 +5,14 @@ import secrets
 import time
 from threading import Lock
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.api.dependencies import get_current_user
 from app.integrations.sms.semaphore import SemaphoreError
 from app.integrations.sms.semaphore import send_sms as semaphore_send_sms
 from app.models.user import User, normalize_email
+from app.services import rate_limit
 from app.services.email import send_signup_otp_email
 from app.services.phone_verification import normalize_ph_mobile, sign_token
 
@@ -121,9 +122,12 @@ def _merchant_otp_key(user_id: int, number: str) -> str:
 
 @router.post("/sms/otp/send")
 def send_otp_code(
-    body: OTPSendRequest, current_user: User = Depends(get_current_user)
+    body: OTPSendRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
 ):
     number = _normalize_phone_number(body.number)
+    rate_limit.enforce(request, "otp_send", number)
     key = _merchant_otp_key(current_user.id, number)
     now = time.monotonic()
 
@@ -147,9 +151,12 @@ def send_otp_code(
 
 @router.post("/sms/otp/verify")
 def verify_otp_code(
-    body: OTPVerifyRequest, current_user: User = Depends(get_current_user)
+    body: OTPVerifyRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
 ):
     number = _normalize_phone_number(body.number)
+    rate_limit.enforce(request, "otp_verify", number)
     _check_otp(_merchant_otp_key(current_user.id, number), body.otp)
     try:
         token = sign_token(
@@ -174,7 +181,7 @@ class SignupVerificationVerifyRequest(SignupVerificationRequest):
 
 
 @router.post("/auth/signup-verification/request")
-def request_signup_verification(body: SignupVerificationRequest):
+def request_signup_verification(body: SignupVerificationRequest, request: Request):
     channel = body.channel.strip().lower()
     identifier = body.identifier.strip()
     if channel not in {"email", "phone"} or not identifier:
@@ -187,6 +194,7 @@ def request_signup_verification(body: SignupVerificationRequest):
         identifier = normalize_email(identifier)
     if channel == "phone":
         identifier = _normalize_phone_number(identifier)
+    rate_limit.enforce(request, "otp_send", identifier)
 
     otp = _generate_otp()
     key = f"signup:{channel}:{identifier}"
@@ -210,13 +218,16 @@ def request_signup_verification(body: SignupVerificationRequest):
 
 
 @router.post("/auth/signup-verification/verify")
-def verify_signup_verification(body: SignupVerificationVerifyRequest):
+def verify_signup_verification(
+    body: SignupVerificationVerifyRequest, request: Request
+):
     channel = body.channel.strip().lower()
     identifier = body.identifier.strip()
     if channel == "email":
         identifier = normalize_email(identifier)
     if channel == "phone":
         identifier = _normalize_phone_number(identifier)
+    rate_limit.enforce(request, "otp_verify", identifier)
     _check_otp(f"signup:{channel}:{identifier}", body.otp)
     try:
         token = sign_token({"channel": channel, "identifier": identifier}, 1800)

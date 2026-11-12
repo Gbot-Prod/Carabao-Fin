@@ -1,4 +1,14 @@
-from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -34,11 +44,25 @@ class User(Base):
     barangay = Column(String, index=True, nullable=True)
     address = Column(String, index=True, nullable=True)
     postal_code = Column(String, index=True, nullable=True)
+    # Map pin for the saved address (U1); routing prefers it over geocoding.
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
     notifications_preferences = Column(JSON, nullable=False, default=dict)
 
     profile_picture_url = Column(String, nullable=True)
     paymongo_customer_id = Column(String, unique=True, index=True, nullable=True)
     is_admin = Column(Boolean, nullable=False, default=False)
+    # Mirrors BetterAuth's twoFactorEnabled, set at /auth/sync (E8c).
+    two_factor_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    # Set by an admin (A3). A suspended user can't sign in or call the API, and
+    # a suspended merchant's shop and listings are hidden from buyers.
+    suspended_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    suspension_reason = Column(Text, nullable=True)
+    suspended_by = Column(
+        Integer, ForeignKey("backend_users.id", ondelete="SET NULL"), nullable=True
+    )
 
     merchant = relationship(
         "Merchant", back_populates="user", uselist=False, cascade="all, delete-orphan"
