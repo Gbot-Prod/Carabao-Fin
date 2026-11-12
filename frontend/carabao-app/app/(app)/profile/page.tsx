@@ -9,6 +9,8 @@ import {
   deleteMyAccount,
 } from '@/util/api';
 import LocationSelects from '@/components/LocationSelects/LocationSelects';
+import MapPinPicker from '@/components/MapPinPicker/MapPinPicker';
+import type { Pin } from '@/util/reverseGeocode';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import TwoFactorSettings from '@/components/TwoFactorSettings/TwoFactorSettings';
 
@@ -81,6 +83,10 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
     region: '', 
     postal_code: '' 
   });
+  // Map pin for the address (U1b); null until the user drops one.
+  const [pin, setPin] = useState<Pin | null>(null);
+  const savedPin = (p: UserProfile): Pin | null =>
+    p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng } : null;
 
   useEffect(() => {
     if (profile) {
@@ -95,7 +101,7 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
     }
   }, [profile]);
 
-  const startEdit = () => { setError(null); setEditing(true); };
+  const startEdit = () => { setError(null); setPin(profile ? savedPin(profile) : null); setEditing(true); };
   const cancel = () => { if (profile) setForm({ 
         address: profile.address ?? '', 
         barangay: profile.barangay ?? '', 
@@ -115,6 +121,8 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
         barangay: form.barangay.trim() || null,
         address: form.address.trim() || null,
         postal_code: form.postal_code.trim() || null,
+        lat: pin?.lat ?? null,
+        lng: pin?.lng ?? null,
       });
       onSaved(updated);
       setEditing(false);
@@ -148,6 +156,20 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
         <label className={styles.formLabel}>Postal code</label>
         <input className={styles.formInput} value={form.postal_code} onChange={setField('postal_code')} placeholder="1634" />
       </div>
+      <div className={styles.panelFormField}>
+        <MapPinPicker
+          value={pin}
+          onChange={(next, found) => {
+            setPin(next);
+            // Fill what the pin tells us; keep anything the user already typed.
+            setForm((prev) => ({
+              ...prev,
+              address: prev.address || found?.street || '',
+              postal_code: prev.postal_code || found?.postcode || '',
+            }));
+          }}
+        />
+      </div>
       {error && <p className={styles.panelError}>{error}</p>}
       <div className={styles.panelActions}>
         <button className={styles.saveBtn} onClick={save} disabled={saving} type="button">{saving ? 'Saving…' : 'Save'}</button>
@@ -163,6 +185,7 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
         <div className={styles.panelRow}><span className={styles.panelRowLabel}>Barangay</span><span className={styles.panelRowValue}>{profile.barangay ?? <em className={styles.noData}>No data</em>}</span></div>
         <div className={styles.panelRow}><span className={styles.panelRowLabel}>Street / House No.</span><span className={styles.panelRowValue}>{profile.address ?? <em className={styles.noData}>No data</em>}</span></div>
         <div className={styles.panelRow}><span className={styles.panelRowLabel}>Postal code</span><span className={styles.panelRowValue}>{profile.postal_code ?? <em className={styles.noData}>No data</em>}</span></div>
+        <div className={styles.panelRow}><span className={styles.panelRowLabel}>Map pin</span><span className={styles.panelRowValue}>{profile.lat != null && profile.lng != null ? `${profile.lat.toFixed(5)}, ${profile.lng.toFixed(5)}` : <em className={styles.noData}>Not pinned</em>}</span></div>
       </div>
       <button className={styles.panelEditBtn} onClick={startEdit} type="button">Edit address</button>
     </div>

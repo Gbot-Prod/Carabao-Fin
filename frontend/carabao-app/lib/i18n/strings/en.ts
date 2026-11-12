@@ -283,6 +283,15 @@ const en = {
     expired: 'This sign-in has timed out. Please sign in again.',
     backToSignIn: 'Back to sign in',
   },
+  mapPin: {
+    label: 'Pin your location on the map',
+    useMyLocation: 'Use my location',
+    locating: 'Finding you…',
+    mapLabel: 'Map: click or drag the pin to your location',
+    hint: 'Click the map or drag the pin to your gate or door. Deliveries are routed to the pin.',
+    pinned: 'Pin saved for delivery routing.',
+    unavailable: 'The map is not available right now. Your typed address will be used.',
+  },
 };
 
 export type Strings = typeof en;

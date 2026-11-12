@@ -292,6 +292,15 @@ const fil: Strings = {
     expired: 'Nag-time out ang pag-sign in na ito. Mag-sign in muli.',
     backToSignIn: 'Bumalik sa pag-sign in',
   },
+  mapPin: {
+    label: 'I-pin ang iyong lokasyon sa mapa',
+    useMyLocation: 'Gamitin ang aking lokasyon',
+    locating: 'Hinahanap ka…',
+    mapLabel: 'Mapa: i-click o i-drag ang pin sa iyong lokasyon',
+    hint: 'I-click ang mapa o i-drag ang pin sa iyong gate o pinto. Ang pin ang susundan ng delivery.',
+    pinned: 'Na-save ang pin para sa ruta ng delivery.',
+    unavailable: 'Hindi available ang mapa ngayon. Ang na-type na address ang gagamitin.',
+  },
 };
 
 export default fil;

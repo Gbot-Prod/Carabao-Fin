@@ -8,6 +8,8 @@ import { cancelPaymentCheckout, createPaymentCheckout, fetchMyCart, fetchMyProfi
 import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { clearPendingPayments, loadPendingPayments, savePendingPayments } from "@/util/pendingPayments";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
+import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
+import type { Pin } from "@/util/reverseGeocode";
 import { isLuzonRegion } from "@/util/serviceArea";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt } from "@/lib/i18n/format";
@@ -39,6 +41,8 @@ export default function CheckoutPage() {
   const [notes, setNotes] = useState("");
   const [deliveryDate, setDeliveryDate] = useState(() => localIsoDate(1));
   const [deliveryWindow, setDeliveryWindow] = useState(TIME_WINDOWS[0]);
+  // Delivery pin (U1b): starts at the profile's saved pin, if any.
+  const [pin, setPin] = useState<Pin | null>(null);
   const [addressForm, setAddressForm] = useState<LocationSelectsValue>({
     region: "",
     province: "",
@@ -63,6 +67,7 @@ export default function CheckoutPage() {
         const profile = await fetchMyProfile();
         if (profile.address) setStreet(profile.address);
         if (profile.postal_code) setPostal(profile.postal_code);
+        if (profile.lat != null && profile.lng != null) setPin({ lat: profile.lat, lng: profile.lng });
         setAddressForm({
           region: profile.region ?? "",
           province: profile.province ?? "",
@@ -139,6 +144,8 @@ export default function CheckoutPage() {
         delivery_time: deliveryWindow,
         delivery_address: deliveryAddress,
         delivery_region: addressForm.region,
+        delivery_lat: pin?.lat ?? null,
+        delivery_lng: pin?.lng ?? null,
         payment_method: paymentMethod,
         notes: notes || null,
         // Ignored by the server, which charges each merchant's own delivery fee.
@@ -211,6 +218,15 @@ export default function CheckoutPage() {
                 placeholder="1634"
               />
             </label>
+
+            <MapPinPicker
+              value={pin}
+              onChange={(next, found) => {
+                setPin(next);
+                if (!street.trim() && found?.street) setStreet(found.street);
+                if (!postal.trim() && found?.postcode) setPostal(found.postcode);
+              }}
+            />
           </div>
 
           <div className={styles.block}>
