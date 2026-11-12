@@ -121,9 +121,13 @@ function CheckoutScreenContent() {
               onChangeText={setAddress}
               multiline
               numberOfLines={3}
-              placeholder="Enter your delivery address"
+              placeholder="Street, barangay, city, province"
               placeholderTextColor={Colors.textLight}
             />
+            {/* The server checks the address is in Luzon (B2). */}
+            <Text style={styles.fieldHint}>
+              Carabao delivers within Luzon only. Include your province or Metro Manila city.
+            </Text>
           </View>
 
           <Text style={styles.fieldLabel}>Time Window</Text>
@@ -250,6 +254,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
 
   fieldGroup: { marginBottom: Spacing.md },
+  fieldHint: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 4 },
   fieldLabel: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '600', marginBottom: 6 },
 
   input: {

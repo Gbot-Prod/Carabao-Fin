@@ -67,6 +67,7 @@ from app.services.payout_service import (
 )
 from app.services.produce_freshness import freshness_error, is_listed, ph_today
 from app.services.produce_pricing import parse_tiers, pricing_error, serialize_tiers
+from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
 from app.services.sms_service import notify_order_shipped
 from app.utils.geocoding import _geocode
 
@@ -293,6 +294,8 @@ def update_my_merchant(
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
     updates = merchant_update.model_dump(exclude_unset=True)
+    if "region" in updates and not is_luzon_region(updates["region"]):
+        raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
     for field, value in updates.items():
         setattr(merchant, field, value)
 

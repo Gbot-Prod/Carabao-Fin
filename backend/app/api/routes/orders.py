@@ -40,6 +40,12 @@ from app.services.review_service import (
     review_deadline,
     to_review_response,
 )
+from app.services.service_area import (
+    DELIVERY_OUTSIDE_LUZON_DETAIL,
+    OUTSIDE_LUZON_DETAIL,
+    address_in_luzon,
+    is_luzon_region,
+)
 
 from ._order_helpers import (
     _extract_item_int,
@@ -64,6 +70,13 @@ def place_order_from_cart(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Carabao delivers within Luzon only (B2).
+    if payload.delivery_region is not None:
+        if not is_luzon_region(payload.delivery_region):
+            raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
+    elif payload.delivery_address and not address_in_luzon(payload.delivery_address):
+        raise HTTPException(status_code=400, detail=DELIVERY_OUTSIDE_LUZON_DETAIL)
+
     # Release any elapsed checkout holds before checking availability.
     expire_stale_reservations(db, reservation_ttl_minutes())
     cart = get_or_create_cart(db, current_user.id)

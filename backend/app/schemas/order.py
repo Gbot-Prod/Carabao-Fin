@@ -70,6 +70,9 @@ class PlaceOrderRequest(BaseModel):
     # A time window such as "08:00 – 10:00"; stored as Order.delivery_window.
     delivery_time: str | None = Field(default=None, max_length=50)
     delivery_address: str | None = None
+    # The region picked at checkout (web). When absent, delivery_address is checked
+    # for a Luzon province or Metro Manila city instead (B2).
+    delivery_region: str | None = Field(default=None, max_length=100)
     payment_method: str | None = None
     notes: str | None = Field(default=None, max_length=500)
     service_fee: int = 40

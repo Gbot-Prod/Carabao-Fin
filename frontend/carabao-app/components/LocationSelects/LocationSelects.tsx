@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchRegions, fetchProvincesByRegion, fetchCitiesByProvince, fetchBarangaysByCity, fetchCitiesByRegion } from '@/util/psgc';
 import type { PsgcRegion, PsgcProvince, PsgcCity, PsgcBarangay } from '@/util/psgc';
+import { isLuzonRegion, SERVICE_AREA_NOTE } from '@/util/serviceArea';
 
 export type LocationSelectsValue = {
   region?: string;
@@ -59,7 +60,9 @@ export default function LocationSelects({
   labelStyle,
   wrapStyle,
 }: LocationSelectsProps) {
-  const { options: regions, loading: loadingRegions } = usePsgcOptions<PsgcRegion>('regions', fetchRegions);
+  const { options: allRegions, loading: loadingRegions } = usePsgcOptions<PsgcRegion>('regions', fetchRegions);
+  // Only Luzon regions can be picked (B2); a saved region outside Luzon simply shows as unselected.
+  const regions = useMemo(() => allRegions.filter((region) => isLuzonRegion(region.name)), [allRegions]);
   const selectedRegion = regions.find((region) => region.name === value.region);
   const regionCode = selectedRegion?.code;
   const isNcr = regionCode === NCR_CODE;
@@ -122,6 +125,7 @@ export default function LocationSelects({
             <option key={region.code} value={region.code}>{region.name}</option>
           ))}
         </select>
+        <small style={{ display: 'block', marginTop: 4, fontSize: 12, color: 'var(--text-subtle)' }}>{SERVICE_AREA_NOTE}</small>
       </div>
 
       <div className={wrapClassName} style={wrapStyle}>

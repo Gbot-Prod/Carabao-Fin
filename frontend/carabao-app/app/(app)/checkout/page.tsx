@@ -7,6 +7,7 @@ import styles from "./page.module.css";
 import { cancelPaymentCheckout, createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
 import { SERVICE_FEE } from "@/lib/constants";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
+import { isLuzonRegion } from "@/util/serviceArea";
 import { getApiErrorStatus } from "@/util/errorHelper";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
@@ -105,6 +106,11 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!isLuzonRegion(addressForm.region)) {
+      setError("Carabao currently delivers within Luzon only. Choose a Luzon region for your delivery address.");
+      return;
+    }
+
     if (!deliveryDate || deliveryDate < localIsoDate()) {
       setError("Please choose a delivery date from today onward.");
       return;
@@ -119,6 +125,7 @@ export default function CheckoutPage() {
         delivery_date: deliveryDate,
         delivery_time: deliveryWindow,
         delivery_address: deliveryAddress,
+        delivery_region: addressForm.region,
         payment_method: paymentMethod,
         notes: notes || null,
         service_fee: serviceFee,

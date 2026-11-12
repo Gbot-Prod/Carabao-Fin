@@ -49,6 +49,8 @@ export type PlaceOrderPayload = {
   delivery_date?: string | null;
   delivery_time?: string | null;
   delivery_address?: string | null;
+  // Region picked at checkout; the server rejects regions outside Luzon (B2).
+  delivery_region?: string | null;
   payment_method?: string | null;
   notes?: string | null;
   service_fee?: number;

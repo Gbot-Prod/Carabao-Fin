@@ -18,6 +18,7 @@ from app.schemas.merchant_application import (
 from app.services import r2_service
 from app.services.merchant_service import get_active_merchant
 from app.services.phone_verification import normalize_ph_mobile, read_token
+from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
 
 router = APIRouter(tags=["merchant-onboarding"])
 logger = logging.getLogger(__name__)
@@ -52,6 +53,9 @@ def submit_my_merchant_onboarding_route(
         raise HTTPException(
             status_code=400, detail="Invalid onboarding payload"
         ) from exc
+
+    if not is_luzon_region(data.region):
+        raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
 
     verified = read_token(data.phone_verification_token)
     if (
