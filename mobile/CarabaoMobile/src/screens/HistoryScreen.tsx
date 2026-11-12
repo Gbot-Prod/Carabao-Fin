@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, SafeAreaView, ActivityIndicator, Alert,
+  StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -12,6 +12,7 @@ import { api, type ApiHistoryOrder } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { SkeletonList, LoadError } from '../components/Skeleton';
 
 function HistoryCard({ order }: { order: ApiHistoryOrder }) {
   const [expanded, setExpanded] = useState(false);
@@ -132,6 +133,8 @@ function HistoryScreenContent() {
   const { token } = useAuth();
   const [orders, setOrders] = useState<ApiHistoryOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -139,14 +142,15 @@ function HistoryScreenContent() {
       try {
         const data = await api.orders.history(token);
         setOrders(data);
+        setFailed(false);
       } catch {
-        // Show empty state on error
+        setFailed(true);
       } finally {
         setLoading(false);
       }
     };
     void load();
-  }, [token]);
+  }, [token, attempt]);
 
   const totalSpent = orders.reduce((s, o) => s + o.total_amount, 0);
   const delivered = orders.filter((o) => o.status.toLowerCase() === 'delivered').length;
@@ -157,9 +161,21 @@ function HistoryScreenContent() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Order History</Text>
         </View>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+        <SkeletonList label="Loading order history" rows={4} />
+      </SafeAreaView>
+    );
+  }
+
+  if (failed && orders.length === 0) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Order History</Text>
         </View>
+        <LoadError
+          message="We couldn't load your orders. Check your connection and try again."
+          onRetry={() => setAttempt((n) => n + 1)}
+        />
       </SafeAreaView>
     );
   }

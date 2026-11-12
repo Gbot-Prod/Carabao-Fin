@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, SafeAreaView, ActivityIndicator,
+  StyleSheet, SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
@@ -10,6 +10,7 @@ import { api, type ApiCurrentOrder, type ApiTracking } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, Divider } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { SkeletonList, LoadError } from '../components/Skeleton';
 
 const STATUS_STEPS = ['Order Placed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
 
@@ -95,6 +96,8 @@ function TrackScreenContent() {
   const { token } = useAuth();
   const [orders, setOrders] = useState<ApiCurrentOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [selectedIdx, setSelectedIdx] = useState(0);
 
   useEffect(() => {
@@ -103,14 +106,15 @@ function TrackScreenContent() {
       try {
         const data = await api.orders.current(token);
         setOrders(data);
+        setFailed(false);
       } catch {
-        // Show empty state on error
+        setFailed(true);
       } finally {
         setLoading(false);
       }
     };
     void load();
-  }, [token]);
+  }, [token, attempt]);
 
   const selected = orders[selectedIdx];
   const [tracking, setTracking] = useState<ApiTracking | null>(null);
@@ -137,9 +141,21 @@ function TrackScreenContent() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Track Orders</Text>
         </View>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+        <SkeletonList label="Loading your deliveries" rows={2} />
+      </SafeAreaView>
+    );
+  }
+
+  if (failed && orders.length === 0) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Track Orders</Text>
         </View>
+        <LoadError
+          message="We couldn't load your deliveries. Check your connection and try again."
+          onRetry={() => setAttempt((n) => n + 1)}
+        />
       </SafeAreaView>
     );
   }

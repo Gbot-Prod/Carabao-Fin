@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, FlatList, TextInput, StyleSheet,
-  TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator,
+  TouchableOpacity, ScrollView, SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -12,6 +12,7 @@ import { useAuth } from '../lib/AuthContext';
 import { api, merchantLocation, type ApiMerchant, type ApiProduceSearchResult } from '../lib/api';
 import { type Farm } from '../lib/mockData';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
+import { SkeletonList, LoadError } from '../components/Skeleton';
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
 
 function merchantToFarm(m: ApiMerchant): Farm {
@@ -38,6 +39,7 @@ function OrderScreenContent() {
   const [farms, setFarms] = useState<Farm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   // U5: unread count for the bell, refreshed every minute.
@@ -93,7 +95,7 @@ function OrderScreenContent() {
       }
     };
     void load();
-  }, [token]);
+  }, [token, attempt]);
 
   const categories = useMemo(() => {
     const cats = Array.from(new Set(farms.map((f) => f.category)));
@@ -189,15 +191,9 @@ function OrderScreenContent() {
       )}
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading farms…</Text>
-        </View>
+        <SkeletonList label="Loading farms" rows={4} grid />
       ) : error ? (
-        <View style={styles.center}>
-          <Ionicons name="warning-outline" size={36} color={Colors.warning} />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
+        <LoadError message={error} onRetry={() => setAttempt((n) => n + 1)} />
       ) : (
         <FlatList
           data={filtered}

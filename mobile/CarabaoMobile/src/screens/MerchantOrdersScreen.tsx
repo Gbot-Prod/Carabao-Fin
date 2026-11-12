@@ -13,6 +13,7 @@ import { api, ApiError, type ApiMerchantOrder, type MerchantOrderStatus } from '
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { SkeletonList, LoadError } from '../components/Skeleton';
 
 const STATUS_LABELS: Record<MerchantOrderStatus, string> = {
   pending: 'Awaiting payment',
@@ -191,7 +192,7 @@ function MerchantOrdersContent() {
 
   let body: React.ReactNode;
   if (loading) {
-    body = <ActivityIndicator style={{ marginTop: 40 }} color={Colors.primary} />;
+    body = <SkeletonList label="Loading incoming orders" rows={4} />;
   } else if (notMerchant) {
     body = (
       <EmptyState
@@ -202,10 +203,12 @@ function MerchantOrdersContent() {
     );
   } else if (error) {
     body = (
-      <EmptyState
-        icon={<Ionicons name="alert-circle-outline" size={48} color={Colors.error} />}
-        title="Something went wrong"
+      <LoadError
         message={error}
+        onRetry={() => {
+          setLoading(true);
+          void load().finally(() => setLoading(false));
+        }}
       />
     );
   } else {
