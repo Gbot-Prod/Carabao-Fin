@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node --test util/navigation.test.ts",
     "auth:migrate": "node scripts/better-auth-migrate.mjs",
     "auth:migrate:apply": "node scripts/better-auth-migrate.mjs --apply"
   },
