@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
-import { api, type ApiCurrentOrder } from '../lib/api';
+import { api, type ApiCurrentOrder, type ApiTracking } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, Divider } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -113,6 +113,21 @@ function TrackScreenContent() {
   }, [token]);
 
   const selected = orders[selectedIdx];
+  const [tracking, setTracking] = useState<ApiTracking | null>(null);
+
+  useEffect(() => {
+    setTracking(null);
+    if (!selected) return;
+    let active = true;
+    api.tracking
+      .forOrder(token, selected.order_id)
+      .then((data) => { if (active) setTracking(data); })
+      .catch(() => { /* leave the "waiting for shipment" state */ });
+    return () => { active = false; };
+  }, [token, selected]);
+
+  const hasEstimate =
+    tracking?.tracking_state === 'estimated' && tracking.eta_minutes !== null;
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(n);
 
@@ -152,8 +167,14 @@ function TrackScreenContent() {
                 <Text style={styles.detailCardTitle}>Delivery Details</Text>
                 <View style={styles.mapPlaceholder}>
                   <Ionicons name="map-outline" size={36} color={Colors.textLight} />
-                  <Text style={styles.mapPlaceholderText}>Live map tracking</Text>
-                  <Text style={styles.mapPlaceholderSub}>Coming soon</Text>
+                  <Text style={styles.mapPlaceholderText}>
+                    {hasEstimate ? 'Estimated progress' : 'Waiting for shipment'}
+                  </Text>
+                  <Text style={styles.mapPlaceholderSub}>
+                    {hasEstimate && tracking
+                      ? `${Math.round(tracking.progress * 100)}% · about ${tracking.eta_minutes} min to arrival`
+                      : 'Estimated progress will appear after the merchant dispatches this order.'}
+                  </Text>
                 </View>
 
                 <View style={styles.detailsGrid}>

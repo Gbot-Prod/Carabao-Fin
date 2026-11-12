@@ -340,7 +340,7 @@ export type MerchantShipmentTracking = {
   origin: { lat: number; lng: number };
   destination: { lat: number; lng: number };
   progress: number;
-  eta_minutes: number;
+  eta_minutes: number | null;
   active_stop_index: number;
 };
 

@@ -13,6 +13,9 @@ import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/u
 import getApiErrorMessage, { getApiErrorStatus } from '@/util/errorHelper';
 import PageLoader from '@/components/PageLoader/PageLoader';
 
+// Progress and ETA are estimated from the route schedule; there is no live GPS.
+const WAITING_MESSAGE = 'Waiting for shipment. Estimated progress will appear after the merchant dispatches this order.';
+
 type TrackOrder = {
   id: number;
   orderId: number;
@@ -211,6 +214,8 @@ function Track() {
   }, []);
 
   const updateTracking = useCallback(async (data: TrackingData, map: mapboxgl.Map) => {
+    if (!data.origin) return;
+    const origin = data.origin;
     const activeOrderId = data.stops[data.active_stop_index]?.order_id ?? null;
 
     // Place stop markers once per order — markers are DOM elements and work
@@ -254,7 +259,7 @@ function Track() {
 
     const driverLngLat: [number, number] = routeRef.current
       ? getPositionAlongRoute(routeRef.current, data.progress)
-      : [data.origin.lng, data.origin.lat];
+      : [origin.lng, origin.lat];
 
     updateDriverMarker(map, driverLngLat);
   }, [drawRouteLayer, placeStopMarkers, updateDriverMarker]);
@@ -300,6 +305,10 @@ function Track() {
           setTrackingError(null);
           const data = await fetchShipmentTracking(shipmentId);
           if (!active) return;
+          if (data.tracking_state === 'waiting_for_shipment') {
+            setTrackingError(WAITING_MESSAGE);
+            return;
+          }
           setTracking(data);
           hasTracking = true;
           const map = mapRef.current;
@@ -350,6 +359,10 @@ function Track() {
         setTrackingError(null);
         const data = await fetchTracking(orderId);
         if (!active) return;
+        if (data.tracking_state === 'waiting_for_shipment') {
+          setTrackingError(WAITING_MESSAGE);
+          return;
+        }
         setTracking(data);
         hasTracking = true;
         // Read mapRef AFTER the await — if the map was removed while fetching
@@ -424,8 +437,10 @@ function Track() {
   const activeStopNumber = tracking
     ? Math.min(tracking.active_stop_index + 1, tracking.stops.length)
     : 0;
-  const estimatedArrival = tracking && currentTime
-    ? new Date(currentTime + tracking.eta_minutes * 60_000).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
+  const etaMinutes = tracking?.eta_minutes ?? null;
+  const progressPercent = tracking ? Math.round(tracking.progress * 100) : 0;
+  const estimatedArrival = etaMinutes !== null && currentTime
+    ? new Date(currentTime + etaMinutes * 60_000).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
     : selectedOrder?.shipped
       ? selectedOrder.timeOfArrival
       : 'Pending shipment';
@@ -472,10 +487,10 @@ function Track() {
               />
             )}
 
-            {tracking && (
+            {tracking && etaMinutes !== null && (
               <div className={styles.mapEtaChip}>
-                <span className={styles.mapEtaLabel}>Arriving in</span>
-                <strong className={styles.mapEtaValue}>{tracking.eta_minutes} min</strong>
+                <span className={styles.mapEtaLabel}>Estimated arrival in</span>
+                <strong className={styles.mapEtaValue}>{etaMinutes} min</strong>
               </div>
             )}
 
@@ -538,8 +553,8 @@ function Track() {
                     <strong>{activeStopNumber}/{tracking.stops.length || 1}</strong>
                   </div>
                   <div>
-                    <span className={styles.shipmentSummaryLabel}>Live ETA</span>
-                    <strong>{tracking.eta_minutes} min</strong>
+                    <span className={styles.shipmentSummaryLabel}>Estimated progress</span>
+                    <strong>{etaMinutes !== null ? `${progressPercent}% · ${etaMinutes} min` : 'No estimate yet'}</strong>
                   </div>
                 </div>
 

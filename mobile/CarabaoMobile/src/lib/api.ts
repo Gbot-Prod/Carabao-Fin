@@ -255,6 +255,17 @@ export type TransactionStatusResponse = {
   paid_at: string | null;
 };
 
+// Progress and ETA are estimated from the planned route schedule; there is no
+// live vehicle location. 'waiting_for_shipment' means no route yet, so no ETA.
+export type ApiTracking = {
+  shipment_id: number;
+  order_id: number;
+  status: string;
+  progress: number;
+  eta_minutes: number | null;
+  tracking_state: 'estimated' | 'waiting_for_shipment';
+};
+
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -305,6 +316,10 @@ export const api = {
       }),
     transactionByOrder: (token: string | null, orderId: number) =>
       request<TransactionStatusResponse>(`/payments/transactions/order/${orderId}`, token),
+  },
+  tracking: {
+    forOrder: (token: string | null, orderId: number) =>
+      request<ApiTracking>(`/tracking/${orderId}`, token),
   },
   users: {
     me: (token: string | null) =>
