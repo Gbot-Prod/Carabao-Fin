@@ -205,3 +205,73 @@
     padding: 16px;
   }
 }
+
+/* ── Pending work (A5a) ──────────────────────── */
+
+.pendingTitle {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pendingGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.pendingCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 20px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
+  background: var(--bg-white);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.pendingCard:hover {
+  border-color: var(--green-600);
+}
+
+.pendingCard:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.pendingCardActive {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.pendingCount {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--green-900);
+  font-variant-numeric: tabular-nums;
+}
+
+.pendingLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.pendingAction {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green-600);
+}
+
+@media (max-width: 720px) {
+  .pendingGrid {
+    grid-template-columns: 1fr;
+  }
+}

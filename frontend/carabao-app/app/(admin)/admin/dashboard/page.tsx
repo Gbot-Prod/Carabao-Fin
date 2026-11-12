@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -33,6 +34,16 @@ function KpiCard({ label, value, alert }: { label: string; value: string; alert?
   );
 }
 
+function PendingCard({ label, count, href, action }: { label: string; count: number; href: string; action: string }) {
+  return (
+    <Link href={href} className={`${styles.pendingCard} ${count > 0 ? styles.pendingCardActive : ""}`}>
+      <span className={styles.pendingCount}>{count.toLocaleString()}</span>
+      <span className={styles.pendingLabel}>{label}</span>
+      <span className={styles.pendingAction}>{count > 0 ? action : "Nothing waiting"} →</span>
+    </Link>
+  );
+}
+
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [batches, setBatches] = useState<PayoutBatch[]>([]);
@@ -57,6 +68,29 @@ export default function AdminDashboard() {
   return (
     <div className={styles.page}>
       <h1 className={styles.heading}>Dashboard</h1>
+
+      {/* Work waiting on an admin */}
+      <h2 className={styles.pendingTitle}>Needs your attention</h2>
+      <div className={styles.pendingGrid}>
+        <PendingCard
+          label="Merchant applications"
+          count={stats.pending_work.applications}
+          href="/admin/review"
+          action="Review"
+        />
+        <PendingCard
+          label="Payouts to send"
+          count={stats.pending_work.payouts_to_send}
+          href="/admin/payouts"
+          action="Send payouts"
+        />
+        <PendingCard
+          label="Refunds pending"
+          count={stats.pending_work.refunds_pending}
+          href="/admin/refunds"
+          action="Record refunds"
+        />
+      </div>
 
       {/* KPI cards */}
       <div className={styles.kpiGrid}>

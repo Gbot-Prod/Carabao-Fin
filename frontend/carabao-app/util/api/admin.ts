@@ -63,6 +63,11 @@ export type AdminStats = {
   total_users: number;
   active_merchants: number;
   pending_applications: number;
+  pending_work: {
+    applications: number;
+    payouts_to_send: number;
+    refunds_pending: number;
+  };
   daily_revenue: DailyRevenue[];
   order_breakdown: OrderStatusCount[];
   payout_summary: PayoutSummaryItem[];

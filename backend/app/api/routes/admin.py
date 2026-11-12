@@ -223,6 +223,25 @@ def get_admin_stats(
         or 0
     )
 
+    # Work waiting on an admin (A5a). Payouts: requested, approved, or failed and
+    # needing a resend; "processing" is waiting on PayMongo, not on an admin.
+    payouts_to_send = (
+        db.query(func.count(PayoutBatch.id))
+        .filter(
+            PayoutBatch.status.in_(
+                [PayoutStatus.PENDING, PayoutStatus.APPROVED, PayoutStatus.FAILED]
+            )
+        )
+        .scalar()
+        or 0
+    )
+    refunds_pending = (
+        db.query(func.count(Transaction.id))
+        .filter(Transaction.status == TransactionStatus.REFUND_PENDING)
+        .scalar()
+        or 0
+    )
+
     since = datetime.now(UTC) - timedelta(days=30)
     # Plain cast (no bound params) so SELECT and GROUP BY match under psycopg3.
     paid_day = cast(Transaction.paid_at, Date)
@@ -261,6 +280,11 @@ def get_admin_stats(
         "total_users": int(total_users),
         "active_merchants": int(active_merchants),
         "pending_applications": int(pending_applications),
+        "pending_work": {
+            "applications": int(pending_applications),
+            "payouts_to_send": int(payouts_to_send),
+            "refunds_pending": int(refunds_pending),
+        },
         "daily_revenue": [
             {
                 "date": str(r.date),
