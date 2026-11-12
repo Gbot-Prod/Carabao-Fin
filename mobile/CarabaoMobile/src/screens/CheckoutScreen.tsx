@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
 import { api } from '../lib/api';
@@ -13,10 +14,10 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Button, Divider, StatRow } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 
+// Matches the web checkout: every order is paid through PayMongo's hosted
+// checkout, where the buyer picks GCash, Maya, card, etc.
 const PAYMENT_METHODS = [
-  { id: 'cod', label: 'Cash on Delivery', icon: '💵' },
-  { id: 'gcash', label: 'GCash', icon: '📱' },
-  { id: 'bank', label: 'Bank Transfer', icon: '🏦' },
+  { id: 'online', label: 'Online payment (GCash, Maya, card via PayMongo)', icon: '💳' },
 ];
 
 const TIME_WINDOWS = [
@@ -27,7 +28,7 @@ function CheckoutScreenContent() {
   const router = useRouter();
   const { items, total, clearCart } = useCart();
   const { token } = useAuth();
-  const [payment, setPayment] = useState('cod');
+  const [payment, setPayment] = useState('online');
   const [timeWindow, setTimeWindow] = useState(TIME_WINDOWS[0]);
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
@@ -70,7 +71,21 @@ function CheckoutScreenContent() {
         service_fee: serviceFee,
       });
       clearCart();
-      router.replace({ pathname: '/confirmation', params: { orderId: result.order_reference } });
+      // The order exists now, so go to confirmation even if PayMongo fails;
+      // that screen polls the transaction and offers "Pay now" to retry.
+      try {
+        const checkout = await api.payments.checkout(token, result.order_id);
+        // Resolves when the buyer closes the browser (PayMongo's redirect
+        // lands on the web site, not the app).
+        await WebBrowser.openBrowserAsync(checkout.checkout_url);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Could not start payment';
+        Alert.alert('Payment not started', message);
+      }
+      router.replace({
+        pathname: '/confirmation',
+        params: { orderId: String(result.order_id), orderRef: result.order_reference },
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to place order';
       Alert.alert('Order Failed', message);

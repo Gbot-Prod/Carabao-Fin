@@ -201,6 +201,34 @@ export type PlaceOrderResponse = {
   status: string;
 };
 
+// Mirrors backend TransactionStatus (app/models/statuses.py).
+export type TransactionStatus =
+  | 'pending'
+  | 'paid'
+  | 'failed'
+  | 'expired'
+  | 'refund_pending'
+  | 'refunded';
+
+export type CheckoutSessionResponse = {
+  transaction_id: number;
+  order_id: number;
+  checkout_url: string;
+  paymongo_session_id: string;
+  amount: number;
+  status: TransactionStatus;
+};
+
+export type TransactionStatusResponse = {
+  id: number;
+  order_id: number;
+  status: TransactionStatus;
+  amount: number;
+  platform_fee: number;
+  merchant_amount: number;
+  paid_at: string | null;
+};
+
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -231,6 +259,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+  },
+  payments: {
+    checkout: (token: string | null, orderId: number) =>
+      request<CheckoutSessionResponse>(`/payments/checkout/${orderId}`, token, {
+        method: 'POST',
+      }),
+    transactionByOrder: (token: string | null, orderId: number) =>
+      request<TransactionStatusResponse>(`/payments/transactions/order/${orderId}`, token),
   },
   users: {
     me: (token: string | null) =>
