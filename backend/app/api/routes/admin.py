@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
+from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
-from app.models.payout_batch import PayoutBatch, PayoutBatchItem
-from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
+from app.models.payout_batch import PayoutBatch
+from app.models.statuses import PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.merchant import MerchantResponse
@@ -20,10 +21,23 @@ from app.schemas.merchant_application import (
     MerchantApplicationResponse,
 )
 from app.schemas.pagination import Page
-from app.schemas.payout import PayoutBatchResponse
+from app.schemas.payout import (
+    AdminPayoutBatchResponse,
+    PayoutDestinationPreview,
+    WalletBalance,
+)
 from app.schemas.user import UserResponse
-from app.services import r2_service
+from app.services import paymongo, r2_service
 from app.services.merchant_service import create_merchant_from_application
+from app.services.payout_service import (
+    PayoutError,
+    get_payout_info,
+    payout_info_problem,
+    refresh_payout,
+    resolve_destination,
+    send_payout,
+    transfer_fee,
+)
 
 router = APIRouter(tags=["admin"])
 
@@ -206,105 +220,120 @@ def get_admin_stats(
     }
 
 
-@router.get("/admin/batches", response_model=list[PayoutBatchResponse])
+def _admin_batch_view(
+    batch: PayoutBatch, merchant_name: str | None, info
+) -> AdminPayoutBatchResponse:
+    destination = None
+    if info is not None:
+        try:
+            dest = resolve_destination(info)
+            destination = PayoutDestinationPreview(
+                type=dest.type,
+                institution=dest.institution,
+                name=dest.name,
+                number=dest.number,
+                provider=dest.provider,
+            )
+        except PayoutError:
+            destination = PayoutDestinationPreview(
+                type=info.payout_type,
+                institution=info.bank_name,
+                name=info.account_name,
+                number=info.account_number or info.ewallet_number,
+                problem=payout_info_problem(info),
+            )
+    update = {"merchant_name": merchant_name, "destination": destination}
+    if batch.transfer_fee is None:
+        # Requested before fees were recorded: preview what sending would take.
+        fee = transfer_fee()
+        update |= {"transfer_fee": fee, "net_amount": batch.gross_amount - fee}
+    return AdminPayoutBatchResponse.model_validate(batch).model_copy(update=update)
+
+
+def _admin_batch_response(db: Session, batch: PayoutBatch) -> AdminPayoutBatchResponse:
+    merchant = db.get(Merchant, batch.merchant_id)
+    return _admin_batch_view(
+        batch,
+        merchant.merchant_name if merchant else None,
+        get_payout_info(db, batch.merchant_id),
+    )
+
+
+@router.get("/admin/wallet", response_model=WalletBalance)
+def get_wallet_balance(admin: User = Depends(_require_admin)):
+    """Balance of the PayMongo wallet merchant payouts are sent from."""
+    try:
+        balance = paymongo.get_wallet_balance()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail="Could not read the PayMongo wallet"
+        ) from exc
+    return WalletBalance(
+        available=balance["available"] / 100, pending=balance["pending"] / 100
+    )
+
+
+@router.get("/admin/batches", response_model=list[AdminPayoutBatchResponse])
 def list_payout_batches(
     status: PayoutStatus | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(_require_admin),
-):
-    q = db.query(PayoutBatch)
-    if status:
-        q = q.filter(PayoutBatch.status == status)
-    return q.order_by(PayoutBatch.period_date.desc()).all()
-
-
-@router.post("/admin/batches/generate", response_model=list[PayoutBatchResponse])
-def generate_payout_batches(
-    period: date | None = None,
-    db: Session = Depends(get_db),
     admin: User = Depends(_require_admin),
 ):
-    """Groups paid, unbatched transactions of delivered orders for the given date
-    (defaults to today) into per-merchant batches."""
-    target_date = period or date.today()
-    start_dt = datetime(
-        target_date.year, target_date.month, target_date.day, tzinfo=UTC
-    )
-    end_dt = start_dt + timedelta(days=1)
-
-    unbatched = (
-        db.query(Transaction)
-        .join(Order, Order.id == Transaction.order_id)
-        .outerjoin(PayoutBatchItem, PayoutBatchItem.transaction_id == Transaction.id)
-        .filter(
-            Transaction.status == TransactionStatus.PAID,
-            Order.status == OrderStatus.DELIVERED,
-            Order.delivered_at.isnot(None),
-            Transaction.paid_at >= start_dt,
-            Transaction.paid_at < end_dt,
-            PayoutBatchItem.id.is_(None),
+    q = (
+        db.query(PayoutBatch, Merchant.merchant_name, MerchantPayoutInfo)
+        .outerjoin(Merchant, Merchant.id == PayoutBatch.merchant_id)
+        .outerjoin(
+            MerchantPayoutInfo,
+            MerchantPayoutInfo.merchant_id == PayoutBatch.merchant_id,
         )
-        .all()
     )
-
-    if not unbatched:
-        return []
-
-    # Group by merchant
-    by_merchant: dict[int, list[Transaction]] = {}
-    for txn in unbatched:
-        by_merchant.setdefault(txn.merchant_id, []).append(txn)
-
-    batches = []
-    for merchant_id, txns in by_merchant.items():
-        batch = PayoutBatch(
-            merchant_id=merchant_id,
-            period_date=target_date,
-            transaction_count=len(txns),
-            gross_amount=sum(t.merchant_amount for t in txns),
-            status=PayoutStatus.PENDING,
-        )
-        db.add(batch)
-        db.flush()
-
-        for txn in txns:
-            db.add(
-                PayoutBatchItem(
-                    batch_id=batch.id,
-                    transaction_id=txn.id,
-                    amount=txn.merchant_amount,
-                )
-            )
-
-        batches.append(batch)
-
-    db.commit()
-    for b in batches:
-        db.refresh(b)
-    return batches
+    if status:
+        q = q.filter(PayoutBatch.status == status)
+    rows = q.order_by(PayoutBatch.created_at.desc()).all()
+    return [_admin_batch_view(batch, name, info) for batch, name, info in rows]
 
 
-@router.patch("/admin/batches/{batch_id}/release", response_model=PayoutBatchResponse)
+@router.patch(
+    "/admin/batches/{batch_id}/release", response_model=AdminPayoutBatchResponse
+)
 def release_payout_batch(
     batch_id: int,
     notes: str | None = None,
     db: Session = Depends(get_db),
     admin: User = Depends(_require_admin),
 ):
-    batch = db.query(PayoutBatch).filter(PayoutBatch.id == batch_id).first()
-    if not batch:
-        raise HTTPException(status_code=404, detail="Batch not found")
-    if batch.status == PayoutStatus.RELEASED:
-        raise HTTPException(status_code=400, detail="Batch already released")
+    """Send the batch to the merchant through PayMongo (or resend a failed one).
 
-    batch.status = PayoutStatus.RELEASED
-    batch.released_at = datetime.now(UTC)
-    if notes:
-        batch.notes = notes
-
-    db.commit()
+    Returns the batch as ``processing`` once PayMongo accepts the transfer, or
+    ``failed`` with a reason when PayMongo refuses it.
+    """
+    try:
+        batch = send_payout(db, batch_id, notes)
+    except PayoutError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     db.refresh(batch)
-    return batch
+    return _admin_batch_response(db, batch)
+
+
+@router.post(
+    "/admin/batches/{batch_id}/refresh", response_model=AdminPayoutBatchResponse
+)
+def refresh_payout_batch(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """Ask PayMongo for the transfer's current status."""
+    try:
+        batch = refresh_payout(db, batch_id)
+    except PayoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail="Could not reach PayMongo. Try again."
+        ) from exc
+    return _admin_batch_response(db, batch)
 
 
 @router.patch(

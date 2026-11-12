@@ -158,16 +158,42 @@ export const uploadShopLogo = async (file: File): Promise<ShopPage> => {
 
 export type PayoutType = 'bank' | 'gcash' | 'maya';
 
+/** InstaPay settles in minutes; PESONet (used for GCash) on banking-day cycles. */
+export type PayoutProvider = 'instapay' | 'pesonet';
+
+export const PAYOUT_PROVIDER_LABELS: Record<PayoutProvider, string> = {
+  instapay: 'InstaPay',
+  pesonet: 'PESONet',
+};
+
+export const PAYOUT_PROVIDER_TIMING: Record<PayoutProvider, string> = {
+  instapay: 'usually arrives within 20 minutes',
+  pesonet: 'arrives on the next PESONet cycle (1 PM, 4 PM or 7 PM on banking days)',
+};
+
 export type PayoutInfo = {
   id: number;
   merchant_id: number;
   payout_type: PayoutType;
+  /** PayMongo institution code (BIC) for bank payouts. */
   bank_code: string | null;
+  bank_name: string | null;
   account_number: string | null;
   account_name: string | null;
   ewallet_number: string | null;
   created_at: string;
   updated_at: string;
+  /** Why payouts can't be sent here yet; null when the method is complete. */
+  problem: string | null;
+};
+
+export type PayoutInstitution = { code: string; name: string };
+
+export type AvailablePayout = {
+  transaction_count: number;
+  gross_amount: number;
+  transfer_fee: number;
+  net_amount: number;
 };
 
 export type PayoutInfoPayload = {
@@ -188,6 +214,17 @@ export type MerchantPayoutBatch = {
   notes: string | null;
   released_at: string | null;
   created_at: string;
+  transfer_fee: number | null;
+  net_amount: number | null;
+  attempts: number;
+  failure_reason: string | null;
+  provider_reference: string | null;
+  paymongo_transfer_id: string | null;
+  sent_at: string | null;
+  destination_type: PayoutType | null;
+  destination_name: string | null;
+  destination_number: string | null;
+  transfer_provider: PayoutProvider | null;
 };
 
 export type MerchantTransaction = {
@@ -219,6 +256,16 @@ export const fetchMyPayouts = async (): Promise<MerchantPayoutBatch[]> => {
 
 export const fetchMyTransactions = async (): Promise<MerchantTransaction[]> => {
   const response = await apiClient.get<MerchantTransaction[]>('/merchants/me/transactions');
+  return response.data;
+};
+
+export const fetchPayoutInstitutions = async (): Promise<PayoutInstitution[]> => {
+  const response = await apiClient.get<PayoutInstitution[]>('/merchants/me/payout-institutions');
+  return response.data;
+};
+
+export const fetchMyAvailablePayout = async (): Promise<AvailablePayout> => {
+  const response = await apiClient.get<AvailablePayout>('/merchants/me/payouts/available');
   return response.data;
 };
 

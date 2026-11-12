@@ -7,8 +7,9 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_db
 from app.models.transaction import Transaction
 from app.services.order_reservations import settle_checkout_payment
-from app.services.sms_service import notify_merchant_new_order
 from app.services.paymongo import get_webhook_secret, verify_webhook_signature
+from app.services.payout_service import handle_transfer_event
+from app.services.sms_service import notify_merchant_new_order
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +40,22 @@ async def paymongo_webhook(request: Request, db: Session = Depends(get_db)):
     if event_type == "checkout_session.payment.paid":
         # Async only to read the raw body; database work must stay off the loop.
         await run_in_threadpool(_handle_checkout_paid, payload, db)
+    elif event_type in ("transfer.outward.successful", "transfer.outward.failed"):
+        await run_in_threadpool(_handle_transfer, event_type, payload, db)
     else:
         logger.debug("Unhandled PayMongo event: %s", event_type)
 
     return {"received": True}
+
+
+def _handle_transfer(event_type: str, payload: dict, db: Session) -> None:
+    """A payout transfer settled. The transfer is the event's ``data``."""
+    attributes = (payload.get("data") or {}).get("attributes") or {}
+    resource = attributes.get("data")
+    if not isinstance(resource, dict):
+        logger.error("Malformed %s payload: no transfer data", event_type)
+        return
+    handle_transfer_event(db, event_type, resource)
 
 
 def _handle_checkout_paid(payload: dict, db: Session) -> None:

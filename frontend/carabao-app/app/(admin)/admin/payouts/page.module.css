@@ -29,9 +29,15 @@
 
 .kpiRow {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) {
+  .kpiRow {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .kpiCard {
@@ -240,33 +246,10 @@
   cursor: not-allowed;
 }
 
-.generateBtn {
-  font-size: 13px;
-  font-weight: 600;
-  padding: 8px 18px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: var(--green-600);
-  color: #fff;
-  cursor: pointer;
-  white-space: nowrap;
-}
 
-.generateBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 /* ── Notes input ─────────────────────────────── */
 
-.notesInput {
-  font-size: 12px;
-  padding: 4px 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  width: 140px;
-  color: #1a2e20;
-}
 
 /* ── Empty / states ──────────────────────────── */
 
@@ -319,4 +302,139 @@
 
 .emptyCell {
   color: var(--text-faint);
+}
+
+.releaseBtn:disabled,
+.secondaryBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.secondaryBtn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-white);
+  color: var(--green-900);
+  cursor: pointer;
+}
+
+.actionStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 220px;
+}
+
+.rowNote,
+.rowNoteError {
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 4px 0 0;
+  max-width: 240px;
+}
+
+.rowNote {
+  color: var(--text-muted);
+}
+
+.rowNoteError {
+  color: var(--danger);
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 25, 15, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+
+.modal {
+  background: var(--bg-white);
+  border-radius: var(--radius-md);
+  padding: 22px 24px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 18px 50px rgba(10, 25, 15, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modalTitle {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--green-900);
+  margin: 0;
+}
+
+.modalList {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.modalList dt {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.modalList dd {
+  margin: 0;
+  color: #1a2e20;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.modalList .modalTotal {
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--green-900);
+}
+
+.modalWarning {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #78350f;
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 0;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.kpiHint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+.linkBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--green-600);
+  text-decoration: underline;
+  cursor: pointer;
 }

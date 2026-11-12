@@ -91,7 +91,7 @@ function ProfileScreenContent() {
   const isMerchant = !!profile?.merchant;
 
   const handleMerchant = () => {
-    router.push('/onboarding');
+    router.push(isMerchant ? '/listings' : '/onboarding');
   };
 
   return (
@@ -119,8 +119,8 @@ function ProfileScreenContent() {
         {/* Merchant Banner */}
         <TouchableOpacity
           style={[styles.merchantBanner, isMerchant && styles.merchantBannerActive]}
-          onPress={isMerchant ? undefined : handleMerchant}
-          activeOpacity={isMerchant ? 1 : 0.85}
+          onPress={handleMerchant}
+          activeOpacity={0.85}
         >
           <View style={styles.merchantBannerLeft}>
             <Ionicons name={isMerchant ? 'storefront' : 'leaf'} size={28} color={Colors.white} />
@@ -129,11 +129,11 @@ function ProfileScreenContent() {
                 {isMerchant ? profile!.merchant!.merchant_name : 'Become a Merchant'}
               </Text>
               <Text style={styles.merchantBannerSub}>
-                {isMerchant ? 'Manage your store on the web app' : 'Sell your produce on Carabao'}
+                {isMerchant ? 'View your listings' : 'Sell your produce on Carabao'}
               </Text>
             </View>
           </View>
-          {!isMerchant && <Ionicons name="arrow-forward" size={20} color={Colors.white} />}
+          <Ionicons name="arrow-forward" size={20} color={Colors.white} />
         </TouchableOpacity>
 
         <View style={styles.sections}>

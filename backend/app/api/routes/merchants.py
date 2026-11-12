@@ -20,7 +20,6 @@ from app.models.statuses import (
     OPEN_PAYOUT_STATUSES,
     OrderStatus,
     PayoutStatus,
-    TransactionStatus,
 )
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -33,15 +32,17 @@ from app.schemas.merchant import (
 )
 from app.schemas.merchant_performance import MerchantPerformanceResponse
 from app.schemas.payout import (
+    AvailablePayout,
     MerchantOrderResponse,
     PayoutBatchResponse,
     PayoutInfoResponse,
     PayoutInfoUpdate,
+    ReceivingInstitution,
     TransactionSummary,
 )
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
-from app.services import r2_service
+from app.services import paymongo, r2_service
 from app.services.merchant_service import (
     find_deletion_blockers,
     get_active_merchant,
@@ -56,6 +57,12 @@ from app.services.order_status import (
     auto_confirm_at,
     money_received_clause,
     payment_status,
+)
+from app.services.payout_service import (
+    claimable_transactions,
+    get_payout_info,
+    payout_info_problem,
+    transfer_fee,
 )
 from app.services.produce_freshness import freshness_error, is_listed, ph_today
 from app.services.produce_pricing import parse_tiers, pricing_error, serialize_tiers
@@ -727,11 +734,20 @@ def get_my_payout_info(
     merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
-    return (
-        db.query(MerchantPayoutInfo)
-        .filter(MerchantPayoutInfo.merchant_id == merchant.id)
-        .first()
-    )
+    return get_payout_info(db, merchant.id)
+
+
+@router.get(
+    "/merchants/me/payout-institutions", response_model=list[ReceivingInstitution]
+)
+def list_payout_institutions(current_user: User = Depends(get_current_user)):
+    """Banks a payout can be sent to (PayMongo's InstaPay list)."""
+    try:
+        return paymongo.list_receiving_institutions("instapay")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail="Could not load the bank list. Try again."
+        ) from exc
 
 
 @router.put("/merchants/me/payout-info", response_model=PayoutInfoResponse)
@@ -744,16 +760,28 @@ def update_my_payout_info(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    info = (
-        db.query(MerchantPayoutInfo)
-        .filter(MerchantPayoutInfo.merchant_id == merchant.id)
-        .first()
-    )
+    values = payload.model_dump()
+    values["bank_name"] = None
+    if payload.payout_type == "bank":
+        try:
+            institutions = paymongo.list_receiving_institutions("instapay")
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502, detail="Could not verify the bank. Try again."
+            ) from exc
+        match = next((i for i in institutions if i["code"] == payload.bank_code), None)
+        if match is None:
+            raise HTTPException(
+                status_code=422, detail="That bank can't receive InstaPay transfers"
+            )
+        values["bank_name"] = match["name"]
+
+    info = get_payout_info(db, merchant.id)
     if not info:
-        info = MerchantPayoutInfo(merchant_id=merchant.id, **payload.model_dump())
+        info = MerchantPayoutInfo(merchant_id=merchant.id, **values)
         db.add(info)
     else:
-        for field, value in payload.model_dump().items():
+        for field, value in values.items():
             setattr(info, field, value)
 
     db.commit()
@@ -801,6 +829,26 @@ def get_my_transactions(
     ]
 
 
+@router.get("/merchants/me/payouts/available", response_model=AvailablePayout)
+def get_my_available_payout(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """What a cash out would request right now, and what would land after fees."""
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    txns = claimable_transactions(db, merchant.id)
+    gross = sum(t.merchant_amount for t in txns)
+    fee = transfer_fee()
+    return AvailablePayout(
+        transaction_count=len(txns),
+        gross_amount=gross,
+        transfer_fee=fee,
+        net_amount=max(0, gross - fee),
+    )
+
+
 @router.post("/merchants/me/payouts/request", response_model=PayoutBatchResponse)
 def request_my_payout(
     db: Session = Depends(get_db),
@@ -811,16 +859,9 @@ def request_my_payout(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    payout_info = (
-        db.query(MerchantPayoutInfo)
-        .filter(MerchantPayoutInfo.merchant_id == merchant.id)
-        .first()
-    )
-    if not payout_info:
-        raise HTTPException(
-            status_code=400,
-            detail="Set up your payout method before requesting a cash out",
-        )
+    problem = payout_info_problem(get_payout_info(db, merchant.id))
+    if problem:
+        raise HTTPException(status_code=400, detail=problem)
 
     pending = (
         db.query(PayoutBatch)
@@ -835,28 +876,7 @@ def request_my_payout(
             status_code=400, detail="You already have a pending payout request"
         )
 
-    already_batched_ids = (
-        db.query(PayoutBatchItem.transaction_id)
-        .join(PayoutBatch, PayoutBatch.id == PayoutBatchItem.batch_id)
-        .filter(
-            PayoutBatch.status.in_(OPEN_PAYOUT_STATUSES | {PayoutStatus.RELEASED})
-        )
-        .scalar_subquery()
-    )
-
-    unpaid_txns = (
-        db.query(Transaction)
-        .join(Order, Order.id == Transaction.order_id)
-        .filter(
-            Transaction.merchant_id == merchant.id,
-            Transaction.status == TransactionStatus.PAID,
-            Order.status == OrderStatus.DELIVERED,
-            Order.delivered_at.isnot(None),
-            Transaction.id.not_in(already_batched_ids),
-        )
-        .all()
-    )
-
+    unpaid_txns = claimable_transactions(db, merchant.id)
     if not unpaid_txns:
         raise HTTPException(
             status_code=400,
@@ -864,11 +884,20 @@ def request_my_payout(
         )
 
     total = sum(t.merchant_amount for t in unpaid_txns)
+    fee = transfer_fee()
+    if total <= fee:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Earnings of ₱{total} don't cover the ₱{fee} transfer fee yet",
+        )
+
     batch = PayoutBatch(
         merchant_id=merchant.id,
         period_date=datetime.now(UTC).date(),
         transaction_count=len(unpaid_txns),
         gross_amount=total,
+        transfer_fee=fee,
+        net_amount=total - fee,
         status=PayoutStatus.PENDING,
     )
     db.add(batch)

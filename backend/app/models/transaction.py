@@ -20,7 +20,7 @@ class Transaction(Base):
 
     amount = Column(Integer, nullable=False)  # pesos
     platform_fee = Column(Integer, nullable=False)  # 2% of amount, can be changed
-    merchant_amount = Column(Integer, nullable=False)  # 99% of amount
+    merchant_amount = Column(Integer, nullable=False)  # amount - platform_fee
 
     status = Column(
         status_type(TransactionStatus, "ck_transactions_status"),

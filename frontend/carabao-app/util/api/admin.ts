@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { UserProfile } from './users';
-import type { Merchant } from './merchants';
+import type { Merchant, MerchantPayoutBatch, PayoutProvider, PayoutType } from './merchants';
 import type { OrderStatus, PayoutStatus } from './statuses';
 
 export type MerchantApplication = {
@@ -68,16 +68,20 @@ export type AdminStats = {
   payout_summary: PayoutSummaryItem[];
 };
 
-export type PayoutBatch = {
-  id: number;
-  merchant_id: number;
-  period_date: string;
-  transaction_count: number;
-  gross_amount: number;
-  status: PayoutStatus;
-  notes: string | null;
-  released_at: string | null;
-  created_at: string;
+export type PayoutDestination = {
+  type: PayoutType;
+  institution: string | null;
+  name: string | null;
+  number: string | null;
+  provider: PayoutProvider | null;
+  /** Set when the merchant's method can't be sent to yet. */
+  problem: string | null;
+};
+
+export type PayoutBatch = MerchantPayoutBatch & {
+  merchant_name: string | null;
+  /** Where the batch goes if sent now (the merchant's current method). */
+  destination: PayoutDestination | null;
 };
 
 export type { UserProfile, Merchant };
@@ -125,13 +129,7 @@ export const fetchAdminPayoutBatches = async (status?: string): Promise<PayoutBa
   return res.data;
 };
 
-export const generatePayoutBatches = async (periodDate?: string): Promise<PayoutBatch[]> => {
-  const res = await apiClient.post<PayoutBatch[]>('/admin/batches/generate', null, {
-    params: periodDate ? { period: periodDate } : {},
-  });
-  return res.data;
-};
-
+/** Sends the batch through PayMongo (or resends a failed one). */
 export const releasePayoutBatch = async (batchId: number, notes?: string): Promise<PayoutBatch> => {
   const res = await apiClient.patch<PayoutBatch>(`/admin/batches/${batchId}/release`, null, {
     params: notes ? { notes } : {},
@@ -164,4 +162,17 @@ export const fetchRsbsaDocumentUrl = async (
   );
 
   return response.data;
+};
+
+export const refreshPayoutBatch = async (batchId: number): Promise<PayoutBatch> => {
+  const res = await apiClient.post<PayoutBatch>(`/admin/batches/${batchId}/refresh`);
+  return res.data;
+};
+
+/** The PayMongo wallet payouts are sent from, in pesos. */
+export type WalletBalance = { available: number; pending: number };
+
+export const fetchWalletBalance = async (): Promise<WalletBalance> => {
+  const res = await apiClient.get<WalletBalance>('/admin/wallet');
+  return res.data;
 };
