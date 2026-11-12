@@ -11,6 +11,7 @@ import {
   type MerchantShipmentSummary,
 } from "@/util/api";
 import getApiErrorMessage from "@/util/errorHelper";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { addDays, formatPeso, formatRequestedDate, todayInManila } from "../lib/format";
 import type { MerchantOrdersState } from "../hooks/useMerchantOrders";
 import type { ShipmentSelection } from "../hooks/useShipmentSelection";
@@ -50,6 +51,7 @@ type Props = {
 };
 
 export default function ShipmentsTab({ ordersState, selection, onOpenOrders }: Props) {
+  const { t } = useLanguage();
   const { readyToShip, loaded, loading, error, reload } = ordersState;
   const today = useMemo(() => todayInManila(), []);
 
@@ -128,7 +130,7 @@ export default function ShipmentsTab({ ordersState, selection, onOpenOrders }: P
           <div className={`${styles.payoutMessage} ${styles.payoutMessageSuccess} ${s.messageRow}`}>
             <span>{message.text}</span>
             {message.shipmentId != null && (
-              <Link className={s.inlineLink} href={`/track?shipment_id=${message.shipmentId}`}>View route →</Link>
+              <Link className={s.inlineLink} href={`/merchantDashboard/routing/${message.shipmentId}`}>{t.routing.openRouting}</Link>
             )}
           </div>
         )}
@@ -265,6 +267,7 @@ function ReadyGroup({ label, urgent, orders, selection }: {
 }
 
 function ShipmentRow({ shipment }: { shipment: MerchantShipmentSummary }) {
+  const { t } = useLanguage();
   const { completed_stop_count: done, stop_count: total } = shipment;
   const pct = total ? Math.round((done / total) * 100) : 0;
   return (
@@ -277,7 +280,7 @@ function ShipmentRow({ shipment }: { shipment: MerchantShipmentSummary }) {
         <span className={s.progressTrack}><span className={s.progressFill} style={{ width: `${pct}%` }} /></span>
         <span className={s.shipmentMeta}>{done} / {total} stops</span>
       </div>
-      <Link className={styles.secondaryBtn} href={`/track?shipment_id=${shipment.id}`}>View</Link>
+      <Link className={styles.secondaryBtn} href={`/merchantDashboard/routing/${shipment.id}`}>{t.routing.routingButton}</Link>
     </li>
   );
 }
