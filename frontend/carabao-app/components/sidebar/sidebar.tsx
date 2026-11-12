@@ -8,6 +8,7 @@ import "./sidebar.css";
 import Logo from "@/public/images/icons/carabaoLogo.png";
 import { LogoutButton } from "@/components/LogoutButton";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
+import NotificationBell from "@/components/NotificationBell/NotificationBell";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
@@ -234,7 +235,10 @@ export default function Sidebar() {
         </nav>
 
         <div className="sidebar__footer">
-          <LanguageToggle className="sidebar__language" />
+          <div className="sidebar__footer-tools">
+            <LanguageToggle className="sidebar__language" />
+            {isAuthenticated && <NotificationBell />}
+          </div>
           {!isLoading && (
             isAuthenticated ? (
               <LogoutButton className="sidebar__logout sidebar__logout-button">

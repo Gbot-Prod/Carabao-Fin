@@ -13,6 +13,7 @@ from .follows import router as follows_router
 from .merchant_onboarding import router as merchant_onboarding_router
 from .merchants import router as merchants_router
 from .misc import router as misc_router
+from .notifications import router as notifications_router
 from .orders import router as orders_router
 from .payments import router as payments_router
 from .produce_search import router as produce_search_router
@@ -30,6 +31,7 @@ router = APIRouter()
 router.include_router(produce_search_router)
 router.include_router(reorder_router)
 router.include_router(follows_router)
+router.include_router(notifications_router)
 router.include_router(admin_router)
 router.include_router(admin_orders_router)
 router.include_router(admin_audit_router)

@@ -5,6 +5,7 @@ import logging
 from app.integrations.sms.semaphore import SemaphoreError, send_sms
 from app.models.order import Order
 from app.models.statuses import OrderStatus
+from app.services import notifications
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,10 @@ def notify_merchant_new_order(*, order: Order) -> None:
     merchant = order.merchant
     phone_number = merchant.contact_number if merchant is not None else None
     if not phone_number:
+        return
+    # U5: the farm owner can turn SMS updates off.
+    owner = getattr(merchant, "user", None)
+    if owner is not None and not notifications.wants(owner, "sms"):
         return
 
     year = order.ordered_at.year if order.ordered_at else "XXXX"

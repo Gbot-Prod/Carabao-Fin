@@ -430,3 +430,15 @@
   align-self: flex-start;
   margin-bottom: 8px;
 }
+
+/* Language switch + notification bell (U5) */
+.sidebar__footer-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sidebar__footer-tools .sidebar__language {
+  margin-bottom: 0;
+}

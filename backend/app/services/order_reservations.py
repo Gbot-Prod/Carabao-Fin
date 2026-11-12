@@ -12,6 +12,7 @@ from app.models.order_history import OrderHistory
 from app.models.produce import Produce
 from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
+from app.services import notifications
 from app.services.paymongo import expire_checkout_session
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,10 @@ def release_order_reservation(
 
     (
         db.query(Transaction)
-        .filter(Transaction.order_id == order.id, Transaction.status == TransactionStatus.PENDING)
+        .filter(
+            Transaction.order_id == order.id,
+            Transaction.status == TransactionStatus.PENDING,
+        )
         .update({Transaction.status: transaction_status}, synchronize_session=False)
     )
     return True
@@ -104,10 +108,7 @@ def restore_order_stock(order: Order, db: Session) -> None:
     # Same lock order as placing an order, so the two can't deadlock.
     for produce_id, quantity in sorted(lines):
         produce = (
-            db.query(Produce)
-            .filter(Produce.id == produce_id)
-            .with_for_update()
-            .first()
+            db.query(Produce).filter(Produce.id == produce_id).with_for_update().first()
         )
         if produce:
             produce.stock_quantity += quantity
@@ -126,15 +127,23 @@ def cancel_order(order: Order, db: Session) -> bool:
     the merchant.
     """
     if order.status == OrderStatus.PENDING:
-        return release_order_reservation(order, db, transaction_status=TransactionStatus.EXPIRED)
+        return release_order_reservation(
+            order, db, transaction_status=TransactionStatus.EXPIRED
+        )
 
     restore_order_stock(order, db)
     _mark_cancelled(order)
 
     (
         db.query(Transaction)
-        .filter(Transaction.order_id == order.id, Transaction.status == TransactionStatus.PAID)
-        .update({Transaction.status: TransactionStatus.REFUND_PENDING}, synchronize_session=False)
+        .filter(
+            Transaction.order_id == order.id,
+            Transaction.status == TransactionStatus.PAID,
+        )
+        .update(
+            {Transaction.status: TransactionStatus.REFUND_PENDING},
+            synchronize_session=False,
+        )
     )
     return True
 
@@ -164,12 +173,33 @@ def settle_checkout_payment(
     txn.paymongo_payment_id = payment_id
     txn.paid_at = datetime.now(UTC)
 
-    if txn.status != TransactionStatus.PENDING or not order or order.status != OrderStatus.PENDING:
+    if (
+        txn.status != TransactionStatus.PENDING
+        or not order
+        or order.status != OrderStatus.PENDING
+    ):
         txn.status = TransactionStatus.REFUND_PENDING
         return "refund"
 
     txn.status = TransactionStatus.PAID
     order.status = OrderStatus.PROCESSING
+    ref = notifications.order_ref(order)
+    notifications.notify(
+        db,
+        notifications.buyer_id(order),
+        notifications.ORDER_PAID,
+        f"Payment received for {ref}",
+        "The farm is now preparing your order.",
+        notifications.order_link(order),
+    )
+    notifications.notify(
+        db,
+        notifications.merchant_user_id(order),
+        notifications.NEW_ORDER,
+        f"New paid order {ref}",
+        f"PHP {getattr(order, 'total_price', 0):,}. Open your dashboard to prepare it.",
+        "/merchantDashboard",
+    )
     if order.order_history_id:
         history = (
             db.query(OrderHistory)
@@ -216,12 +246,7 @@ def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
     released = 0
 
     for order_id in stale_order_ids:
-        order = (
-            db.query(Order)
-            .filter(Order.id == order_id)
-            .with_for_update()
-            .first()
-        )
+        order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
         if not order or order.status != OrderStatus.PENDING:
             continue
 
@@ -238,7 +263,9 @@ def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
         if has_live_checkout:
             continue
 
-        if release_order_reservation(order, db, transaction_status=TransactionStatus.EXPIRED):
+        if release_order_reservation(
+            order, db, transaction_status=TransactionStatus.EXPIRED
+        ):
             released += 1
 
     return released

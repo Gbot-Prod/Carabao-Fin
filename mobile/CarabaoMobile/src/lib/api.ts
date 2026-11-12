@@ -315,6 +315,17 @@ export type ApiProduceSearchResult = ApiProduce & {
 
 export type ApiPage<T> = { items: T[]; total: number; page: number; page_size: number };
 
+// The notification centre (U5).
+export type ApiNotification = {
+  id: number;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  read: boolean;
+  created_at: string;
+};
+
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -386,6 +397,14 @@ export const api = {
         `/produce/search?q=${encodeURIComponent(q)}&in_stock=true&page_size=${pageSize}`,
         token,
       ),
+  },
+  notifications: {
+    list: (token: string | null) =>
+      request<{ items: ApiNotification[]; unread: number }>('/users/me/notifications', token),
+    markRead: (token: string | null, id: number) =>
+      request<null>(`/users/me/notifications/${id}/read`, token, { method: 'POST' }),
+    markAllRead: (token: string | null) =>
+      request<null>('/users/me/notifications/read-all', token, { method: 'POST' }),
   },
   follows: {
     // Favourite farms (U4).

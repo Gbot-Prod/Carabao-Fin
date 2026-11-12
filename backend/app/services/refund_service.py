@@ -17,7 +17,7 @@ from app.integrations.sms.semaphore import SemaphoreError, send_sms
 from app.models.statuses import TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.services import audit_log, email
+from app.services import audit_log, email, notifications
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +76,11 @@ def record_refund(
     txn.refund_notes = (notes or "").strip() or None
     txn.refunded_at = datetime.now(UTC)
     txn.refunded_by = admin.id
+    notifications.notify(
+        db, txn.user_id, notifications.REFUND,
+        f"Refund sent for {order_ref(txn)}", f"PHP {txn.amount:,} via {REFUND_METHODS[method]}.",
+        f"/orders/{txn.order_id}",
+    )
     audit_log.record_admin_action(
         db,
         admin=admin,
@@ -105,7 +110,7 @@ def notify_buyer_refunded(txn: Transaction) -> None:
     ref = order_ref(txn)
     method = REFUND_METHODS.get(txn.refund_method or "", txn.refund_method or "")
 
-    if buyer.email:
+    if buyer.email and notifications.wants(buyer, "email"):
         try:
             email.send_refund_email(
                 buyer.email,
@@ -117,7 +122,7 @@ def notify_buyer_refunded(txn: Transaction) -> None:
         except Exception as exc:  # noqa: BLE001 - email provider errors vary
             logger.warning("[email] Could not send refund email for %s: %s", ref, exc)
 
-    if buyer.phone_number:
+    if buyer.phone_number and notifications.wants(buyer, "sms"):
         message = (
             f"Carabao: PHP {txn.amount:,} for order {ref} was refunded via "
             f"{method}. Ref: {txn.refund_reference}"

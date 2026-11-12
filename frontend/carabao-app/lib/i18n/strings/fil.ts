@@ -336,6 +336,11 @@ const fil: Strings = {
     unfollow: 'Huwag nang sundan',
     badge: 'Sinusundan',
   },
+  notificationsBell: {
+    title: 'Mga Abiso',
+    markAll: 'Markahang nabasa lahat',
+    empty: 'Wala pang abiso. Dito lalabas ang balita sa order, payout at review.',
+  },
 };
 
 export default fil;

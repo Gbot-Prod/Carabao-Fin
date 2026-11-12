@@ -22,6 +22,7 @@ from app.schemas.order import (
     PlaceOrderRequest,
     PlaceOrderResponse,
 )
+from app.services import notifications
 from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
     expire_stale_reservations,
@@ -208,6 +209,17 @@ def place_order_from_cart(
         )
         db.add(order)
         orders.append((order, merchant))
+
+    db.flush()  # ids for the notifications below
+    for order, merchant in orders:
+        notifications.notify(
+            db,
+            current_user.id,
+            notifications.ORDER_PLACED,
+            f"Order {notifications.order_ref(order)} placed",
+            f"From {merchant.merchant_name}. Pay to confirm it.",
+            f"/orders/{order.id}",
+        )
 
     db.commit()
     placed = []

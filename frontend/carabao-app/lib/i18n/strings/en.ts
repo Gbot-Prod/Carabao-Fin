@@ -327,6 +327,11 @@ const en = {
     unfollow: 'Unfollow',
     badge: 'Following',
   },
+  notificationsBell: {
+    title: 'Notifications',
+    markAll: 'Mark all read',
+    empty: 'No notifications yet. Order updates, payouts and reviews appear here.',
+  },
 };
 
 export type Strings = typeof en;

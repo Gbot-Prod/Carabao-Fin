@@ -40,6 +40,18 @@ function OrderScreenContent() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  // U5: unread count for the bell, refreshed every minute.
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    const load = () =>
+      api.notifications.list(token).then((r) => { if (active) setUnread(r.unread); }).catch(() => {});
+    void load();
+    const timer = setInterval(load, 60_000);
+    return () => { active = false; clearInterval(timer); };
+  }, [token]);
+
   // U4: followed farms are listed first.
   const [followed, setFollowed] = useState<Set<string>>(new Set());
   useEffect(() => {
@@ -106,6 +118,21 @@ function OrderScreenContent() {
           <Text style={styles.greeting}>Good morning</Text>
           <Text style={styles.headerTitle}>Find Fresh Farms</Text>
         </View>
+        <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+        {token ? (
+          <TouchableOpacity
+            style={styles.cartBtn}
+            onPress={() => router.push('/notifications')}
+            accessibilityLabel={unread ? `Notifications, ${unread} unread` : 'Notifications'}
+          >
+            <Ionicons name="notifications-outline" size={22} color={Colors.primary} />
+            {unread > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{unread > 9 ? '9+' : unread}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity style={styles.cartBtn} onPress={() => router.push('/(tabs)/cart')}>
           <Ionicons name="cart-outline" size={22} color={Colors.primary} />
           {itemCount > 0 && (
@@ -114,6 +141,7 @@ function OrderScreenContent() {
             </View>
           )}
         </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search */}

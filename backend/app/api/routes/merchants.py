@@ -42,7 +42,7 @@ from app.schemas.payout import (
 )
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
-from app.services import paymongo, r2_service
+from app.services import notifications, paymongo, r2_service
 from app.services.account_suspension import merchant_is_public
 from app.services.merchant_service import (
     find_deletion_blockers,
@@ -1030,7 +1030,8 @@ def update_my_merchant_order_status(
     )
 
     notify_order_shipped(
-        phone_number=user.phone_number if user else None,
+        # U5: only when the buyer accepts SMS updates.
+        phone_number=user.phone_number if user and notifications.wants(user, "sms") else None,
         merchant_name=merchant.merchant_name or "Merchant",
         order_ref=f"CB-{order.ordered_at.year if order.ordered_at else 'XXXX'}-{order.id:04d}",
         status=status,

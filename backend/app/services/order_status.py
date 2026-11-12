@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.order import Order
 from app.models.statuses import OrderStatus, PaymentStatus, TransactionStatus
 from app.models.transaction import Transaction
+from app.services import notifications
 from app.services.order_reservations import cancel_order
 
 IN_TRANSIT_STATUSES = frozenset({OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY})
@@ -109,6 +110,15 @@ def apply_merchant_transition(order: Order, new_status: OrderStatus, db: Session
         mark_shipped(order)
     else:
         order.status = new_status
+        if new_status == OrderStatus.OUT_FOR_DELIVERY:
+            notifications.notify(
+                db,
+                notifications.buyer_id(order),
+                notifications.ORDER_OUT_FOR_DELIVERY,
+                f"Order {notifications.order_ref(order)} is out for delivery",
+                "Your produce is on its way today.",
+                "/track",
+            )
 
 
 def auto_confirm_days() -> int:
@@ -127,12 +137,28 @@ def mark_shipped(order: Order) -> None:
     order.status = OrderStatus.SHIPPED
     if order.shipped_at is None:
         order.shipped_at = datetime.now(UTC)
+    notifications.notify(
+        order,
+        notifications.buyer_id(order),
+        notifications.ORDER_SHIPPED,
+        f"Order {notifications.order_ref(order)} has shipped",
+        "Follow its estimated progress on the Track page.",
+        "/track",
+    )
 
 
 def mark_delivered(order: Order, confirmed_by: str) -> None:
     order.status = OrderStatus.DELIVERED
     order.delivered_at = datetime.now(UTC)
     order.delivery_confirmed_by = confirmed_by
+    notifications.notify(
+        order,
+        notifications.buyer_id(order),
+        notifications.ORDER_DELIVERED,
+        f"Order {notifications.order_ref(order)} was delivered",
+        "Enjoy your produce. You can now review the farm.",
+        notifications.order_link(order),
+    )
 
 
 def auto_confirm_delivered_orders(db: Session, days: int) -> int:
