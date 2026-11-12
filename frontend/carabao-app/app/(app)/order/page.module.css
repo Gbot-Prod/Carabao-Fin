@@ -461,3 +461,33 @@
     display: none;
   }
 }
+
+/* Shops / Produce switch (U2) */
+.viewTabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.viewTab {
+  padding: 6px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--bg-white);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.viewTab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.viewTabActive {
+  border-color: var(--green-600);
+  background: var(--green-600);
+  color: var(--bg-white);
+}

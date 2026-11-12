@@ -8,6 +8,7 @@ import styles from './page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import { fetchMerchants, fetchMerchantShopPage, fetchMyCart } from '@/util/api';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
+import ProduceResults from './ProduceResults';
 import { fmt, plural } from '@/lib/i18n/format';
 import type { Strings } from '@/lib/i18n/strings/en';
 
@@ -60,6 +61,8 @@ function OrderContent() {
   const [cartItemCount, setCartItemCount] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('recommended');
+  // U2: browse shops (client-side) or produce (server-side search).
+  const [view, setView] = useState<'shops' | 'produce'>('shops');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -200,6 +203,25 @@ function OrderContent() {
         </Link>
       </header>
 
+      <div className={styles.viewTabs} role="tablist">
+        {(['shops', 'produce'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="tab"
+            aria-selected={view === v}
+            className={`${styles.viewTab} ${view === v ? styles.viewTabActive : ''}`}
+            onClick={() => setView(v)}
+          >
+            {v === 'shops' ? t.produceSearch.tabShops : t.produceSearch.tabProduce}
+          </button>
+        ))}
+      </div>
+
+      {view === 'produce' ? (
+        <ProduceResults query={searchTerm} />
+      ) : (
+      <>
       <div className={styles.toolbar}>
         <div className={styles.activeFilters}>
           {Array.from(activeFilters).map((filter) => (
@@ -300,6 +322,8 @@ function OrderContent() {
             </Link>
           ))}
         </section>
+      )}
+      </>
       )}
     </div>
   );

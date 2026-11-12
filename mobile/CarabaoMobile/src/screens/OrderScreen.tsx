@@ -9,7 +9,7 @@ import { useRouter } from 'expo-router';
 import FarmCard from '../components/FarmCard';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
-import { api, merchantLocation, type ApiMerchant } from '../lib/api';
+import { api, merchantLocation, type ApiMerchant, type ApiProduceSearchResult } from '../lib/api';
 import { type Farm } from '../lib/mockData';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
@@ -40,6 +40,23 @@ function OrderScreenContent() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  // U2: produce matching the search box, from the server (debounced).
+  const [produceHits, setProduceHits] = useState<ApiProduceSearchResult[]>([]);
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) {
+      setProduceHits([]);
+      return;
+    }
+    let active = true;
+    const timer = setTimeout(() => {
+      api.search
+        .produce(token, q)
+        .then((res) => { if (active) setProduceHits(res.items); })
+        .catch(() => { if (active) setProduceHits([]); });
+    }, 300);
+    return () => { active = false; clearTimeout(timer); };
+  }, [search, token]);
 
   useEffect(() => {
     const load = async () => {
@@ -165,6 +182,34 @@ function OrderScreenContent() {
               />
             </View>
           )}
+          ListHeaderComponent={
+            produceHits.length > 0 ? (
+              <View style={styles.hits}>
+                <Text style={styles.hitsTitle}>Produce matching “{search.trim()}”</Text>
+                {produceHits.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={styles.hitRow}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/merchant',
+                        params: { farmId: String(p.merchant_id), farmName: p.merchant_name },
+                      })
+                    }
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.hitName}>{p.name ?? 'Produce'}</Text>
+                      <Text style={styles.hitMeta}>
+                        {p.merchant_name}{p.merchant_province ? ` · ${p.merchant_province}` : ''}
+                      </Text>
+                    </View>
+                    <Text style={styles.hitPrice}>₱{p.price.toLocaleString()}/{p.unit}</Text>
+                  </TouchableOpacity>
+                ))}
+                <Text style={styles.hitsTitle}>Farms</Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <Ionicons name="leaf-outline" size={48} color={Colors.textLight} />
@@ -203,6 +248,16 @@ const styles = StyleSheet.create({
   },
   cartBadgeText: { color: Colors.white, fontSize: 10, fontWeight: '800' },
 
+  hits: { width: '100%', marginBottom: Spacing.md, gap: Spacing.xs },
+  hitsTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.textMuted, marginTop: Spacing.sm },
+  hitRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    backgroundColor: Colors.white, borderRadius: Radius.md, padding: Spacing.md,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  hitName: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
+  hitMeta: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  hitPrice: { fontSize: FontSize.sm, fontWeight: '800', color: Colors.primary },
   searchWrap: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white,
     marginHorizontal: Spacing.lg, marginTop: Spacing.md,

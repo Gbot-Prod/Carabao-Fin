@@ -306,6 +306,15 @@ export type ApiMerchantOrder = {
   notes: string | null;
 };
 
+// GET /produce/search (U2).
+export type ApiProduceSearchResult = ApiProduce & {
+  merchant_name: string;
+  merchant_province: string | null;
+  merchant_city: string | null;
+};
+
+export type ApiPage<T> = { items: T[]; total: number; page: number; page_size: number };
+
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -370,6 +379,13 @@ export const api = {
   tracking: {
     forOrder: (token: string | null, orderId: number) =>
       request<ApiTracking>(`/tracking/${orderId}`, token),
+  },
+  search: {
+    produce: (token: string | null, q: string, pageSize = 10) =>
+      request<ApiPage<ApiProduceSearchResult>>(
+        `/produce/search?q=${encodeURIComponent(q)}&in_stock=true&page_size=${pageSize}`,
+        token,
+      ),
   },
   referencePrices: {
     list: (token: string | null) =>

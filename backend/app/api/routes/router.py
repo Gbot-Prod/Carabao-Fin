@@ -14,6 +14,7 @@ from .merchants import router as merchants_router
 from .misc import router as misc_router
 from .orders import router as orders_router
 from .payments import router as payments_router
+from .produce_search import router as produce_search_router
 from .reference_prices import router as reference_prices_router
 from .reviews import router as reviews_router
 from .shipments import router as shipments_router
@@ -24,6 +25,7 @@ from .users import router as users_router
 router = APIRouter()
 
 # Keep paths exactly the same by not using prefixes here.
+router.include_router(produce_search_router)
 router.include_router(admin_router)
 router.include_router(admin_orders_router)
 router.include_router(admin_audit_router)
