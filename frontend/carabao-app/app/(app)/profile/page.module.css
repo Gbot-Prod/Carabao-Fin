@@ -368,7 +368,7 @@
 
 .noData {
   font-style: italic;
-  color: #9aab9d;
+  color: var(--text-faint);
   font-size: 13px;
 }
 

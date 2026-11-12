@@ -101,7 +101,7 @@
 .formCard select:focus,
 .formCard textarea:focus {
   outline: none;
-  border-color: #079135;
+  border-color: #057a2d;
   box-shadow: var(--focus-ring);
 }
 
@@ -191,7 +191,7 @@
 
 .primaryButton {
   border: none;
-  background: #079135fa;
+  background: #057a2d;
   color: #ffffff;
   cursor: pointer;
 }

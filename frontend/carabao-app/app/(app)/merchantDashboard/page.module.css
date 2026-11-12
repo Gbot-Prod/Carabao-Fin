@@ -341,7 +341,7 @@
 
 .kpiSub {
   font-size: 11px;
-  color: #7a8f7a;
+  color: var(--text-faint);
   font-weight: 600;
 }
 
@@ -777,7 +777,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #7a8f7a;
+  color: var(--text-faint);
 }
 
 .shopDetailValue {
@@ -786,7 +786,7 @@
 }
 
 .shopDetailValue em {
-  color: #aabdaa;
+  color: var(--text-faint);
   font-style: normal;
 }
 
@@ -940,7 +940,7 @@
 
 .orderDate {
   font-size: 12px;
-  color: #7a8f7a;
+  color: var(--text-faint);
   font-weight: 600;
 }
 

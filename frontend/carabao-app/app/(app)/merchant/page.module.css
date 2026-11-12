@@ -69,7 +69,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6b806b;
+  color: var(--text-faint);
 }
 
 .ownerRow dd {
@@ -114,7 +114,7 @@
 
 .label {
   font-size: 0.85rem;
-  color: #6b7d6b;
+  color: var(--text-faint);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;

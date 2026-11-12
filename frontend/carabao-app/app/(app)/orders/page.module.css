@@ -176,7 +176,7 @@
 
 .badgeCancelled {
   background: #fee2e2;
-  color: #dc2626;
+  color: #b91c1c;
 }
 
 .cardMeta {
@@ -202,7 +202,7 @@
   padding: 0.5rem 1rem;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  background-color: #0a8b3a;
+  background-color: #057a2d;
   color: #fff;
   font-size: 0.85rem;
   font-weight: 600;
@@ -222,7 +222,7 @@
 .deleteBtn {
   background: none;
   border: none;
-  color: #dc2626;
+  color: #b91c1c;
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -301,7 +301,7 @@
 .browseLink {
   margin-top: 0.5rem;
   padding: 0.6rem 1.25rem;
-  background-color: #0a8b3a;
+  background-color: #057a2d;
   color: #fff;
   border-radius: var(--radius-sm);
   font-weight: 600;
@@ -314,9 +314,9 @@
 .receivedBtn {
   padding: 0.5rem 1rem;
   border-radius: var(--radius-sm);
-  border: 1px solid #0a8b3a;
+  border: 1px solid #057a2d;
   background: none;
-  color: #0a8b3a;
+  color: #057a2d;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
@@ -330,7 +330,7 @@
 
 .confirmReceivedYes {
   padding: 0.3rem 0.75rem;
-  background: #0a8b3a;
+  background: #057a2d;
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
@@ -347,7 +347,7 @@
 .confirmError {
   margin: 0;
   font-size: 0.8rem;
-  color: #dc2626;
+  color: #b91c1c;
 }
 
 /* ── Expandable order details ─────────────────────────────────────────────── */

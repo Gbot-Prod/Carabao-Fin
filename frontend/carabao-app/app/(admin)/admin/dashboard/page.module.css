@@ -172,7 +172,7 @@
 
 .emptyText {
   font-size: 13px;
-  color: #b0bdb3;
+  color: var(--text-faint);
   margin: 0;
 }
 
