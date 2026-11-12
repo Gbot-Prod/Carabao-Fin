@@ -1,3 +1,0 @@
-Method,Name,Error,Occurrences,First Seen,Last Seen
-PUT,PUT /carts/me,CatchResponseError('HTTP 500'),1,2026-11-03T02:50:11Z,2026-11-03T02:50:11Z
-POST,POST /auth/mobile/sign-in,CatchResponseError('HTTP 500'),1,2026-11-03T02:50:11Z,2026-11-03T02:50:11Z

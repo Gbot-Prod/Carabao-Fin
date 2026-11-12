@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
+import { formatRequestedDate } from '@/app/(app)/merchantDashboard/lib/format';
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
 
 export default function MerchantDetailPage() {
@@ -75,7 +76,8 @@ export default function MerchantDetailPage() {
                 farm: merchant?.merchant_name ?? '',
                 produce: produce.name ?? 'Item',
                 unit: produce.unit,
-                quantity: 1,
+                // A first add starts at the listing's minimum order.
+                quantity: produce.min_order_qty,
                 price: produce.price,
                 stock_quantity: produce.stock_quantity,
               },
@@ -192,6 +194,20 @@ export default function MerchantDetailPage() {
                   <div className={styles.productBody}>
                     <h3>{produce.name ?? 'Unnamed Produce'}</h3>
                     {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
+                    <p className={styles.freshness}>
+                      {produce.harvest_date
+                        ? `Harvested ${formatRequestedDate(produce.harvest_date)}`
+                        : 'Harvest date not set'}
+                      {produce.best_before && ` · Best before ${formatRequestedDate(produce.best_before)}`}
+                    </p>
+                    {produce.min_order_qty > 1 && (
+                      <p className={styles.freshness}>Minimum order: {produce.min_order_qty}</p>
+                    )}
+                    {produce.price_tiers.length > 0 && (
+                      <p className={styles.freshness}>
+                        Bulk: {produce.price_tiers.map((t) => `${t.min_qty}+ at ₱${t.unit_price}`).join(' · ')}
+                      </p>
+                    )}
                     <p className={styles.price}>₱{produce.price} / {produce.unit_quantity && produce.unit_quantity !== 1 ? produce.unit_quantity : ""}{produce.unit}</p>
                     <button
                       className={styles.addBtn}

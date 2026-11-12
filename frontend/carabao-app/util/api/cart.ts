@@ -8,6 +8,8 @@ export type CartItem = {
   quantity: number;
   price: number;
   stock_quantity?: number;
+  // Set by the server when the cart is saved.
+  min_order_qty?: number;
 };
 
 export type Cart = {

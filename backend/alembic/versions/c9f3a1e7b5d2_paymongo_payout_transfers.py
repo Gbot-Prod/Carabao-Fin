@@ -6,7 +6,7 @@ merchant_payout_info.bank_code now holds a PayMongo institution code (BIC);
 rows saved before this hold free text and must be re-picked by the merchant.
 
 Revision ID: c9f3a1e7b5d2
-Revises: b8e4f2a6c1d3
+Revises: d4f8b2c6e1a9
 Create Date: 2026-11-12
 """
 
@@ -18,7 +18,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "c9f3a1e7b5d2"
-down_revision: str | Sequence[str] | None = "b8e4f2a6c1d3"
+down_revision: str | Sequence[str] | None = "d4f8b2c6e1a9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, Column, Date, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -19,5 +19,13 @@ class Produce(Base):
     unit_quantity = Column(Float, nullable=False, default=1.0)
     stock_quantity = Column(Integer, nullable=False, default=0)
     image_url = Column(String, nullable=True)
+    # NULL on listings created before these were collected.
+    harvest_date = Column(Date, nullable=True)
+    best_before = Column(Date, nullable=True, index=True)
+    # In sale units (see unit_quantity), the same count a buyer puts in the cart.
+    min_order_qty = Column(Integer, nullable=False, default=1)
+    # [{"min_qty": int, "unit_price": int}], lowest min_qty first; see
+    # services/produce_pricing.py.
+    price_tiers = Column(JSON, nullable=False, default=list)
 
     merchant = relationship("Merchant", back_populates="produces")

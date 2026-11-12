@@ -15,6 +15,7 @@ type CartItem = {
   quantity: number;
   price: number;
   stock_quantity?: number;
+  min_order_qty?: number;
 };
 
 export default function CartPage() {
@@ -35,6 +36,7 @@ export default function CartPage() {
               unit: item.unit,
               quantity: Number(item.quantity) || 0,
               price: Number(item.price) || 0,
+              min_order_qty: item.min_order_qty,
             })),
           );
         }
@@ -60,7 +62,21 @@ export default function CartPage() {
 
     const persistCart = async () => {
       try {
-        await replaceMyCart(items);
+        const saved = await replaceMyCart(items);
+        // The server sets each line's price (bulk tiers) and minimum order.
+        const fromServer = new Map(saved.items.map((i) => [String(i.id), i]));
+        const changed = items.some((item) => {
+          const s = fromServer.get(item.id);
+          return s !== undefined && (Number(s.price) !== item.price || s.min_order_qty !== item.min_order_qty);
+        });
+        if (changed) {
+          setItems((prev) =>
+            prev.map((item) => {
+              const s = fromServer.get(item.id);
+              return s ? { ...item, price: Number(s.price) || 0, min_order_qty: s.min_order_qty } : item;
+            }),
+          );
+        }
       } catch {
         // Keep UI responsive even when save fails.
       }
@@ -81,6 +97,7 @@ export default function CartPage() {
     setItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
+        if (nextQuantity < (item.min_order_qty ?? 1)) return item;
         const max = item.stock_quantity ?? Infinity;
         return { ...item, quantity: Math.min(nextQuantity, max) };
       }),
@@ -128,6 +145,7 @@ export default function CartPage() {
                         type="button"
                         onClick={() => updateQuantity(item.id, item.quantity - 1)}
                         aria-label={`Decrease quantity for ${item.produce}`}
+                        disabled={item.quantity <= (item.min_order_qty ?? 1)}
                       >
                         -
                       </button>
@@ -141,6 +159,9 @@ export default function CartPage() {
                         +
                       </button>
                     </div>
+                    {(item.min_order_qty ?? 1) > 1 && (
+                      <p className={styles.priceLine}>Min. order {item.min_order_qty}</p>
+                    )}
 
                     <p className={styles.lineTotal}>
                       PHP {(item.quantity * item.price).toFixed(2)}

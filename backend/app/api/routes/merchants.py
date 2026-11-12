@@ -64,6 +64,8 @@ from app.services.payout_service import (
     payout_info_problem,
     transfer_fee,
 )
+from app.services.produce_freshness import freshness_error, is_listed, ph_today
+from app.services.produce_pricing import parse_tiers, pricing_error, serialize_tiers
 from app.services.sms_service import notify_order_shipped
 from app.utils.geocoding import _geocode
 
@@ -238,7 +240,10 @@ def list_merchants(db: Session = Depends(get_db)):
     return (
         db.query(Merchant)
         # MerchantResponse includes both; without this each merchant costs 2 queries.
-        .options(selectinload(Merchant.shop_page), selectinload(Merchant.produces))
+        .options(
+            selectinload(Merchant.shop_page),
+            selectinload(Merchant.produces.and_(is_listed(ph_today()))),
+        )
         .outerjoin(MerchantApplication, MerchantApplication.user_id == Merchant.user_id)
         .filter(
             Merchant.deleted_at.is_(None),
@@ -256,7 +261,10 @@ def list_merchants(db: Session = Depends(get_db)):
 def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
     merchant = (
         db.query(Merchant)
-        .options(selectinload(Merchant.user))
+        .options(
+            selectinload(Merchant.user),
+            selectinload(Merchant.produces.and_(is_listed(ph_today()))),
+        )
         .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
         .first()
     )
@@ -386,8 +394,26 @@ def get_my_merchant_performance(
 # ---------------------------------------------------------------------------
 
 
+@router.get("/merchants/me/produce", response_model=list[ProduceResponse])
+def list_my_produce(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Every listing of the current merchant, expired ones included."""
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    return (
+        db.query(Produce)
+        .filter(Produce.merchant_id == merchant.id)
+        .order_by(Produce.id)
+        .all()
+    )
+
+
 @router.get("/merchants/{merchant_id}/produce", response_model=list[ProduceResponse])
 def list_merchant_produce(merchant_id: int, db: Session = Depends(get_db)):
+    """The listings buyers can see: expired produce is left out."""
     merchant = (
         db.query(Merchant)
         .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
@@ -395,7 +421,12 @@ def list_merchant_produce(merchant_id: int, db: Session = Depends(get_db)):
     )
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
-    return merchant.produces
+    return (
+        db.query(Produce)
+        .filter(Produce.merchant_id == merchant.id, is_listed(ph_today()))
+        .order_by(Produce.id)
+        .all()
+    )
 
 
 @router.post("/produce/", response_model=ProduceResponse)
@@ -408,7 +439,18 @@ def create_produce(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    produce = Produce(merchant_id=merchant.id, **produce_in.model_dump())
+    error = freshness_error(produce_in.harvest_date, produce_in.best_before)
+    error = error or pricing_error(
+        produce_in.price, produce_in.min_order_qty, produce_in.price_tiers
+    )
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    produce = Produce(
+        merchant_id=merchant.id,
+        **produce_in.model_dump(exclude={"price_tiers"}),
+        price_tiers=serialize_tiers(produce_in.price_tiers),
+    )
     db.add(produce)
     db.commit()
     db.refresh(produce)
@@ -434,8 +476,23 @@ def update_produce(
     if not produce:
         raise HTTPException(status_code=404, detail="Produce item not found")
 
-    for field, value in produce_update.model_dump(exclude_unset=True).items():
+    changes = produce_update.model_dump(exclude_unset=True, exclude={"price_tiers"})
+    for field, value in changes.items():
         setattr(produce, field, value)
+    tiers = (
+        produce_update.price_tiers
+        if "price_tiers" in produce_update.model_fields_set
+        else parse_tiers(produce.price_tiers)
+    )
+    produce.price_tiers = serialize_tiers(tiers)
+
+    # An edited listing must carry valid dates, including one created before
+    # they were collected, and tiers that still fit its price.
+    error = freshness_error(produce.harvest_date, produce.best_before)
+    error = error or pricing_error(produce.price, produce.min_order_qty, tiers)
+    if error:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=error)
 
     db.commit()
     db.refresh(produce)

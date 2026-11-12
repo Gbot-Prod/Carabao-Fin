@@ -33,6 +33,8 @@ from app.services.order_status import (
     mark_delivered,
     money_received_clause,
 )
+from app.services.produce_freshness import is_expired, ph_today
+from app.services.produce_pricing import unit_price_for
 from app.services.review_service import (
     can_review,
     review_deadline,
@@ -73,6 +75,7 @@ def place_order_from_cart(
             status_code=400, detail="Delivery date cannot be in the past"
         )
 
+    today = ph_today()
     history = get_or_create_order_history(db, current_user.id)
     # Lock stock rows in id order so two carts sharing items can't deadlock.
     locked_produce = {
@@ -109,10 +112,23 @@ def place_order_from_cart(
             raise HTTPException(
                 status_code=400, detail=f"Produce ID {produce_id} not found"
             )
+        if is_expired(produce, today):
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{produce.name}' is past its best-before date",
+            )
 
         quantity = max(_to_int(item.get("quantity"), 0), 0)
         if quantity == 0:
             raise HTTPException(status_code=400, detail="Item quantity must be positive")
+        if quantity < produce.min_order_qty:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"'{produce.name}' has a minimum order of "
+                    f"{produce.min_order_qty}, {quantity} requested"
+                ),
+            )
         if produce.stock_quantity < quantity:
             raise HTTPException(
                 status_code=400,
@@ -124,8 +140,9 @@ def place_order_from_cart(
 
         produce_by_id[produce_id] = produce
         produce.stock_quantity -= quantity
-        fresh_total += produce.price * quantity
-        order_items.append({**item, "price": produce.price})
+        unit_price = unit_price_for(produce, quantity)
+        fresh_total += unit_price * quantity
+        order_items.append({**item, "price": unit_price})
 
     merchant_ids = {produce.merchant_id for produce in produce_by_id.values()}
     if len(merchant_ids) != 1:

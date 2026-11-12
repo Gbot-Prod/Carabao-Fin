@@ -1,3 +1,0 @@
-version,trials_n,failed,p50_ms,p95_ms,max_ms,target_p95_ms,target_met
-before_fix,30,0,21.7,31.8,33.1,1000,Yes
-after_fix,30,0,20.8,27.0,34.2,1000,Yes

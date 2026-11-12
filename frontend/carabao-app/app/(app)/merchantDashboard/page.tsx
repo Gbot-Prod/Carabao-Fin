@@ -7,7 +7,7 @@ import PageLoader from "@/components/PageLoader/PageLoader";
 import {
   fetchMyMerchantPerformance,
   fetchMerchantById,
-  fetchMerchantProduce,
+  fetchMyProduce,
   fetchMerchantShopPage,
   type Merchant,
   type MerchantPerformance,
@@ -69,7 +69,7 @@ export default function MerchantDashboardPage() {
       setProduceLoading(true);
       try {
         const [produceRes, shopPageRes, merchantRes] = await Promise.allSettled([
-          fetchMerchantProduce(merchantId),
+          fetchMyProduce(),
           fetchMerchantShopPage(merchantId),
           fetchMerchantById(merchantId),
         ]);

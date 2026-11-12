@@ -1,9 +1,0 @@
-version,concurrent_users,requests_measured,requests_per_second,p50_ms,p95_ms,max_ms,errors,error_rate_percent,connection_pool_timeouts,target_p95_ms,target_error_rate_percent,target_met
-before_fix,1,93,1.55,7.7,170.9,172.2,0,0.0,0,2000,1.0,Yes
-before_fix,10,785,13.08,17.9,285.0,948.8,0,0.0,0,2000,1.0,Yes
-before_fix,25,233,3.88,202.5,30384.9,31324.1,2,0.86,2,2000,1.0,No
-before_fix,50,10,0.17,45813.3,61486.2,61563.3,0,0.0,0,2000,1.0,"No (slow, low n)"
-after_fix,1,81,1.35,6.1,171.8,175.4,0,0.0,0,2000,1.0,Yes
-after_fix,10,811,13.52,7.4,170.6,184.5,0,0.0,0,2000,1.0,Yes
-after_fix,25,2027,33.78,7.4,170.4,236.9,0,0.0,0,2000,1.0,Yes
-after_fix,50,3829,63.82,14.2,335.3,840.3,0,0.0,0,2000,1.0,Yes
