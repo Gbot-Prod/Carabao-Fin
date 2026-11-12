@@ -73,6 +73,9 @@ class PlaceOrderRequest(BaseModel):
     # The region picked at checkout (web). When absent, delivery_address is checked
     # for a Luzon province or Metro Manila city instead (B2).
     delivery_region: str | None = Field(default=None, max_length=100)
+    # Map pin for the delivery address (U1), optional.
+    delivery_lat: float | None = None
+    delivery_lng: float | None = None
     payment_method: str | None = None
     notes: str | None = Field(default=None, max_length=500)
     service_fee: int = 40

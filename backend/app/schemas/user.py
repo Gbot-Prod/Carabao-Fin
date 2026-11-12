@@ -15,6 +15,9 @@ class UserBase(BaseModel):
     barangay: str | None = None
     address: str | None = None
     postal_code: str | None = None
+    # Map pin for the address (U1).
+    lat: float | None = None
+    lng: float | None = None
     created_at: datetime | None = None
     profile_picture_url: str | None = None
     notifications_preferences: dict | None = None
@@ -39,6 +42,9 @@ class UserUpdate(BaseModel):
     barangay: str | None = None
     address: str | None = None
     postal_code: str | None = None
+    # Map pin for the address (U1).
+    lat: float | None = None
+    lng: float | None = None
     notifications_preferences: dict | None = None
 
 

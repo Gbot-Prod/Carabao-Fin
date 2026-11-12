@@ -35,6 +35,9 @@ class Merchant(Base):
     barangay = Column(String, nullable=True, index=True)
     address = Column(String, nullable=False, index=True)
     postal_code = Column(String, nullable=False, index=True)
+    # Map pin (U1).
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
 
     available_days = Column(JSON, nullable=False, default=list)
     operating_hours = Column(JSON, nullable=False)

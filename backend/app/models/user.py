@@ -3,6 +3,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -43,6 +44,9 @@ class User(Base):
     barangay = Column(String, index=True, nullable=True)
     address = Column(String, index=True, nullable=True)
     postal_code = Column(String, index=True, nullable=True)
+    # Map pin for the saved address (U1); routing prefers it over geocoding.
+    lat = Column(Float, nullable=True)
+    lng = Column(Float, nullable=True)
     notifications_preferences = Column(JSON, nullable=False, default=dict)
 
     profile_picture_url = Column(String, nullable=True)

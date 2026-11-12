@@ -34,6 +34,7 @@ from app.services.order_status import (
     mark_delivered,
     money_received_clause,
 )
+from app.services.pinned_location import validate_pin
 from app.services.produce_freshness import is_expired, ph_today
 from app.services.produce_pricing import unit_price_for
 from app.services.review_service import (
@@ -77,6 +78,7 @@ def place_order_from_cart(
             raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
     elif payload.delivery_address and not address_in_luzon(payload.delivery_address):
         raise HTTPException(status_code=400, detail=DELIVERY_OUTSIDE_LUZON_DETAIL)
+    delivery_pin = validate_pin(payload.delivery_lat, payload.delivery_lng)
 
     # Release any elapsed checkout holds before checking availability.
     expire_stale_reservations(db, reservation_ttl_minutes())
@@ -196,6 +198,8 @@ def place_order_from_cart(
             total_price=subtotal_by_merchant[merchant_id] + service_fee,
             items=items_by_merchant[merchant_id],
             delivery_address=payload.delivery_address,
+            delivery_lat=delivery_pin[0] if delivery_pin else None,
+            delivery_lng=delivery_pin[1] if delivery_pin else None,
             requested_delivery_date=payload.delivery_date,
             delivery_window=(payload.delivery_time or "").strip() or None,
             notes=(payload.notes or "").strip() or None,

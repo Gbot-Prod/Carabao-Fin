@@ -65,6 +65,7 @@ from app.services.payout_service import (
     payout_info_problem,
     transfer_fee,
 )
+from app.services.pinned_location import delivery_point, merchant_point, validate_pin
 from app.services.produce_freshness import freshness_error, is_listed, ph_today
 from app.services.produce_pricing import parse_tiers, pricing_error, serialize_tiers
 from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
@@ -142,7 +143,7 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
                 parts = [p for p in [user.address, user.city] if p]
                 delivery_address = ", ".join(parts) if parts else None
 
-    if not delivery_address:
+    if not delivery_address and order.delivery_lat is None:
         print(
             f"[route] Skipping route computation for order {
                 order.id
@@ -150,8 +151,10 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
         )
         return
 
-    origin_coords = _geocode(merchant_address)
-    dest_coords = _geocode(delivery_address)
+    # Saved map pins first (U1); geocode the address text only without one.
+    origin_coords = merchant_point(order.merchant, merchant_address, _geocode)
+    buyer = order.order_history.user if order.order_history else None
+    dest_coords = delivery_point(order, buyer, delivery_address, _geocode)
 
     if not origin_coords:
         print(
@@ -296,6 +299,8 @@ def update_my_merchant(
     updates = merchant_update.model_dump(exclude_unset=True)
     if "region" in updates and not is_luzon_region(updates["region"]):
         raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
+    if "lat" in updates or "lng" in updates:
+        validate_pin(updates.get("lat", merchant.lat), updates.get("lng", merchant.lng))
     for field, value in updates.items():
         setattr(merchant, field, value)
 

@@ -29,6 +29,9 @@ class MerchantOnboardingPayload(BaseModel):
     barangay: str = Field(min_length=1)
     address: str = Field(min_length=1)
     postal_code: str = Field(min_length=1)
+    # Map pin for the farm (U1), optional.
+    lat: float | None = None
+    lng: float | None = None
     delivery_time: int = Field(ge=0)
     delivery_price: int = Field(ge=0)
     price_range_min: int = Field(ge=0)

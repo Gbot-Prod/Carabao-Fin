@@ -18,6 +18,7 @@ from app.schemas.merchant_application import (
 from app.services import r2_service
 from app.services.merchant_service import get_active_merchant
 from app.services.phone_verification import normalize_ph_mobile, read_token
+from app.services.pinned_location import validate_pin
 from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
 
 router = APIRouter(tags=["merchant-onboarding"])
@@ -56,6 +57,7 @@ def submit_my_merchant_onboarding_route(
 
     if not is_luzon_region(data.region):
         raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
+    validate_pin(data.lat, data.lng)
 
     verified = read_token(data.phone_verification_token)
     if (
@@ -129,6 +131,8 @@ def submit_my_merchant_onboarding_route(
     application.barangay = data.barangay
     application.address = data.address
     application.postal_code = data.postal_code
+    application.lat = data.lat
+    application.lng = data.lng
     application.price_range_min = int(data.price_range_min)
     application.price_range_max = int(data.price_range_max)
     application.available_days = data.available_days
