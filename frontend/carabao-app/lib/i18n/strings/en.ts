@@ -341,9 +341,14 @@ const en = {
     sending: 'Sending…',
     sendError: "Couldn't send. Please try again.",
     you: 'You',
-    roles: { buyer: 'Buyer', merchant: 'Farm', admin: 'Carabao support' },
+    roles: { buyer: 'Buyer', merchant: 'Farm', admin: 'Carabao support', user: 'Customer' },
     closed: 'This chat closed 7 days after delivery. Contact Carabao support for help.',
     closesOn: 'This chat closes on {date}.',
+  },
+  support: {
+    setting: 'Contact support',
+    title: 'Chat with Carabao support',
+    empty: 'No messages yet. Tell us what went wrong and an admin will reply here.',
   },
 };
 

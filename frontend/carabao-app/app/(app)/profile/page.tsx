@@ -13,6 +13,8 @@ import MapPinPicker from '@/components/MapPinPicker/MapPinPicker';
 import type { Pin } from '@/util/reverseGeocode';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import TwoFactorSettings from '@/components/TwoFactorSettings/TwoFactorSettings';
+import OrderChat from '@/components/OrderChat/OrderChat';
+import { useLanguage } from '@/lib/i18n/LanguageProvider';
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 function UserAvatar({ pictureUrl, uploading, onUpload }: {
@@ -387,6 +389,30 @@ function profileToForm(p: UserProfile): EditForm {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
+// CH2: the user's own support conversation with the admins.
+function SupportPanel() {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={styles.settingCard}>
+      <button
+        type="button"
+        className={styles.settingHeader}
+        style={{ width: '100%', background: 'none', border: 0, cursor: 'pointer', textAlign: 'left' }}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span className={styles.settingLabel}>💬 {t.support.setting}</span>
+      </button>
+      {open && (
+        <div className={styles.settingDetails}>
+          <OrderChat endpoint="/support/messages" title={t.support.title} emptyText={t.support.empty} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Profile() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -600,6 +626,8 @@ export default function Profile() {
                 <NotificationsPanel profile={profile} onSaved={setProfile} />
               </div>
             </div>
+
+            <SupportPanel />
           </div>
         </section>
       </main>

@@ -350,9 +350,14 @@ const fil: Strings = {
     sending: 'Ipinapadala…',
     sendError: 'Hindi naipadala. Pakisubukang muli.',
     you: 'Ikaw',
-    roles: { buyer: 'Mamimili', merchant: 'Bukid', admin: 'Carabao support' },
+    roles: { buyer: 'Mamimili', merchant: 'Bukid', admin: 'Carabao support', user: 'Customer' },
     closed: 'Nagsara ang chat na ito 7 araw matapos ang delivery. Makipag-ugnayan sa Carabao support para sa tulong.',
     closesOn: 'Magsasara ang chat na ito sa {date}.',
+  },
+  support: {
+    setting: 'Makipag-ugnayan sa support',
+    title: 'Makipag-chat sa Carabao support',
+    empty: 'Wala pang mensahe. Sabihin kung ano ang problema at sasagot dito ang isang admin.',
   },
 };
 

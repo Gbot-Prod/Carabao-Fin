@@ -1,6 +1,7 @@
 // src/screens/OrderChatScreen.tsx
 // Order chat on mobile (CH1c): same thread as the web. Polls every 10 seconds
-// while this screen is open.
+// while this screen is open. With `support=1` it shows the user's support
+// chat with the admins instead (CH2).
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
@@ -13,12 +14,17 @@ import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 
 const POLL_MS = 10_000;
-const ROLE_LABEL: Record<string, string> = { buyer: 'Buyer', merchant: 'Farm', admin: 'Carabao support' };
+const ROLE_LABEL: Record<string, string> = { buyer: 'Buyer', merchant: 'Farm', admin: 'Carabao support', user: 'You' };
 
 function OrderChatContent() {
   const router = useRouter();
   const { token } = useAuth();
-  const { orderId, title } = useLocalSearchParams<{ orderId?: string; title?: string }>();
+  const { orderId, title, support } = useLocalSearchParams<{
+    orderId?: string;
+    title?: string;
+    support?: string;
+  }>();
+  const isSupport = support === '1';
   const id = Number(orderId);
   const [messages, setMessages] = useState<ApiChatMessage[]>([]);
   const [closed, setClosed] = useState(false);
@@ -30,9 +36,11 @@ function OrderChatContent() {
   const listRef = useRef<FlatList<ApiChatMessage>>(null);
 
   const poll = useCallback(async () => {
-    if (!token || !Number.isFinite(id)) return;
+    if (!token || (!isSupport && !Number.isFinite(id))) return;
     try {
-      const thread = await api.chat.thread(token, id, lastId.current);
+      const thread = isSupport
+        ? await api.support.thread(token, lastId.current)
+        : await api.chat.thread(token, id, lastId.current);
       if (thread.messages.length) {
         lastId.current = thread.messages[thread.messages.length - 1].id;
         setMessages((prev) => [...prev, ...thread.messages.filter((m) => !prev.some((p) => p.id === m.id))]);
@@ -44,7 +52,7 @@ function OrderChatContent() {
     } finally {
       setLoaded(true);
     }
-  }, [token, id]);
+  }, [token, id, isSupport]);
 
   useEffect(() => {
     void poll();
@@ -57,7 +65,9 @@ function OrderChatContent() {
     if (!body || !token) return;
     setSending(true);
     try {
-      const message = await api.chat.send(token, id, body);
+      const message = isSupport
+        ? await api.support.send(token, body)
+        : await api.chat.send(token, id, body);
       lastId.current = Math.max(lastId.current, message.id);
       setMessages((prev) => [...prev, message]);
       setDraft('');
@@ -75,7 +85,7 @@ function OrderChatContent() {
         <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Back">
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.navTitle} numberOfLines={1}>{title ?? `Order #${orderId}`}</Text>
+        <Text style={styles.navTitle} numberOfLines={1}>{title ?? (isSupport ? 'Carabao support' : `Order #${orderId}`)}</Text>
         <View style={{ width: 22 }} />
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

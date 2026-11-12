@@ -8,17 +8,30 @@ import { fmt } from "@/lib/i18n/format";
 import styles from "./OrderChat.module.css";
 
 type Message = { id: number; sender_role: string; mine: boolean; body: string; created_at: string };
-type Thread = { order_id: number; my_role: string; closed: boolean; closes_at: string | null; messages: Message[] };
+type Thread = { my_role: string; closed: boolean; closes_at: string | null; messages: Message[] };
 
 const POLL_MS = 10_000;
 
 /**
  * Order chat (CH1b) between the buyer and the farm; admins can read and join.
+ * Also used for support chat (CH2) by passing `endpoint` (same message API shape).
  * Polls every 10 seconds while mounted (i.e. while the chat is open).
  */
-export default function OrderChat({ orderId }: { orderId: number }) {
+export default function OrderChat({
+  orderId,
+  endpoint,
+  title,
+  emptyText,
+}: {
+  orderId?: number;
+  endpoint?: string;
+  title?: string;
+  emptyText?: string;
+}) {
   const { t } = useLanguage();
   const c = t.chat;
+  const url = endpoint ?? `/orders/${orderId}/messages`;
+  const inputId = `chat-${url.replace(/[^a-z0-9]+/gi, "-")}`;
   const [messages, setMessages] = useState<Message[]>([]);
   const [closed, setClosed] = useState(false);
   const [closesAt, setClosesAt] = useState<string | null>(null);
@@ -31,7 +44,7 @@ export default function OrderChat({ orderId }: { orderId: number }) {
 
   const poll = useCallback(async () => {
     try {
-      const res = await apiClient.get<Thread>(`/orders/${orderId}/messages`, {
+      const res = await apiClient.get<Thread>(url, {
         params: { after_id: lastId.current },
       });
       const fresh = res.data.messages;
@@ -46,7 +59,7 @@ export default function OrderChat({ orderId }: { orderId: number }) {
     } finally {
       setLoaded(true);
     }
-  }, [orderId]);
+  }, [url]);
 
   useEffect(() => {
     lastId.current = 0;
@@ -72,7 +85,7 @@ export default function OrderChat({ orderId }: { orderId: number }) {
     setSending(true);
     setError(null);
     try {
-      const res = await apiClient.post<Message>(`/orders/${orderId}/messages`, { body });
+      const res = await apiClient.post<Message>(url, { body });
       lastId.current = Math.max(lastId.current, res.data.id);
       setMessages((prev) => [...prev, res.data]);
       setDraft("");
@@ -86,12 +99,12 @@ export default function OrderChat({ orderId }: { orderId: number }) {
   const who = (role: string) => c.roles[role as keyof typeof c.roles] ?? role;
 
   return (
-    <section className={styles.chat} aria-label={c.title}>
-      <h3 className={styles.title}>{c.title}</h3>
+    <section className={styles.chat} aria-label={title ?? c.title}>
+      <h3 className={styles.title}>{title ?? c.title}</h3>
       {!loaded ? (
         <p className={styles.note}>{c.loading}</p>
       ) : messages.length === 0 ? (
-        <p className={styles.note}>{c.empty}</p>
+        <p className={styles.note}>{emptyText ?? c.empty}</p>
       ) : (
         <ol className={styles.list} ref={listRef} aria-live="polite">
           {messages.map((m) => (
@@ -109,9 +122,9 @@ export default function OrderChat({ orderId }: { orderId: number }) {
         <p className={styles.note}>{c.closed}</p>
       ) : (
         <form className={styles.form} onSubmit={send}>
-          <label className={styles.srOnly} htmlFor={`chat-${orderId}`}>{c.placeholder}</label>
+          <label className={styles.srOnly} htmlFor={inputId}>{c.placeholder}</label>
           <textarea
-            id={`chat-${orderId}`}
+            id={inputId}
             rows={2}
             maxLength={2000}
             value={draft}

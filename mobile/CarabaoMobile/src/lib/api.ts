@@ -336,7 +336,7 @@ export type ApiChatMessage = {
 };
 
 export type ApiChatThread = {
-  order_id: number;
+  order_id?: number;
   my_role: string;
   closed: boolean;
   closes_at: string | null;
@@ -414,6 +414,16 @@ export const api = {
         `/produce/search?q=${encodeURIComponent(q)}&in_stock=true&page_size=${pageSize}`,
         token,
       ),
+  },
+  // Support chat (CH2): the user's own conversation with the admins.
+  support: {
+    thread: (token: string | null, afterId = 0) =>
+      request<ApiChatThread>(`/support/messages?after_id=${afterId}`, token),
+    send: (token: string | null, body: string) =>
+      request<ApiChatMessage>('/support/messages', token, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      }),
   },
   chat: {
     thread: (token: string | null, orderId: number, afterId = 0) =>
