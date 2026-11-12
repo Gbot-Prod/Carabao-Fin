@@ -269,6 +269,29 @@ export type ApiTracking = {
   tracking_state: 'estimated' | 'waiting_for_shipment';
 };
 
+export type MerchantOrderStatus =
+  | 'pending' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
+
+// Mirrors backend MerchantOrderResponse (app/schemas/payout.py). Merchants only
+// receive orders a payment has landed on.
+export type ApiMerchantOrder = {
+  id: number;
+  status: MerchantOrderStatus;
+  payment_status: 'awaiting_payment' | 'paid' | 'refund_pending' | 'refunded' | 'unpaid';
+  total_price: number;
+  items: { name?: string; produce_name?: string; quantity?: number; price?: number }[];
+  delivery_address: string | null;
+  ordered_at: string;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  buyer_phone: string | null;
+  shipped: boolean;
+  time_of_arrival: string | null;
+  requested_delivery_date: string | null;
+  delivery_window: string | null;
+  notes: string | null;
+};
+
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -279,6 +302,16 @@ export const api = {
       request<ApiMerchant>(`/merchants/${id}`, token),
     produce: (id: number, token: string | null) =>
       request<ApiProduce[]>(`/merchants/${id}/produce`, token),
+    // The merchant's own listings, including expired and admin-hidden ones.
+    myProduce: (token: string | null) =>
+      request<ApiProduce[]>('/merchants/me/produce', token),
+    myOrders: (token: string | null) =>
+      request<ApiMerchantOrder[]>('/merchants/me/orders', token),
+    updateOrderStatus: (token: string | null, orderId: number, status: MerchantOrderStatus) =>
+      request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/status`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
   },
   cart: {
     get: (token: string | null) =>

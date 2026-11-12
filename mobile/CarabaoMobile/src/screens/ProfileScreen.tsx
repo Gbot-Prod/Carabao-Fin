@@ -137,6 +137,16 @@ function ProfileScreenContent() {
         </TouchableOpacity>
 
         <View style={styles.sections}>
+          {isMerchant ? (
+            <>
+              <SectionHeader title="My shop" />
+              <View style={styles.settingsGroup}>
+                <SettingItem icon="receipt-outline" label="Incoming orders" onPress={() => router.push('/merchant-orders')} />
+                <SettingItem icon="leaf-outline" label="My listings" onPress={() => router.push('/listings')} />
+              </View>
+            </>
+          ) : null}
+
           {/* Account */}
           <SectionHeader title="Account" />
           <View style={styles.settingsGroup}>

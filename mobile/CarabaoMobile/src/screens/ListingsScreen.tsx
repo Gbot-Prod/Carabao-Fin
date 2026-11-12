@@ -1,6 +1,7 @@
 // src/screens/ListingsScreen.tsx
 // Merchant's own produce listings. Uses the same endpoints as the web
-// merchant dashboard: /users/me to find the merchant, then /merchants/{id}/produce.
+// merchant dashboard: /users/me to find the merchant, then /merchants/me/produce
+// (which, unlike the public list, includes expired and admin-hidden listings).
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, FlatList, StyleSheet, SafeAreaView,
@@ -90,7 +91,7 @@ function ListingsScreenContent() {
         return;
       }
       setMerchantName(profile.merchant.merchant_name);
-      setItems(await api.merchants.produce(profile.merchant.id, token));
+      setItems(await api.merchants.myProduce(token));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load your listings');
     }
