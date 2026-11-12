@@ -135,6 +135,7 @@ def _shipment_response(
             lng=float(point["lng"]),
             label=point.get("label", "Stop"),
             status=point.get("status", "in_transit"),
+            estimated_arrival_at=point.get("estimated_arrival_at"),
         )
         for index, point in enumerate(stop_points)
     ]
@@ -161,6 +162,7 @@ def _shipment_response(
         progress=progress,
         eta_minutes=eta_minutes,
         active_stop_index=active_stop_index,
+        total_duration_seconds=route_waypoints[0].get("total_duration_seconds"),
     )
 
 

@@ -101,3 +101,45 @@ def test_shipment_list_counts_completed_stops(db, merchant, buyer):  # noqa: F81
     assert rows[done.id]["completed_stop_count"] == 2
     assert rows[active.id]["completed_stop_count"] == 1
     assert rows[empty.id]["completed_stop_count"] == 0
+
+
+def test_shipment_tracking_shows_live_stop_statuses(db, merchant, buyer):  # noqa: F811
+    # The route is a dispatch snapshot; the merchant view must read each stop's
+    # status from its order now, without writing back into the route.
+    shipment = _shipment(db, merchant, stop_count=2)
+    delivered = _order(db, merchant, buyer, "out_for_delivery", shipment_id=shipment.id)
+    pending = _order(db, merchant, buyer, "out_for_delivery", shipment_id=shipment.id)
+    shipment.route_waypoints = [
+        {
+            "type": "pickup", "lat": 14.6, "lng": 121.0, "label": "Farm",
+            "sequence": 0, "total_duration_seconds": 1800,
+        },
+        *(
+            {
+                "type": "delivery", "order_id": order.id, "lat": 14.6 + seq / 100,
+                "lng": 121.0, "label": f"Stop {seq}", "sequence": seq,
+                "status": "in_transit",
+                "estimated_arrival_at": "2026-11-13T10:00:00+00:00",
+            }
+            for seq, order in enumerate([delivered, pending], start=1)
+        ),
+    ]
+    db.commit()
+    delivered.status = "delivered"
+    db.commit()
+
+    resp = _client(db, merchant).get(f"/shipments/{shipment.id}")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [s["status"] for s in body["stops"]] == ["delivered", "out_for_delivery"]
+    stop_waypoints = [w for w in body["waypoints"] if w["type"] == "delivery"]
+    assert [w["status"] for w in stop_waypoints] == ["delivered", "out_for_delivery"]
+    assert body["stops"][0]["estimated_arrival_at"] == "2026-11-13T10:00:00+00:00"
+    assert body["total_duration_seconds"] == 1800
+    db.refresh(shipment)
+    assert all(
+        w.get("status") == "in_transit"
+        for w in shipment.route_waypoints
+        if w["type"] == "delivery"
+    )
