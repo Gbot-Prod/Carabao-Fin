@@ -31,6 +31,13 @@ function freshnessLabel(product: ApiProduce): string {
     : harvested;
 }
 
+function orderTermsLabel(product: ApiProduce): string | null {
+  const parts: string[] = [];
+  if (product.min_order_qty > 1) parts.push(`Min. order ${product.min_order_qty}`);
+  for (const tier of product.price_tiers) parts.push(`${tier.min_qty}+ at ₱${tier.unit_price}`);
+  return parts.length ? parts.join(' · ') : null;
+}
+
 function MerchantScreenContent() {
   const router = useRouter();
   const { farmId, farmName } = useLocalSearchParams<{ farmId: string; farmName: string }>();
@@ -74,7 +81,7 @@ function MerchantScreenContent() {
       produce: product.name ?? 'Produce',
       unit: product.unit,
       price: product.price,
-    });
+    }, product.min_order_qty);
     setAddedIds((prev) => new Set([...prev, product.id]));
   };
 
@@ -182,6 +189,7 @@ function MerchantScreenContent() {
             ) : (
               products.map((product) => {
                 const isAdded = addedIds.has(product.id);
+                const terms = orderTermsLabel(product);
                 return (
                   <View key={product.id} style={styles.productRow}>
                     {product.image_url ? (
@@ -202,6 +210,7 @@ function MerchantScreenContent() {
                         <Text style={styles.productDesc} numberOfLines={2}>{product.description}</Text>
                       ) : null}
                       <Text style={styles.productFreshness}>{freshnessLabel(product)}</Text>
+                      {terms ? <Text style={styles.productFreshness}>{terms}</Text> : null}
                       <View style={styles.productFooter}>
                         <Text style={styles.productPrice}>₱{product.price.toLocaleString()}</Text>
                         <TouchableOpacity
