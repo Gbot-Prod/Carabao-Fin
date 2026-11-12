@@ -12,6 +12,7 @@ from .chat import router as chat_router
 from .email import router as email_router
 from .follows import router as follows_router
 from .merchant_onboarding import router as merchant_onboarding_router
+from .merchant_sales import router as merchant_sales_router
 from .merchants import router as merchants_router
 from .misc import router as misc_router
 from .notifications import router as notifications_router
@@ -38,6 +39,7 @@ router.include_router(notifications_router)
 router.include_router(chat_router)
 router.include_router(support_chat_router)
 router.include_router(stock_alerts_router)
+router.include_router(merchant_sales_router)
 router.include_router(admin_router)
 router.include_router(admin_orders_router)
 router.include_router(admin_audit_router)

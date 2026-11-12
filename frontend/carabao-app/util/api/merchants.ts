@@ -157,6 +157,20 @@ export const updateMyLowStockThreshold = async (low_stock_threshold: number): Pr
   return response.data;
 };
 
+// F2: sales charts on the merchant dashboard.
+export type MerchantSales = {
+  days: number;
+  total_revenue: number;
+  total_orders: number;
+  daily: { date: string; revenue: number; orders: number }[];
+  top_products: { produce_id: number | null; name: string; quantity: number; revenue: number }[];
+};
+
+export const fetchMySales = async (days: 30 | 90): Promise<MerchantSales> => {
+  const response = await apiClient.get<MerchantSales>('/merchants/me/sales', { params: { days } });
+  return response.data;
+};
+
 export const deleteMyMerchant = async (): Promise<void> => {
   await apiClient.delete('/merchants/me');
 };

@@ -3,6 +3,7 @@ import styles from "../page.module.css";
 import { formatDate, formatPeso } from "../lib/format";
 import type { MerchantPerformance, Produce } from "@/util/api";
 import StockAlertsPanel from "./StockAlertsPanel";
+import SalesCharts from "./SalesCharts";
 
 type Props = {
   performance: MerchantPerformance;
@@ -104,6 +105,8 @@ export default function OverviewTab({ performance, produces, onOpenReviews, onOp
           </div>
         </div>
       </div>
+
+      <SalesCharts />
 
       <StockAlertsPanel refreshKey={produces} onThreshold={setThreshold} />
 
