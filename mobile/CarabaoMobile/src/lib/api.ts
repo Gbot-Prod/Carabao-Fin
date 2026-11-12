@@ -343,6 +343,24 @@ export type ApiChatThread = {
   messages: ApiChatMessage[];
 };
 
+// Stock alerts (F1), same as the web merchant dashboard.
+export type ApiStockAlertItem = {
+  id: number;
+  name: string;
+  unit: string;
+  stock_quantity: number;
+  best_before: string | null;
+  days_left: number | null;
+};
+
+export type ApiStockAlerts = {
+  low_stock_threshold: number;
+  expiry_warning_days: number;
+  low_stock: ApiStockAlertItem[];
+  expiring_soon: ApiStockAlertItem[];
+  expired: ApiStockAlertItem[];
+};
+
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -358,6 +376,8 @@ export const api = {
       request<ApiProduce[]>('/merchants/me/produce', token),
     myOrders: (token: string | null) =>
       request<ApiMerchantOrder[]>('/merchants/me/orders', token),
+    stockAlerts: (token: string | null) =>
+      request<ApiStockAlerts>('/merchants/me/stock-alerts', token),
     updateOrderStatus: (token: string | null, orderId: number, status: MerchantOrderStatus) =>
       request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/status`, token, {
         method: 'PATCH',

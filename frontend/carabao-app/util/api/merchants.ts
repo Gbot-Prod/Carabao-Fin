@@ -129,6 +129,34 @@ export const fetchMyMerchantPerformance = async (): Promise<MerchantPerformance>
   return response.data;
 };
 
+// F1: low-stock and best-before alerts for the merchant dashboard.
+export type StockAlertItem = {
+  id: number;
+  name: string;
+  unit: string;
+  stock_quantity: number;
+  best_before: string | null;
+  days_left: number | null;
+};
+
+export type StockAlerts = {
+  low_stock_threshold: number;
+  expiry_warning_days: number;
+  low_stock: StockAlertItem[];
+  expiring_soon: StockAlertItem[];
+  expired: StockAlertItem[];
+};
+
+export const fetchMyStockAlerts = async (): Promise<StockAlerts> => {
+  const response = await apiClient.get<StockAlerts>('/merchants/me/stock-alerts');
+  return response.data;
+};
+
+export const updateMyLowStockThreshold = async (low_stock_threshold: number): Promise<StockAlerts> => {
+  const response = await apiClient.patch<StockAlerts>('/merchants/me/stock-alerts', { low_stock_threshold });
+  return response.data;
+};
+
 export const deleteMyMerchant = async (): Promise<void> => {
   await apiClient.delete('/merchants/me');
 };

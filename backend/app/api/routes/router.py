@@ -23,6 +23,7 @@ from .reorder import router as reorder_router
 from .reviews import router as reviews_router
 from .shipments import router as shipments_router
 from .sms import router as sms_router
+from .stock_alerts import router as stock_alerts_router
 from .support_chat import router as support_chat_router
 from .tracking import router as tracking_router
 from .users import router as users_router
@@ -36,6 +37,7 @@ router.include_router(follows_router)
 router.include_router(notifications_router)
 router.include_router(chat_router)
 router.include_router(support_chat_router)
+router.include_router(stock_alerts_router)
 router.include_router(admin_router)
 router.include_router(admin_orders_router)
 router.include_router(admin_audit_router)

@@ -44,6 +44,8 @@ class Merchant(Base):
     delivery_time = Column(Integer, nullable=True, index=True)
 
     delivery_price = Column(Integer, nullable=True, index=True)  # pesos
+    # F1: listings at or below this stock are flagged on the dashboard (0 = off).
+    low_stock_threshold = Column(Integer, nullable=False, default=5, server_default="5")
     price_range_min = Column(Integer, nullable=False)
     price_range_max = Column(Integer, nullable=False)
 
