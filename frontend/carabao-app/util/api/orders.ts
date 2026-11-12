@@ -114,3 +114,14 @@ export const fetchOrder = async (orderId: number): Promise<OrderDetail> => {
   const response = await apiClient.get<OrderDetail>(`/orders/me/${orderId}`);
   return response.data;
 };
+
+// "Buy again" (U3): refills the cart with what is still available.
+export type ReorderResult = {
+  added: { produce_id: number; name: string; quantity: number; price: number; reduced_from: number | null }[];
+  unavailable: { name: string; reason: string }[];
+};
+
+export const reorderOrder = async (orderId: number): Promise<ReorderResult> => {
+  const response = await apiClient.post<ReorderResult>(`/orders/me/${orderId}/reorder`);
+  return response.data;
+};

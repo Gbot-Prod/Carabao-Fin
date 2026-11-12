@@ -8,6 +8,8 @@ import {
   fetchCurrentOrders,
   fetchOrderHistory,
   deleteOrderFromHistory,
+  reorderOrder,
+  type ReorderResult,
   confirmOrderReceived,
   isInTransit,
   ORDER_STATUS_LABELS,
@@ -238,6 +240,22 @@ function PastOrderCard({
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const merchantHref = order.merchant_id ? `/merchant/${order.merchant_id}` : null;
+  // "Buy again" (U3)
+  const [reordering, setReordering] = useState(false);
+  const [reorder, setReorder] = useState<ReorderResult | null>(null);
+  const [reorderError, setReorderError] = useState(false);
+
+  const handleReorder = async () => {
+    setReordering(true);
+    setReorderError(false);
+    try {
+      setReorder(await reorderOrder(order.order_id));
+    } catch {
+      setReorderError(true);
+    } finally {
+      setReordering(false);
+    }
+  };
 
   const handleConfirm = async () => {
     setDeleting(true);
@@ -288,7 +306,42 @@ function PastOrderCard({
         <Link href={`/orders/${order.order_id}`} className={styles.receivedBtn}>
           {order.status === "delivered" ? "View & review" : "View order"}
         </Link>
+        <button type="button" className={styles.trackBtn} onClick={() => void handleReorder()} disabled={reordering}>
+          {reordering ? "Adding…" : "Buy again"}
+        </button>
       </div>
+
+      {(reorder || reorderError) && (
+        <div className={styles.reorderResult} role="status">
+          {reorderError ? (
+            <p>Couldn&apos;t add these items right now. Please try again.</p>
+          ) : reorder && (
+            <>
+              <p>
+                {reorder.added.length > 0
+                  ? `Added ${reorder.added.length} item${reorder.added.length === 1 ? "" : "s"} to your cart.`
+                  : "None of these items can be ordered right now."}{" "}
+                {reorder.added.length > 0 && <Link href="/cart">Go to cart</Link>}
+              </p>
+              {reorder.added.some((a) => a.reduced_from) && (
+                <ul>
+                  {reorder.added.filter((a) => a.reduced_from).map((a) => (
+                    <li key={a.produce_id}>{a.name}: only {a.quantity} left (you had {a.reduced_from})</li>
+                  ))}
+                </ul>
+              )}
+              {reorder.unavailable.length > 0 && (
+                <>
+                  <p>Not added:</p>
+                  <ul>
+                    {reorder.unavailable.map((u, i) => <li key={`${u.name}-${i}`}>{u.name}: {u.reason}</li>)}
+                  </ul>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {confirming && (
         <div className={styles.confirmRow}>

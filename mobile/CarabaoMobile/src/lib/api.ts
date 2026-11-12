@@ -387,6 +387,15 @@ export const api = {
         token,
       ),
   },
+  reorder: {
+    // "Buy again" (U3); the response's cart lines feed the app's local cart.
+    order: (token: string | null, orderId: number) =>
+      request<{
+        added: { produce_id: number; name: string; quantity: number; price: number; reduced_from: number | null }[];
+        unavailable: { name: string; reason: string }[];
+        cart: { items: Record<string, unknown>[] };
+      }>(`/orders/me/${orderId}/reorder`, token, { method: 'POST' }),
+  },
   referencePrices: {
     list: (token: string | null) =>
       request<ApiReferencePrice[]>('/reference-prices', token),

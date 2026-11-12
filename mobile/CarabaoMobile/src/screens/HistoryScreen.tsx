@@ -2,10 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet, SafeAreaView, ActivityIndicator,
+  StyleSheet, SafeAreaView, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
+import { useCart } from '../lib/CartContext';
 import { api, type ApiHistoryOrder } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge } from '../components/UI';
@@ -13,6 +14,49 @@ import { ProtectedScreen } from '../components/ProtectedScreen';
 
 function HistoryCard({ order }: { order: ApiHistoryOrder }) {
   const [expanded, setExpanded] = useState(false);
+  const { token } = useAuth();
+  const { items: cartItems, addItem, updateQuantity } = useCart();
+  const [reordering, setReordering] = useState(false);
+
+  // "Buy again" (U3): the server checks what can still be ordered; the app's
+  // cart is local, so its returned lines are copied in.
+  const buyAgain = async () => {
+    setReordering(true);
+    try {
+      const res = await api.reorder.order(token, order.order_id);
+      for (const added of res.added) {
+        const line = res.cart.items.find((l) => Number(l.produce_id ?? l.id) === added.produce_id);
+        const id = String(added.produce_id);
+        const existing = cartItems.find((i) => i.id === id);
+        if (existing) {
+          updateQuantity(id, Math.max(existing.quantity, added.quantity));
+        } else {
+          addItem({
+            id,
+            produceId: added.produce_id,
+            merchantId: line?.merchant_id != null ? Number(line.merchant_id) : null,
+            farm: String(line?.farm ?? order.merchant),
+            produce: added.name,
+            unit: String(line?.unit ?? 'kg'),
+            price: added.price,
+            deliveryFee: line?.delivery_fee != null ? Number(line.delivery_fee) : null,
+          }, added.quantity);
+        }
+      }
+      const lines = [
+        res.added.length > 0
+          ? `Added ${res.added.length} item${res.added.length === 1 ? '' : 's'} to your cart.`
+          : 'None of these items can be ordered right now.',
+        ...res.added.filter((a) => a.reduced_from).map((a) => `${a.name}: only ${a.quantity} left.`),
+        ...res.unavailable.map((u) => `${u.name}: ${u.reason}.`),
+      ];
+      Alert.alert('Buy again', lines.join('\n'));
+    } catch (err) {
+      Alert.alert('Buy again', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setReordering(false);
+    }
+  };
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(n);
 
@@ -60,6 +104,9 @@ function HistoryCard({ order }: { order: ApiHistoryOrder }) {
               <Text style={styles.detailValue}>{order.items.length} item{order.items.length !== 1 ? 's' : ''}</Text>
             </View>
           )}
+          <TouchableOpacity style={styles.buyAgain} onPress={buyAgain} disabled={reordering}>
+            <Text style={styles.buyAgainText}>{reordering ? 'Adding…' : 'Buy again'}</Text>
+          </TouchableOpacity>
         </View>
       )}
     </TouchableOpacity>
@@ -154,6 +201,11 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
+  buyAgain: {
+    marginTop: Spacing.sm, alignSelf: 'flex-start', backgroundColor: Colors.primary,
+    borderRadius: Radius.md, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
+  },
+  buyAgainText: { color: Colors.white, fontWeight: '700', fontSize: FontSize.sm },
   root: { flex: 1, backgroundColor: Colors.offWhite },
 
   header: {
