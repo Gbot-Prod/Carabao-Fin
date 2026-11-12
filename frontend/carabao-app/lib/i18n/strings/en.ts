@@ -233,6 +233,24 @@ const en = {
     stay: 'Stay signed in',
     signedOutNotice: 'You were signed out after a period of inactivity. Please sign in again.',
   },
+  reset: {
+    forgotLink: 'Forgot password?',
+    forgotTitle: 'Reset your password',
+    forgotBody: "Enter your account's email and we'll send you a link to choose a new password.",
+    send: 'Send reset link',
+    sent: 'If an account uses that email, a reset link is on its way. Check your inbox (and spam folder).',
+    newTitle: 'Choose a new password',
+    newPassword: 'New password',
+    confirmPassword: 'Confirm new password',
+    save: 'Save new password',
+    tooShort: 'Use at least 8 characters.',
+    mismatch: 'The passwords do not match.',
+    invalidLink: 'This reset link is invalid or has expired. Request a new one.',
+    done: 'Your password has been changed. You can sign in with it now.',
+    backToSignIn: 'Back to sign in',
+    requestNew: 'Request a new link',
+    genericError: 'Something went wrong. Please try again.',
+  },
 };
 
 export type Strings = typeof en;

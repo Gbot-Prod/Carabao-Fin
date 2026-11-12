@@ -110,3 +110,19 @@ export const signOut = async () => {
 
   return data;
 };
+
+// Forgot password (E6). BetterAuth answers the same whether or not the email
+// has an account, so the page can't be used to discover accounts.
+export const requestPasswordReset = async (email: string) => {
+  const { error } = await authClient.requestPasswordReset({ email, redirectTo: "/reset-password" });
+  if (error) throw new Error(getErrorMessage(error, "Could not send the reset email"));
+};
+
+export const resetPassword = async (newPassword: string, token: string) => {
+  const { error } = await authClient.resetPassword({ newPassword, token });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "INVALID_TOKEN") throw new Error("INVALID_TOKEN");
+    throw new Error(getErrorMessage(error, "Could not reset the password"));
+  }
+};

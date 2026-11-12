@@ -408,3 +408,41 @@
   color: #92400e;
   font-size: 14px;
 }
+
+/* Forgot / reset password pages (E6) */
+.auth-page--single {
+  grid-template-columns: 1fr;
+}
+
+.auth-help {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.auth-link {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--green-600);
+  text-decoration: none;
+}
+
+.auth-link:hover {
+  text-decoration: underline;
+}
+
+.auth-link--right {
+  display: block;
+  margin-top: 8px;
+  text-align: right;
+}
+
+.auth-submit--link {
+  display: block;
+  margin-top: 16px;
+  text-align: center;
+  text-decoration: none;
+}

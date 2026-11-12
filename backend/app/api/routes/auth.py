@@ -4,16 +4,19 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import os
+import secrets
 import time
 import unicodedata
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import bcrypt as _bcrypt
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -21,6 +24,7 @@ from app.core.security import create_access_token
 from app.models.mobile_credential import MobileCredential
 from app.models.user import User, normalize_email
 from app.services.account_suspension import suspended_detail
+from app.services.email import send_password_reset_otp_email
 
 router = APIRouter(tags=["auth"])
 
@@ -526,6 +530,129 @@ def mobile_set_password(
         db.add(credential)
     else:
         credential.password_hash = hashed
+
+    db.commit()
+    return {"ok": True}
+
+
+# ── Mobile password reset (E6) ────────────────────────────────────────
+# Email OTP, then a new password. Web accounts reset through BetterAuth's email
+# link instead; this flow also updates the BetterAuth password when the account
+# has one, so the web and app passwords stay the same.
+
+logger = logging.getLogger(__name__)
+MIN_PASSWORD_LENGTH = 8
+
+
+def _better_auth_password_hash(password: str) -> str:
+    """A hash BetterAuth accepts: hex salt (used as text) + ":" + hex scrypt key."""
+    salt_hex = secrets.token_hex(16)
+    key = hashlib.scrypt(
+        unicodedata.normalize("NFKC", password).encode("utf-8"),
+        salt=salt_hex.encode("utf-8"),
+        n=BETTER_AUTH_SCRYPT_PARAMS["n"],
+        r=BETTER_AUTH_SCRYPT_PARAMS["r"],
+        p=BETTER_AUTH_SCRYPT_PARAMS["p"],
+        dklen=BETTER_AUTH_SCRYPT_PARAMS["dklen"],
+        maxmem=256 * 1024 * 1024,
+    )
+    return f"{salt_hex}:{key.hex()}"
+
+
+def _reset_key(email: str) -> str:
+    return f"password-reset:{email}"
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
+
+
+@router.post("/auth/mobile/password-reset/request")
+def request_mobile_password_reset(
+    payload: PasswordResetRequest, db: Session = Depends(get_db)
+):
+    """Email a reset code. Always answers ok, so it can't reveal who has an account."""
+    from app.api.routes import sms
+
+    email = normalize_email(payload.email)
+    key = _reset_key(email)
+    with sms._otp_lock:
+        sms._check_resend_cooldown(key)
+
+    user = db.query(User).filter(User.email == email).first()
+    if user is None or user.suspended_at is not None:
+        return {"ok": True}
+
+    otp = sms._generate_otp()
+    try:
+        send_password_reset_otp_email(email, otp)
+    except Exception as exc:  # noqa: BLE001 - provider errors vary
+        logger.warning("[password-reset] Could not email a code: %s", exc)
+        raise HTTPException(
+            status_code=502, detail="The reset code could not be sent. Try again."
+        ) from exc
+    sms._store_otp(key, otp)
+    return {"ok": True}
+
+
+@router.post("/auth/mobile/password-reset/confirm")
+def confirm_mobile_password_reset(
+    payload: PasswordResetConfirm, db: Session = Depends(get_db)
+):
+    from app.api.routes import sms
+
+    if len(payload.new_password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters",
+        )
+    email = normalize_email(payload.email)
+    # Raises 400 for a wrong or expired code (and counts attempts).
+    sms._check_otp(_reset_key(email), payload.otp.strip())
+
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+    if user.suspended_at is not None:
+        raise HTTPException(status_code=403, detail=suspended_detail(user))
+
+    hashed = _bcrypt_hash(payload.new_password)
+    credential = (
+        db.query(MobileCredential).filter(MobileCredential.user_id == user.id).first()
+    )
+    if credential is None:
+        db.add(MobileCredential(user_id=user.id, password_hash=hashed))
+    else:
+        credential.password_hash = hashed
+
+    ba_user_id = user.external_auth_id
+    if ba_user_id and not ba_user_id.startswith("mobile:"):
+        try:
+            with db.begin_nested():
+                db.execute(
+                    text(
+                        'UPDATE account SET password = :password, "updatedAt" = :now '
+                        'WHERE "userId" = :id AND password IS NOT NULL'
+                    ),
+                    {
+                        "password": _better_auth_password_hash(payload.new_password),
+                        "now": datetime.now(UTC),
+                        "id": ba_user_id,
+                    },
+                )
+                # Like BetterAuth's revokeSessionsOnPasswordReset.
+                db.execute(
+                    text('DELETE FROM "session" WHERE "userId" = :id'),
+                    {"id": ba_user_id},
+                )
+        except SQLAlchemyError as exc:
+            logger.warning("[password-reset] BetterAuth password not updated: %s", exc)
 
     db.commit()
     return {"ok": True}

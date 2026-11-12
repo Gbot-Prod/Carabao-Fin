@@ -159,6 +159,23 @@ export const auth = betterAuth({
     // Whoever proves the inbox via a reset kicks out anyone who registered
     // the address first.
     revokeSessionsOnPasswordReset: true,
+    // Forgot-password (E6): the link goes out through the backend's email service.
+    sendResetPassword: async ({ user, url }) => {
+      const sharedSecret = process.env.AUTH_SYNC_SHARED_SECRET;
+      if (!apiBaseUrl || !sharedSecret) {
+        console.info(`[password-reset] Email not configured. Reset link for ${user.email}: ${url}`);
+        return;
+      }
+      const res = await fetch(`${apiBaseUrl}/email/send-password-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Internal-Auth-Sync-Secret": sharedSecret },
+        body: JSON.stringify({ to: user.email, reset_url: url }),
+      }).catch((err) => {
+        console.error("[password-reset] Failed to reach backend email service", err);
+        return null;
+      });
+      if (!res?.ok) console.error(`[password-reset] Backend returned ${res?.status} for ${user.email}`);
+    },
   },
   emailVerification: {
     sendOnSignUp: true,

@@ -65,3 +65,41 @@ def send_refund_email(
             """,
         }
     )
+
+
+def send_password_reset_email(to: str, reset_url: str) -> None:
+    """Web reset link from BetterAuth (E6)."""
+    resend.Emails.send(
+        {
+            "from": FROM_ADDRESS,
+            "to": [to],
+            "subject": "Reset your Carabao password",
+            "html": f"""
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#f7fcf8;border-radius:12px">
+                  <h2 style="color:#173d25;margin:0 0 8px">Reset your password</h2>
+                  <p style="color:#4a5e4d;margin:0 0 24px">Someone asked to reset the password for this Carabao account. Use the button below to choose a new one.</p>
+                  <a href="{escape(reset_url)}" style="display:inline-block;padding:12px 28px;background:#31925d;color:white;border-radius:8px;text-decoration:none;font-weight:600">Choose a new password</a>
+                  <p style="color:#8a9a8c;font-size:12px;margin:24px 0 0">This link expires in 1 hour. If you didn't ask for a reset, you can ignore this email; your password stays the same.</p>
+                </div>
+            """,
+        }
+    )
+
+
+def send_password_reset_otp_email(to: str, otp: str) -> None:
+    """Mobile reset code (E6)."""
+    resend.Emails.send(
+        {
+            "from": FROM_ADDRESS,
+            "to": [to],
+            "subject": "Your Carabao password reset code",
+            "html": f"""
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#f7fcf8;border-radius:12px">
+                  <h2 style="color:#173d25;margin:0 0 8px">Reset your password</h2>
+                  <p style="color:#4a5e4d;margin:0 0 24px">Enter this code in the Carabao app to choose a new password:</p>
+                  <p style="font-size:28px;letter-spacing:0.2em;font-weight:700;color:#173d25;margin:0 0 24px">{escape(otp)}</p>
+                  <p style="color:#8a9a8c;font-size:12px;margin:0">This code expires in 10 minutes. If you didn't ask for a reset, you can ignore this email.</p>
+                </div>
+            """,
+        }
+    )

@@ -242,6 +242,24 @@ const fil: Strings = {
     stay: 'Manatiling naka-sign in',
     signedOutNotice: 'Na-sign out ka dahil matagal kang walang ginagawa. Mag-sign in muli.',
   },
+  reset: {
+    forgotLink: 'Nakalimutan ang password?',
+    forgotTitle: 'I-reset ang iyong password',
+    forgotBody: 'Ilagay ang email ng iyong account at magpapadala kami ng link para makapili ng bagong password.',
+    send: 'Ipadala ang reset link',
+    sent: 'Kung may account na gumagamit ng email na iyan, papunta na ang reset link. Tingnan ang iyong inbox (at spam folder).',
+    newTitle: 'Pumili ng bagong password',
+    newPassword: 'Bagong password',
+    confirmPassword: 'Kumpirmahin ang bagong password',
+    save: 'I-save ang bagong password',
+    tooShort: 'Gumamit ng hindi bababa sa 8 character.',
+    mismatch: 'Hindi magkatugma ang mga password.',
+    invalidLink: 'Hindi na valid o nag-expire na ang reset link na ito. Humiling ng bago.',
+    done: 'Napalitan na ang iyong password. Maaari ka nang mag-sign in gamit ito.',
+    backToSignIn: 'Bumalik sa pag-sign in',
+    requestNew: 'Humiling ng bagong link',
+    genericError: 'May nangyaring mali. Pakisubukang muli.',
+  },
 };
 
 export default fil;

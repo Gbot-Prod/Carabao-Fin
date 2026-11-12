@@ -265,6 +265,10 @@ export default function SignupPage() {
               )}
             </div>
 
+            {authMode === "signin" && (
+              <a href="/forgot-password" className="auth-link auth-link--right">{t.reset.forgotLink}</a>
+            )}
+
             <button type="submit" disabled={isLoading} className="auth-submit">
               {isLoading ? t.auth.pleaseWait : authMode === "signup"
                 ? verificationStep === "identifier" ? t.auth.sendCode : t.auth.verifyAndContinue

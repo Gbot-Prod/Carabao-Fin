@@ -8,6 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
+import { PasswordResetSheet } from '../components/PasswordResetSheet';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 const { width } = Dimensions.get('window');
@@ -17,6 +18,9 @@ export default function AuthScreen() {
   // "Create account" from the cart prompt (E4) opens on sign-up.
   const params = useLocalSearchParams<{ mode?: string }>();
   const [mode, setMode] = useState<'signin' | 'signup'>(params.mode === 'signup' ? 'signup' : 'signin');
+  // Forgot password (E6).
+  const [resetOpen, setResetOpen] = useState(false);
+  const [notice, setNotice] = useState('');
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -177,6 +181,13 @@ export default function AuthScreen() {
             />
           )}
 
+          {mode === 'signin' && (
+            <TouchableOpacity onPress={() => { setNotice(''); setResetOpen(true); }} style={styles.forgotWrap}>
+              <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
+          {notice ? <Text style={styles.noticeText}>{notice}</Text> : null}
+
           {/* Submit */}
           <TouchableOpacity
             style={[styles.submitBtn, loading && styles.submitDisabled]}
@@ -201,12 +212,27 @@ export default function AuthScreen() {
           </Text>
         </View>
       </ScrollView>
+      <PasswordResetSheet
+        visible={resetOpen}
+        initialEmail={form.email}
+        onClose={() => setResetOpen(false)}
+        onDone={(email) => {
+          setResetOpen(false);
+          setError('');
+          handleChange('email', email);
+          handleChange('password', '');
+          setNotice('Password changed. Sign in with your new password.');
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.offWhite },
+  forgotWrap: { alignSelf: 'flex-end', paddingVertical: 4 },
+  forgotText: { color: Colors.primary, fontWeight: '600', fontSize: FontSize.sm },
+  noticeText: { color: Colors.success, fontSize: FontSize.sm, marginTop: 4 },
   scroll: { flexGrow: 1 },
 
   heroBg: {
