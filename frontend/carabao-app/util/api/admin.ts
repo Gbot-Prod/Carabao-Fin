@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 import type { UserProfile } from './users';
 import type { Merchant, MerchantPayoutBatch, PayoutProvider, PayoutType } from './merchants';
-import type { OrderStatus, PayoutStatus } from './statuses';
+import type { OrderStatus, PayoutStatus, TransactionStatus } from './statuses';
 import type { Produce } from './produce';
 
 export type MerchantApplication = {
@@ -272,6 +272,75 @@ export const fetchAdminOrders = async (
 export const fetchAdminOrder = async (orderId: number): Promise<AdminOrderDetail> => {
   const res = await apiClient.get<AdminOrderDetail>(`/admin/orders/${orderId}`);
   return res.data;
+};
+
+// ── Transactions ledger ──────────────────────────────────────────────────────
+
+export type AdminTransaction = {
+  id: number;
+  order_id: number;
+  status: TransactionStatus;
+  amount: number;
+  platform_fee: number;
+  merchant_amount: number;
+  description: string | null;
+  paymongo_session_id: string | null;
+  paymongo_payment_id: string | null;
+  created_at: string;
+  paid_at: string | null;
+  merchant_id: number;
+  merchant_name: string | null;
+  buyer_id: number;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  refund_method: string | null;
+  refund_reference: string | null;
+  refunded_at: string | null;
+};
+
+export type AdminTransactionTotals = {
+  count: number;
+  amount: number;
+  platform_fee: number;
+  merchant_amount: number;
+};
+
+export type AdminTransactionFilters = {
+  status?: TransactionStatus;
+  merchant_id?: number;
+  date_from?: string; // YYYY-MM-DD, on created_at
+  date_to?: string; // YYYY-MM-DD, inclusive
+  q?: string; // PayMongo ID, #order/transaction ID, buyer email, refund ref
+};
+
+export const fetchAdminTransactions = async (
+  filters: AdminTransactionFilters,
+  page = 1,
+  pageSize = ADMIN_PAGE_SIZE,
+): Promise<Paginated<AdminTransaction> & { totals: AdminTransactionTotals }> => {
+  const res = await apiClient.get<Paginated<AdminTransaction> & { totals: AdminTransactionTotals }>(
+    '/admin/transactions',
+    { params: { ...filters, page, page_size: pageSize } },
+  );
+  return res.data;
+};
+
+// Goes through apiClient (not a plain link) so the Bearer token is sent.
+export const downloadAdminTransactionsCsv = async (filters: AdminTransactionFilters): Promise<void> => {
+  const res = await apiClient.get<Blob>('/admin/transactions/export', {
+    params: filters,
+    responseType: 'blob',
+  });
+  const disposition = String(res.headers['content-disposition'] ?? '');
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'transactions.csv';
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 };
 
 // ── Refunds (A2) ─────────────────────────────────────────────────────────────
