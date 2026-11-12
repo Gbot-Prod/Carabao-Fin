@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
+import { useLanguage } from '@/lib/i18n/LanguageProvider';
+import { fmt } from '@/lib/i18n/format';
 import ReferencePriceHint, { useReferencePrices } from '@/components/ReferencePrice/ReferencePriceHint';
 import { formatRequestedDate } from '@/app/(app)/merchantDashboard/lib/format';
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
@@ -13,6 +15,7 @@ export default function MerchantDetailPage() {
   const params = useParams<{ merchantID?: string }>();
   const merchantID = Number(params?.merchantID ?? '0');
   const hasValidMerchantId = Number.isFinite(merchantID) && merchantID > 0;
+  const { t } = useLanguage();
   // Market reference ranges (P1), fetched once and matched per card.
   const referencePrices = useReferencePrices();
 
@@ -98,16 +101,16 @@ export default function MerchantDetailPage() {
   };
 
   if (!merchant && !error) {
-    return <PageLoader label="Loading shop…" />;
+    return <PageLoader label={t.shop.loading} />;
   }
 
   return (
     <div className={styles.page}>
       {notification && (
         <div className={styles.cartToast} role="status">
-          <span>&#10003; {notification} added to cart</span>
+          <span>&#10003; {fmt(t.shop.addedToCart, { name: notification })}</span>
           <Link href="/cart">
-            View Cart
+            {t.shop.viewCart}
           </Link>
         </div>
       )}
@@ -135,44 +138,44 @@ export default function MerchantDetailPage() {
                 <h1 className={styles.merchantName}>{merchant.merchant_name}</h1>
                 <dl className={styles.ownerInfo}>
                   <div className={styles.ownerRow}>
-                    <dt>Owner</dt>
-                    <dd>{merchant.owner_name || 'Not provided'}</dd>
+                    <dt>{t.shop.owner}</dt>
+                    <dd>{merchant.owner_name || t.shop.notProvided}</dd>
                   </div>
                   <div className={styles.ownerRow}>
-                    <dt>Contact</dt>
+                    <dt>{t.shop.contact}</dt>
                     <dd>
                       {merchant.contact_number ? (
                         <a href={`tel:${merchant.contact_number}`}>{merchant.contact_number}</a>
                       ) : (
-                        'Not provided'
+                        t.shop.notProvided
                       )}
                     </dd>
                   </div>
                   {merchant.contact_email && (
                     <div className={styles.ownerRow}>
-                      <dt>Email</dt>
+                      <dt>{t.shop.email}</dt>
                       <dd>
                         <a href={`mailto:${merchant.contact_email}`}>{merchant.contact_email}</a>
                       </dd>
                     </div>
                   )}
                 </dl>
-                <p className={styles.merchantLocation}>Location: {merchantLocation || 'Not specified'}</p>
+                <p className={styles.merchantLocation}>{fmt(t.shop.location, { place: merchantLocation || t.shop.notSpecified })}</p>
                 {(shopPage?.description) && (
                   <p className={styles.merchantDesc}>{shopPage.description}</p>
                 )}
                 <div className={styles.details}>
                   <div className={styles.detailItem}>
-                    <span className={styles.label}>Rating</span>
-                    <span className={styles.value}>{merchant.rating ?? 'N/A'}</span>
+                    <span className={styles.label}>{t.shop.rating}</span>
+                    <span className={styles.value}>{merchant.rating ?? t.shop.na}</span>
                   </div>
                   <div className={styles.detailItem}>
-                    <span className={styles.label}>Delivery</span>
-                    <span className={styles.value}>{merchant.delivery_time ? `${merchant.delivery_time} day(s)` : 'N/A'}</span>
+                    <span className={styles.label}>{t.shop.delivery}</span>
+                    <span className={styles.value}>{merchant.delivery_time ? fmt(t.shop.deliveryDays, { count: merchant.delivery_time }) : t.shop.na}</span>
                   </div>
                   <div className={styles.detailItem}>
-                    <span className={styles.label}>Hours</span>
-                    <span className={styles.value}>{merchant.operating_hours != null ? (typeof merchant.operating_hours === 'string' ? merchant.operating_hours : JSON.stringify(merchant.operating_hours)) : 'Not available'}</span>
+                    <span className={styles.label}>{t.shop.hours}</span>
+                    <span className={styles.value}>{merchant.operating_hours != null ? (typeof merchant.operating_hours === 'string' ? merchant.operating_hours : JSON.stringify(merchant.operating_hours)) : t.shop.notAvailable}</span>
                   </div>
                 </div>
               </div>
@@ -180,7 +183,7 @@ export default function MerchantDetailPage() {
           </header>
 
           <section className={styles.productsSection}>
-            <h2>Available Produce</h2>
+            <h2>{t.shop.availableProduce}</h2>
 
             <div className={styles.productsGrid}>
               {produces.map((produce) => (
@@ -195,20 +198,24 @@ export default function MerchantDetailPage() {
                     )}
                   </div>
                   <div className={styles.productBody}>
-                    <h3>{produce.name ?? 'Unnamed Produce'}</h3>
+                    <h3>{produce.name ?? t.shop.unnamedProduce}</h3>
                     {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
                     <p className={styles.freshness}>
                       {produce.harvest_date
-                        ? `Harvested ${formatRequestedDate(produce.harvest_date)}`
-                        : 'Harvest date not set'}
-                      {produce.best_before && ` · Best before ${formatRequestedDate(produce.best_before)}`}
+                        ? fmt(t.shop.harvested, { date: formatRequestedDate(produce.harvest_date) })
+                        : t.shop.harvestNotSet}
+                      {produce.best_before && ` · ${fmt(t.shop.bestBefore, { date: formatRequestedDate(produce.best_before) })}`}
                     </p>
                     {produce.min_order_qty > 1 && (
-                      <p className={styles.freshness}>Minimum order: {produce.min_order_qty}</p>
+                      <p className={styles.freshness}>{fmt(t.shop.minOrder, { qty: produce.min_order_qty })}</p>
                     )}
                     {produce.price_tiers.length > 0 && (
                       <p className={styles.freshness}>
-                        Bulk: {produce.price_tiers.map((t) => `${t.min_qty}+ at ₱${t.unit_price}`).join(' · ')}
+                        {fmt(t.shop.bulk, {
+                          tiers: produce.price_tiers
+                            .map((tier) => fmt(t.shop.bulkTier, { qty: tier.min_qty, price: tier.unit_price }))
+                            .join(' · '),
+                        })}
                       </p>
                     )}
                     <p className={styles.price}>₱{produce.price} / {produce.unit_quantity && produce.unit_quantity !== 1 ? produce.unit_quantity : ""}{produce.unit}</p>
@@ -218,7 +225,7 @@ export default function MerchantDetailPage() {
                       disabled={addingId === produce.id}
                       onClick={() => void handleAddToCart(produce)}
                     >
-                      {addingId === produce.id ? 'Adding…' : 'Add to Cart'}
+                      {addingId === produce.id ? t.shop.adding : t.shop.addToCart}
                     </button>
                   </div>
                 </article>

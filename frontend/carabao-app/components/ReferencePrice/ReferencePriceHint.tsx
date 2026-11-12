@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { fetchReferencePrices, matchReferencePrice, type ReferencePrice } from "@/util/api/referencePrices";
 import styles from "./ReferencePriceHint.module.css";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { fmt } from "@/lib/i18n/format";
 
 const asOf = (iso: string) =>
   new Date(`${iso}T00:00:00+08:00`).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
@@ -36,6 +38,7 @@ type Props = {
  */
 export default function ReferencePriceHint({ name, unit, price, variant = "form", prices }: Props) {
   const loaded = useReferencePrices();
+  const { t } = useLanguage();
   const ref = matchReferencePrice(prices ?? loaded, name, unit);
   if (!ref) return null;
 
@@ -43,20 +46,22 @@ export default function ReferencePriceHint({ name, unit, price, variant = "form"
   const sameUnit = !unit || unit === ref.unit;
   let comparison: string | null = null;
   if (variant === "form" && price && price > 0 && sameUnit) {
-    if (price > ref.high) comparison = "Your price is above this range.";
-    else if (price < ref.low) comparison = "Your price is below this range.";
-    else comparison = "Your price is within this range.";
+    if (price > ref.high) comparison = t.reference.above;
+    else if (price < ref.low) comparison = t.reference.below;
+    else comparison = t.reference.within;
   }
 
   return (
     <div className={`${styles.hint} ${variant === "card" ? styles.card : ""}`} role="note">
-      <span className={styles.label}>Market reference{variant === "form" ? ` for ${ref.commodity}` : ""}:</span>{" "}
+      <span className={styles.label}>
+        {variant === "form" ? fmt(t.reference.marketReferenceFor, { commodity: ref.commodity }) : t.reference.marketReference}:
+      </span>{" "}
       <strong className={styles.range}>{range}</strong>
-      {ref.is_sample && <span className={styles.sample}>Sample data</span>}
+      {ref.is_sample && <span className={styles.sample}>{t.reference.sampleData}</span>}
       {variant === "form" && (
         <span className={styles.source}>
-          {ref.source} · as of {asOf(ref.as_of)}
-          {!sameUnit && ` · listed per ${ref.unit}, not ${unit}`}
+          {ref.source} · {fmt(t.reference.asOf, { date: asOf(ref.as_of) })}
+          {!sameUnit && ` · ${fmt(t.reference.listedPer, { refUnit: ref.unit, unit: unit ?? "" })}`}
         </span>
       )}
       {comparison && <span className={styles.comparison}>{comparison}</span>}

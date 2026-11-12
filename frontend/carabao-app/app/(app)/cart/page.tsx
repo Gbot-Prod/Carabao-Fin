@@ -6,6 +6,8 @@ import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import { fetchMyCart, replaceMyCart } from "@/util/api";
 import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { fmt, plural } from "@/lib/i18n/format";
 
 type CartItem = {
   id: string;
@@ -21,6 +23,7 @@ type CartItem = {
 };
 
 export default function CartPage() {
+  const { t } = useLanguage();
   const [items, setItems] = useState<CartItem[]>([]);
   const [isHydrating, setIsHydrating] = useState(true);
   const hasSyncedRef = useRef(false);
@@ -128,30 +131,31 @@ export default function CartPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1>Your Cart</h1>
-        <p>Review your produce before proceeding to checkout.</p>
+        <h1>{t.cart.title}</h1>
+        <p>{t.cart.subtitle}</p>
       </header>
 
       <div className={styles.layout}>
         <section className={styles.itemsCard}>
           {isHydrating ? (
-            <PageLoader variant="inline" label="Loading your cart…" />
+            <PageLoader variant="inline" label={t.cart.loading} />
           ) : items.length === 0 ? (
             <div className={styles.emptyState}>
-              <h2>Your cart is empty</h2>
-              <p>Add products from farms to place an order.</p>
+              <h2>{t.cart.emptyTitle}</h2>
+              <p>{t.cart.emptyBody}</p>
               <Link href="/order" className={styles.secondaryButton}>
-                Browse Farms
+                {t.cart.browseFarms}
               </Link>
             </div>
           ) : (
             <div className={styles.groupList}>
               {groups.map((group) => (
-                <section key={group.key} className={styles.farmGroup} aria-label={`Items from ${group.farm}`}>
+                <section key={group.key} className={styles.farmGroup} aria-label={fmt(t.cart.itemsFrom, { farm: group.farm })}>
                   <header className={styles.farmGroupHeader}>
                     <h2 className={styles.farmGroupName}>{group.farm}</h2>
                     <span className={styles.farmGroupMeta}>
-                      {group.items.length} item{group.items.length === 1 ? "" : "s"} · delivery PHP {group.deliveryFee.toFixed(2)}
+                      {plural(group.items.length, t.cart.itemCountOne, t.cart.itemCountMany)} ·{" "}
+                      {fmt(t.cart.groupDelivery, { fee: group.deliveryFee.toFixed(2) })}
                     </span>
                   </header>
                   <ul className={styles.itemList}>
@@ -169,7 +173,7 @@ export default function CartPage() {
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                              aria-label={`Decrease quantity for ${item.produce}`}
+                              aria-label={fmt(t.cart.decrease, { name: item.produce })}
                               disabled={item.quantity <= (item.min_order_qty ?? 1)}
                             >
                               -
@@ -178,14 +182,14 @@ export default function CartPage() {
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                              aria-label={`Increase quantity for ${item.produce}`}
+                              aria-label={fmt(t.cart.increase, { name: item.produce })}
                               disabled={item.stock_quantity !== undefined && item.quantity >= item.stock_quantity}
                             >
                               +
                             </button>
                           </div>
                           {(item.min_order_qty ?? 1) > 1 && (
-                            <p className={styles.priceLine}>Min. order {item.min_order_qty}</p>
+                            <p className={styles.priceLine}>{fmt(t.cart.minOrder, { qty: item.min_order_qty ?? 1 })}</p>
                           )}
 
                           <p className={styles.lineTotal}>
@@ -197,14 +201,14 @@ export default function CartPage() {
                             className={styles.removeButton}
                             onClick={() => removeItem(item.id)}
                           >
-                            Remove
+                            {t.cart.remove}
                           </button>
                         </div>
                       </li>
                     ))}
                   </ul>
                   <p className={styles.farmGroupTotal}>
-                    Subtotal for {group.farm}: <strong>PHP {group.total.toFixed(2)}</strong>
+                    {fmt(t.cart.farmSubtotal, { farm: group.farm })} <strong>PHP {group.total.toFixed(2)}</strong>
                   </p>
                 </section>
               ))}
@@ -213,23 +217,20 @@ export default function CartPage() {
         </section>
 
         <aside className={styles.summaryCard}>
-          <h2>Order Summary</h2>
+          <h2>{t.cart.summary}</h2>
           <div className={styles.summaryLine}>
-            <span>Items total</span>
+            <span>{t.cart.itemsTotal}</span>
             <strong>PHP {itemTotal.toFixed(2)}</strong>
           </div>
           <div className={styles.summaryLine}>
-            <span>Delivery fees{groups.length > 1 ? ` (${groups.length} farms)` : ""}</span>
+            <span>{groups.length > 1 ? fmt(t.cart.deliveryFeesFarms, { count: groups.length }) : t.cart.deliveryFees}</span>
             <strong>PHP {deliveryTotal.toFixed(2)}</strong>
           </div>
           {groups.length > 1 && (
-            <p className={styles.multiFarmNote}>
-              Each farm delivers and is paid separately, so checkout creates {groups.length} orders and you pay
-              for each in turn.
-            </p>
+            <p className={styles.multiFarmNote}>{fmt(t.cart.multiFarmNote, { count: groups.length })}</p>
           )}
           <div className={styles.summaryLineGrand}>
-            <span>Grand total</span>
+            <span>{t.cart.grandTotal}</span>
             <strong>PHP {grandTotal.toFixed(2)}</strong>
           </div>
 
@@ -238,10 +239,10 @@ export default function CartPage() {
               href={items.length === 0 ? "/order" : "/checkout"}
               className={styles.primaryButton}
             >
-              {items.length === 0 ? "Add Products" : "Proceed to Checkout"}
+              {items.length === 0 ? t.cart.addProducts : t.cart.proceed}
             </Link>
             <Link href="/order" className={styles.secondaryButton}>
-              Continue Shopping
+              {t.cart.continueShopping}
             </Link>
           </div>
         </aside>
