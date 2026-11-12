@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -30,6 +30,7 @@ from app.schemas.user import UserResponse
 from app.services import audit_log, paymongo, r2_service
 from app.services.account_suspension import reinstate_user, suspend_user
 from app.services.merchant_service import create_merchant_from_application
+from app.services.produce_freshness import PH_TZ
 from app.services.payout_service import (
     PayoutError,
     get_payout_info,
@@ -196,6 +197,51 @@ def list_all_merchant_applications(
     )
 
 
+WEEKS_SHOWN = 12
+
+
+def _weekly_signups(db: Session, now: datetime | None = None) -> list[dict]:
+    """New buyers and new merchants per Manila week (Monday start), oldest first.
+
+    A buyer is a non-admin account with no merchant profile; a merchant is
+    counted in the week its merchant profile was created.
+    """
+    today = (now or datetime.now(UTC)).astimezone(PH_TZ).date()
+    first_week = today - timedelta(days=today.weekday(), weeks=WEEKS_SHOWN - 1)
+    since = datetime.combine(first_week, time.min, tzinfo=PH_TZ)
+    weeks = {
+        first_week + timedelta(weeks=i): {"buyers": 0, "merchants": 0}
+        for i in range(WEEKS_SHOWN)
+    }
+
+    def week_of(moment: datetime):
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=UTC)
+        day = moment.astimezone(PH_TZ).date()
+        return day - timedelta(days=day.weekday())
+
+    buyers = (
+        db.query(User.created_at)
+        .outerjoin(Merchant, Merchant.user_id == User.id)
+        .filter(
+            User.created_at >= since,
+            User.is_admin.is_(False),
+            Merchant.id.is_(None),
+        )
+        .all()
+    )
+    for (created_at,) in buyers:
+        bucket = weeks.get(week_of(created_at))
+        if bucket is not None:
+            bucket["buyers"] += 1
+    merchants = db.query(Merchant.created_at).filter(Merchant.created_at >= since).all()
+    for (created_at,) in merchants:
+        bucket = weeks.get(week_of(created_at))
+        if bucket is not None:
+            bucket["merchants"] += 1
+    return [{"week_start": str(week), **counts} for week, counts in weeks.items()]
+
+
 @router.get("/admin/stats")
 def get_admin_stats(
     db: Session = Depends(get_db),
@@ -285,6 +331,7 @@ def get_admin_stats(
             "payouts_to_send": int(payouts_to_send),
             "refunds_pending": int(refunds_pending),
         },
+        "weekly_signups": _weekly_signups(db),
         "daily_revenue": [
             {
                 "date": str(r.date),

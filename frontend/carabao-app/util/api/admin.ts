@@ -56,6 +56,12 @@ export type PayoutSummaryItem = {
   total_amount: number;
 };
 
+export type WeeklySignups = {
+  week_start: string; // Monday, YYYY-MM-DD (Manila)
+  buyers: number;
+  merchants: number;
+};
+
 export type AdminStats = {
   total_revenue: number;
   platform_fees: number;
@@ -68,6 +74,7 @@ export type AdminStats = {
     payouts_to_send: number;
     refunds_pending: number;
   };
+  weekly_signups: WeeklySignups[];
   daily_revenue: DailyRevenue[];
   order_breakdown: OrderStatusCount[];
   payout_summary: PayoutSummaryItem[];

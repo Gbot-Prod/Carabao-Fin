@@ -155,6 +155,31 @@ export default function AdminDashboard() {
         )}
       </section>
 
+      {/* New buyers and merchants per week (A5b) */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>New Buyers and Merchants — Last 12 Weeks</h2>
+        {stats.weekly_signups.every((w) => w.buyers === 0 && w.merchants === 0) ? (
+          <p className={styles.emptyText}>No new buyers or merchants in the last 12 weeks.</p>
+        ) : (
+          <div className={styles.chartWrap}>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={stats.weekly_signups} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0ece5" vertical={false} />
+                <XAxis dataKey="week_start" tickFormatter={shortDate} tick={{ fontSize: 11, fill: "#647067" }} tickLine={false} axisLine={false} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#647067" }} tickLine={false} axisLine={false} width={32} />
+                <Tooltip
+                  labelFormatter={(d) => `Week of ${shortDate(d)}`}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e0ece5" }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="buyers" name="New buyers" fill="#31925d" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="merchants" name="New merchants" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </section>
+
       {/* Order status + Payout summary */}
       <div className={styles.row}>
         <section className={`${styles.section} ${styles.flex1}`}>
