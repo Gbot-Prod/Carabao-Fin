@@ -168,9 +168,26 @@ def test_status_columns_reject_unknown_values(db, merchant, buyer):  # noqa: F81
 @pytest.mark.parametrize(
     ("payload", "expected"),
     [
-        ({"payout_type": "gcash", "ewallet_number": "09171234567"}, 200),
-        ({"payout_type": "gcash"}, 422),
-        ({"payout_type": "bank", "bank_code": "BDO"}, 422),
+        (
+            {
+                "payout_type": "gcash",
+                "ewallet_number": "09171234567",
+                "account_name": "Juan dela Cruz",
+            },
+            200,
+        ),
+        ({"payout_type": "gcash", "ewallet_number": "09171234567"}, 422),
+        ({"payout_type": "gcash", "account_name": "Juan"}, 422),
+        ({"payout_type": "gcash", "ewallet_number": "12345", "account_name": "J"}, 422),
+        (
+            {
+                "payout_type": "bank",
+                "bank_code": "BDO",
+                "account_number": "1",
+                "account_name": "J",
+            },
+            422,
+        ),
         ({"payout_type": "paypal", "ewallet_number": "x"}, 422),
     ],
 )

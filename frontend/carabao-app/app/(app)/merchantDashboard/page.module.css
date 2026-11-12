@@ -1122,6 +1122,81 @@
   margin: 0;
 }
 
+.payoutNotice {
+  font-size: 13px;
+  line-height: 1.5;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin: 0;
+}
+
+.payoutNoticeError {
+  background: rgba(185, 28, 28, 0.08);
+  color: var(--danger);
+  border: 1px solid rgba(185, 28, 28, 0.2);
+}
+
+.payoutFeeLine {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.payoutFeeLine strong {
+  color: var(--green-900);
+}
+
+.payoutFieldError {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--danger);
+  margin-top: 6px;
+}
+
+.payoutFieldHint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 6px;
+  letter-spacing: 0.02em;
+}
+
+.payoutDisclaimer {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #78350f;
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+
+.payoutDisclaimer ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.payoutDisclaimer li + li {
+  margin-top: 4px;
+}
+
+.payoutDisclaimer code {
+  font-size: 11px;
+  background: rgba(120, 53, 15, 0.08);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.linkBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--green-600);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .payoutForm {
   display: flex;
   flex-direction: column;

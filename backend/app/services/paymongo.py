@@ -176,6 +176,189 @@ def detach_payment_method(customer_id: str, payment_method_id: str) -> None:
     response.raise_for_status()
 
 
+# ---------------------------------------------------------------------------
+# Money out: wallet transfers (InstaPay / PESONet) to merchants
+# ---------------------------------------------------------------------------
+
+PAYMONGO_API_ROOT = "https://api.paymongo.com"
+# Every PayMongo wallet sends from this BIC (per the batch transfer reference).
+PAYMONGO_WALLET_BIC = "PAEYPHM2XXX"
+INSTITUTIONS_CACHE_SECONDS = 6 * 60 * 60
+
+_institutions_cache: dict[str, tuple[float, list[dict]]] = {}
+
+
+class TransferRejected(Exception):
+    """PayMongo refused the transfer (4xx): nothing was sent, safe to retry."""
+
+
+class TransferOutcomeUnknown(Exception):
+    """Timeout, network error or 5xx: the transfer may or may not exist."""
+
+
+def _error_detail(response) -> str:
+    try:
+        errors = response.json().get("errors") or []
+        if errors:
+            return "; ".join(
+                f"{e.get('code', 'error')}: {e.get('detail', '')}".strip()
+                for e in errors
+            )
+    except ValueError:
+        pass
+    return f"HTTP {response.status_code}"
+
+
+def get_wallet_account() -> dict:
+    """The default activated wallet's account, used as the transfer source."""
+    response = requests.get(
+        f"{PAYMONGO_API_ROOT}/v2/wallets",
+        params=[("status", "activated"), ("fields", "account")],
+        headers=_auth_header(),
+        timeout=15,
+    )
+    response.raise_for_status()
+    wallets = response.json().get("data") or []
+    wallet = next((w for w in wallets if w.get("is_default")), None) or (
+        wallets[0] if wallets else None
+    )
+    account = (wallet or {}).get("account") or {}
+    if not account.get("account_number"):
+        raise RuntimeError(
+            "No activated PayMongo wallet found for these API keys "
+            "(test keys have no wallet; transfers need live keys)"
+        )
+    return {
+        "number": account["account_number"],
+        "name": account.get("account_name") or "",
+        "bic": PAYMONGO_WALLET_BIC,
+    }
+
+
+def get_wallet_balance() -> dict:
+    """The default wallet's balance in centavos: ``{available, pending}``."""
+    response = requests.get(
+        f"{PAYMONGO_API_ROOT}/v2/wallets",
+        params=[("status", "activated"), ("fields", "balance")],
+        headers=_auth_header(),
+        timeout=15,
+    )
+    response.raise_for_status()
+    wallets = response.json().get("data") or []
+    wallet = next((w for w in wallets if w.get("is_default")), None) or (
+        wallets[0] if wallets else None
+    )
+    if wallet is None:
+        raise RuntimeError("No activated PayMongo wallet found for these API keys")
+    balance = wallet.get("balance") or {}
+    return {
+        "available": int(balance.get("available") or 0),
+        "pending": int(balance.get("pending") or 0),
+    }
+
+
+def list_receiving_institutions(provider: str = "instapay") -> list[dict]:
+    """Banks and e-wallets PayMongo can send to: ``[{code, name}]`` by name.
+
+    ``code`` is the institution's ``provider_code`` (its BIC), which is what a
+    transfer's ``destination_account.bic`` takes. Cached for a few hours.
+    """
+    cached = _institutions_cache.get(provider)
+    if cached and time.monotonic() - cached[0] < INSTITUTIONS_CACHE_SECONDS:
+        return cached[1]
+
+    response = requests.get(
+        f"{PAYMONGO_API_ROOT}/v1/wallets/receiving_institutions",
+        params={"provider": provider},
+        headers=_auth_header(),
+        timeout=15,
+    )
+    response.raise_for_status()
+    institutions = sorted(
+        (
+            {"code": attrs["provider_code"], "name": attrs.get("name") or ""}
+            for attrs in (
+                item.get("attributes") or {}
+                for item in response.json().get("data") or []
+            )
+            if attrs.get("provider_code")
+        ),
+        key=lambda i: i["name"].lower(),
+    )
+    _institutions_cache[provider] = (time.monotonic(), institutions)
+    return institutions
+
+
+def create_transfer(
+    *,
+    amount_centavos: int,
+    destination: dict,
+    reference_number: str,
+    description: str,
+    provider: str = "instapay",
+    metadata: dict | None = None,
+) -> dict:
+    """Send one transfer from the wallet; returns the transfer object.
+
+    ``provider`` is ``instapay`` (minutes, up to ₱50,000) or ``pesonet``
+    (banking-day cycles, up to ₱10,000,000).
+
+    ``destination`` is ``{number, name, bic}``. Raises TransferRejected when
+    PayMongo refuses it and TransferOutcomeUnknown when we cannot tell.
+    """
+    try:
+        source = get_wallet_account()
+    except Exception as exc:  # nothing has been sent yet
+        raise TransferRejected(f"could not read the PayMongo wallet: {exc}") from exc
+    transfer: dict = {
+        "source_account": source,
+        "destination_account": destination,
+        "amount": amount_centavos,
+        "currency": "PHP",
+        "provider": provider,
+        "reference_number": reference_number,
+        "purpose": "Disbursement",
+        "description": description,
+    }
+    if metadata:
+        transfer["metadata"] = metadata
+
+    try:
+        response = requests.post(
+            f"{PAYMONGO_API_ROOT}/v2/batch_transfers",
+            json={"transfers": [transfer]},
+            headers=_auth_header(),
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise TransferOutcomeUnknown(str(exc)) from exc
+
+    if response.status_code >= 500:
+        raise TransferOutcomeUnknown(_error_detail(response))
+    if response.status_code >= 400:
+        raise TransferRejected(_error_detail(response))
+
+    try:
+        transfers = (response.json().get("data") or {}).get("transfers") or []
+    except ValueError as exc:
+        raise TransferOutcomeUnknown("unreadable PayMongo response") from exc
+    if not transfers:
+        raise TransferOutcomeUnknown(
+            "PayMongo accepted the batch but listed no transfer"
+        )
+    return transfers[0]
+
+
+def get_transfer(transfer_id: str) -> dict:
+    response = requests.get(
+        f"{PAYMONGO_API_ROOT}/v2/transfers/{transfer_id}",
+        headers=_auth_header(),
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()["data"]
+
+
 def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
     """
     PayMongo sends: Paymongo-Signature: t=<ts>,te=<test_hmac>,li=<live_hmac>
