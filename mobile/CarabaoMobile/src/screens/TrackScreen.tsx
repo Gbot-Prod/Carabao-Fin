@@ -11,18 +11,34 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, Divider } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
-
-const STATUS_STEPS = ['Order Placed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'];
+import {
+  ORDER_TIMELINE_STEPS, orderStatusColor, orderStatusLabel, timelineIndex,
+} from '../lib/orderStatus';
 
 function StatusTimeline({ status }: { status: string }) {
-  const currentIdx = STATUS_STEPS.findIndex((s) =>
-    s.toLowerCase() === status.toLowerCase()
-  );
-  const idx = currentIdx === -1 ? 1 : currentIdx;
+  const idx = timelineIndex(status);
+
+  // Cancelled (or an unrecognised status) isn't a point on the progress line.
+  if (idx === -1) {
+    return (
+      <View style={tl.notice}>
+        <Ionicons
+          name={status === 'cancelled' ? 'close-circle-outline' : 'help-circle-outline'}
+          size={20}
+          color={status === 'cancelled' ? Colors.error : Colors.textMuted}
+        />
+        <Text style={tl.noticeText}>
+          {status === 'cancelled'
+            ? 'This order was cancelled. If you paid, the refund is handled by Carabao.'
+            : `Status: ${orderStatusLabel(status)}`}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={tl.container}>
-      {STATUS_STEPS.map((step, i) => {
+      {ORDER_TIMELINE_STEPS.map(({ label: step }, i) => {
         const done = i <= idx;
         const active = i === idx;
         return (
@@ -37,7 +53,7 @@ function StatusTimeline({ status }: { status: string }) {
                   />
                 )}
               </View>
-              {i < STATUS_STEPS.length - 1 && (
+              {i < ORDER_TIMELINE_STEPS.length - 1 && (
                 <View style={[tl.line, i < idx && tl.lineDone]} />
               )}
             </View>
@@ -52,14 +68,6 @@ function StatusTimeline({ status }: { status: string }) {
       })}
     </View>
   );
-}
-
-function statusColor(s: string): 'green' | 'blue' | 'yellow' | 'gray' {
-  const lower = s.toLowerCase();
-  if (lower === 'delivered') return 'green';
-  if (lower === 'shipped' || lower === 'out for delivery') return 'blue';
-  if (lower === 'processing') return 'yellow';
-  return 'gray';
 }
 
 function OrderCard({
@@ -86,7 +94,7 @@ function OrderCard({
             ETA: {order.shipped ? (order.time_of_arrival ?? 'TBD') : 'Pending shipment'}
           </Text>
         </View>
-        <Badge label={order.status} color={statusColor(order.status)} />
+        <Badge label={orderStatusLabel(order.status)} color={orderStatusColor(order.status)} />
       </View>
     </TouchableOpacity>
   );
@@ -204,7 +212,7 @@ function TrackScreenContent() {
                   </View>
                   <View style={styles.detailItem}>
                     <Text style={styles.detailLabel}>STATUS</Text>
-                    <Text style={[styles.detailValue, { color: Colors.primary }]}>{selected.status}</Text>
+                    <Text style={[styles.detailValue, { color: Colors.primary }]}>{orderStatusLabel(selected.status)}</Text>
                   </View>
                   <View style={styles.detailItem}>
                     <Text style={styles.detailLabel}>ESTIMATED ARRIVAL</Text>
@@ -269,6 +277,12 @@ const tl = StyleSheet.create({
   stepTextDone: { color: Colors.text, fontWeight: '500' },
   stepTextActive: { color: Colors.primary, fontWeight: '700' },
   stepSub: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  notice: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    marginVertical: Spacing.sm, padding: Spacing.md,
+    backgroundColor: Colors.surfaceAlt, borderRadius: Radius.md,
+  },
+  noticeText: { flex: 1, fontSize: FontSize.sm, color: Colors.textMuted },
 });
 
 const styles = StyleSheet.create({

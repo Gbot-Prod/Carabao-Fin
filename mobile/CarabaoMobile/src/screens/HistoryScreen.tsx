@@ -13,6 +13,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
+import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
 
 function HistoryCard({ order }: { order: ApiHistoryOrder }) {
   const [expanded, setExpanded] = useState(false);
@@ -63,14 +64,6 @@ function HistoryCard({ order }: { order: ApiHistoryOrder }) {
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(n);
 
-  const badgeColor = (s: string): 'green' | 'blue' | 'yellow' | 'gray' => {
-    const lower = s.toLowerCase();
-    if (lower === 'delivered') return 'green';
-    if (lower === 'shipped') return 'blue';
-    if (lower === 'processing') return 'yellow';
-    return 'gray';
-  };
-
   return (
     <TouchableOpacity onPress={() => setExpanded((p) => !p)} activeOpacity={0.8} style={styles.card}>
       <View style={styles.cardHeader}>
@@ -86,7 +79,7 @@ function HistoryCard({ order }: { order: ApiHistoryOrder }) {
           </View>
         </View>
         <View style={styles.cardRight}>
-          <Badge label={order.status} color={badgeColor(order.status)} />
+          <Badge label={orderStatusLabel(order.status)} color={orderStatusColor(order.status)} />
           <Ionicons
             name={expanded ? 'chevron-up' : 'chevron-down'}
             size={14}
