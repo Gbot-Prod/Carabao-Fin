@@ -110,9 +110,29 @@ export type ApiProduce = {
   category: string | null;
   price: number;
   unit: string;
+  unit_quantity?: number;
   stock_quantity: number;
   image_url: string | null;
 };
+
+// Mirrors backend ProduceCreate / ProduceUpdate (app/schemas/produce.py).
+export type ProduceCategory = 'Vegetables' | 'Fruits';
+export type ProduceUnit = 'kg' | 'lbs';
+
+export type ProduceCreatePayload = {
+  name: string;
+  description?: string | null;
+  category?: ProduceCategory | null;
+  price: number;
+  unit?: ProduceUnit;
+  unit_quantity?: number;
+  stock_quantity?: number;
+  image_url?: string | null;
+};
+
+export type ProduceUpdatePayload = Partial<{
+  [K in keyof ProduceCreatePayload]: ProduceCreatePayload[K] | null;
+}>;
 
 export type ApiCurrentOrder = {
   id: number;
@@ -257,6 +277,18 @@ export const api = {
     place: (token: string | null, payload: PlaceOrderPayload) =>
       request<PlaceOrderResponse>('/orders/me/place', token, {
         method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+  },
+  produce: {
+    create: (token: string | null, payload: ProduceCreatePayload) =>
+      request<ApiProduce>('/produce/', token, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    update: (token: string | null, produceId: number, payload: ProduceUpdatePayload) =>
+      request<ApiProduce>(`/produce/${produceId}`, token, {
+        method: 'PATCH',
         body: JSON.stringify(payload),
       }),
   },
