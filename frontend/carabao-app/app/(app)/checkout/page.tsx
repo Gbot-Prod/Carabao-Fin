@@ -9,6 +9,8 @@ import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { clearPendingPayments, loadPendingPayments, savePendingPayments } from "@/util/pendingPayments";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
 import { isLuzonRegion } from "@/util/serviceArea";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { fmt } from "@/lib/i18n/format";
 import { getApiErrorStatus } from "@/util/errorHelper";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
@@ -23,10 +25,14 @@ const localIsoDate = (offsetDays = 0) => {
 };
 
 export default function CheckoutPage() {
+  const { t } = useLanguage();
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
   const [isLoadingCart, setIsLoadingCart] = useState(true);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set by the mount-only payment-return effect; translated at render time so it
+  // follows the language toggle without re-running that effect.
+  const [returnNotice, setReturnNotice] = useState<"errPaymentProcessing" | "errPaymentCancelled" | null>(null);
   const [street, setStreet] = useState("");
   const [postal, setPostal] = useState("");
   const [paymentMethod] = useState("online");
@@ -81,7 +87,7 @@ export default function CheckoutPage() {
 
     void cancelPaymentCheckout(orderId).catch((err) => {
       if (getApiErrorStatus(err) === 409) {
-        setError("A payment for this order is still being processed. Check your orders before trying again.");
+        setReturnNotice("errPaymentProcessing");
       }
       // Otherwise the server-side expiry sweep will still release stock.
     });
@@ -94,7 +100,7 @@ export default function CheckoutPage() {
         // The expiry sweep releases it anyway.
       });
     }
-    setError("Payment was cancelled. Your items are available in your cart.");
+    setReturnNotice("errPaymentCancelled");
     window.history.replaceState({}, "", "/checkout");
   }, []);
 
@@ -108,22 +114,23 @@ export default function CheckoutPage() {
     }
 
     if (!street.trim() || !addressForm.city || !addressForm.barangay) {
-      setError("Please enter your street address, city, and barangay before placing an order.");
+      setError(t.checkout.errAddressMissing);
       return;
     }
 
     if (!isLuzonRegion(addressForm.region)) {
-      setError("Carabao currently delivers within Luzon only. Choose a Luzon region for your delivery address.");
+      setError(t.checkout.errOutsideLuzon);
       return;
     }
 
     if (!deliveryDate || deliveryDate < localIsoDate()) {
-      setError("Please choose a delivery date from today onward.");
+      setError(t.checkout.errDate);
       return;
     }
 
     setIsPlacingOrder(true);
     setError(null);
+    setReturnNotice(null);
 
     try {
       const deliveryAddress = [street, addressForm.barangay, addressForm.city, addressForm.province, postal, 'Philippines'].filter(Boolean).join(', ') || null;
@@ -146,7 +153,7 @@ export default function CheckoutPage() {
       const checkout = await createPaymentCheckout(placed ? placed[0].order_id : result.order_id);
       window.location.href = checkout.checkout_url;
     } catch (err) {
-      let message = "Unable to place order right now. Please try again.";
+      let message = t.checkout.errGeneric;
 
       if (axios.isAxiosError(err)) {
         const data = err.response?.data as unknown;
@@ -167,16 +174,16 @@ export default function CheckoutPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1>Checkout</h1>
-        <p>Confirm your delivery details before paying.</p>
+        <h1>{t.checkout.title}</h1>
+        <p>{t.checkout.subtitle}</p>
       </header>
 
       <div className={styles.layout}>
         <section className={styles.formCard}>
           <div className={styles.block}>
-            <h2>Delivery Information</h2>
+            <h2>{t.checkout.deliveryInfo}</h2>
             <label>
-              Street / House No.
+              {t.checkout.street}
               <input
                 type="text"
                 value={street}
@@ -196,7 +203,7 @@ export default function CheckoutPage() {
             </div>
 
             <label>
-              Postal code
+              {t.checkout.postal}
               <input
                 type="text"
                 value={postal}
@@ -207,10 +214,10 @@ export default function CheckoutPage() {
           </div>
 
           <div className={styles.block}>
-            <h2>Delivery Schedule</h2>
+            <h2>{t.checkout.schedule}</h2>
             <div className={styles.gridTwo}>
               <label>
-                Preferred date
+                {t.checkout.preferredDate}
                 <input
                   type="date"
                   value={deliveryDate}
@@ -220,7 +227,7 @@ export default function CheckoutPage() {
                 />
               </label>
               <label>
-                Time window
+                {t.checkout.timeWindow}
                 <select value={deliveryWindow} onChange={(event) => setDeliveryWindow(event.target.value)}>
                   {TIME_WINDOWS.map((slot) => (
                     <option key={slot} value={slot}>{slot}</option>
@@ -231,26 +238,26 @@ export default function CheckoutPage() {
           </div>
 
           <div className={styles.block}>
-            <h2>Order Notes</h2>
+            <h2>{t.checkout.notesTitle}</h2>
             <label>
-              Notes for merchant or rider
+              {t.checkout.notesLabel}
               <textarea
                 rows={3}
                 value={notes}
                 maxLength={500}
                 onChange={(event) => setNotes(event.target.value)}
-                placeholder="Include gate instructions, preferred contact method, or handling requests."
+                placeholder={t.checkout.notesPlaceholder}
               />
             </label>
           </div>
         </section>
 
         <aside className={styles.summaryCard}>
-          <h2>Order Summary</h2>
+          <h2>{t.checkout.summary}</h2>
           {isLoadingCart ? (
-            <PageLoader variant="compact" label="Loading cart items…" />
+            <PageLoader variant="compact" label={t.checkout.loading} />
           ) : checkoutItems.length === 0 ? (
-            <p>Your cart is empty. Add items before checkout.</p>
+            <p>{t.checkout.empty}</p>
           ) : (
             groups.map((group) => (
               <div key={group.key} className={styles.farmGroup}>
@@ -265,7 +272,7 @@ export default function CheckoutPage() {
                     </li>
                   ))}
                   <li className={styles.farmGroupFee}>
-                    <span>Delivery{groups.length > 1 ? ` from ${group.farm}` : ""}</span>
+                    <span>{groups.length > 1 ? fmt(t.checkout.deliveryFrom, { farm: group.farm }) : t.checkout.deliveryFee}</span>
                     <strong>PHP {group.deliveryFee.toFixed(2)}</strong>
                   </li>
                 </ul>
@@ -275,26 +282,26 @@ export default function CheckoutPage() {
 
           <div className={styles.totals}>
             <p>
-              <span>Subtotal</span>
+              <span>{t.checkout.subtotal}</span>
               <strong>PHP {subtotal.toFixed(2)}</strong>
             </p>
             <p>
-              <span>Delivery fees{groups.length > 1 ? ` (${groups.length} farms)` : ""}</span>
+              <span>{groups.length > 1 ? fmt(t.checkout.deliveryFeesFarms, { count: groups.length }) : t.checkout.deliveryFees}</span>
               <strong>PHP {deliveryTotal.toFixed(2)}</strong>
             </p>
             <p className={styles.grandTotal}>
-              <span>Total</span>
+              <span>{t.checkout.total}</span>
               <strong>PHP {grandTotal.toFixed(2)}</strong>
             </p>
           </div>
 
           {groups.length > 1 && (
-            <p className={styles.multiFarmNote}>
-              This creates {groups.length} orders, one per farm. You&apos;ll pay for each in turn.
-            </p>
+            <p className={styles.multiFarmNote}>{fmt(t.checkout.multiFarmNote, { count: groups.length })}</p>
           )}
 
-          {error && <p className={styles.errorMessage}>{error}</p>}
+          {(error ?? returnNotice) && (
+            <p className={styles.errorMessage}>{error ?? (returnNotice ? t.checkout[returnNotice] : null)}</p>
+          )}
 
           <button
             type="button"
@@ -302,10 +309,10 @@ export default function CheckoutPage() {
             onClick={() => void handlePlaceOrder()}
             disabled={checkoutItems.length === 0 || isLoadingCart || isPlacingOrder}
           >
-            {isPlacingOrder ? "Redirecting to payment..." : "Place Order"}
+            {isPlacingOrder ? t.checkout.redirecting : t.checkout.placeOrder}
           </button>
           <Link href="/cart" className={styles.secondaryButton}>
-            Back to Cart
+            {t.checkout.backToCart}
           </Link>
         </aside>
       </div>

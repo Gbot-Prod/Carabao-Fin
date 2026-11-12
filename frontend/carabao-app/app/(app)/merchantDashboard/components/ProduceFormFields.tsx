@@ -2,6 +2,8 @@ import styles from "../page.module.css";
 import type { PriceTier, Produce, ProduceCreatePayload } from "@/util/api";
 import { todayInManila } from "../lib/format";
 import ReferencePriceHint from "@/components/ReferencePrice/ReferencePriceHint";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { fmt } from "@/lib/i18n/format";
 
 export type ProduceFormState = {
   name: string;
@@ -57,8 +59,15 @@ export const formToPayload = (f: ProduceFormState): ProduceCreatePayload => ({
 });
 
 function TickGroup<T extends string>({
-  label, options, value, onChange,
-}: { label: string; options: readonly T[]; value: T | ""; onChange: (v: T) => void }) {
+  label, options, value, onChange, optionLabels,
+}: {
+  label: string;
+  options: readonly T[];
+  value: T | "";
+  onChange: (v: T) => void;
+  /** Shown text per option; the stored value stays the option itself. */
+  optionLabels?: Partial<Record<T, string>>;
+}) {
   return (
     <div>
       <div className={styles.formTickLabel}>{label}</div>
@@ -70,7 +79,7 @@ function TickGroup<T extends string>({
             className={`${styles.tickBtn} ${value === opt ? styles.tickBtnActive : ""}`}
             onClick={() => onChange(opt)}
           >
-            {opt}
+            {optionLabels?.[opt] ?? opt}
           </button>
         ))}
       </div>
@@ -79,6 +88,7 @@ function TickGroup<T extends string>({
 }
 
 function PriceTierFields({ form, onChange }: { form: ProduceFormState; onChange: (f: ProduceFormState) => void }) {
+  const { t } = useLanguage();
   const setTier = (index: number, tier: PriceTier) =>
     onChange({ ...form, price_tiers: form.price_tiers.map((t, i) => (i === index ? tier : t)) });
   const addTier = () => {
@@ -93,7 +103,7 @@ function PriceTierFields({ form, onChange }: { form: ProduceFormState; onChange:
   return (
     <div className={styles.tierSection}>
       <label className={styles.formLabel}>
-        Minimum order
+        {t.listing.minOrder}
         <input
           className={styles.formInput}
           type="number"
@@ -105,44 +115,41 @@ function PriceTierFields({ form, onChange }: { form: ProduceFormState; onChange:
         />
       </label>
 
-      <div className={styles.formTickLabel}>Bulk prices</div>
-      <p className={styles.tierHint}>
-        Buyers pay the price of the highest tier their quantity reaches. Each tier must start above the
-        minimum order and be cheaper than the one before.
-      </p>
+      <div className={styles.formTickLabel}>{t.listing.bulkPrices}</div>
+      <p className={styles.tierHint}>{t.listing.tierHint}</p>
       {form.price_tiers.map((tier, index) => (
         <div key={index} className={styles.tierRow}>
-          <span className={styles.pricePerLabel}>From</span>
+          <span className={styles.pricePerLabel}>{t.listing.from}</span>
           <input
             className={styles.formInput}
             type="number"
             min={form.min_order_qty + 1}
             step="1"
             required
-            aria-label={`Tier ${index + 1} quantity`}
+            aria-label={fmt(t.listing.tierQty, { n: index + 1 })}
             value={tier.min_qty}
             onChange={(e) => setTier(index, { ...tier, min_qty: Math.floor(Number(e.target.value)) || 0 })}
           />
-          <span className={styles.pricePerLabel}>units, ₱</span>
+          <span className={styles.pricePerLabel}>{t.listing.unitsPeso}</span>
           <input
             className={styles.formInput}
             type="number"
             min="1"
             step="1"
             required
-            aria-label={`Tier ${index + 1} price`}
+            aria-label={fmt(t.listing.tierPrice, { n: index + 1 })}
             value={tier.unit_price}
             onChange={(e) => setTier(index, { ...tier, unit_price: Math.floor(Number(e.target.value)) || 0 })}
           />
-          <span className={styles.pricePerLabel}>each</span>
+          <span className={styles.pricePerLabel}>{t.listing.each}</span>
           <button type="button" className={styles.secondaryBtn} onClick={() => removeTier(index)}>
-            Remove
+            {t.listing.removeTier}
           </button>
         </div>
       ))}
       {form.price_tiers.length < MAX_PRICE_TIERS && (
         <button type="button" className={styles.secondaryBtn} onClick={addTier}>
-          + Add bulk price
+          {t.listing.addTier}
         </button>
       )}
     </div>
@@ -150,22 +157,23 @@ function PriceTierFields({ form, onChange }: { form: ProduceFormState; onChange:
 }
 
 export default function ProduceFormFields({ form, onChange }: { form: ProduceFormState; onChange: (f: ProduceFormState) => void }) {
+  const { t } = useLanguage();
   return (
     <>
       <div className={styles.formGrid}>
         <label className={styles.formLabel}>
-          Name *
+          {t.listing.name}
           <input className={styles.formInput} required value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} />
         </label>
         <label className={styles.formLabel}>
-          Stock
+          {t.listing.stock}
           <input className={styles.formInput} type="number" min="0" value={form.stock_quantity} onChange={(e) => onChange({ ...form, stock_quantity: Number(e.target.value) })} />
         </label>
       </div>
 
       <div className={styles.formGrid}>
         <label className={styles.formLabel}>
-          Harvest date *
+          {t.listing.harvestDate}
           <input
             className={styles.formInput}
             type="date"
@@ -176,7 +184,7 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
           />
         </label>
         <label className={styles.formLabel}>
-          Best before *
+          {t.listing.bestBefore}
           <input
             className={styles.formInput}
             type="date"
@@ -190,13 +198,14 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
 
       <div className={styles.formTickRow}>
         <TickGroup
-          label="Category"
+          label={t.listing.category}
           options={["Vegetables", "Fruits"] as const}
+          optionLabels={{ Vegetables: t.listing.vegetables, Fruits: t.listing.fruits }}
           value={form.category}
           onChange={(v) => onChange({ ...form, category: v })}
         />
         <TickGroup
-          label="Unit"
+          label={t.listing.unit}
           options={["kg", "lbs"] as const}
           value={form.unit}
           onChange={(v) => onChange({ ...form, unit: v })}
@@ -205,12 +214,12 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
 
       <div className={styles.priceRow}>
         <label className={`${styles.formLabel} ${styles.grow1}`}>
-          Price (₱)
+          {t.listing.price}
           <input className={styles.formInput} type="number" min="0" value={form.price} onChange={(e) => onChange({ ...form, price: Number(e.target.value) })} />
         </label>
-        <div className={styles.pricePerLabel}>per</div>
+        <div className={styles.pricePerLabel}>{t.listing.per}</div>
         <label className={`${styles.formLabel} ${styles.qtyField}`}>
-          Quantity
+          {t.listing.quantity}
           <input className={styles.formInput} type="number" min="0.1" step="0.1" value={form.unit_quantity ?? 1} onChange={(e) => onChange({ ...form, unit_quantity: Number(e.target.value) || 1 })} />
         </label>
         <div className={styles.priceUnitLabel}>{form.unit}</div>
@@ -218,7 +227,7 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
 
       {form.price > 0 && form.unit_quantity > 0 && (
         <div className={styles.pricePreview}>
-          ₱{form.price} per {form.unit_quantity === 1 ? "" : form.unit_quantity}{form.unit}
+          {fmt(t.listing.pricePreview, { price: form.price, qty: form.unit_quantity === 1 ? "" : form.unit_quantity, unit: form.unit })}
         </div>
       )}
 
@@ -232,7 +241,7 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
       <PriceTierFields form={form} onChange={onChange} />
 
       <label className={styles.formLabelFull}>
-        Description
+        {t.listing.description}
         <textarea className={styles.formInput} rows={2} value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} />
       </label>
     </>

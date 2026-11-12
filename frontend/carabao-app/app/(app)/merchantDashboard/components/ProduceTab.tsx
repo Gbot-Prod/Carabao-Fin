@@ -4,6 +4,7 @@ import PageLoader from "@/components/PageLoader/PageLoader";
 import { createProduce, deleteProduce, updateProduce, uploadProduceImage, type Produce } from "@/util/api";
 import ProduceFormFields, { emptyProduceForm, formToPayload, produceToForm, type ProduceFormState } from "./ProduceFormFields";
 import { formatRequestedDate, todayInManila } from "../lib/format";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
 type Props = {
   produces: Produce[];
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export default function ProduceTab({ produces, setProduces, loading }: Props) {
+  const { t } = useLanguage();
   const [uploadingIds, setUploadingIds] = useState<Set<number>>(new Set());
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<ProduceFormState>(emptyProduceForm);
@@ -83,11 +85,11 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
 
       {showAddForm && (
         <form onSubmit={(e) => void handleAdd(e)} className={styles.produceForm}>
-          <p className={styles.formTitle}>New produce</p>
+          <p className={styles.formTitle}>{t.listing.newProduce}</p>
           <ProduceFormFields form={addForm} onChange={setAddForm} />
           <div className={styles.formActions}>
-            <button type="submit" className={styles.primaryBtn} disabled={saving}>{saving ? "Saving…" : "Save"}</button>
-            <button type="button" className={styles.secondaryBtn} onClick={() => { setShowAddForm(false); setAddForm(emptyProduceForm); }}>Cancel</button>
+            <button type="submit" className={styles.primaryBtn} disabled={saving}>{saving ? t.listing.saving : t.listing.save}</button>
+            <button type="button" className={styles.secondaryBtn} onClick={() => { setShowAddForm(false); setAddForm(emptyProduceForm); }}>{t.listing.cancel}</button>
           </div>
         </form>
       )}
@@ -104,8 +106,8 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
               <p className={styles.formTitle}>Edit: {produce.name}</p>
               <ProduceFormFields form={editForm} onChange={setEditForm} />
               <div className={styles.formActions}>
-                <button type="submit" className={styles.primaryBtn} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
-                <button type="button" className={styles.secondaryBtn} onClick={() => setEditingId(null)}>Cancel</button>
+                <button type="submit" className={styles.primaryBtn} disabled={saving}>{saving ? t.listing.saving : t.listing.saveChanges}</button>
+                <button type="button" className={styles.secondaryBtn} onClick={() => setEditingId(null)}>{t.listing.cancel}</button>
               </div>
             </form>
           ) : (
