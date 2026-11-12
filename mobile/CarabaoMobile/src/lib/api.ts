@@ -112,6 +112,9 @@ export type ApiProduce = {
   unit: string;
   stock_quantity: number;
   image_url: string | null;
+  // ISO dates (YYYY-MM-DD); null on listings created before they were collected.
+  harvest_date: string | null;
+  best_before: string | null;
 };
 
 export type ApiCurrentOrder = {
