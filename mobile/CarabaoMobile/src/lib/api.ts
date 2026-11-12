@@ -326,6 +326,23 @@ export type ApiNotification = {
   created_at: string;
 };
 
+// Order chat (CH1).
+export type ApiChatMessage = {
+  id: number;
+  sender_role: string;
+  mine: boolean;
+  body: string;
+  created_at: string;
+};
+
+export type ApiChatThread = {
+  order_id: number;
+  my_role: string;
+  closed: boolean;
+  closes_at: string | null;
+  messages: ApiChatMessage[];
+};
+
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -397,6 +414,15 @@ export const api = {
         `/produce/search?q=${encodeURIComponent(q)}&in_stock=true&page_size=${pageSize}`,
         token,
       ),
+  },
+  chat: {
+    thread: (token: string | null, orderId: number, afterId = 0) =>
+      request<ApiChatThread>(`/orders/${orderId}/messages?after_id=${afterId}`, token),
+    send: (token: string | null, orderId: number, body: string) =>
+      request<ApiChatMessage>(`/orders/${orderId}/messages`, token, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      }),
   },
   notifications: {
     list: (token: string | null) =>

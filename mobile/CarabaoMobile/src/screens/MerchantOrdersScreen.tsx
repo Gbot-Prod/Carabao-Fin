@@ -49,11 +49,12 @@ function badgeColor(status: MerchantOrderStatus): 'green' | 'blue' | 'yellow' | 
 }
 
 function OrderRow({
-  order, busy, onUpdate,
+  order, busy, onUpdate, onChat,
 }: {
   order: ApiMerchantOrder;
   busy: boolean;
   onUpdate: (order: ApiMerchantOrder, to: MerchantOrderStatus) => void;
+  onChat: (order: ApiMerchantOrder) => void;
 }) {
   const [open, setOpen] = useState(false);
   const itemCount = order.items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
@@ -89,6 +90,9 @@ function OrderRow({
           {order.delivery_address ? <Text style={styles.detailMuted}>Deliver to: {order.delivery_address}</Text> : null}
           {order.buyer_phone ? <Text style={styles.detailMuted}>Phone: {order.buyer_phone}</Text> : null}
           <Text style={styles.detailMuted}>Ordered {new Date(order.ordered_at).toLocaleString('en-PH')}</Text>
+          <TouchableOpacity style={styles.chatLink} onPress={() => onChat(order)}>
+            <Text style={styles.chatLinkText}>Message buyer</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -209,7 +213,19 @@ function MerchantOrdersContent() {
       <FlatList
         data={visible}
         keyExtractor={(o) => String(o.id)}
-        renderItem={({ item }) => <OrderRow order={item} busy={busyId === item.id} onUpdate={onUpdate} />}
+        renderItem={({ item }) => (
+          <OrderRow
+            order={item}
+            busy={busyId === item.id}
+            onUpdate={onUpdate}
+            onChat={(o) =>
+              router.push({
+                pathname: '/order-chat',
+                params: { orderId: String(o.id), title: `Chat with ${o.buyer_name ?? 'buyer'}` },
+              })
+            }
+          />
+        )}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListHeaderComponent={
@@ -301,4 +317,6 @@ const styles = StyleSheet.create({
   },
   cancelBtnText: { color: Colors.error, fontWeight: '700', fontSize: FontSize.sm },
   btnDisabled: { opacity: 0.5 },
+  chatLink: { marginTop: Spacing.sm, alignSelf: 'flex-start' },
+  chatLinkText: { color: Colors.primary, fontWeight: '700', fontSize: FontSize.sm },
 });

@@ -5,6 +5,7 @@ import {
   StyleSheet, SafeAreaView, ActivityIndicator, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { useCart } from '../lib/CartContext';
 import { api, type ApiHistoryOrder } from '../lib/api';
@@ -17,6 +18,7 @@ function HistoryCard({ order }: { order: ApiHistoryOrder }) {
   const { token } = useAuth();
   const { items: cartItems, addItem, updateQuantity } = useCart();
   const [reordering, setReordering] = useState(false);
+  const router = useRouter();
 
   // "Buy again" (U3): the server checks what can still be ordered; the app's
   // cart is local, so its returned lines are copied in.
@@ -104,9 +106,22 @@ function HistoryCard({ order }: { order: ApiHistoryOrder }) {
               <Text style={styles.detailValue}>{order.items.length} item{order.items.length !== 1 ? 's' : ''}</Text>
             </View>
           )}
-          <TouchableOpacity style={styles.buyAgain} onPress={buyAgain} disabled={reordering}>
-            <Text style={styles.buyAgainText}>{reordering ? 'Adding…' : 'Buy again'}</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+            <TouchableOpacity style={styles.buyAgain} onPress={buyAgain} disabled={reordering}>
+              <Text style={styles.buyAgainText}>{reordering ? 'Adding…' : 'Buy again'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.buyAgain, styles.chatBtn]}
+              onPress={() =>
+                router.push({
+                  pathname: '/order-chat',
+                  params: { orderId: String(order.order_id), title: `Chat with ${order.merchant}` },
+                })
+              }
+            >
+              <Text style={[styles.buyAgainText, styles.chatBtnText]}>Message farm</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </TouchableOpacity>
@@ -206,6 +221,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
   },
   buyAgainText: { color: Colors.white, fontWeight: '700', fontSize: FontSize.sm },
+  chatBtn: { backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.primary },
+  chatBtnText: { color: Colors.primary },
   root: { flex: 1, backgroundColor: Colors.offWhite },
 
   header: {
