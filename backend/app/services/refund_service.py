@@ -17,7 +17,7 @@ from app.integrations.sms.semaphore import SemaphoreError, send_sms
 from app.models.statuses import TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.services import email
+from app.services import audit_log, email
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +69,28 @@ def record_refund(
     if txn.status != TransactionStatus.REFUND_PENDING:
         raise RefundError(409, f"Transaction is {txn.status}, not refund_pending")
 
+    before = {"status": txn.status}
     txn.status = TransactionStatus.REFUNDED
     txn.refund_method = method
     txn.refund_reference = reference
     txn.refund_notes = (notes or "").strip() or None
     txn.refunded_at = datetime.now(UTC)
     txn.refunded_by = admin.id
+    audit_log.record_admin_action(
+        db,
+        admin=admin,
+        action=audit_log.REFUND,
+        target_type="transaction",
+        target_id=txn.id,
+        before=before,
+        after={
+            "status": txn.status,
+            "amount": txn.amount,
+            "refund_method": txn.refund_method,
+            "refund_reference": txn.refund_reference,
+            "refund_notes": txn.refund_notes,
+        },
+    )
     db.commit()
     db.refresh(txn)
     notify_buyer_refunded(txn)

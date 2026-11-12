@@ -27,7 +27,7 @@ from app.schemas.payout import (
     WalletBalance,
 )
 from app.schemas.user import UserResponse
-from app.services import paymongo, r2_service
+from app.services import audit_log, paymongo, r2_service
 from app.services.account_suspension import reinstate_user, suspend_user
 from app.services.merchant_service import create_merchant_from_application
 from app.services.payout_service import (
@@ -66,7 +66,17 @@ def set_user_admin_role(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    before = {"is_admin": bool(user.is_admin)}
     user.is_admin = payload.is_admin
+    audit_log.record_admin_action(
+        db,
+        admin=current_admin,
+        action=audit_log.ROLE_CHANGE,
+        target_type="user",
+        target_id=user.id,
+        before=before,
+        after={"is_admin": payload.is_admin},
+    )
     if user.external_auth_id:
         ba_role = "admin" if payload.is_admin else "user"
         db.execute(
@@ -169,7 +179,7 @@ def reinstate_account(
     user = _get_other_user(db, user_id, current_admin)
     if user.suspended_at is None:
         raise HTTPException(status_code=409, detail="Account is not suspended")
-    return reinstate_user(db, user)
+    return reinstate_user(db, user, admin=current_admin)
 
 
 @router.get(
@@ -360,12 +370,37 @@ def release_payout_batch(
     Returns the batch as ``processing`` once PayMongo accepts the transfer, or
     ``failed`` with a reason when PayMongo refuses it.
     """
+    existing = db.get(PayoutBatch, batch_id)
+    before = (
+        {"status": existing.status, "attempts": existing.attempts}
+        if existing is not None
+        else None
+    )
     try:
         batch = send_payout(db, batch_id, notes)
     except PayoutError as exc:
         db.rollback()
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     db.refresh(batch)
+    # send_payout commits on its own; the log is its own commit afterwards.
+    audit_log.record_admin_action(
+        db,
+        admin=admin,
+        action=audit_log.PAYOUT_RELEASE,
+        target_type="payout_batch",
+        target_id=batch.id,
+        before=before,
+        after={
+            "status": batch.status,
+            "attempts": batch.attempts,
+            "net_amount": batch.net_amount,
+            "paymongo_reference": batch.paymongo_reference,
+            "paymongo_transfer_id": batch.paymongo_transfer_id,
+            "failure_reason": batch.failure_reason,
+            "notes": notes,
+        },
+    )
+    db.commit()
     return _admin_batch_response(db, batch)
 
 
@@ -396,7 +431,7 @@ def review_merchant_application(
     app_id: int,
     payload: ApplicationReviewPayload,
     db: Session = Depends(get_db),
-    _: User = Depends(_require_admin),
+    admin: User = Depends(_require_admin),
 ):
     application = (
         db.query(MerchantApplication).filter(MerchantApplication.id == app_id).first()
@@ -404,6 +439,11 @@ def review_merchant_application(
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found")
 
+    before = {
+        "status": application.status,
+        "admin_note": application.admin_note,
+        "merchant_id": application.merchant_id,
+    }
     application.status = payload.status
     application.admin_note = payload.admin_note
 
@@ -417,6 +457,19 @@ def review_merchant_application(
                 status_code=400, detail="Failed to create merchant profile"
             ) from exc
 
+    audit_log.record_admin_action(
+        db,
+        admin=admin,
+        action=audit_log.APPLICATION_REVIEW,
+        target_type="merchant_application",
+        target_id=application.id,
+        before=before,
+        after={
+            "status": application.status,
+            "admin_note": application.admin_note,
+            "merchant_id": application.merchant_id,
+        },
+    )
     db.commit()
     db.refresh(application)
     return application

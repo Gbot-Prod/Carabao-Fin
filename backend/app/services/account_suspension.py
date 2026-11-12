@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.models.merchant import Merchant
 from app.models.user import User
+from app.services import audit_log
 
 logger = logging.getLogger(__name__)
 
@@ -67,21 +68,48 @@ def _sync_better_auth_ban(db: Session, user: User, *, banned: bool) -> None:
         )
 
 
+def _suspension_state(user: User) -> dict:
+    return {
+        "suspended_at": user.suspended_at,
+        "suspension_reason": user.suspension_reason,
+    }
+
+
 def suspend_user(db: Session, user: User, *, admin: User, reason: str) -> User:
+    before = _suspension_state(user)
     user.suspended_at = datetime.now(UTC)
     user.suspension_reason = reason.strip()
     user.suspended_by = admin.id
     _sync_better_auth_ban(db, user, banned=True)
+    audit_log.record_admin_action(
+        db,
+        admin=admin,
+        action=audit_log.SUSPEND,
+        target_type="user",
+        target_id=user.id,
+        before=before,
+        after=_suspension_state(user),
+    )
     db.commit()
     db.refresh(user)
     return user
 
 
-def reinstate_user(db: Session, user: User) -> User:
+def reinstate_user(db: Session, user: User, *, admin: User) -> User:
+    before = _suspension_state(user)
     user.suspended_at = None
     user.suspension_reason = None
     user.suspended_by = None
     _sync_better_auth_ban(db, user, banned=False)
+    audit_log.record_admin_action(
+        db,
+        admin=admin,
+        action=audit_log.REINSTATE,
+        target_type="user",
+        target_id=user.id,
+        before=before,
+        after=_suspension_state(user),
+    )
     db.commit()
     db.refresh(user)
     return user

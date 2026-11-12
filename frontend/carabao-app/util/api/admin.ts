@@ -310,3 +310,35 @@ export const reinstateUser = async (userId: number): Promise<UserProfile> => {
   const res = await apiClient.post<UserProfile>(`/admin/users/${userId}/reinstate`);
   return res.data;
 };
+
+// ── Audit log (A4) ───────────────────────────────────────────────────────────
+
+export type AuditLogEntry = {
+  id: number;
+  admin_id: number | null;
+  admin_email: string;
+  action: string;
+  target_type: string;
+  target_id: number | null;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export const AUDIT_PAGE_SIZE = 50;
+
+export const fetchAuditLog = async (
+  filters: { action?: string },
+  page = 1,
+  pageSize = AUDIT_PAGE_SIZE,
+): Promise<Paginated<AuditLogEntry>> => {
+  const res = await apiClient.get<Paginated<AuditLogEntry>>('/admin/audit-log', {
+    params: { ...filters, page, page_size: pageSize },
+  });
+  return res.data;
+};
+
+export const fetchAuditActions = async (): Promise<string[]> => {
+  const res = await apiClient.get<string[]>('/admin/audit-log/actions');
+  return res.data;
+};
