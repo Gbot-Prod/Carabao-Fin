@@ -58,6 +58,7 @@ from app.services.order_status import (
     payment_status,
 )
 from app.services.produce_freshness import freshness_error, is_listed, ph_today
+from app.services.produce_pricing import parse_tiers, pricing_error, serialize_tiers
 from app.services.sms_service import notify_order_shipped
 from app.utils.geocoding import _geocode
 
@@ -432,10 +433,17 @@ def create_produce(
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
     error = freshness_error(produce_in.harvest_date, produce_in.best_before)
+    error = error or pricing_error(
+        produce_in.price, produce_in.min_order_qty, produce_in.price_tiers
+    )
     if error:
         raise HTTPException(status_code=400, detail=error)
 
-    produce = Produce(merchant_id=merchant.id, **produce_in.model_dump())
+    produce = Produce(
+        merchant_id=merchant.id,
+        **produce_in.model_dump(exclude={"price_tiers"}),
+        price_tiers=serialize_tiers(produce_in.price_tiers),
+    )
     db.add(produce)
     db.commit()
     db.refresh(produce)
@@ -461,12 +469,20 @@ def update_produce(
     if not produce:
         raise HTTPException(status_code=404, detail="Produce item not found")
 
-    for field, value in produce_update.model_dump(exclude_unset=True).items():
+    changes = produce_update.model_dump(exclude_unset=True, exclude={"price_tiers"})
+    for field, value in changes.items():
         setattr(produce, field, value)
+    tiers = (
+        produce_update.price_tiers
+        if "price_tiers" in produce_update.model_fields_set
+        else parse_tiers(produce.price_tiers)
+    )
+    produce.price_tiers = serialize_tiers(tiers)
 
     # An edited listing must carry valid dates, including one created before
-    # they were collected.
+    # they were collected, and tiers that still fit its price.
     error = freshness_error(produce.harvest_date, produce.best_before)
+    error = error or pricing_error(produce.price, produce.min_order_qty, tiers)
     if error:
         db.rollback()
         raise HTTPException(status_code=400, detail=error)

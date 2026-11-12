@@ -34,6 +34,7 @@ from app.services.order_status import (
     money_received_clause,
 )
 from app.services.produce_freshness import is_expired, ph_today
+from app.services.produce_pricing import unit_price_for
 from app.services.review_service import (
     can_review,
     review_deadline,
@@ -120,6 +121,14 @@ def place_order_from_cart(
         quantity = max(_to_int(item.get("quantity"), 0), 0)
         if quantity == 0:
             raise HTTPException(status_code=400, detail="Item quantity must be positive")
+        if quantity < produce.min_order_qty:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"'{produce.name}' has a minimum order of "
+                    f"{produce.min_order_qty}, {quantity} requested"
+                ),
+            )
         if produce.stock_quantity < quantity:
             raise HTTPException(
                 status_code=400,
@@ -131,8 +140,9 @@ def place_order_from_cart(
 
         produce_by_id[produce_id] = produce
         produce.stock_quantity -= quantity
-        fresh_total += produce.price * quantity
-        order_items.append({**item, "price": produce.price})
+        unit_price = unit_price_for(produce, quantity)
+        fresh_total += unit_price * quantity
+        order_items.append({**item, "price": unit_price})
 
     merchant_ids = {produce.merchant_id for produce in produce_by_id.values()}
     if len(merchant_ids) != 1:
