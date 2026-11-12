@@ -209,6 +209,9 @@ export type AdminOrderDetail = AdminOrderSummary & {
     paymongo_payment_id: string | null;
     created_at: string;
     paid_at: string | null;
+    refund_method: string | null;
+    refund_reference: string | null;
+    refunded_at: string | null;
   }[];
   shipment: { id: number; status: string; stop_count: number; shipped_at: string | null } | null;
   delivery: {
@@ -243,5 +246,50 @@ export const fetchAdminOrders = async (
 
 export const fetchAdminOrder = async (orderId: number): Promise<AdminOrderDetail> => {
   const res = await apiClient.get<AdminOrderDetail>(`/admin/orders/${orderId}`);
+  return res.data;
+};
+
+// ── Refunds (A2) ─────────────────────────────────────────────────────────────
+
+export type RefundMethod = 'paymongo' | 'gcash' | 'maya' | 'bank_transfer' | 'cash';
+
+export const REFUND_METHOD_LABELS: Record<RefundMethod, string> = {
+  paymongo: 'PayMongo refund',
+  gcash: 'GCash',
+  maya: 'Maya',
+  bank_transfer: 'Bank transfer',
+  cash: 'Cash',
+};
+
+export type AdminRefund = {
+  transaction_id: number;
+  order_id: number;
+  order_status: string;
+  status: 'refund_pending' | 'refunded';
+  amount: number;
+  paymongo_payment_id: string | null;
+  paid_at: string | null;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  buyer_phone: string | null;
+  merchant_name: string | null;
+  refund_method: RefundMethod | null;
+  refund_reference: string | null;
+  refund_notes: string | null;
+  refunded_at: string | null;
+};
+
+export const fetchAdminRefunds = async (
+  status: 'refund_pending' | 'refunded' = 'refund_pending',
+): Promise<AdminRefund[]> => {
+  const res = await apiClient.get<AdminRefund[]>('/admin/refunds', { params: { status } });
+  return res.data;
+};
+
+export const recordRefund = async (
+  transactionId: number,
+  payload: { method: RefundMethod; reference: string; notes?: string },
+): Promise<AdminRefund> => {
+  const res = await apiClient.post<AdminRefund>(`/admin/refunds/${transactionId}`, payload);
   return res.data;
 };

@@ -1,4 +1,4 @@
-"""Admin view of every order: filterable list and a full detail view (A1)."""
+"""Admin view of every order (A1) and the refund queue (A2)."""
 
 from datetime import date, datetime, time, timedelta
 
@@ -18,9 +18,12 @@ from app.schemas.admin_order import (
     AdminOrderShipment,
     AdminOrderSummary,
     AdminOrderTransaction,
+    AdminRefund,
+    RecordRefundPayload,
 )
 from app.schemas.pagination import Page
 from app.services.order_status import payment_status
+from app.services.refund_service import RefundError, record_refund
 
 router = APIRouter(tags=["admin"])
 
@@ -139,6 +142,9 @@ def get_order_detail(
                 paymongo_payment_id=t.paymongo_payment_id,
                 created_at=t.created_at,
                 paid_at=t.paid_at,
+                refund_method=t.refund_method,
+                refund_reference=t.refund_reference,
+                refunded_at=t.refunded_at,
             )
             for t in order.transactions
         ],
@@ -162,3 +168,74 @@ def get_order_detail(
             delivery_confirmed_by=order.delivery_confirmed_by,
         ),
     )
+
+
+def _refund_view(txn: Transaction) -> AdminRefund:
+    order = txn.order
+    return AdminRefund(
+        transaction_id=txn.id,
+        order_id=txn.order_id,
+        order_status=order.status if order else "",
+        status=txn.status,
+        amount=txn.amount,
+        paymongo_payment_id=txn.paymongo_payment_id,
+        paid_at=txn.paid_at,
+        buyer_name=_buyer_name(txn.user),
+        buyer_email=txn.user.email if txn.user else None,
+        buyer_phone=txn.user.phone_number if txn.user else None,
+        merchant_name=txn.merchant.merchant_name if txn.merchant else None,
+        refund_method=txn.refund_method,
+        refund_reference=txn.refund_reference,
+        refund_notes=txn.refund_notes,
+        refunded_at=txn.refunded_at,
+    )
+
+
+@router.get("/admin/refunds", response_model=list[AdminRefund])
+def list_refunds(
+    status: TransactionStatus = TransactionStatus.REFUND_PENDING,
+    db: Session = Depends(get_db),
+    _: User = Depends(_require_admin),
+):
+    if status not in (TransactionStatus.REFUND_PENDING, TransactionStatus.REFUNDED):
+        raise HTTPException(
+            status_code=422, detail="status must be refund_pending or refunded"
+        )
+    order_by = (
+        Transaction.refunded_at.desc()
+        if status == TransactionStatus.REFUNDED
+        else Transaction.created_at.asc()
+    )
+    txns = (
+        db.query(Transaction)
+        .options(
+            joinedload(Transaction.order),
+            joinedload(Transaction.user),
+            joinedload(Transaction.merchant),
+        )
+        .filter(Transaction.status == status)
+        .order_by(order_by, Transaction.id.asc())
+        .all()
+    )
+    return [_refund_view(t) for t in txns]
+
+
+@router.post("/admin/refunds/{transaction_id}", response_model=AdminRefund)
+def record_transaction_refund(
+    transaction_id: int,
+    payload: RecordRefundPayload,
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    try:
+        txn = record_refund(
+            db,
+            transaction_id=transaction_id,
+            admin=admin,
+            method=payload.method,
+            reference=payload.reference,
+            notes=payload.notes,
+        )
+    except RefundError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return _refund_view(txn)

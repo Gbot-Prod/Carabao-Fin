@@ -265,6 +265,7 @@ function OrderDetailPanel({ orderId, onClose }: { orderId: number; onClose: () =
                       <span className={styles.sub}>
                         Created {when(t.created_at)}{t.paid_at ? ` · paid ${when(t.paid_at)}` : ""}
                         {t.paymongo_payment_id ? ` · ${t.paymongo_payment_id}` : ""}
+                        {t.refund_reference ? ` · refunded via ${label(t.refund_method ?? "")} (${t.refund_reference})` : ""}
                       </span>
                     </li>
                   ))}

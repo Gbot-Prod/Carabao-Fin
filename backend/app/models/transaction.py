@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -39,7 +39,16 @@ class Transaction(Base):
     )
     paid_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Set when an admin records the refund of a refund_pending payment (A2).
+    refund_method = Column(String, nullable=True)
+    refund_reference = Column(String, nullable=True)
+    refunded_at = Column(DateTime(timezone=True), nullable=True)
+    refunded_by = Column(
+        Integer, ForeignKey("backend_users.id", ondelete="SET NULL"), nullable=True
+    )
+    refund_notes = Column(Text, nullable=True)
+
     order = relationship("Order", back_populates="transactions")
     merchant = relationship("Merchant")
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     payout_items = relationship("PayoutBatchItem", back_populates="transaction")

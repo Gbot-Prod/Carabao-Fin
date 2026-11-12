@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "/admin/merchants", label: "Merchants" },
   { href: "/admin/review", label: "Review" },
   { href: "/admin/payouts", label: "Payouts" },
+  { href: "/admin/refunds", label: "Refunds" },
 ];
 
 export default function AdminSidebar() {
