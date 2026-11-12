@@ -157,11 +157,14 @@ export const enableTwoFactor = async (password: string) => {
 export const verifyTwoFactorSetup = async (code: string) => {
   const { error } = await authClient.twoFactor.verifyTotp({ code });
   if (error) throw new Error(getErrorMessage(error, "That code didn't match. Try the newest code."));
+  // Tell the backend straight away (admin access depends on it, E8c).
+  await syncBackendSession();
 };
 
 export const disableTwoFactor = async (password: string) => {
   const { error } = await authClient.twoFactor.disable({ password });
   if (error) throw new Error(getErrorMessage(error, "Could not turn off two-step verification"));
+  await syncBackendSession();
 };
 
 // Second step of a two-step sign-in (E8b): an authenticator or backup code

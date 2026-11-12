@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -45,9 +46,22 @@ from app.services.produce_freshness import PH_TZ
 router = APIRouter(tags=["admin"])
 
 
+ADMIN_2FA_DETAIL = (
+    "Two-step verification is required for admin accounts. Turn it on in your "
+    "profile, then reload this page."
+)
+
+
+def admin_requires_two_factor() -> bool:
+    """E8c: on unless ADMIN_REQUIRE_2FA=false (e.g. for a local demo)."""
+    return os.getenv("ADMIN_REQUIRE_2FA", "true").lower() not in {"0", "false", "no"}
+
+
 def _require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
+    if admin_requires_two_factor() and not current_user.two_factor_enabled:
+        raise HTTPException(status_code=403, detail=ADMIN_2FA_DETAIL)
     return current_user
 
 

@@ -48,6 +48,10 @@ class User(Base):
     profile_picture_url = Column(String, nullable=True)
     paymongo_customer_id = Column(String, unique=True, index=True, nullable=True)
     is_admin = Column(Boolean, nullable=False, default=False)
+    # Mirrors BetterAuth's twoFactorEnabled, set at /auth/sync (E8c).
+    two_factor_enabled = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     # Set by an admin (A3). A suspended user can't sign in or call the API, and
     # a suspended merchant's shop and listings are hidden from buyers.
     suspended_at = Column(DateTime(timezone=True), nullable=True, index=True)

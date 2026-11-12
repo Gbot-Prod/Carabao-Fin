@@ -81,6 +81,8 @@ class AuthSyncPayload(BaseModel):
     # Better Auth's emailVerified flag; trusted because the caller holds the
     # shared secret.
     email_verified: bool = False
+    # Better Auth's twoFactorEnabled (E8c); None leaves the stored value alone.
+    two_factor_enabled: bool | None = None
 
 
 class AuthSyncResponse(BaseModel):
@@ -207,6 +209,13 @@ def sync_auth(
 
     if user.suspended_at is not None:
         raise HTTPException(status_code=403, detail=suspended_detail(user))
+
+    if (
+        payload.two_factor_enabled is not None
+        and user.two_factor_enabled != payload.two_factor_enabled
+    ):
+        user.two_factor_enabled = payload.two_factor_enabled
+        db.commit()
 
     access_token = create_access_token(
         subject=user.external_auth_id,
