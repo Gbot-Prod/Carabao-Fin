@@ -7,6 +7,8 @@ import Link from "next/link";
 import "./sidebar.css";
 import Logo from "@/public/images/icons/carabaoLogo.png";
 import { LogoutButton } from "@/components/LogoutButton";
+import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
 import { SidebarFilterChips } from "./SidebarFilterChips";
@@ -87,6 +89,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
   const { showPrompt } = useAuthPrompt();
+  const { t } = useLanguage();
 
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -186,7 +189,7 @@ export default function Sidebar() {
           href={profileBlocked ? "#" : "/profile"}
           className={`sidebar__account${pathname === "/profile" ? " sidebar__account--active" : ""}`}
           onClick={profileBlocked ? (e) => { e.preventDefault(); showPrompt(); } : () => setIsMobileOpen(false)}
-          aria-label="Open profile"
+          aria-label={t.nav.openProfile}
         >
           
           <div className="sidebar__avatar">
@@ -198,7 +201,7 @@ export default function Sidebar() {
             )}
           </div>
           <div className="sidebar__account-text">
-            <span className="sidebar__account-name">{isLoading ? "Loading..." : displayName}</span>
+            <span className="sidebar__account-name">{isLoading ? t.nav.loading : displayName}</span>
             {displayEmail && <span className="sidebar__account-email">{displayEmail}</span>}
           </div>
         </Link>
@@ -206,20 +209,20 @@ export default function Sidebar() {
         <nav className="sidebar__nav">
           <div className="sidebar__section">
             <ul className="sidebar__nav-list">
-              {renderNavLink("/order", "Shops", <ShopIcon />)}
-              {renderNavLink("/cart", "Cart", <CartIcon />)}
-              {renderNavLink("/track", "Track", <TrackIcon />, true)}
-              {renderNavLink("/orders", "Orders", <ReceiptIcon />, true)}
+              {renderNavLink("/order", t.nav.shops, <ShopIcon />)}
+              {renderNavLink("/cart", t.nav.cart, <CartIcon />)}
+              {renderNavLink("/track", t.nav.track, <TrackIcon />, true)}
+              {renderNavLink("/orders", t.nav.orders, <ReceiptIcon />, true)}
             </ul>
           </div>
 
           {merchantId != null && (
             <div className="sidebar__section sidebar__section--divided">
               <div className="sidebar__merchant">
-                <span className="sidebar__merchant-label">Merchant</span>
+                <span className="sidebar__merchant-label">{t.nav.merchant}</span>
                 <ul className="sidebar__nav-list">
-                  {renderNavLink(`/merchant/${merchantId}`, "My Shop Page", <StoreIcon />, true)}
-                  {renderNavLink("/merchantDashboard", "Dashboard", <DashboardIcon />, true)}
+                  {renderNavLink(`/merchant/${merchantId}`, t.nav.myShopPage, <StoreIcon />, true)}
+                  {renderNavLink("/merchantDashboard", t.nav.dashboard, <DashboardIcon />, true)}
                 </ul>
               </div>
             </div>
@@ -231,6 +234,7 @@ export default function Sidebar() {
         </nav>
 
         <div className="sidebar__footer">
+          <LanguageToggle className="sidebar__language" />
           {!isLoading && (
             isAuthenticated ? (
               <LogoutButton className="sidebar__logout sidebar__logout-button">
@@ -241,10 +245,10 @@ export default function Sidebar() {
                     <line x1="21" y1="12" x2="9" y2="12" />
                   </svg>
                 </span>
-                <span>Sign Out</span>
+                <span>{t.nav.signOut}</span>
               </LogoutButton>
             ) : (
-              <Link href="/auth" className="sidebar__nav-link">Sign In</Link>
+              <Link href="/auth" className="sidebar__nav-link">{t.nav.signIn}</Link>
             )
           )}
         </div>

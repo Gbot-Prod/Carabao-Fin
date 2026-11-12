@@ -7,10 +7,13 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Logo from "@/public/images/icons/carabaoLogo.png";
+import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import "./page.css";
 
 export default function SignupPage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [authMode, setMode] = useState<"signin" | "signup">("signin");
   const [signUpMode, setSignUpMode] = useState<"number" | "email">("number");
   const [formData, setFormData] = useState({
@@ -67,7 +70,7 @@ export default function SignupPage() {
         router.push("/");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Authentication failed. Please try again.";
+      const message = err instanceof Error ? err.message : t.auth.genericError;
       setError(message);
     } finally {
       setIsLoading(false);
@@ -78,12 +81,9 @@ export default function SignupPage() {
     <div className="auth-page">
       <section className="auth-brand-panel">
         <div className="auth-brand-content">
-          <Image src={Logo} alt="Carabao Logo" className="auth-brand-logo" priority />
+          <Image src={Logo} alt={t.auth.logoAlt} className="auth-brand-logo" priority />
           <h1>Carabao</h1>
-          <p>
-            Farm-fresh produce, delivered with confidence. Join the marketplace that connects
-            buyers and trusted local merchants.
-          </p>
+          <p>{t.auth.brandTagline}</p>
         </div>
         <div className="auth-brand-orb auth-brand-orb-one" aria-hidden="true" />
         <div className="auth-brand-orb auth-brand-orb-three" aria-hidden="true" />
@@ -94,23 +94,26 @@ export default function SignupPage() {
       <section className="auth-form-panel">
         <div className="auth-form-shell">
           <div className="auth-header">
-            <p className="auth-kicker">Welcome</p>
-            <h2>{authMode === "signup" ? "Create your Carabao account" : "Sign in to Carabao"}</h2>
+            <div className="auth-kicker-row">
+              <p className="auth-kicker">{t.auth.welcome}</p>
+              <LanguageToggle />
+            </div>
+            <h2>{authMode === "signup" ? t.auth.signUpTitle : t.auth.signInTitle}</h2>
             <div className="auth-header-buttons">
-              <div className="auth-switch" role="tablist" aria-label="Authentication mode">
+              <div className="auth-switch" role="tablist" aria-label={t.auth.modeLabel}>
                 <button
                   type="button"
                   className={`auth-switch-btn ${authMode === "signin" ? "active" : ""}`}
                   onClick={() => { setMode("signin"); setVerificationStep("identifier"); setError(""); }}
                 >
-                  Sign in
+                  {t.auth.signIn}
                 </button>
                 <button
                   type="button"
                   className={`auth-switch-btn ${authMode === "signup" ? "active" : ""}`}
                   onClick={() => { setMode("signup"); setVerificationStep("identifier"); setError(""); }}
                 >
-                  Sign up
+                  {t.auth.signUp}
                 </button>
               </div>
 
@@ -118,14 +121,14 @@ export default function SignupPage() {
                 <div
                   className="signup-mode-switch"
                   role="tablist"
-                  aria-label="Signup mode"
+                  aria-label={t.auth.signUpModeLabel}
                 >
                   <button
                     type="button"
                     role="tab"
-                    aria-label="Sign up with phone number"
+                    aria-label={t.auth.signUpWithPhone}
                     aria-selected={signUpMode === "number"}
-                    title="Sign up with phone number"
+                    title={t.auth.signUpWithPhone}
                     className={`signup-mode-btn ${signUpMode === "number" ? "active" : ""
                       }`}
                     onClick={() => setSignUpMode("number")}
@@ -136,9 +139,9 @@ export default function SignupPage() {
                   <button
                     type="button"
                     role="tab"
-                    aria-label="Sign up with email"
+                    aria-label={t.auth.signUpWithEmail}
                     aria-selected={signUpMode === "email"}
-                    title="Sign up with email"
+                    title={t.auth.signUpWithEmail}
                     className={`signup-mode-btn ${signUpMode === "email" ? "active" : ""
                       }`}
                     onClick={() => setSignUpMode("email")}
@@ -169,7 +172,7 @@ export default function SignupPage() {
                         autoComplete="email"
                         required
                         className="auth-input"
-                        placeholder="Email address"
+                        placeholder={t.auth.emailPlaceholder}
                         value={formData.email}
                         onChange={handleChange}
                         disabled={verificationStep === "code"}
@@ -206,14 +209,12 @@ export default function SignupPage() {
                         pattern="[0-9]{6}"
                         maxLength={6}
                         className="auth-input"
-                        placeholder="6-digit verification code"
+                        placeholder={t.auth.codePlaceholder}
                         value={formData.verificationCode}
                         onChange={handleChange}
                       />
                       <button type="button" className="code-resend" onClick={() => setIsResending(true)}>
-                        {isResending ? "Please wait before sending another code" : "Resend Code"
-                        
-                        }
+                        {isResending ? t.auth.resendWait : t.auth.resendCode}
                       </button>
                     </>
                   )}
@@ -227,7 +228,7 @@ export default function SignupPage() {
                 autoComplete="email"
                 required
                 className="auth-input"
-                placeholder="Email address"
+                placeholder={t.auth.emailPlaceholder}
                 value={formData.email}
                 onChange={handleChange}
               />
@@ -237,7 +238,7 @@ export default function SignupPage() {
                     type="password"
                     required
                     className="auth-input"
-                    placeholder="Password"
+                    placeholder={t.auth.passwordPlaceholder}
                     value={formData.password}
                     onChange={handleChange}
                   />
@@ -246,9 +247,9 @@ export default function SignupPage() {
             </div>
 
             <button type="submit" disabled={isLoading} className="auth-submit">
-              {isLoading ? "Please wait..." : authMode === "signup"
-                ? verificationStep === "identifier" ? "Send verification code" : "Verify and continue"
-                : "Sign in"}
+              {isLoading ? t.auth.pleaseWait : authMode === "signup"
+                ? verificationStep === "identifier" ? t.auth.sendCode : t.auth.verifyAndContinue
+                : t.auth.signIn}
             </button>
 
           </form>

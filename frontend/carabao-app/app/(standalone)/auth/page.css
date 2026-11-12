@@ -390,3 +390,11 @@
     box-shadow: 0 16px 30px rgb(15 50 28 / 0.11);
   }
 }
+
+/* Welcome line with the English / Filipino switch (L1) */
+.auth-kicker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}

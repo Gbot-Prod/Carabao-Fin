@@ -424,3 +424,9 @@
     pointer-events: auto;
   }
 }
+
+/* English / Filipino switch (L1) */
+.sidebar__language {
+  align-self: flex-start;
+  margin-bottom: 8px;
+}
