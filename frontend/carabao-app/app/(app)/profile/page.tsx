@@ -13,6 +13,7 @@ import MapPinPicker from '@/components/MapPinPicker/MapPinPicker';
 import type { Pin } from '@/util/reverseGeocode';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import TwoFactorSettings from '@/components/TwoFactorSettings/TwoFactorSettings';
+import { TWO_FACTOR_ENABLED } from '@/lib/features';
 import OrderChat from '@/components/OrderChat/OrderChat';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
 
@@ -557,7 +558,7 @@ export default function Profile() {
           </section>
 
           {/* Two-step verification (E8a): offered to merchants and admins */}
-          {(hasMerchant || profile?.is_admin) && <TwoFactorSettings />}
+          {TWO_FACTOR_ENABLED && (hasMerchant || profile?.is_admin) && <TwoFactorSettings />}
 
           {/* Danger zone */}
           <section className={styles.profileDangerZone}>

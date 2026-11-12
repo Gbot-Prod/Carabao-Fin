@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { admin, twoFactor } from "better-auth/plugins";
+import { TWO_FACTOR_ENABLED } from "@/lib/features";
 import { Pool } from "pg";
 
 const rawPostgresUrl =
@@ -117,7 +118,9 @@ function readSignupVerification(token: string | null | undefined): SignupVerific
 
 export const auth = betterAuth({
   // E8: TOTP two-step verification ("Carabao" is the name shown in authenticator apps).
-  plugins: [admin(), twoFactor({ issuer: "Carabao" })],
+  // Switched off for now (lib/features.ts): without the plugin, sign-in never asks
+  // for a code, even for accounts that turned it on earlier.
+  plugins: TWO_FACTOR_ENABLED ? [admin(), twoFactor({ issuer: "Carabao" })] : [admin()],
   databaseHooks: {
     user: {
       create: {

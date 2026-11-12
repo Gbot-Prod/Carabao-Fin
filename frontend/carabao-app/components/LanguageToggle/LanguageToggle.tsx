@@ -2,6 +2,7 @@
 
 import { useLanguage, type Language } from "@/lib/i18n/LanguageProvider";
 import styles from "./LanguageToggle.module.css";
+import { LANGUAGE_TOGGLE_ENABLED } from "@/lib/features";
 
 const OPTIONS: { value: Language; short: string }[] = [
   { value: "en", short: "EN" },
@@ -11,6 +12,7 @@ const OPTIONS: { value: Language; short: string }[] = [
 /** English / Filipino switch (L1). */
 export default function LanguageToggle({ className = "" }: { className?: string }) {
   const { lang, setLang, t } = useLanguage();
+  if (!LANGUAGE_TOGGLE_ENABLED) return null; // switched off for now (lib/features.ts)
   return (
     <div className={`${styles.toggle} ${className}`} role="group" aria-label={t.language.label}>
       {OPTIONS.map((option) => (

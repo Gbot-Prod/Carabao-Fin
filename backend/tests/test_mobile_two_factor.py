@@ -69,3 +69,9 @@ def test_wrong_password_is_still_401_not_a_hint(db, client):  # noqa: F811
         json={"email": "farmer@example.com", "password": "wrong-password"},
     )
     assert res.status_code == 401
+
+
+def test_feature_off_lets_two_factor_accounts_sign_in(db, client, monkeypatch):  # noqa: F811
+    monkeypatch.setenv("TWO_FACTOR_ENABLED", "false")
+    _user(db, external_auth_id="ba_1", two_factor_enabled=True)
+    assert _sign_in(client).status_code == 200

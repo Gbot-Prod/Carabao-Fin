@@ -26,6 +26,7 @@ from app.models.user import User, normalize_email
 from app.services import rate_limit
 from app.services.account_suspension import suspended_detail
 from app.services.email import send_password_reset_otp_email
+from app.services.features import two_factor_enabled
 
 router = APIRouter(tags=["auth"])
 
@@ -499,7 +500,7 @@ def mobile_sign_in(
 
     # E8d: the app can't ask for the authenticator code yet, so a password alone
     # must not get an account with two-step verification in.
-    if _two_factor_on(db, user):
+    if two_factor_enabled() and _two_factor_on(db, user):
         raise HTTPException(status_code=403, detail=MOBILE_TWO_FACTOR_DETAIL)
 
     access_token = create_access_token(

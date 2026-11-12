@@ -31,6 +31,7 @@ from app.schemas.payout import (
 from app.schemas.user import UserResponse
 from app.services import audit_log, paymongo, r2_service
 from app.services.account_suspension import reinstate_user, suspend_user
+from app.services.features import two_factor_enabled
 from app.services.merchant_service import create_merchant_from_application
 from app.services.payout_service import (
     PayoutError,
@@ -53,7 +54,10 @@ ADMIN_2FA_DETAIL = (
 
 
 def admin_requires_two_factor() -> bool:
-    """E8c: on unless ADMIN_REQUIRE_2FA=false (e.g. for a local demo)."""
+    """E8c: only while two-step verification is turned on (TWO_FACTOR_ENABLED),
+    and then unless ADMIN_REQUIRE_2FA=false (e.g. for a local demo)."""
+    if not two_factor_enabled():
+        return False
     return os.getenv("ADMIN_REQUIRE_2FA", "true").lower() not in {"0", "false", "no"}
 
 
@@ -371,7 +375,9 @@ def get_admin_stats(
             func.sum(Transaction.amount).label("revenue"),
             func.sum(Transaction.platform_fee).label("platform_fee"),
         )
-        .filter(Transaction.status == TransactionStatus.PAID, Transaction.paid_at >= since)
+        .filter(
+            Transaction.status == TransactionStatus.PAID, Transaction.paid_at >= since
+        )
         .group_by(paid_day)
         .order_by(paid_day)
         .all()

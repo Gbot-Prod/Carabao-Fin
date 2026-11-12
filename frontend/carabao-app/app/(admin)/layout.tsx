@@ -4,9 +4,12 @@ import { auth } from "@/lib/auth";
 import AdminSidebar from "./AdminSidebar";
 import Link from "next/link";
 import styles from "./layout.module.css";
+import { TWO_FACTOR_ENABLED } from "@/lib/features";
 
 // E8c: same switch as the backend's ADMIN_REQUIRE_2FA (default on).
-const requireTwoFactor = (process.env.ADMIN_REQUIRE_2FA ?? "true").toLowerCase() !== "false";
+// Only while two-step verification is switched on (lib/features.ts).
+const requireTwoFactor =
+  TWO_FACTOR_ENABLED && (process.env.ADMIN_REQUIRE_2FA ?? "true").toLowerCase() !== "false";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const reqHeaders = await headers();

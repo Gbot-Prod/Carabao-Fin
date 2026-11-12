@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import en, { type Strings } from "./strings/en";
 import fil from "./strings/fil";
+import { LANGUAGE_TOGGLE_ENABLED } from "@/lib/features";
 
 // English / Filipino UI (L1). The choice is a per-browser convenience, so it lives
 // in localStorage; the page always renders in English first and switches after
@@ -38,6 +39,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Language>("en");
 
   useEffect(() => {
+    // With the toggle switched off, ignore a Filipino choice saved earlier.
+    if (!LANGUAGE_TOGGLE_ENABLED) return;
     const saved = readSaved();
     if (saved && saved !== "en") queueMicrotask(() => setLangState(saved));
   }, []);
