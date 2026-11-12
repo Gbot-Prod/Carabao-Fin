@@ -227,6 +227,12 @@ const en = {
     signUp: 'Create an account',
     later: 'Not now',
   },
+  idle: {
+    title: 'Are you still there?',
+    body: "You'll be signed out in {seconds} seconds because you've been inactive.",
+    stay: 'Stay signed in',
+    signedOutNotice: 'You were signed out after a period of inactivity. Please sign in again.',
+  },
 };
 
 export type Strings = typeof en;

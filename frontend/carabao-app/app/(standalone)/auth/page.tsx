@@ -30,10 +30,17 @@ export default function SignupPage() {
   const [isResending, setIsResending] = useState(false);
   const [verificationStep, setVerificationStep] = useState<"identifier" | "code">("identifier");
 
-  // "Create an account" links (E4) open the page on sign-up.
+  const [idleNotice, setIdleNotice] = useState(false);
+
+  // "Create an account" links (E4) open the page on sign-up; ?reason=idle (E5)
+  // explains an automatic sign-out.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("mode") === "signup") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "signup") {
       queueMicrotask(() => setMode("signup"));
+    }
+    if (params.get("reason") === "idle") {
+      queueMicrotask(() => setIdleNotice(true));
     }
   }, []);
 
@@ -161,6 +168,11 @@ export default function SignupPage() {
           </div>
 
           <form className="auth-form" onSubmit={handleSubmit}>
+            {idleNotice && !error && (
+              <div className="auth-notice" role="status">
+                {t.idle.signedOutNotice}
+              </div>
+            )}
             {error && (
               <div className="auth-error" role="alert" aria-live="polite">
                 <div>{error}</div>

@@ -236,6 +236,12 @@ const fil: Strings = {
     signUp: 'Gumawa ng account',
     later: 'Mamaya na',
   },
+  idle: {
+    title: 'Nandiyan ka pa ba?',
+    body: 'Ikaw ay isa-sign out sa loob ng {seconds} segundo dahil matagal kang walang ginagawa.',
+    stay: 'Manatiling naka-sign in',
+    signedOutNotice: 'Na-sign out ka dahil matagal kang walang ginagawa. Mag-sign in muli.',
+  },
 };
 
 export default fil;

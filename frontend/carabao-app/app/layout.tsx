@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import { LanguageProvider } from "@/lib/i18n/LanguageProvider";
+import IdleLogout from "@/components/IdleLogout/IdleLogout";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -27,6 +28,7 @@ export default function RootLayout({
         <LanguageProvider>
           <AuthProvider>
             {children}
+            <IdleLogout />
           </AuthProvider>
         </LanguageProvider>
       </body>

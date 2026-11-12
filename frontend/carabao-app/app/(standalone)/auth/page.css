@@ -398,3 +398,13 @@
   justify-content: space-between;
   gap: 12px;
 }
+
+/* Automatic sign-out notice (E5) */
+.auth-notice {
+  padding: 10px 12px;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-sm);
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 14px;
+}
