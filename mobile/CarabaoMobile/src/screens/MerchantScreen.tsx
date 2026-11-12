@@ -88,6 +88,7 @@ function MerchantScreenContent() {
       produce: product.name ?? 'Produce',
       unit: product.unit,
       price: product.price,
+      deliveryFee: merchant?.delivery_price ?? null,
     }, product.min_order_qty);
     setAddedIds((prev) => new Set([...prev, product.id]));
   };

@@ -226,10 +226,22 @@ export type PlaceOrderPayload = {
   service_fee?: number;
 };
 
-export type PlaceOrderResponse = {
+export type PlacedOrder = {
   order_id: number;
   order_reference: string;
   status: string;
+  merchant_id: number;
+  merchant_name: string;
+  total_price: number;
+  delivery_fee: number;
+};
+
+export type PlaceOrderResponse = {
+  // The first order; `orders` lists one per farm in the cart (C1).
+  order_id: number;
+  order_reference: string;
+  status: string;
+  orders?: PlacedOrder[];
 };
 
 // Mirrors backend TransactionStatus (app/models/statuses.py).

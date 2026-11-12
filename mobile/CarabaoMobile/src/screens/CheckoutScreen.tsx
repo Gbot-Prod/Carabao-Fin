@@ -10,6 +10,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
 import { api } from '../lib/api';
+import { cartTotals, groupCartByFarm, type PendingOrder } from '../lib/cartGroups';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Button, Divider, StatRow } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -26,7 +27,7 @@ const TIME_WINDOWS = [
 
 function CheckoutScreenContent() {
   const router = useRouter();
-  const { items, total, clearCart } = useCart();
+  const { items, clearCart } = useCart();
   const { token } = useAuth();
   const [payment, setPayment] = useState('online');
   const [timeWindow, setTimeWindow] = useState(TIME_WINDOWS[0]);
@@ -34,8 +35,9 @@ function CheckoutScreenContent() {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const serviceFee = 40;
-  const grandTotal = total + serviceFee;
+  // One order per farm (C1), each with that farm's delivery fee.
+  const groups = groupCartByFarm(items);
+  const { itemTotal: total, deliveryTotal, grandTotal } = cartTotals(groups);
 
   const handlePlaceOrder = async () => {
     if (!token) {
@@ -68,13 +70,24 @@ function CheckoutScreenContent() {
         delivery_time: timeWindow,
         payment_method: payment,
         notes: notes.trim() || null,
-        service_fee: serviceFee,
+        // Ignored by the server, which charges each farm's own delivery fee.
+        service_fee: deliveryTotal,
       });
+      // PayMongo takes one order per checkout: pay the first here, the
+      // confirmation screen lists the other farms' orders to pay in turn.
+      const placed = result.orders?.length ? result.orders : null;
+      const first = placed ? placed[0] : { order_id: result.order_id, order_reference: result.order_reference };
+      const more: PendingOrder[] = (placed ?? []).slice(1).map((o) => ({
+        id: o.order_id,
+        ref: o.order_reference,
+        farm: o.merchant_name,
+        total: o.total_price,
+      }));
       clearCart();
       // The order exists now, so go to confirmation even if PayMongo fails;
       // that screen polls the transaction and offers "Pay now" to retry.
       try {
-        const checkout = await api.payments.checkout(token, result.order_id);
+        const checkout = await api.payments.checkout(token, first.order_id);
         // Resolves when the buyer closes the browser (PayMongo's redirect
         // lands on the web site, not the app).
         await WebBrowser.openBrowserAsync(checkout.checkout_url);
@@ -84,7 +97,11 @@ function CheckoutScreenContent() {
       }
       router.replace({
         pathname: '/confirmation',
-        params: { orderId: String(result.order_id), orderRef: result.order_reference },
+        params: {
+          orderId: String(first.order_id),
+          orderRef: first.order_reference,
+          ...(more.length ? { more: JSON.stringify(more) } : {}),
+        },
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to place order';
@@ -192,16 +209,33 @@ function CheckoutScreenContent() {
             <Ionicons name="receipt-outline" size={16} color={Colors.text} />
             <Text style={styles.sectionTitle}> Order Summary</Text>
           </View>
-          {items.map((item) => (
-            <StatRow
-              key={item.id}
-              label={`${item.quantity}x ${item.produce}`}
-              value={`₱${(item.quantity * item.price).toLocaleString()}`}
-            />
+          {groups.map((group) => (
+            <View key={group.key} style={styles.farmGroup}>
+              {groups.length > 1 && <Text style={styles.farmGroupName}>{group.farm}</Text>}
+              {group.items.map((item) => (
+                <StatRow
+                  key={item.id}
+                  label={`${item.quantity}x ${item.produce}`}
+                  value={`₱${(item.quantity * item.price).toLocaleString()}`}
+                />
+              ))}
+              <StatRow
+                label={groups.length > 1 ? `Delivery from ${group.farm}` : 'Delivery fee'}
+                value={`₱${group.deliveryFee.toLocaleString()}`}
+              />
+            </View>
           ))}
           <Divider />
           <StatRow label="Items subtotal" value={`₱${total.toLocaleString()}`} />
-          <StatRow label="Service fee" value={`₱${serviceFee}`} />
+          <StatRow
+            label={groups.length > 1 ? `Delivery fees (${groups.length} farms)` : 'Delivery fee'}
+            value={`₱${deliveryTotal.toLocaleString()}`}
+          />
+          {groups.length > 1 && (
+            <Text style={styles.fieldHint}>
+              This creates {groups.length} orders, one per farm. You'll pay for each in turn.
+            </Text>
+          )}
           <Divider style={{ marginTop: Spacing.sm }} />
           <StatRow label="Total" value={`₱${grandTotal.toLocaleString()}`} bold />
         </View>
@@ -254,6 +288,8 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
 
   fieldGroup: { marginBottom: Spacing.md },
+  farmGroup: { marginBottom: Spacing.sm },
+  farmGroupName: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text, marginBottom: 2 },
   fieldHint: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 4 },
   fieldLabel: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '600', marginBottom: 6 },
 
