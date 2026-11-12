@@ -13,6 +13,24 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
 
+// "YYYY-MM-DD" → "Nov 20", read as a calendar date so no timezone shifts the day.
+function formatDay(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return Number.isNaN(date.getTime())
+    ? ymd
+    : date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+}
+
+function freshnessLabel(product: ApiProduce): string {
+  const harvested = product.harvest_date
+    ? `Harvested ${formatDay(product.harvest_date)}`
+    : 'Harvest date not set';
+  return product.best_before
+    ? `${harvested} · Best before ${formatDay(product.best_before)}`
+    : harvested;
+}
+
 function MerchantScreenContent() {
   const router = useRouter();
   const { farmId, farmName } = useLocalSearchParams<{ farmId: string; farmName: string }>();
@@ -183,6 +201,7 @@ function MerchantScreenContent() {
                       {product.description ? (
                         <Text style={styles.productDesc} numberOfLines={2}>{product.description}</Text>
                       ) : null}
+                      <Text style={styles.productFreshness}>{freshnessLabel(product)}</Text>
                       <View style={styles.productFooter}>
                         <Text style={styles.productPrice}>₱{product.price.toLocaleString()}</Text>
                         <TouchableOpacity
@@ -294,6 +313,7 @@ const styles = StyleSheet.create({
   productCatText: { fontSize: 10, color: Colors.primary, fontWeight: '700' },
   productName: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   productDesc: { fontSize: FontSize.xs, color: Colors.textMuted, lineHeight: 16 },
+  productFreshness: { fontSize: FontSize.xs, color: Colors.textMuted },
   productFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   productPrice: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.primary },
   addBtn: { backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.md },

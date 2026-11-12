@@ -1,5 +1,6 @@
 import styles from "../page.module.css";
 import type { Produce, ProduceCreatePayload } from "@/util/api";
+import { todayInManila } from "../lib/format";
 
 export type ProduceFormState = {
   name: string;
@@ -10,10 +11,13 @@ export type ProduceFormState = {
   unit_quantity: number;
   stock_quantity: number;
   image_url: string;
+  harvest_date: string;
+  best_before: string;
 };
 
 export const emptyProduceForm: ProduceFormState = {
   name: "", description: "", category: "", price: 0, unit: "kg", unit_quantity: 1, stock_quantity: 0, image_url: "",
+  harvest_date: "", best_before: "",
 };
 
 export const produceToForm = (p: Produce): ProduceFormState => ({
@@ -25,6 +29,8 @@ export const produceToForm = (p: Produce): ProduceFormState => ({
   unit_quantity: p.unit_quantity ?? 1,
   stock_quantity: p.stock_quantity,
   image_url: p.image_url ?? "",
+  harvest_date: p.harvest_date ?? "",
+  best_before: p.best_before ?? "",
 });
 
 export const formToPayload = (f: ProduceFormState): ProduceCreatePayload => ({
@@ -36,6 +42,8 @@ export const formToPayload = (f: ProduceFormState): ProduceCreatePayload => ({
   unit_quantity: f.unit_quantity,
   stock_quantity: f.stock_quantity,
   image_url: f.image_url || null,
+  harvest_date: f.harvest_date,
+  best_before: f.best_before,
 });
 
 function TickGroup<T extends string>({
@@ -71,6 +79,31 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
         <label className={styles.formLabel}>
           Stock
           <input className={styles.formInput} type="number" min="0" value={form.stock_quantity} onChange={(e) => onChange({ ...form, stock_quantity: Number(e.target.value) })} />
+        </label>
+      </div>
+
+      <div className={styles.formGrid}>
+        <label className={styles.formLabel}>
+          Harvest date *
+          <input
+            className={styles.formInput}
+            type="date"
+            required
+            max={todayInManila()}
+            value={form.harvest_date}
+            onChange={(e) => onChange({ ...form, harvest_date: e.target.value })}
+          />
+        </label>
+        <label className={styles.formLabel}>
+          Best before *
+          <input
+            className={styles.formInput}
+            type="date"
+            required
+            min={form.harvest_date || undefined}
+            value={form.best_before}
+            onChange={(e) => onChange({ ...form, best_before: e.target.value })}
+          />
         </label>
       </div>
 

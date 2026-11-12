@@ -3,6 +3,7 @@ import styles from "../page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import { createProduce, deleteProduce, updateProduce, uploadProduceImage, type Produce } from "@/util/api";
 import ProduceFormFields, { emptyProduceForm, formToPayload, produceToForm, type ProduceFormState } from "./ProduceFormFields";
+import { formatRequestedDate, todayInManila } from "../lib/format";
 
 type Props = {
   produces: Produce[];
@@ -125,6 +126,16 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
                 {produce.category && <span className={styles.produceCategory}>{produce.category}</span>}
                 <span className={styles.producePrice}>₱{produce.price} / {produce.unit_quantity !== 1 ? produce.unit_quantity : ""}{produce.unit}</span>
                 <span className={styles.produceStock}>Stock: {produce.stock_quantity}</span>
+                {produce.harvest_date && produce.best_before ? (
+                  <span className={styles.produceFreshness}>
+                    Harvested {formatRequestedDate(produce.harvest_date)} · Best before {formatRequestedDate(produce.best_before)}
+                    {produce.best_before < todayInManila() && (
+                      <span className={styles.produceExpired}>Expired · hidden from buyers</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className={styles.produceFreshness}>Harvest date not set. Edit to add it.</span>
+                )}
                 {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
               </div>
               <div className={styles.produceRowActions}>

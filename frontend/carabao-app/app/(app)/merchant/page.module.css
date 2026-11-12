@@ -213,6 +213,12 @@
   color: #345f34;
 }
 
+.freshness {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #5b6b5b;
+}
+
 .addBtn {
   margin-top: auto;
   padding: 0.65rem;

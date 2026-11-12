@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -12,10 +13,13 @@ class ProduceBase(BaseModel):
     unit_quantity: float = 1.0
     stock_quantity: int = 0
     image_url: str | None = None
+    harvest_date: date | None = None
+    best_before: date | None = None
 
 
 class ProduceCreate(ProduceBase):
-    pass
+    harvest_date: date
+    best_before: date
 
 
 class ProduceUpdate(BaseModel):
@@ -27,6 +31,8 @@ class ProduceUpdate(BaseModel):
     unit_quantity: float | None = None
     stock_quantity: int | None = None
     image_url: str | None = None
+    harvest_date: date | None = None
+    best_before: date | None = None
 
     @field_validator("category", mode="before")
     @classmethod
