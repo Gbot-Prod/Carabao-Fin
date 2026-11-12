@@ -1,8 +1,9 @@
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.models.statuses import PayoutStatus, status_type
 
 
 class PayoutBatch(Base):
@@ -15,8 +16,12 @@ class PayoutBatch(Base):
     period_date = Column(Date, nullable=False, index=True)
     transaction_count = Column(Integer, nullable=False, default=0)
     gross_amount = Column(Integer, nullable=False, default=0)  # pesos
-    status = Column(String, nullable=False, default="pending", index=True)
-    # pending | approved | processing | released | failed
+    status = Column(
+        status_type(PayoutStatus, "ck_payout_batches_status"),
+        nullable=False,
+        default=PayoutStatus.PENDING,
+        index=True,
+    )
     notes = Column(Text, nullable=True)
     released_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(

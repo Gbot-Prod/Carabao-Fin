@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import requests as _requests
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_current_user, get_db
@@ -24,12 +25,16 @@ from app.schemas.shipment import (
     Waypoint,
 )
 from app.services.merchant_service import get_active_merchant
-from app.services.order_status import mark_shipped
+from app.models.statuses import OrderStatus
+from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
 from app.utils.geocoding import _geocode
 
 router = APIRouter(tags=["shipments"])
 
 GEOCODE_WORKERS = 8
+
+SHIPPABLE_ORDER_STATUSES = frozenset({OrderStatus.PROCESSING})
+# A stop is finished once its order is in CLOSED_ORDER_STATUSES.
 
 
 def _resolve_delivery_address(order: Order, buyer: User | None) -> str | None:
@@ -184,15 +189,19 @@ def create_merchant_shipment(
             detail="One or more orders were not found for this merchant",
         )
 
+    # Only paid, merchant-confirmed orders that are not already on a route can
+    # ship. Pending orders are unpaid; anything later is already shipped/closed.
     blocked = [
         order.id
         for order in orders
-        if order.status.lower() in {"shipped", "delivered", "cancelled"}
+        if order.status not in SHIPPABLE_ORDER_STATUSES
+        or order.shipment_id is not None
     ]
     if blocked:
         raise HTTPException(
             status_code=400,
-            detail=f"Orders already shipped or closed: {', '.join(map(str, blocked))}",
+            detail="Only confirmed (processing) orders not already in a shipment "
+            f"can be shipped. Not eligible: {', '.join(map(str, blocked))}",
         )
 
     merchant_address = ", ".join(
@@ -370,12 +379,9 @@ def create_merchant_shipment(
         assert isinstance(order, Order)
         order.shipment_id = shipment.id
         mark_shipped(order)
-        if order.current_order:
-            wp = next((w for w in waypoints if w.get("order_id") == order.id), None)
-            if wp and wp.get("estimated_arrival_at"):
-                order.current_order.time_of_arrival = datetime.fromisoformat(
-                    wp["estimated_arrival_at"]
-                )
+        wp = next((w for w in waypoints if w.get("order_id") == order.id), None)
+        if wp and wp.get("estimated_arrival_at"):
+            order.time_of_arrival = datetime.fromisoformat(wp["estimated_arrival_at"])
 
     db.commit()
     db.refresh(shipment)
@@ -450,11 +456,24 @@ def list_my_shipments(
         .all()
     )
 
+    # Shipment.status is never advanced after creation, so the merchant's
+    # active/past split is derived from how many of its orders are closed.
+    closed_counts = dict(
+        db.query(Order.shipment_id, func.count(Order.id))
+        .filter(
+            Order.shipment_id.in_([s.id for s in rows]),
+            Order.status.in_(CLOSED_ORDER_STATUSES),
+        )
+        .group_by(Order.shipment_id)
+        .all()
+    ) if rows else {}
+
     return [
         {
             "id": s.id,
             "status": s.status,
             "stop_count": s.stop_count,
+            "completed_stop_count": closed_counts.get(s.id, 0),
             "created_at": s.created_at,
             "shipped_at": s.shipped_at,
         }

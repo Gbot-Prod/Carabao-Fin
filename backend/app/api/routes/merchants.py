@@ -8,7 +8,6 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db
-from app.models.current_orders import CurrentOrder
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
@@ -17,11 +16,21 @@ from app.models.order_history import OrderHistory
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.produce import Produce
 from app.models.shopPage import ShopPage
+from app.models.statuses import (
+    OPEN_PAYOUT_STATUSES,
+    OrderStatus,
+    PayoutStatus,
+    TransactionStatus,
+)
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.routing.service import compute_route
 from app.routing.state import Stop
-from app.schemas.merchant import MerchantResponse, MerchantUpdate
+from app.schemas.merchant import (
+    MerchantDetailResponse,
+    MerchantResponse,
+    MerchantUpdate,
+)
 from app.schemas.merchant_performance import MerchantPerformanceResponse
 from app.schemas.payout import (
     MerchantOrderResponse,
@@ -38,11 +47,15 @@ from app.services.merchant_service import (
     get_active_merchant,
     soft_delete_merchant,
 )
-from app.services.order_reservations import cancel_order
 from app.services.order_status import (
-    MERCHANT_TRANSITIONS,
+    ACTIVE_ORDER_STATUSES,
+    SHIPPED_STATUSES,
+    InvalidTransition,
+    PaymentInProgress,
+    apply_merchant_transition,
     auto_confirm_at,
-    mark_shipped,
+    money_received_clause,
+    payment_status,
 )
 from app.services.sms_service import notify_order_shipped
 from app.utils.geocoding import _geocode
@@ -51,7 +64,7 @@ router = APIRouter(tags=["merchants"])
 
 
 class MerchantOrderStatusUpdate(BaseModel):
-    status: str
+    status: OrderStatus
 
 
 def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
@@ -204,8 +217,8 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
         }
         for i, s in enumerate(ordered_stops)
     ]
-    if order.current_order and arrival_at:
-        order.current_order.time_of_arrival = arrival_at
+    if arrival_at:
+        order.time_of_arrival = arrival_at
     print(
         f"[route] Computed and stored route for order {order.id} with {
             len(ordered_stops)
@@ -232,16 +245,25 @@ def list_merchants(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/merchants/{merchant_id}", response_model=MerchantResponse)
+@router.get("/merchants/{merchant_id}", response_model=MerchantDetailResponse)
 def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
     merchant = (
         db.query(Merchant)
+        .options(selectinload(Merchant.user))
         .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
         .first()
     )
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
-    return merchant
+
+    response = MerchantDetailResponse.model_validate(merchant)
+    owner = merchant.user
+    if owner is not None:
+        full_name = " ".join(
+            part.strip() for part in (owner.first_name, owner.last_name) if part and part.strip()
+        )
+        response.owner_name = full_name or None
+    return response
 
 
 @router.patch("/merchants/me", response_model=MerchantResponse)
@@ -272,7 +294,8 @@ def get_my_merchant_performance(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    active_statuses = {"pending", "processing", "shipped", "out_for_delivery"}
+    # Unpaid checkouts never reach the merchant, so they don't count here.
+    paid_orders = (Order.merchant_id == merchant.id, money_received_clause())
     now = datetime.now(UTC)
     window_start = now - timedelta(days=30)
 
@@ -284,52 +307,51 @@ def get_my_merchant_performance(
     )
 
     total_orders = (
-        db.query(func.count(Order.id)).filter(Order.merchant_id == merchant.id).scalar()
-        or 0
+        db.query(func.count(Order.id)).filter(*paid_orders).scalar() or 0
     )
     active_orders = (
         db.query(func.count(Order.id))
-        .filter(Order.merchant_id == merchant.id, Order.status.in_(active_statuses))
+        .filter(*paid_orders, Order.status.in_(ACTIVE_ORDER_STATUSES))
         .scalar()
         or 0
     )
     delivered_orders = (
         db.query(func.count(Order.id))
-        .filter(Order.merchant_id == merchant.id, Order.status == "delivered")
+        .filter(*paid_orders, Order.status == OrderStatus.DELIVERED)
         .scalar()
         or 0
     )
     cancelled_orders = (
         db.query(func.count(Order.id))
-        .filter(Order.merchant_id == merchant.id, Order.status == "cancelled")
+        .filter(*paid_orders, Order.status == OrderStatus.CANCELLED)
         .scalar()
         or 0
     )
 
     total_revenue = (
         db.query(func.coalesce(func.sum(Order.total_price), 0))
-        .filter(Order.merchant_id == merchant.id, Order.status != "cancelled")
+        .filter(*paid_orders, Order.status != OrderStatus.CANCELLED)
         .scalar()
         or 0
     )
     last_order_at = (
         db.query(func.max(Order.ordered_at))
-        .filter(Order.merchant_id == merchant.id)
+        .filter(*paid_orders)
         .scalar()
     )
 
     last_30_days_orders = (
         db.query(func.count(Order.id))
-        .filter(Order.merchant_id == merchant.id, Order.ordered_at >= window_start)
+        .filter(*paid_orders, Order.ordered_at >= window_start)
         .scalar()
         or 0
     )
     last_30_days_revenue = (
         db.query(func.coalesce(func.sum(Order.total_price), 0))
         .filter(
-            Order.merchant_id == merchant.id,
+            *paid_orders,
             Order.ordered_at >= window_start,
-            Order.status != "cancelled",
+            Order.status != OrderStatus.CANCELLED,
         )
         .scalar()
         or 0
@@ -339,6 +361,7 @@ def get_my_merchant_performance(
         merchant_id=merchant.id,
         merchant_name=merchant.merchant_name,
         rating=merchant.rating,
+        rating_count=merchant.rating_count or 0,
         total_products=int(total_products),
         total_orders=int(total_orders),
         active_orders=int(active_orders),
@@ -746,7 +769,7 @@ def request_my_payout(
         db.query(PayoutBatch)
         .filter(
             PayoutBatch.merchant_id == merchant.id,
-            PayoutBatch.status.in_(["pending", "approved", "processing"]),
+            PayoutBatch.status.in_(OPEN_PAYOUT_STATUSES),
         )
         .first()
     )
@@ -759,7 +782,7 @@ def request_my_payout(
         db.query(PayoutBatchItem.transaction_id)
         .join(PayoutBatch, PayoutBatch.id == PayoutBatchItem.batch_id)
         .filter(
-            PayoutBatch.status.in_(["released", "approved", "processing", "pending"])
+            PayoutBatch.status.in_(OPEN_PAYOUT_STATUSES | {PayoutStatus.RELEASED})
         )
         .scalar_subquery()
     )
@@ -769,8 +792,8 @@ def request_my_payout(
         .join(Order, Order.id == Transaction.order_id)
         .filter(
             Transaction.merchant_id == merchant.id,
-            Transaction.status == "paid",
-            Order.status == "delivered",
+            Transaction.status == TransactionStatus.PAID,
+            Order.status == OrderStatus.DELIVERED,
             Order.delivered_at.isnot(None),
             Transaction.id.not_in(already_batched_ids),
         )
@@ -789,7 +812,7 @@ def request_my_payout(
         period_date=datetime.now(UTC).date(),
         transaction_count=len(unpaid_txns),
         gross_amount=total,
-        status="pending",
+        status=PayoutStatus.PENDING,
     )
     db.add(batch)
     db.flush()
@@ -811,6 +834,35 @@ def request_my_payout(
 # ---------------------------------------------------------------------------
 
 
+def _to_merchant_order_response(
+    order: Order, user: User | None
+) -> MerchantOrderResponse:
+    """One order as the merchant's orders tab shows it."""
+    buyer_name = None
+    if user:
+        buyer_name = " ".join(filter(None, [user.first_name, user.last_name])) or None
+    return MerchantOrderResponse(
+        id=order.id,
+        status=order.status,
+        payment_status=payment_status(order),
+        total_price=order.total_price,
+        items=order.items or [],
+        delivery_address=order.delivery_address,
+        ordered_at=order.ordered_at,
+        buyer_name=buyer_name,
+        buyer_email=user.email if user else None,
+        buyer_phone=user.phone_number if user else None,
+        shipped=order.status in SHIPPED_STATUSES,
+        time_of_arrival=order.time_of_arrival,
+        shipment_id=order.shipment_id,
+        shipped_at=order.shipped_at,
+        auto_confirm_at=auto_confirm_at(order),
+        requested_delivery_date=order.requested_delivery_date,
+        delivery_window=order.delivery_window,
+        notes=order.notes,
+    )
+
+
 @router.get("/merchants/me/orders", response_model=list[MerchantOrderResponse])
 def get_my_merchant_orders(
     db: Session = Depends(get_db),
@@ -820,42 +872,20 @@ def get_my_merchant_orders(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
+    # Unpaid checkouts stay with the buyer until a payment lands on them.
     rows = (
-        db.query(Order, User, CurrentOrder)
+        db.query(Order, User)
+        .options(selectinload(Order.transactions))
         .outerjoin(User, User.id == Order.user_id)
-        .outerjoin(CurrentOrder, CurrentOrder.order_id == Order.id)
-        .filter(Order.merchant_id == merchant.id)
+        .filter(Order.merchant_id == merchant.id, money_received_clause())
         .order_by(Order.ordered_at.desc())
         .limit(200)
         .all()
     )
 
-    result = []
-    for order, user, current in rows:
-        buyer_name = None
-        if user:
-            buyer_name = (
-                " ".join(filter(None, [user.first_name, user.last_name])) or None
-            )
-        result.append(
-            MerchantOrderResponse(
-                id=order.id,
-                status=order.status,
-                total_price=order.total_price,
-                items=order.items or [],
-                delivery_address=order.delivery_address,
-                ordered_at=order.ordered_at,
-                buyer_name=buyer_name,
-                buyer_email=user.email if user else None,
-                buyer_phone=user.phone_number if user else None,
-                shipped=current.shipped if current else False,
-                time_of_arrival=current.time_of_arrival if current else None,
-                shipment_id=order.shipment_id,
-                shipped_at=order.shipped_at,
-                auto_confirm_at=auto_confirm_at(order),
-            )
-        )
-    return result
+    return [
+        _to_merchant_order_response(order, user) for order, user in rows
+    ]
 
 
 @router.patch(
@@ -881,34 +911,20 @@ def update_my_merchant_order_status(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
-    allowed_next = MERCHANT_TRANSITIONS.get(order.status, set())
-    if status not in allowed_next:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot transition order from '{order.status}' to '{status}'",
-        )
-
-    if status == "cancelled":
-        if not cancel_order(order, db):
-            raise HTTPException(
-                status_code=409,
-                detail="A payment for this order is in progress; try again shortly",
-            )
-    elif status == "shipped":
-        mark_shipped(order)
-    else:
-        order.status = status
-        if order.current_order:
-            order.current_order.status = status
+    try:
+        apply_merchant_transition(order, status, db)
+    except InvalidTransition as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PaymentInProgress as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     # Compute and store ALNS route when order is marked for shipping (first
     # time only)
-    if status == "shipped" and not order.route_waypoints:
+    if status == OrderStatus.SHIPPED and not order.route_waypoints:
         _compute_and_store_route(db, order)
 
     db.commit()
 
-    current = order.current_order
     order_history = (
         db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
     )
@@ -916,9 +932,6 @@ def update_my_merchant_order_status(
         db.query(User).filter(User.id == order_history.user_id).first()
         if order_history
         else None
-    )
-    buyer_name = (
-        " ".join(filter(None, [user.first_name, user.last_name])) if user else None
     )
 
     notify_order_shipped(
@@ -928,22 +941,7 @@ def update_my_merchant_order_status(
         status=status,
     )
 
-    return MerchantOrderResponse(
-        id=order.id,
-        status=order.status,
-        total_price=order.total_price,
-        items=order.items or [],
-        delivery_address=order.delivery_address,
-        ordered_at=order.ordered_at,
-        buyer_name=buyer_name,
-        buyer_email=user.email if user else None,
-        buyer_phone=user.phone_number if user else None,
-        shipped=current.shipped if current else False,
-        time_of_arrival=current.time_of_arrival if current else None,
-        shipment_id=order.shipment_id,
-        shipped_at=order.shipped_at,
-        auto_confirm_at=auto_confirm_at(order),
-    )
+    return _to_merchant_order_response(order, user)
 
 
 @router.delete("/merchants/me", status_code=204)

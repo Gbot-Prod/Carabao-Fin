@@ -1,8 +1,6 @@
 """
-Tests for the custom ALNS routing module.
+Tests for the custom ALNS routing module. Dont push this to main gyuys
 
-Convention: stops are placed on a simple lat/lng grid so expected distances
-and orderings are predictable without floating-point surprises.
 """
 
 import itertools

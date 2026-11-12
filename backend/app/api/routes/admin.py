@@ -11,6 +11,7 @@ from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.order import Order
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
+from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.merchant import MerchantResponse
@@ -19,7 +20,7 @@ from app.schemas.merchant_application import (
     MerchantApplicationResponse,
 )
 from app.schemas.pagination import Page
-from app.schemas.payment import PayoutBatchResponse
+from app.schemas.payout import PayoutBatchResponse
 from app.schemas.user import UserResponse
 from app.services import r2_service
 from app.services.merchant_service import create_merchant_from_application
@@ -125,13 +126,13 @@ def get_admin_stats(
 ):
     total_revenue = (
         db.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(Transaction.status == "paid")
+        .filter(Transaction.status == TransactionStatus.PAID)
         .scalar()
         or 0
     )
     platform_fees = (
         db.query(func.coalesce(func.sum(Transaction.platform_fee), 0))
-        .filter(Transaction.status == "paid")
+        .filter(Transaction.status == TransactionStatus.PAID)
         .scalar()
         or 0
     )
@@ -154,7 +155,7 @@ def get_admin_stats(
             func.sum(Transaction.amount).label("revenue"),
             func.sum(Transaction.platform_fee).label("platform_fee"),
         )
-        .filter(Transaction.status == "paid", Transaction.paid_at >= since)
+        .filter(Transaction.status == TransactionStatus.PAID, Transaction.paid_at >= since)
         .group_by(paid_day)
         .order_by(paid_day)
         .all()
@@ -207,7 +208,7 @@ def get_admin_stats(
 
 @router.get("/admin/batches", response_model=list[PayoutBatchResponse])
 def list_payout_batches(
-    status: str | None = None,
+    status: PayoutStatus | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
@@ -236,8 +237,8 @@ def generate_payout_batches(
         .join(Order, Order.id == Transaction.order_id)
         .outerjoin(PayoutBatchItem, PayoutBatchItem.transaction_id == Transaction.id)
         .filter(
-            Transaction.status == "paid",
-            Order.status == "delivered",
+            Transaction.status == TransactionStatus.PAID,
+            Order.status == OrderStatus.DELIVERED,
             Order.delivered_at.isnot(None),
             Transaction.paid_at >= start_dt,
             Transaction.paid_at < end_dt,
@@ -261,7 +262,7 @@ def generate_payout_batches(
             period_date=target_date,
             transaction_count=len(txns),
             gross_amount=sum(t.merchant_amount for t in txns),
-            status="pending",
+            status=PayoutStatus.PENDING,
         )
         db.add(batch)
         db.flush()
@@ -293,10 +294,10 @@ def release_payout_batch(
     batch = db.query(PayoutBatch).filter(PayoutBatch.id == batch_id).first()
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
-    if batch.status == "released":
+    if batch.status == PayoutStatus.RELEASED:
         raise HTTPException(status_code=400, detail="Batch already released")
 
-    batch.status = "released"
+    batch.status = PayoutStatus.RELEASED
     batch.released_at = datetime.now(UTC)
     if notes:
         batch.notes = notes

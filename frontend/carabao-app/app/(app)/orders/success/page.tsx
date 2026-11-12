@@ -11,7 +11,7 @@ function PaymentSuccessContent() {
   const orderId = searchParams.get("order_id");
 
   const [transaction, setTransaction] = useState<TransactionStatusResponse | null>(null);
-  const [status, setStatus] = useState<"polling" | "paid" | "failed" | "not_found" | "timeout">(
+  const [status, setStatus] = useState<"polling" | "paid" | "refund" | "failed" | "not_found" | "timeout">(
     orderId ? "polling" : "not_found",
   );
 
@@ -34,6 +34,11 @@ function PaymentSuccessContent() {
 
         if (txn.status === "paid") {
           setStatus("paid");
+          return;
+        }
+        // The money landed after the order closed (e.g. checkout expired); it is refunded.
+        if (txn.status === "refund_pending" || txn.status === "refunded") {
+          setStatus("refund");
           return;
         }
         if (txn.status === "failed" || txn.status === "expired") {
@@ -78,6 +83,21 @@ function PaymentSuccessContent() {
         <p className={styles.subtext}>Your payment was not completed. No charges were made.</p>
         <Link href="/checkout" className={styles.primaryButton}>Try Again</Link>
         <Link href="/orders" className={styles.secondaryButton}>View Order History</Link>
+      </div>
+    );
+  }
+
+  if (status === "refund") {
+    return (
+      <div className={styles.container}>
+        <div className={`${styles.badge} ${styles.badgePending}`}>
+          Refund Pending
+        </div>
+        <h1 className={styles.heading}>Your order was already closed</h1>
+        <p className={styles.subtext}>
+          Your payment arrived after this order was cancelled, so it won&apos;t be fulfilled. The amount will be refunded to you.
+        </p>
+        <Link href="/orders" className={styles.primaryButton}>View Order History</Link>
       </div>
     );
   }

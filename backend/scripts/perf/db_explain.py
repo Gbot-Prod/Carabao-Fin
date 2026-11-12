@@ -23,13 +23,16 @@ from sqlalchemy.dialects import postgresql  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.core.database import engine  # noqa: E402
-from app.models.current_orders import CurrentOrder  # noqa: E402
 from app.models.merchant import Merchant  # noqa: E402
 from app.models.merchant_application import MerchantApplication  # noqa: E402
 from app.models.order import Order  # noqa: E402
 from app.models.order_history import OrderHistory  # noqa: E402
 from app.models.produce import Produce  # noqa: E402
-from app.models.transaction import Transaction  # noqa: E402
+from app.models.statuses import OrderStatus  # noqa: E402
+from app.services.order_status import (  # noqa: E402
+    ACTIVE_ORDER_STATUSES,
+    money_received_clause,
+)
 from app.models.user import User  # noqa: E402
 from main import app  # noqa: E402, F401  (registers every mapper)
 
@@ -62,28 +65,25 @@ def key_queries(session: Session) -> dict[str, object]:
         "product listing (GET /merchants/{id}/produce)": select(Produce).where(
             Produce.merchant_id == merchant_id
         ),
-        "buyer current orders (GET /orders/me/current)": select(CurrentOrder)
-        .join(Order)
-        .join(OrderHistory)
-        .where(OrderHistory.user_id == busiest_buyer)
-        .order_by(CurrentOrder.id.asc()),
-        "merchant orders (GET /merchants/me/orders)": select(Order, User, CurrentOrder)
+        "buyer current orders (GET /orders/me/current)": select(Order)
+        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
+        .where(
+            OrderHistory.user_id == busiest_buyer,
+            Order.status.in_(ACTIVE_ORDER_STATUSES),
+        )
+        .order_by(Order.id.asc()),
+        "merchant orders (GET /merchants/me/orders)": select(Order, User)
         .outerjoin(User, User.id == Order.user_id)
-        .outerjoin(CurrentOrder, CurrentOrder.order_id == Order.id)
-        .where(Order.merchant_id == merchant_id)
+        .where(Order.merchant_id == merchant_id, money_received_clause())
         .order_by(Order.ordered_at.desc())
         .limit(200),
-        "merchant paid queue (GET /orders/merchant/current)": select(CurrentOrder)
-        .join(Order, CurrentOrder.order_id == Order.id)
-        .join(Transaction, Transaction.order_id == Order.id)
+        "merchant paid queue (GET /orders/merchant/current)": select(Order)
         .where(
-            CurrentOrder.merchant_id == merchant_id,
-            CurrentOrder.status.in_(
-                ["pending", "processing", "shipped", "out_for_delivery"]
-            ),
-            Transaction.status == "paid",
+            Order.merchant_id == merchant_id,
+            Order.status.in_(ACTIVE_ORDER_STATUSES - {OrderStatus.PENDING}),
+            money_received_clause(),
         )
-        .order_by(CurrentOrder.created_at.asc()),
+        .order_by(Order.ordered_at.asc()),
         "stale reservation scan (POST /orders/me/place)": select(Order.id).where(
             Order.status == "pending", Order.ordered_at < func.now()
         ),

@@ -10,6 +10,16 @@ import LocationSelects, { type LocationSelectsValue } from "@/components/Locatio
 import { getApiErrorStatus } from "@/util/errorHelper";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
+// Same windows the mobile app offers, so both clients store comparable values.
+const TIME_WINDOWS = ["08:00 – 10:00", "10:00 – 12:00", "13:00 – 15:00", "16:00 – 18:00"];
+
+// YYYY-MM-DD in the buyer's local calendar (en-CA formats as ISO).
+const localIsoDate = (offsetDays = 0) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toLocaleDateString("en-CA");
+};
+
 export default function CheckoutPage() {
   const [checkoutItems, setCheckoutItems] = useState<CartItem[]>([]);
   const [isLoadingCart, setIsLoadingCart] = useState(true);
@@ -19,6 +29,8 @@ export default function CheckoutPage() {
   const [postal, setPostal] = useState("");
   const [paymentMethod] = useState("online");
   const [notes, setNotes] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState(() => localIsoDate(1));
+  const [deliveryWindow, setDeliveryWindow] = useState(TIME_WINDOWS[0]);
   const [addressForm, setAddressForm] = useState<LocationSelectsValue>({
     region: "",
     province: "",
@@ -93,14 +105,19 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (!deliveryDate || deliveryDate < localIsoDate()) {
+      setError("Please choose a delivery date from today onward.");
+      return;
+    }
+
     setIsPlacingOrder(true);
     setError(null);
 
     try {
       const deliveryAddress = [street, addressForm.barangay, addressForm.city, addressForm.province, postal, 'Philippines'].filter(Boolean).join(', ') || null;
       const result = await placeOrderFromCart({
-        delivery_date: null,
-        delivery_time: null,
+        delivery_date: deliveryDate,
+        delivery_time: deliveryWindow,
         delivery_address: deliveryAddress,
         payment_method: paymentMethod,
         notes: notes || null,
@@ -171,12 +188,37 @@ export default function CheckoutPage() {
           </div>
 
           <div className={styles.block}>
+            <h2>Delivery Schedule</h2>
+            <div className={styles.gridTwo}>
+              <label>
+                Preferred date
+                <input
+                  type="date"
+                  value={deliveryDate}
+                  min={localIsoDate()}
+                  onChange={(event) => setDeliveryDate(event.target.value)}
+                  required
+                />
+              </label>
+              <label>
+                Time window
+                <select value={deliveryWindow} onChange={(event) => setDeliveryWindow(event.target.value)}>
+                  {TIME_WINDOWS.map((slot) => (
+                    <option key={slot} value={slot}>{slot}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className={styles.block}>
             <h2>Order Notes</h2>
             <label>
               Notes for merchant or rider
               <textarea
                 rows={3}
                 value={notes}
+                maxLength={500}
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder="Include gate instructions, preferred contact method, or handling requests."
               />

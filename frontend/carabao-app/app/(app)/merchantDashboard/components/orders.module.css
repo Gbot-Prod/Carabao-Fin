@@ -1,0 +1,413 @@
+/* Orders + Shipments tabs. Shared tokens come from app/globals.css. */
+
+/* ── Orders tab ──────────────────────────────────────────────────────────── */
+.chipCount {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(23, 61, 37, 0.08);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.readyBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: var(--green-50);
+  border: 1px solid var(--border-strong);
+  color: var(--green-900);
+  font-size: 14px;
+}
+
+.orderList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.orderCard {
+  padding: 0;
+  gap: 0;
+}
+
+.orderSummary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 10px 6px;
+}
+
+.orderToggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.orderToggle:hover {
+  background: rgba(23, 61, 37, 0.04);
+}
+
+.orderToggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.chevron {
+  display: inline-block;
+  width: 12px;
+  color: var(--text-faint);
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.15s;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.summaryText {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.noteFlag {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: #fff4d6;
+  color: #7a5200;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.summaryTotal {
+  margin-left: auto;
+}
+
+.summaryActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.orderDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 20px 18px 36px;
+  border-top: 1px solid rgba(23, 61, 37, 0.06);
+  padding-top: 14px;
+}
+
+/* ── Shipments tab ───────────────────────────────────────────────────────── */
+.sectionHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.sectionHint {
+  margin: 4px 0 0;
+  max-width: 64ch;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.messageRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.inlineLink {
+  color: inherit;
+  font-weight: 800;
+}
+
+.emptyBlock {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.group + .group {
+  margin-top: 18px;
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
+.groupHead input,
+.readyRow input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--green-600);
+  flex-shrink: 0;
+}
+
+.groupLabel {
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--green-900);
+}
+
+.groupLabelUrgent {
+  color: #b45309;
+}
+
+.groupCount {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.readyList {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.readyList li + li {
+  border-top: 1px solid var(--green-border);
+}
+
+.readyRow {
+  display: grid;
+  grid-template-columns: 16px 56px minmax(100px, 1fr) minmax(140px, 2fr) minmax(150px, 1.2fr) 64px 80px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--bg-white);
+}
+
+.readyRow:hover {
+  background: var(--green-50);
+}
+
+.readyRowChecked {
+  background: #eaf6ee;
+}
+
+.readyRowChecked:hover {
+  background: #e1f1e6;
+}
+
+.readyRowBlocked {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.readyId {
+  font-weight: 850;
+  color: var(--green-900);
+}
+
+.readyBuyer {
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.readyBuyer,
+.readyAddress {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.readyAddress,
+.readyItems {
+  color: var(--text-muted);
+}
+
+.readyWhen {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.readyTotal {
+  text-align: right;
+  font-weight: 800;
+  color: var(--green-900);
+}
+
+/* Sticks to the bottom of the viewport while scrolling the ready list. */
+.actionBar {
+  position: sticky;
+  bottom: 16px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: var(--green-900);
+  color: #fff;
+  box-shadow: 0 16px 36px rgba(23, 61, 37, 0.25);
+}
+
+.actionBarInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.actionBarError {
+  color: #fecaca;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.actionBarButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.barGhostBtn {
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.barGhostBtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.shipmentList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shipmentRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+}
+
+.shipmentMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.shipmentMeta {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.shipmentProgress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 200px;
+}
+
+.progressTrack {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  overflow: hidden;
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  background: var(--green-600);
+}
+
+@media (max-width: 860px) {
+  .readyRow {
+    grid-template-columns: 16px 56px 1fr auto;
+    row-gap: 4px;
+  }
+
+  .readyAddress,
+  .readyWhen,
+  .readyItems {
+    grid-column: 3 / -1;
+  }
+
+  .readyTotal {
+    grid-column: 4;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 540px) {
+  .orderSummary {
+    flex-wrap: wrap;
+  }
+
+  .summaryActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .orderDetails {
+    padding-left: 20px;
+  }
+
+  .shipmentRow {
+    flex-wrap: wrap;
+  }
+
+  .shipmentProgress {
+    width: 100%;
+    order: 3;
+  }
+}

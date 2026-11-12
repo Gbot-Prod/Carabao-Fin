@@ -1,5 +1,7 @@
 import { apiClient } from './client';
 import type { CartItem } from './cart';
+import type { Review } from './reviews';
+import type { OrderStatus, PaymentStatus } from './statuses';
 
 export type OrderHistoryItem = {
   id: number;
@@ -7,10 +9,16 @@ export type OrderHistoryItem = {
   merchant: string;
   merchant_id?: number | null;
   merchant_page_slug?: string | null;
+  merchant_logo_url?: string | null;
   total_amount: number;
   order_date: string;
-  status: string;
+  status: OrderStatus;
+  payment_status: PaymentStatus;
   items: CartItem[];
+  delivery_address?: string | null;
+  requested_delivery_date?: string | null; // YYYY-MM-DD
+  delivery_window?: string | null;
+  notes?: string | null;
 };
 
 export type CurrentOrderItem = {
@@ -19,6 +27,7 @@ export type CurrentOrderItem = {
   merchant: string;
   merchant_id?: number | null;
   merchant_page_slug?: string | null;
+  merchant_logo_url?: string | null;
   shipped: boolean;
   date_bought: string;
   time_of_arrival: string | null;
@@ -26,8 +35,14 @@ export type CurrentOrderItem = {
   auto_confirm_at?: string | null;
   delivery_fee: number;
   image: string | null;
-  status: string;
+  status: OrderStatus;
+  payment_status: PaymentStatus;
   items: CartItem[];
+  total_amount?: number;
+  delivery_address?: string | null;
+  requested_delivery_date?: string | null; // YYYY-MM-DD
+  delivery_window?: string | null;
+  notes?: string | null;
 };
 
 export type PlaceOrderPayload = {
@@ -43,7 +58,7 @@ export type PlaceOrderPayload = {
 export type PlaceOrderResponse = {
   order_id: number;
   order_reference: string;
-  status: string;
+  status: OrderStatus;
 };
 
 export const fetchOrderHistory = async (): Promise<OrderHistoryItem[]> => {
@@ -68,4 +83,17 @@ export const confirmOrderReceived = async (orderId: number): Promise<CurrentOrde
 
 export const deleteOrderFromHistory = async (orderId: number): Promise<void> => {
   await apiClient.delete(`/orders/me/history/${orderId}`);
+};
+
+export type OrderDetail = CurrentOrderItem & {
+  delivered_at?: string | null;
+  delivery_confirmed_by?: string | null;
+  review?: Review | null;
+  can_review: boolean;
+  review_deadline?: string | null;
+};
+
+export const fetchOrder = async (orderId: number): Promise<OrderDetail> => {
+  const response = await apiClient.get<OrderDetail>(`/orders/me/${orderId}`);
+  return response.data;
 };

@@ -5,7 +5,6 @@ Changes applied:
   backend_users  : DROP member_since
   carts          : DROP total_items, total_price
   orders         : ADD user_id (FK -> backend_users, nullable)
-  current_orders : DROP shipped, merchant_name
   order_histories: DROP total_orders, total_spent
   merchants      : operating_hours VARCHAR -> JSON, rating INTEGER -> FLOAT
 """
@@ -65,15 +64,6 @@ STEPS = [
     (
         "orders: create ix_orders_user_id",
         "CREATE INDEX IF NOT EXISTS ix_orders_user_id ON orders(user_id)",
-    ),
-    # ── current_orders ───────────────────────────────────────────────────────
-    (
-        "current_orders: drop shipped",
-        "ALTER TABLE current_orders DROP COLUMN IF EXISTS shipped",
-    ),
-    (
-        "current_orders: drop merchant_name",
-        "ALTER TABLE current_orders DROP COLUMN IF EXISTS merchant_name",
     ),
     # ── order_histories ──────────────────────────────────────────────────────
     (

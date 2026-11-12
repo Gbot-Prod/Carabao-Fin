@@ -12,7 +12,6 @@ from app.api.routes.router import router
 from app.core.database import SessionLocal
 from app.models import (  # noqa: F401
     cart,
-    current_orders,
     merchant,
     merchant_application,
     merchant_payout,
@@ -21,6 +20,7 @@ from app.models import (  # noqa: F401
     order_history,
     payout_batch,
     produce,
+    review,
     shipment,
     shopPage,
     transaction,

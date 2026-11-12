@@ -1,7 +1,8 @@
-from datetime import date, datetime
-from typing import Literal
+from datetime import datetime
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
+
+from app.models.statuses import TransactionStatus
 
 
 class CheckoutResponse(BaseModel):
@@ -10,7 +11,7 @@ class CheckoutResponse(BaseModel):
     checkout_url: str
     paymongo_session_id: str
     amount: int
-    status: str
+    status: TransactionStatus
 
 
 class TransactionResponse(BaseModel):
@@ -21,26 +22,12 @@ class TransactionResponse(BaseModel):
     amount: int
     platform_fee: int
     merchant_amount: int
-    status: str
+    status: TransactionStatus
     paymongo_session_id: str | None = None
     paymongo_payment_id: str | None = None
     checkout_url: str | None = None
     created_at: datetime
     paid_at: datetime | None = None
-
-    model_config = {"from_attributes": True}
-
-
-class PayoutBatchResponse(BaseModel):
-    id: int
-    merchant_id: int
-    period_date: date
-    transaction_count: int
-    gross_amount: int
-    status: str
-    notes: str | None = None
-    created_at: datetime
-    released_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -67,37 +54,3 @@ class SavedCard(BaseModel):
 
 class AttachPaymentMethodRequest(BaseModel):
     payment_method_id: str
-
-
-class MerchantPayoutInfoCreate(BaseModel):
-    payout_type: Literal["bank", "gcash", "maya"]
-    bank_code: str | None = None
-    account_number: str | None = None
-    account_name: str | None = None
-    ewallet_number: str | None = None
-
-    @model_validator(mode="after")
-    def _validate_payout_fields(self):
-        if self.payout_type == "bank":
-            missing = [
-                k
-                for k in ("bank_code", "account_number", "account_name")
-                if not getattr(self, k)
-            ]
-            if missing:
-                raise ValueError(
-                    f"Missing required fields for bank payout: {', '.join(missing)}"
-                )
-        else:
-            if not self.ewallet_number:
-                raise ValueError(
-                    "Missing required field for e-wallet payout: ewallet_number"
-                )
-        return self
-
-
-class MerchantPayoutInfoResponse(MerchantPayoutInfoCreate):
-    id: int
-    merchant_id: int
-
-    model_config = {"from_attributes": True}

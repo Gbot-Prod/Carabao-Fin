@@ -6,7 +6,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
-from app.models.current_orders import CurrentOrder
 from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.mobile_credential import MobileCredential
@@ -19,7 +18,7 @@ from app.models.user import User
 from app.schemas.payment import AttachPaymentMethodRequest, SavedCard
 from app.schemas.user import UserResponse, UserUpdate
 from app.services import r2_service
-from app.services.merchant_service import ACTIVE_ORDER_STATUSES
+from app.services.order_status import ACTIVE_ORDER_STATUSES
 from app.services.paymongo import (
     attach_payment_method,
     detach_payment_method,
@@ -223,9 +222,6 @@ def delete_my_account(
     if current_user.merchant:
         merchant_id = current_user.merchant.id
         db.query(Order).filter(Order.merchant_id == merchant_id).update(
-            {"merchant_id": None}, synchronize_session=False
-        )
-        db.query(CurrentOrder).filter(CurrentOrder.merchant_id == merchant_id).update(
             {"merchant_id": None}, synchronize_session=False
         )
 
