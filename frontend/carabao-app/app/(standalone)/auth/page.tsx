@@ -196,6 +196,7 @@ export default function SignupPage() {
                         autoComplete="email"
                         required
                         className="auth-input"
+                        aria-label={t.auth.emailPlaceholder}
                         placeholder={t.auth.emailPlaceholder}
                         value={formData.email}
                         onChange={handleChange}
@@ -213,6 +214,7 @@ export default function SignupPage() {
                           autoComplete="number"
                           required
                           className="auth-input w-10/12"
+                          aria-label="Phone number (+63)"
                           placeholder="912 345 6789"
                           value={formData.phoneNumber}
                           onChange={handleChange}
@@ -233,6 +235,7 @@ export default function SignupPage() {
                         pattern="[0-9]{6}"
                         maxLength={6}
                         className="auth-input"
+                        aria-label={t.auth.codePlaceholder}
                         placeholder={t.auth.codePlaceholder}
                         value={formData.verificationCode}
                         onChange={handleChange}
@@ -252,6 +255,7 @@ export default function SignupPage() {
                 autoComplete="email"
                 required
                 className="auth-input"
+                aria-label={t.auth.emailPlaceholder}
                 placeholder={t.auth.emailPlaceholder}
                 value={formData.email}
                 onChange={handleChange}
@@ -262,6 +266,7 @@ export default function SignupPage() {
                     type="password"
                     required
                     className="auth-input"
+                    aria-label={t.auth.passwordPlaceholder}
                     placeholder={t.auth.passwordPlaceholder}
                     value={formData.password}
                     onChange={handleChange}

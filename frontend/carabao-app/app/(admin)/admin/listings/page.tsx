@@ -125,7 +125,7 @@ function ListingsContent() {
         </label>
         <form onSubmit={onSearch} className={styles.field}>
           <span>Search by name</span>
-          <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="e.g. talong" maxLength={100} />
+          <input type="search" aria-label="Search listings by name" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="e.g. talong" maxLength={100} />
         </form>
       </div>
 

@@ -123,6 +123,7 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
               <span className={styles.phonePrefix}>+63</span>
               <input
                 className={styles.phoneInput}
+                aria-label="Contact number (+63)"
                 value={draft.contact_number}
                 onChange={(e) => setDraft((d) => ({ ...d, contact_number: formatLocalPhone(e.target.value) }))}
                 placeholder="912 345 6789"

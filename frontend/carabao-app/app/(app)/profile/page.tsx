@@ -151,12 +151,12 @@ function AddressPanel({ profile, onSaved }: { profile: UserProfile | null; onSav
         wrapClassName={styles.panelFormField}
       />
       <div className={styles.panelFormField}>
-        <label className={styles.formLabel}>Street / House No.</label>
-        <input className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave, Unit 4B" />
+        <label htmlFor="profile-address" className={styles.formLabel}>Street / House No.</label>
+        <input id="profile-address" className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave, Unit 4B" />
       </div>
       <div className={styles.panelFormField}>
-        <label className={styles.formLabel}>Postal code</label>
-        <input className={styles.formInput} value={form.postal_code} onChange={setField('postal_code')} placeholder="1634" />
+        <label htmlFor="profile-postal-code" className={styles.formLabel}>Postal code</label>
+        <input id="profile-postal-code" className={styles.formInput} value={form.postal_code} onChange={setField('postal_code')} placeholder="1634" />
       </div>
       <div className={styles.panelFormField}>
         <MapPinPicker
@@ -343,25 +343,25 @@ function PaymentPanel({ userEmail }: { userEmail: string | undefined }) {
       {showForm ? (
         <div className={styles.panelForm}>
           <div className={styles.panelFormField}>
-            <label className={styles.formLabel}>Name on card</label>
-            <input className={styles.formInput} value={form.name} onChange={setField('name')} placeholder="Juan dela Cruz" />
+            <label htmlFor="profile-name" className={styles.formLabel}>Name on card</label>
+            <input id="profile-name" className={styles.formInput} value={form.name} onChange={setField('name')} placeholder="Juan dela Cruz" />
           </div>
           <div className={styles.panelFormField}>
-            <label className={styles.formLabel}>Card number</label>
-            <input className={styles.formInput} value={form.card_number} onChange={handleCardNumber} placeholder="1234 5678 9012 3456" maxLength={19} inputMode="numeric" />
+            <label htmlFor="profile-card-number" className={styles.formLabel}>Card number</label>
+            <input id="profile-card-number" className={styles.formInput} value={form.card_number} onChange={handleCardNumber} placeholder="1234 5678 9012 3456" maxLength={19} inputMode="numeric" />
           </div>
           <div className={styles.panelFormRow}>
             <div className={styles.panelFormField}>
-              <label className={styles.formLabel}>Exp month</label>
-              <input className={styles.formInput} value={form.exp_month} onChange={setField('exp_month')} placeholder="12" maxLength={2} inputMode="numeric" />
+              <label htmlFor="profile-exp-month" className={styles.formLabel}>Exp month</label>
+              <input id="profile-exp-month" className={styles.formInput} value={form.exp_month} onChange={setField('exp_month')} placeholder="12" maxLength={2} inputMode="numeric" />
             </div>
             <div className={styles.panelFormField}>
-              <label className={styles.formLabel}>Exp year</label>
-              <input className={styles.formInput} value={form.exp_year} onChange={setField('exp_year')} placeholder="2028" maxLength={4} inputMode="numeric" />
+              <label htmlFor="profile-exp-year" className={styles.formLabel}>Exp year</label>
+              <input id="profile-exp-year" className={styles.formInput} value={form.exp_year} onChange={setField('exp_year')} placeholder="2028" maxLength={4} inputMode="numeric" />
             </div>
             <div className={styles.panelFormField}>
-              <label className={styles.formLabel}>CVC</label>
-              <input className={styles.formInput} value={form.cvc} onChange={setField('cvc')} placeholder="123" maxLength={4} inputMode="numeric" type="password" />
+              <label htmlFor="profile-cvc" className={styles.formLabel}>CVC</label>
+              <input id="profile-cvc" className={styles.formInput} value={form.cvc} onChange={setField('cvc')} placeholder="123" maxLength={4} inputMode="numeric" type="password" />
             </div>
           </div>
           {error && <p className={styles.panelError}>{error}</p>}
@@ -639,18 +639,18 @@ export default function Profile() {
             <h3 className={styles.modalTitle}>Edit Profile</h3>
             <div className={styles.formGrid}>
               <div className={styles.formGroup}>
-                <label className={styles.formLabel}>First name</label>
-                <input className={styles.formInput} value={form.first_name} onChange={set('first_name')} placeholder="First name" />
+                <label htmlFor="profile-first-name" className={styles.formLabel}>First name</label>
+                <input id="profile-first-name" className={styles.formInput} value={form.first_name} onChange={set('first_name')} placeholder="First name" />
               </div>
               <div className={styles.formGroup}>
-                <label className={styles.formLabel}>Last name</label>
-                <input className={styles.formInput} value={form.last_name} onChange={set('last_name')} placeholder="Last name" />
+                <label htmlFor="profile-last-name" className={styles.formLabel}>Last name</label>
+                <input id="profile-last-name" className={styles.formInput} value={form.last_name} onChange={set('last_name')} placeholder="Last name" />
               </div>
               <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
-                <label className={styles.formLabel}>Phone number</label>
+                <label htmlFor="profile-phone-number" className={styles.formLabel}>Phone number</label>
                 <div className={styles.phoneRow}>
                   <span className={styles.phonePrefix}>+63</span>
-                  <input className={`${styles.formInput} ${styles.phoneInput}`} value={form.phone_number} onChange={set('phone_number')} placeholder="912 345 6789" />
+                  <input id="profile-phone-number" className={`${styles.formInput} ${styles.phoneInput}`} value={form.phone_number} onChange={set('phone_number')} placeholder="912 345 6789" />
                 </div>
               </div>
             </div>

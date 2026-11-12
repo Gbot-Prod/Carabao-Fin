@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { fetchRegions, fetchProvincesByRegion, fetchCitiesByProvince, fetchBarangaysByCity, fetchCitiesByRegion } from '@/util/psgc';
 import type { PsgcRegion, PsgcProvince, PsgcCity, PsgcBarangay } from '@/util/psgc';
 import { isLuzonRegion } from '@/util/serviceArea';
@@ -62,6 +62,8 @@ export default function LocationSelects({
   wrapStyle,
 }: LocationSelectsProps) {
   const { t } = useLanguage();
+  // Q2b: ids per instance, so two pickers on one page don't collide.
+  const uid = useId();
   const { options: allRegions, loading: loadingRegions } = usePsgcOptions<PsgcRegion>('regions', fetchRegions);
   // Only Luzon regions can be picked (B2); a saved region outside Luzon simply shows as unselected.
   const regions = useMemo(() => allRegions.filter((region) => isLuzonRegion(region.name)), [allRegions]);
@@ -113,9 +115,9 @@ export default function LocationSelects({
   return (
     <>
       <div className={wrapClassName} style={wrapStyle}>
-        <label className={labelClassName} style={labelStyle}>{t.location.region}</label>
+        <label htmlFor={`${uid}-region`} className={labelClassName} style={labelStyle}>{t.location.region}</label>
 
-        <select
+        <select id={`${uid}-region`}
           className={selectClassName}
           style={selectStyle}
           value={selectedRegion?.code ?? ''}
@@ -131,8 +133,8 @@ export default function LocationSelects({
       </div>
 
       <div className={wrapClassName} style={wrapStyle}>
-        <label className={labelClassName} style={labelStyle}>{t.location.province}</label>
-        <select
+        <label htmlFor={`${uid}-province`} className={labelClassName} style={labelStyle}>{t.location.province}</label>
+        <select id={`${uid}-province`}
           className={selectClassName}
           style={selectStyle}
           value={selectedProvince?.code ?? ''}
@@ -149,8 +151,8 @@ export default function LocationSelects({
       </div>
 
       <div className={wrapClassName} style={wrapStyle}>
-        <label className={labelClassName} style={labelStyle}>{t.location.city}</label>
-        <select
+        <label htmlFor={`${uid}-city`} className={labelClassName} style={labelStyle}>{t.location.city}</label>
+        <select id={`${uid}-city`}
           className={selectClassName}
           style={selectStyle}
           value={selectedCity?.code ?? ''}
@@ -167,8 +169,8 @@ export default function LocationSelects({
       </div>
 
       <div className={wrapClassName} style={wrapStyle}>
-        <label className={labelClassName} style={labelStyle}>{t.location.barangay}</label>
-        <select
+        <label htmlFor={`${uid}-barangay`} className={labelClassName} style={labelStyle}>{t.location.barangay}</label>
+        <select id={`${uid}-barangay`}
           className={selectClassName}
           style={selectStyle}
           value={selectedBarangay?.code ?? ''}

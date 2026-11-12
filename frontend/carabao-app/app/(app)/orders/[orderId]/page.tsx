@@ -175,6 +175,7 @@ function ReviewSection({
         <Stars value={rating} onChange={setRating} />
         <textarea
           className={styles.reviewInput}
+          aria-label="Your review (optional)"
           placeholder={`How was your order from ${order.merchant}? (optional)`}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
