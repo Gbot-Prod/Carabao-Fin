@@ -57,10 +57,22 @@ export type PlaceOrderPayload = {
   image?: string | null;
 };
 
-export type PlaceOrderResponse = {
+export type PlacedOrder = {
   order_id: number;
   order_reference: string;
   status: OrderStatus;
+  merchant_id: number;
+  merchant_name: string;
+  total_price: number;
+  delivery_fee: number;
+};
+
+export type PlaceOrderResponse = {
+  // The first order; `orders` lists every one (one per merchant in the cart).
+  order_id: number;
+  order_reference: string;
+  status: OrderStatus;
+  orders?: PlacedOrder[];
 };
 
 export const fetchOrderHistory = async (): Promise<OrderHistoryItem[]> => {

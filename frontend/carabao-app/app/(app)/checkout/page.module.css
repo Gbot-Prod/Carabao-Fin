@@ -232,3 +232,29 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Multi-farm checkout (C1) */
+.farmGroup + .farmGroup {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--green-border);
+}
+
+.farmGroupName {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green-900);
+}
+
+.farmGroupFee {
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+
+.multiFarmNote {
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-subtle);
+}

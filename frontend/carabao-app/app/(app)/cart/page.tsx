@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import { fetchMyCart, replaceMyCart } from "@/util/api";
-import { SERVICE_FEE } from "@/lib/constants";
+import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 
 type CartItem = {
   id: string;
@@ -16,6 +16,8 @@ type CartItem = {
   price: number;
   stock_quantity?: number;
   min_order_qty?: number;
+  merchant_id?: number | null;
+  delivery_fee?: number | null;
 };
 
 export default function CartPage() {
@@ -37,6 +39,8 @@ export default function CartPage() {
               quantity: Number(item.quantity) || 0,
               price: Number(item.price) || 0,
               min_order_qty: item.min_order_qty,
+              merchant_id: item.merchant_id,
+              delivery_fee: item.delivery_fee,
             })),
           );
         }
@@ -67,13 +71,29 @@ export default function CartPage() {
         const fromServer = new Map(saved.items.map((i) => [String(i.id), i]));
         const changed = items.some((item) => {
           const s = fromServer.get(item.id);
-          return s !== undefined && (Number(s.price) !== item.price || s.min_order_qty !== item.min_order_qty);
+          return (
+            s !== undefined &&
+            (Number(s.price) !== item.price ||
+              s.min_order_qty !== item.min_order_qty ||
+              (s.merchant_id ?? null) !== (item.merchant_id ?? null) ||
+              (s.delivery_fee ?? null) !== (item.delivery_fee ?? null) ||
+              s.farm !== item.farm)
+          );
         });
         if (changed) {
           setItems((prev) =>
             prev.map((item) => {
               const s = fromServer.get(item.id);
-              return s ? { ...item, price: Number(s.price) || 0, min_order_qty: s.min_order_qty } : item;
+              return s
+                ? {
+                    ...item,
+                    price: Number(s.price) || 0,
+                    min_order_qty: s.min_order_qty,
+                    merchant_id: s.merchant_id,
+                    delivery_fee: s.delivery_fee,
+                    farm: s.farm || item.farm,
+                  }
+                : item;
             }),
           );
         }
@@ -85,12 +105,9 @@ export default function CartPage() {
     void persistCart();
   }, [items, isHydrating]);
 
-  const itemTotal = useMemo(
-    () => items.reduce((sum, item) => sum + item.quantity * item.price, 0),
-    [items],
-  );
-  const serviceFee = itemTotal > 0 ? SERVICE_FEE : 0;
-  const grandTotal = itemTotal + serviceFee;
+  // One order per farm at checkout (C1), each with its own delivery fee.
+  const groups = useMemo(() => groupCartByMerchant(items), [items]);
+  const { itemTotal, deliveryTotal, grandTotal } = cartTotals(groups);
 
   const updateQuantity = (id: string, nextQuantity: number) => {
     if (nextQuantity < 1) return;
@@ -128,56 +145,70 @@ export default function CartPage() {
               </Link>
             </div>
           ) : (
-            <ul className={styles.itemList}>
-              {items.map((item) => (
-                <li key={item.id} className={styles.itemRow}>
-                  <div className={styles.itemMeta}>
-                    <p className={styles.farm}>{item.farm}</p>
-                    <h3>{item.produce}</h3>
-                    <p className={styles.priceLine}>
-                      PHP {item.price.toFixed(2)} / {item.unit}
-                    </p>
-                  </div>
+            <div className={styles.groupList}>
+              {groups.map((group) => (
+                <section key={group.key} className={styles.farmGroup} aria-label={`Items from ${group.farm}`}>
+                  <header className={styles.farmGroupHeader}>
+                    <h2 className={styles.farmGroupName}>{group.farm}</h2>
+                    <span className={styles.farmGroupMeta}>
+                      {group.items.length} item{group.items.length === 1 ? "" : "s"} · delivery PHP {group.deliveryFee.toFixed(2)}
+                    </span>
+                  </header>
+                  <ul className={styles.itemList}>
+                    {group.items.map((item) => (
+                      <li key={item.id} className={styles.itemRow}>
+                        <div className={styles.itemMeta}>
+                          <h3>{item.produce}</h3>
+                          <p className={styles.priceLine}>
+                            PHP {item.price.toFixed(2)} / {item.unit}
+                          </p>
+                        </div>
 
-                  <div className={styles.itemActions}>
-                    <div className={styles.qtyControl}>
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        aria-label={`Decrease quantity for ${item.produce}`}
-                        disabled={item.quantity <= (item.min_order_qty ?? 1)}
-                      >
-                        -
-                      </button>
-                      <span>{item.quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        aria-label={`Increase quantity for ${item.produce}`}
-                        disabled={item.stock_quantity !== undefined && item.quantity >= item.stock_quantity}
-                      >
-                        +
-                      </button>
-                    </div>
-                    {(item.min_order_qty ?? 1) > 1 && (
-                      <p className={styles.priceLine}>Min. order {item.min_order_qty}</p>
-                    )}
+                        <div className={styles.itemActions}>
+                          <div className={styles.qtyControl}>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                              aria-label={`Decrease quantity for ${item.produce}`}
+                              disabled={item.quantity <= (item.min_order_qty ?? 1)}
+                            >
+                              -
+                            </button>
+                            <span>{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              aria-label={`Increase quantity for ${item.produce}`}
+                              disabled={item.stock_quantity !== undefined && item.quantity >= item.stock_quantity}
+                            >
+                              +
+                            </button>
+                          </div>
+                          {(item.min_order_qty ?? 1) > 1 && (
+                            <p className={styles.priceLine}>Min. order {item.min_order_qty}</p>
+                          )}
 
-                    <p className={styles.lineTotal}>
-                      PHP {(item.quantity * item.price).toFixed(2)}
-                    </p>
+                          <p className={styles.lineTotal}>
+                            PHP {(item.quantity * item.price).toFixed(2)}
+                          </p>
 
-                    <button
-                      type="button"
-                      className={styles.removeButton}
-                      onClick={() => removeItem(item.id)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </li>
+                          <button
+                            type="button"
+                            className={styles.removeButton}
+                            onClick={() => removeItem(item.id)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className={styles.farmGroupTotal}>
+                    Subtotal for {group.farm}: <strong>PHP {group.total.toFixed(2)}</strong>
+                  </p>
+                </section>
               ))}
-            </ul>
+            </div>
           )}
         </section>
 
@@ -188,9 +219,15 @@ export default function CartPage() {
             <strong>PHP {itemTotal.toFixed(2)}</strong>
           </div>
           <div className={styles.summaryLine}>
-            <span>Service fee</span>
-            <strong>PHP {serviceFee.toFixed(2)}</strong>
+            <span>Delivery fees{groups.length > 1 ? ` (${groups.length} farms)` : ""}</span>
+            <strong>PHP {deliveryTotal.toFixed(2)}</strong>
           </div>
+          {groups.length > 1 && (
+            <p className={styles.multiFarmNote}>
+              Each farm delivers and is paid separately, so checkout creates {groups.length} orders and you pay
+              for each in turn.
+            </p>
+          )}
           <div className={styles.summaryLineGrand}>
             <span>Grand total</span>
             <strong>PHP {grandTotal.toFixed(2)}</strong>

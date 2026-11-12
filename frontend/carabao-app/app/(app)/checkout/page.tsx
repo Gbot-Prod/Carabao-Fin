@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 import { cancelPaymentCheckout, createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
-import { SERVICE_FEE } from "@/lib/constants";
+import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
+import { clearPendingPayments, loadPendingPayments, savePendingPayments } from "@/util/pendingPayments";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
 import { isLuzonRegion } from "@/util/serviceArea";
 import { getApiErrorStatus } from "@/util/errorHelper";
@@ -84,17 +85,22 @@ export default function CheckoutPage() {
       }
       // Otherwise the server-side expiry sweep will still release stock.
     });
+    // A multi-farm checkout (C1): release the other farms' unpaid orders too, so
+    // the buyer can check out again from the cart without stock being held.
+    const rest = loadPendingPayments().filter((o) => o.order_id !== orderId);
+    clearPendingPayments();
+    for (const other of rest) {
+      void cancelPaymentCheckout(other.order_id).catch(() => {
+        // The expiry sweep releases it anyway.
+      });
+    }
     setError("Payment was cancelled. Your items are available in your cart.");
     window.history.replaceState({}, "", "/checkout");
   }, []);
 
-  const subtotal = useMemo(
-    () =>
-      checkoutItems.reduce((sum, item) => sum + item.quantity * item.price, 0),
-    [checkoutItems],
-  );
-  const serviceFee = SERVICE_FEE;
-  const grandTotal = subtotal + serviceFee;
+  // Checkout creates one order per farm (C1), each with its own delivery fee.
+  const groups = useMemo(() => groupCartByMerchant(checkoutItems), [checkoutItems]);
+  const { itemTotal: subtotal, deliveryTotal, grandTotal } = cartTotals(groups);
 
   const handlePlaceOrder = async () => {
     if (checkoutItems.length === 0 || isPlacingOrder) {
@@ -128,10 +134,16 @@ export default function CheckoutPage() {
         delivery_region: addressForm.region,
         payment_method: paymentMethod,
         notes: notes || null,
-        service_fee: serviceFee,
+        // Ignored by the server, which charges each merchant's own delivery fee.
+        service_fee: deliveryTotal,
       });
 
-      const checkout = await createPaymentCheckout(result.order_id);
+      // PayMongo takes one order per checkout, so a multi-farm cart is paid in
+      // turn: pay the first now, the success page offers the rest.
+      const placed = result.orders?.length ? result.orders : null;
+      if (placed && placed.length > 1) savePendingPayments(placed.slice(1));
+      else clearPendingPayments();
+      const checkout = await createPaymentCheckout(placed ? placed[0].order_id : result.order_id);
       window.location.href = checkout.checkout_url;
     } catch (err) {
       let message = "Unable to place order right now. Please try again.";
@@ -240,16 +252,25 @@ export default function CheckoutPage() {
           ) : checkoutItems.length === 0 ? (
             <p>Your cart is empty. Add items before checkout.</p>
           ) : (
-            <ul className={styles.itemList}>
-              {checkoutItems.map((item) => (
-                <li key={item.id}>
-                  <span>
-                    {item.quantity} x {item.produce}
-                  </span>
-                  <strong>PHP {(item.quantity * item.price).toFixed(2)}</strong>
-                </li>
-              ))}
-            </ul>
+            groups.map((group) => (
+              <div key={group.key} className={styles.farmGroup}>
+                {groups.length > 1 && <h3 className={styles.farmGroupName}>{group.farm}</h3>}
+                <ul className={styles.itemList}>
+                  {group.items.map((item) => (
+                    <li key={item.id}>
+                      <span>
+                        {item.quantity} x {item.produce}
+                      </span>
+                      <strong>PHP {(item.quantity * item.price).toFixed(2)}</strong>
+                    </li>
+                  ))}
+                  <li className={styles.farmGroupFee}>
+                    <span>Delivery{groups.length > 1 ? ` from ${group.farm}` : ""}</span>
+                    <strong>PHP {group.deliveryFee.toFixed(2)}</strong>
+                  </li>
+                </ul>
+              </div>
+            ))
           )}
 
           <div className={styles.totals}>
@@ -258,14 +279,20 @@ export default function CheckoutPage() {
               <strong>PHP {subtotal.toFixed(2)}</strong>
             </p>
             <p>
-              <span>Service fee</span>
-              <strong>PHP {serviceFee.toFixed(2)}</strong>
+              <span>Delivery fees{groups.length > 1 ? ` (${groups.length} farms)` : ""}</span>
+              <strong>PHP {deliveryTotal.toFixed(2)}</strong>
             </p>
             <p className={styles.grandTotal}>
               <span>Total</span>
               <strong>PHP {grandTotal.toFixed(2)}</strong>
             </p>
           </div>
+
+          {groups.length > 1 && (
+            <p className={styles.multiFarmNote}>
+              This creates {groups.length} orders, one per farm. You&apos;ll pay for each in turn.
+            </p>
+          )}
 
           {error && <p className={styles.errorMessage}>{error}</p>}
 
