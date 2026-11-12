@@ -115,6 +115,9 @@ export type ApiProduce = {
   // ISO dates (YYYY-MM-DD); null on listings created before they were collected.
   harvest_date: string | null;
   best_before: string | null;
+  min_order_qty: number;
+  // Unit price once a cart line reaches min_qty; the server applies it.
+  price_tiers: { min_qty: number; unit_price: number }[];
 };
 
 export type ApiCurrentOrder = {

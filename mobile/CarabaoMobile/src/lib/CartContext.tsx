@@ -16,7 +16,8 @@ interface CartContextType {
   items: CartItem[];
   itemCount: number;
   total: number;
-  addItem: (item: Omit<CartItem, 'quantity'>) => void;
+  // `quantity` is used only when the item is not in the cart yet.
+  addItem: (item: Omit<CartItem, 'quantity'>, quantity?: number) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -27,7 +28,7 @@ const CartContext = createContext<CartContextType | null>(null);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  const addItem = (newItem: Omit<CartItem, 'quantity'>) => {
+  const addItem = (newItem: Omit<CartItem, 'quantity'>, quantity = 1) => {
     setItems((prev) => {
       const existing = prev.find((i) => i.id === newItem.id);
       if (existing) {
@@ -35,7 +36,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           i.id === newItem.id ? { ...i, quantity: i.quantity + 1 } : i
         );
       }
-      return [...prev, { ...newItem, quantity: 1 }];
+      return [...prev, { ...newItem, quantity }];
     });
   };
 
