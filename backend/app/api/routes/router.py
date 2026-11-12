@@ -5,6 +5,7 @@ from app.api.webhooks.paymongo import router as paymongo_webhook_router
 from .admin import router as admin_router
 from .admin_audit import router as admin_audit_router
 from .admin_orders import router as admin_orders_router
+from .admin_produce import router as admin_produce_router
 from .auth import router as auth_router
 from .carts import router as carts_router
 from .email import router as email_router
@@ -25,6 +26,7 @@ router = APIRouter()
 router.include_router(admin_router)
 router.include_router(admin_orders_router)
 router.include_router(admin_audit_router)
+router.include_router(admin_produce_router)
 router.include_router(email_router)
 router.include_router(misc_router)
 router.include_router(merchant_onboarding_router)

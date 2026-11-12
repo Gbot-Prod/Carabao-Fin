@@ -19,6 +19,9 @@ export type Produce = {
   best_before: string | null;
   min_order_qty: number;
   price_tiers: PriceTier[];
+  // Set when an admin hides the listing (A6); only the merchant ever sees these.
+  hidden_at?: string | null;
+  hidden_reason?: string | null;
 };
 
 export type ProduceCreatePayload = {

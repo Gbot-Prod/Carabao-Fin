@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -61,5 +61,8 @@ class ProduceUpdate(BaseModel):
 class ProduceResponse(ProduceBase):
     id: int
     merchant_id: int
+    # Admin moderation (A6); buyers never receive hidden listings.
+    hidden_at: datetime | None = None
+    hidden_reason: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

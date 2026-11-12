@@ -21,8 +21,19 @@ REINSTATE = "user.reinstate"
 APPLICATION_REVIEW = "merchant_application.review"
 PAYOUT_RELEASE = "payout.release"
 REFUND = "transaction.refund"
+PRODUCE_HIDE = "produce.hide"
+PRODUCE_UNHIDE = "produce.unhide"
 
-ACTIONS = (ROLE_CHANGE, SUSPEND, REINSTATE, APPLICATION_REVIEW, PAYOUT_RELEASE, REFUND)
+ACTIONS = (
+    ROLE_CHANGE,
+    SUSPEND,
+    REINSTATE,
+    APPLICATION_REVIEW,
+    PAYOUT_RELEASE,
+    REFUND,
+    PRODUCE_HIDE,
+    PRODUCE_UNHIDE,
+)
 
 
 def _jsonable(value: Any) -> Any:

@@ -143,6 +143,12 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
                 ) : (
                   <span className={styles.produceFreshness}>Harvest date not set. Edit to add it.</span>
                 )}
+                {produce.hidden_at && (
+                  <p className={styles.produceHidden} role="status">
+                    <strong>Hidden by Carabao admin</strong> · buyers can&apos;t see or order this listing.
+                    {produce.hidden_reason && <> Reason: {produce.hidden_reason}</>} Contact support once it&apos;s fixed.
+                  </p>
+                )}
                 {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
               </div>
               <div className={styles.produceRowActions}>

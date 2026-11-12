@@ -112,6 +112,11 @@ def place_order_from_cart(
             raise HTTPException(
                 status_code=400, detail=f"Produce ID {produce_id} not found"
             )
+        if produce.hidden_at is not None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{produce.name}' is no longer available",
+            )
         if is_expired(produce, today):
             raise HTTPException(
                 status_code=400,

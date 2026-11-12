@@ -20,6 +20,8 @@ const ACTION_LABELS: Record<string, string> = {
   "merchant_application.review": "Application review",
   "payout.release": "Payout release",
   "transaction.refund": "Refund",
+  "produce.hide": "Listing hidden",
+  "produce.unhide": "Listing unhidden",
 };
 
 const TARGET_LINKS: Partial<Record<string, (id: number) => string>> = {
@@ -27,6 +29,7 @@ const TARGET_LINKS: Partial<Record<string, (id: number) => string>> = {
   merchant_application: () => "/admin/review",
   payout_batch: () => "/admin/payouts",
   transaction: () => "/admin/refunds",
+  produce: () => "/admin/listings",
 };
 
 const show = (value: unknown): string => {

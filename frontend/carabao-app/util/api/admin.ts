@@ -2,6 +2,7 @@ import { apiClient } from './client';
 import type { UserProfile } from './users';
 import type { Merchant, MerchantPayoutBatch, PayoutProvider, PayoutType } from './merchants';
 import type { OrderStatus, PayoutStatus } from './statuses';
+import type { Produce } from './produce';
 
 export type MerchantApplication = {
   id: number;
@@ -359,5 +360,30 @@ export const fetchAuditLog = async (
 
 export const fetchAuditActions = async (): Promise<string[]> => {
   const res = await apiClient.get<string[]>('/admin/audit-log/actions');
+  return res.data;
+};
+
+// ── Listing moderation (A6) ──────────────────────────────────────────────────
+
+export type AdminProduce = Produce & { merchant_name: string | null };
+
+export const fetchAdminProduce = async (
+  filters: { hidden?: boolean; q?: string; merchant_id?: number },
+  page = 1,
+  pageSize = ADMIN_PAGE_SIZE,
+): Promise<Paginated<AdminProduce>> => {
+  const res = await apiClient.get<Paginated<AdminProduce>>('/admin/produce', {
+    params: { ...filters, page, page_size: pageSize },
+  });
+  return res.data;
+};
+
+export const hideProduce = async (produceId: number, reason: string): Promise<AdminProduce> => {
+  const res = await apiClient.post<AdminProduce>(`/admin/produce/${produceId}/hide`, { reason });
+  return res.data;
+};
+
+export const unhideProduce = async (produceId: number): Promise<AdminProduce> => {
+  const res = await apiClient.post<AdminProduce>(`/admin/produce/${produceId}/unhide`);
   return res.data;
 };

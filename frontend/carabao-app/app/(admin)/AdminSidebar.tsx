@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/admin/users", label: "Users" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/merchants", label: "Merchants" },
+  { href: "/admin/listings", label: "Listings" },
   { href: "/admin/review", label: "Review" },
   { href: "/admin/payouts", label: "Payouts" },
   { href: "/admin/refunds", label: "Refunds" },

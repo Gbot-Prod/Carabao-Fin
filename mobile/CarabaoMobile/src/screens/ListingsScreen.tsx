@@ -25,6 +25,12 @@ function ListingRow({ item, onPress }: { item: ApiProduce; onPress: () => void }
           ₱{item.price.toLocaleString()} / {item.unit_quantity && item.unit_quantity !== 1 ? `${item.unit_quantity} ` : ''}{item.unit}
           {item.category ? ` · ${item.category}` : ''}
         </Text>
+        {item.hidden_at ? (
+          <Text style={styles.rowHidden}>
+            Hidden by Carabao admin: buyers can't see or order it.
+            {item.hidden_reason ? ` Reason: ${item.hidden_reason}` : ''}
+          </Text>
+        ) : null}
       </View>
       <Badge
         label={outOfStock ? 'Out of stock' : `${item.stock_quantity} in stock`}
@@ -192,4 +198,5 @@ const styles = StyleSheet.create({
   rowInfo: { flex: 1 },
   rowName: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   rowMeta: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 2 },
+  rowHidden: { fontSize: FontSize.xs, color: Colors.error, fontWeight: '600', marginTop: 4 },
 });

@@ -119,6 +119,9 @@ export type ApiProduce = {
   min_order_qty: number;
   // Unit price once a cart line reaches min_qty; the server applies it.
   price_tiers: { min_qty: number; unit_price: number }[];
+  // Set when an admin hides the listing; only the merchant's own list has it.
+  hidden_at?: string | null;
+  hidden_reason?: string | null;
 };
 
 // Mirrors backend ProduceCreate / ProduceUpdate (app/schemas/produce.py).
