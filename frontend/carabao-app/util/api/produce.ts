@@ -1,5 +1,8 @@
 import { apiClient } from './client';
 
+// Unit price once a cart line reaches min_qty sale units; the server applies it.
+export type PriceTier = { min_qty: number; unit_price: number };
+
 export type Produce = {
   id: number;
   merchant_id: number;
@@ -14,6 +17,8 @@ export type Produce = {
   // ISO dates (YYYY-MM-DD); null on listings created before they were collected.
   harvest_date: string | null;
   best_before: string | null;
+  min_order_qty: number;
+  price_tiers: PriceTier[];
 };
 
 export type ProduceCreatePayload = {
@@ -27,6 +32,8 @@ export type ProduceCreatePayload = {
   image_url?: string | null;
   harvest_date: string;
   best_before: string;
+  min_order_qty?: number;
+  price_tiers?: PriceTier[];
 };
 
 export type ProduceUpdatePayload = {
@@ -40,6 +47,8 @@ export type ProduceUpdatePayload = {
   image_url?: string | null;
   harvest_date?: string;
   best_before?: string;
+  min_order_qty?: number;
+  price_tiers?: PriceTier[];
 };
 
 export const fetchMerchantProduce = async (merchantId: number): Promise<Produce[]> => {

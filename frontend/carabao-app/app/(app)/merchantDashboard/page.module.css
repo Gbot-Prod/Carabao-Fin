@@ -497,6 +497,31 @@
   color: var(--text-muted);
 }
 
+.tierSection {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tierHint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tierRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tierRow .formInput {
+  width: 90px;
+}
+
 .produceFreshness {
   width: 100%;
   font-size: 12px;

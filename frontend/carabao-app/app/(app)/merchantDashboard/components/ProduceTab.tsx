@@ -126,6 +126,13 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
                 {produce.category && <span className={styles.produceCategory}>{produce.category}</span>}
                 <span className={styles.producePrice}>₱{produce.price} / {produce.unit_quantity !== 1 ? produce.unit_quantity : ""}{produce.unit}</span>
                 <span className={styles.produceStock}>Stock: {produce.stock_quantity}</span>
+                {(produce.min_order_qty > 1 || produce.price_tiers.length > 0) && (
+                  <span className={styles.produceFreshness}>
+                    {produce.min_order_qty > 1 && `Min. order ${produce.min_order_qty}`}
+                    {produce.min_order_qty > 1 && produce.price_tiers.length > 0 && " · "}
+                    {produce.price_tiers.map((t) => `${t.min_qty}+ → ₱${t.unit_price}`).join(" · ")}
+                  </span>
+                )}
                 {produce.harvest_date && produce.best_before ? (
                   <span className={styles.produceFreshness}>
                     Harvested {formatRequestedDate(produce.harvest_date)} · Best before {formatRequestedDate(produce.best_before)}
