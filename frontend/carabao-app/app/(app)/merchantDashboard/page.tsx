@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import styles from "./page.module.css";
-import PageLoader from "@/components/PageLoader/PageLoader";
+import SkeletonList, { LoadError } from "@/components/Skeleton/Skeleton";
 import {
   fetchMyMerchantPerformance,
   fetchMerchantById,
@@ -34,6 +34,7 @@ export default function MerchantDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isMerchant, setIsMerchant] = useState<boolean | null>(null);
   const [performance, setPerformance] = useState<MerchantPerformance | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   // Shared across tabs (header logo, overview stock, tab counts), so owned here.
   const [merchant, setMerchant] = useState<Merchant | null>(null);
@@ -60,7 +61,7 @@ export default function MerchantDashboardPage() {
       }
     };
     void load();
-  }, []);
+  }, [attempt]);
 
   const merchantId = performance?.merchant_id;
   useEffect(() => {
@@ -94,7 +95,7 @@ export default function MerchantDashboardPage() {
     return (
       <div className={styles.page}>
         <div className={styles.loadingState}>
-          <PageLoader label="Loading dashboard…" />
+          <SkeletonList label="Loading dashboard…" rows={4} />
         </div>
       </div>
     );
@@ -111,6 +112,18 @@ export default function MerchantDashboardPage() {
             <Link className={styles.secondaryBtn} href="/profile">Back to Profile</Link>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // Not a 404, but the dashboard still couldn't load (network or server error).
+  if (isMerchant === null || !performance) {
+    return (
+      <div className={styles.page}>
+        <LoadError
+          message="We couldn't load your dashboard. Check your connection and try again."
+          onRetry={() => setAttempt((n) => n + 1)}
+        />
       </div>
     );
   }

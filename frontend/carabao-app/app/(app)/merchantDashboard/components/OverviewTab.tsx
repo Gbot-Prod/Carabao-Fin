@@ -113,6 +113,13 @@ export default function OverviewTab({ performance, produces, onOpenReviews, onOp
 
       <StockAlertsPanel refreshKey={produces} onThreshold={setThreshold} />
 
+      {produces.length === 0 && (
+        <div className={styles.panel}>
+          <h2 className={styles.panelTitle}>Stock by Produce</h2>
+          <p className={styles.emptyText}>No listings yet. Add your first produce from the Produce tab.</p>
+        </div>
+      )}
+
       {produces.length > 0 && (
         <div className={styles.panel}>
           <h2 className={styles.panelTitle}>Stock by Produce</h2>

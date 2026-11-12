@@ -15,7 +15,7 @@ import {
 } from "@/util/api/admin";
 import { ORDER_STATUS_LABELS, PAYOUT_STATUS_LABELS, type OrderStatus } from "@/util/api/statuses";
 import styles from "./page.module.css";
-import PageLoader from "@/components/PageLoader/PageLoader";
+import SkeletonList, { LoadError } from "@/components/Skeleton/Skeleton";
 
 const peso = (v: number) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 }).format(v);
@@ -49,16 +49,34 @@ export default function AdminDashboard() {
   const [batches, setBatches] = useState<PayoutBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     Promise.all([fetchAdminStats(), fetchAdminPayoutBatches()])
-      .then(([s, b]) => { setStats(s); setBatches(b); })
-      .catch(() => setError("Failed to load dashboard data."))
+      .then(([s, b]) => { setStats(s); setBatches(b); setError(null); })
+      .catch(() => setError("We couldn't load the dashboard. Check your connection and try again."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [attempt]);
 
-  if (loading) return <PageLoader label="Loading dashboard…" />;
-  if (error || !stats) return <div className={styles.stateError}>{error ?? "Unknown error"}</div>;
+  if (loading) {
+    return (
+      <div className={styles.page}>
+        <h1 className={styles.heading}>Dashboard</h1>
+        <SkeletonList label="Loading dashboard…" rows={4} />
+      </div>
+    );
+  }
+  if (error || !stats) {
+    return (
+      <div className={styles.page}>
+        <h1 className={styles.heading}>Dashboard</h1>
+        <LoadError
+          message={error ?? "We couldn't load the dashboard."}
+          onRetry={() => { setLoading(true); setAttempt((n) => n + 1); }}
+        />
+      </div>
+    );
+  }
 
   const pendingBatchCount = batches.filter((b) => b.status === "pending").length;
   const sortedPayoutSummary = [...stats.payout_summary].sort(
