@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
+import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
 import {
   fetchMyProfile,
   submitMyMerchantOnboarding,
@@ -419,6 +420,22 @@ export default function MerchantOnboardingPage() {
               <div className={styles.field}>
                 <label className={styles.label}>Postal code (optional)</label>
                 <input className={styles.input} value={form.postal_code ?? ""} onChange={setField("postal_code")} placeholder="1634" />
+              </div>
+
+              {/* Farm pickup point (U1c): deliveries start from this pin. */}
+              <div className={`${styles.field} ${styles.fieldFull}`}>
+                <MapPinPicker
+                  value={form.lat != null && form.lng != null ? { lat: form.lat, lng: form.lng } : null}
+                  onChange={(pin, found) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      lat: pin.lat,
+                      lng: pin.lng,
+                      address: prev.address || found?.street || prev.address,
+                      postal_code: prev.postal_code || found?.postcode || prev.postal_code,
+                    }))
+                  }
+                />
               </div>
 
               <div className={styles.field}>

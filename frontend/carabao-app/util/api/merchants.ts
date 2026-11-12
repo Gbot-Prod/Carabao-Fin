@@ -13,6 +13,9 @@ export type Merchant = {
   barangay: string | null;
   address: string | null;
   postal_code: string | null;
+  // Farm map pin (U1).
+  lat?: number | null;
+  lng?: number | null;
   category: string | null;
   contact_number: string;
   contact_email?: string | null;
@@ -40,6 +43,9 @@ export type MerchantOnboardingPayload = {
   barangay?: string;
   address: string;
   postal_code?: string;
+  // Farm map pin (U1c), optional.
+  lat?: number | null;
+  lng?: number | null;
   price_range_min: number;
   price_range_max: number;
   delivery_time: number;
@@ -93,6 +99,8 @@ export type MerchantUpdatePayload = {
   barangay?: string | null;
   address?: string | null;
   postal_code?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   contact_email?: string | null;
   contact_number?: string | null;
   operating_hours?: string | null;
