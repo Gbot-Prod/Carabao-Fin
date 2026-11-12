@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
-import PageLoader from "@/components/PageLoader/PageLoader";
+import SkeletonList, { LoadError } from "@/components/Skeleton/Skeleton";
 import {
   fetchCurrentOrders,
   fetchOrderHistory,
@@ -378,24 +378,38 @@ export default function Orders() {
   const [orders, setOrders] = useState<CurrentOrderItem[]>([]);
   const [pastOrders, setPastOrders] = useState<OrderHistoryItem[]>([]);
   const [loadingCurrent, setLoadingCurrent] = useState(true);
+  const [currentError, setCurrentError] = useState(false);
+  const [currentAttempt, setCurrentAttempt] = useState(0);
   const [historyFetched, setHistoryFetched] = useState(false);
+  const [historyError, setHistoryError] = useState(false);
   const loadingHistory = tab === "history" && !historyFetched;
 
   useEffect(() => {
     fetchCurrentOrders()
-      .then(setOrders)
-      .catch(() => setOrders([]))
+      .then((rows) => {
+        setOrders(rows);
+        setCurrentError(false);
+      })
+      .catch(() => setCurrentError(true))
       .finally(() => setLoadingCurrent(false));
-  }, []);
+  }, [currentAttempt]);
 
   useEffect(() => {
     if (tab === "history" && !historyFetched) {
       fetchOrderHistory()
-        .then(setPastOrders)
-        .catch(() => setPastOrders([]))
+        .then((rows) => {
+          setPastOrders(rows);
+          setHistoryError(false);
+        })
+        .catch(() => setHistoryError(true))
         .finally(() => { setHistoryFetched(true); });
     }
   }, [tab, historyFetched]);
+
+  const retryCurrent = () => {
+    setLoadingCurrent(true);
+    setCurrentAttempt((n) => n + 1);
+  };
 
   const handleConfirmed = (updated: CurrentOrderItem) => {
     setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
@@ -432,7 +446,9 @@ export default function Orders() {
 
       {tab === "current" && (
         loadingCurrent ? (
-          <PageLoader variant="inline" label="Loading your orders…" />
+          <SkeletonList label="Loading your orders…" rows={3} />
+        ) : currentError ? (
+          <LoadError message="We couldn't load your orders. Check your connection and try again." onRetry={retryCurrent} />
         ) : orders.length === 0 ? (
           <div className={styles.empty}>
             <p className={styles.emptyTitle}>No active orders</p>
@@ -450,7 +466,9 @@ export default function Orders() {
 
       {tab === "history" && (
         loadingHistory ? (
-          <PageLoader variant="inline" label="Loading order history…" />
+          <SkeletonList label="Loading order history…" rows={3} />
+        ) : historyError ? (
+          <LoadError message="We couldn't load your order history. Check your connection and try again." onRetry={() => setHistoryFetched(false)} />
         ) : pastOrders.length === 0 ? (
           <div className={styles.empty}>
             <p className={styles.emptyTitle}>No past orders</p>

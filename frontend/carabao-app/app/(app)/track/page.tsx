@@ -12,6 +12,7 @@ import { fetchShipmentTracking } from '@/util/api';
 import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
 import getApiErrorMessage, { getApiErrorStatus } from '@/util/errorHelper';
 import PageLoader from '@/components/PageLoader/PageLoader';
+import SkeletonList, { LoadError } from '@/components/Skeleton/Skeleton';
 
 // Progress and ETA are estimated from the route schedule; there is no live GPS.
 const WAITING_MESSAGE = 'Waiting for shipment. Estimated progress will appear after the merchant dispatches this order.';
@@ -130,6 +131,8 @@ function Track() {
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [currentOrders, setCurrentOrders] = useState<TrackOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState(false);
+  const [ordersAttempt, setOrdersAttempt] = useState(0);
   const [selectedOrderIndex, setSelectedOrderIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
 
@@ -144,19 +147,21 @@ function Track() {
     const loadCurrentOrders = async () => {
       try {
         const response = (await fetchCurrentOrders()).filter(isInTransit);
+        setOrdersError(false);
         if (response.length > 0) {
           setCurrentOrders(response.map(toTrackOrder));
           setSelectedOrderIndex(0);
         }
       } catch {
-        // orders stay empty if the backend is unavailable
+        // Say so instead of showing "nothing out for delivery".
+        setOrdersError(true);
       } finally {
         setOrdersLoading(false);
       }
     };
 
     void loadCurrentOrders();
-  }, []);
+  }, [ordersAttempt]);
 
   useEffect(() => {
     if (selectedOrderIndex >= currentOrders.length) {
@@ -467,7 +472,21 @@ function Track() {
   return (
     <Suspense fallback={<PageLoader label="Loading your deliveries…" />}>
       {ordersLoading ? (
-        <PageLoader label="Loading your deliveries…" />
+        <div className={styles.emptyState}>
+          <h1 className={styles.pageTitle}>Track orders</h1>
+          <SkeletonList label="Loading your deliveries…" rows={2} />
+        </div>
+      ) : ordersError && !selectedOrder ? (
+        <div className={styles.emptyState}>
+          <h1 className={styles.pageTitle}>Track orders</h1>
+          <LoadError
+            message="We couldn't load your deliveries. Check your connection and try again."
+            onRetry={() => {
+              setOrdersLoading(true);
+              setOrdersAttempt((n) => n + 1);
+            }}
+          />
+        </div>
       ) : !selectedOrder ? (
         <div className={styles.emptyState}>
           <h1 className={styles.pageTitle}>Track orders</h1>

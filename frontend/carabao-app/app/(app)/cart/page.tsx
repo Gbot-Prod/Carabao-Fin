@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./page.module.css";
-import PageLoader from "@/components/PageLoader/PageLoader";
+import SkeletonList from "@/components/Skeleton/Skeleton";
 import { fetchMyCart, replaceMyCart } from "@/util/api";
 import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -140,7 +140,7 @@ export default function CartPage() {
       <div className={styles.layout}>
         <section className={styles.itemsCard}>
           {isHydrating || authLoading ? (
-            <PageLoader variant="inline" label={t.cart.loading} />
+            <SkeletonList label={t.cart.loading} rows={3} thumbnail />
           ) : !isAuthenticated ? (
             <div className={styles.emptyState}>
               <h2>{t.cart.signedOutTitle}</h2>
