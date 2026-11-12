@@ -1,6 +1,7 @@
 import styles from "../page.module.css";
 import type { PriceTier, Produce, ProduceCreatePayload } from "@/util/api";
 import { todayInManila } from "../lib/format";
+import ReferencePriceHint from "@/components/ReferencePrice/ReferencePriceHint";
 
 export type ProduceFormState = {
   name: string;
@@ -220,6 +221,13 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
           ₱{form.price} per {form.unit_quantity === 1 ? "" : form.unit_quantity}{form.unit}
         </div>
       )}
+
+      {/* Fair-price information (P1): the market range for what's being listed. */}
+      <ReferencePriceHint
+        name={form.name}
+        unit={form.unit}
+        price={form.unit_quantity > 0 ? form.price / form.unit_quantity : undefined}
+      />
 
       <PriceTierFields form={form} onChange={onChange} />
 
