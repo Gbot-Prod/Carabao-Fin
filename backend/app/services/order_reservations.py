@@ -179,9 +179,23 @@ def settle_checkout_payment(
         if history:
             history.last_order_at = datetime.now(UTC)
 
+    # Drop only what this order bought: a multi-merchant checkout (C1) leaves
+    # the other merchants' items in the cart until their orders are paid.
     cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()
     if cart:
-        cart.items = []
+        bought = {
+            _item_value(item, "produce_id", "produceId", "id")
+            for item in order.items or []
+            if isinstance(item, dict)
+        }
+        cart.items = [
+            item
+            for item in cart.items or []
+            if not (
+                isinstance(item, dict)
+                and _item_value(item, "produce_id", "produceId", "id") in bought
+            )
+        ]
     return "paid"
 
 

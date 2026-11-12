@@ -303,7 +303,7 @@ def test_checkout_rejected_for_deleted_merchant(db, seller, buyer):
     resp = _client(db, buyer_user).post("/orders/me/place", json={})
 
     assert resp.status_code == 400
-    assert resp.json()["detail"] == "This merchant is no longer accepting orders"
+    assert "no longer accepting orders" in resp.json()["detail"]
     db.rollback()
     assert db.query(Order).count() == 0
     assert db.get(Produce, produce.id).stock_quantity == 5

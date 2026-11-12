@@ -79,7 +79,20 @@ class PlaceOrderRequest(BaseModel):
     image: str | None = None
 
 
-class PlaceOrderResponse(BaseModel):
+class PlacedOrder(BaseModel):
     order_id: int
     order_reference: str
     status: OrderStatus
+    merchant_id: int
+    merchant_name: str
+    total_price: int
+    delivery_fee: int
+
+
+class PlaceOrderResponse(BaseModel):
+    # The first order, for clients that place one merchant's cart at a time.
+    order_id: int
+    order_reference: str
+    status: OrderStatus
+    # Every order created: one per merchant in the cart (C1), merchant id order.
+    orders: list[PlacedOrder] = []
