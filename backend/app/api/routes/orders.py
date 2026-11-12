@@ -33,6 +33,7 @@ from app.services.order_status import (
     mark_delivered,
     money_received_clause,
 )
+from app.services.produce_freshness import is_expired, ph_today
 from app.services.review_service import (
     can_review,
     review_deadline,
@@ -73,6 +74,7 @@ def place_order_from_cart(
             status_code=400, detail="Delivery date cannot be in the past"
         )
 
+    today = ph_today()
     history = get_or_create_order_history(db, current_user.id)
     # Lock stock rows in id order so two carts sharing items can't deadlock.
     locked_produce = {
@@ -108,6 +110,11 @@ def place_order_from_cart(
         if produce is None:
             raise HTTPException(
                 status_code=400, detail=f"Produce ID {produce_id} not found"
+            )
+        if is_expired(produce, today):
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{produce.name}' is past its best-before date",
             )
 
         quantity = max(_to_int(item.get("quantity"), 0), 0)
