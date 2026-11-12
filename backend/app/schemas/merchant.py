@@ -62,6 +62,12 @@ class MerchantResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AdminMerchantResponse(MerchantResponse):
+    # The owner's account suspension (A3); a suspended merchant is hidden.
+    owner_suspended_at: datetime | None = None
+    owner_suspension_reason: str | None = None
+
+
 class MerchantDetailResponse(MerchantResponse):
     """Public merchant profile, plus the owning user's name for transparency."""
 

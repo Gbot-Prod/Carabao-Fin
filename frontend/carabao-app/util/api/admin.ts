@@ -102,8 +102,13 @@ export const fetchAdminUsers = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Pro
   return res.data;
 };
 
-export const fetchAdminMerchantsPage = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Promise<Paginated<Merchant>> => {
-  const res = await apiClient.get<Paginated<Merchant>>('/admin/merchants', {
+export type AdminMerchant = Merchant & {
+  owner_suspended_at: string | null;
+  owner_suspension_reason: string | null;
+};
+
+export const fetchAdminMerchantsPage = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Promise<Paginated<AdminMerchant>> => {
+  const res = await apiClient.get<Paginated<AdminMerchant>>('/admin/merchants', {
     params: { page, page_size: pageSize },
   });
   return res.data;
@@ -291,5 +296,17 @@ export const recordRefund = async (
   payload: { method: RefundMethod; reference: string; notes?: string },
 ): Promise<AdminRefund> => {
   const res = await apiClient.post<AdminRefund>(`/admin/refunds/${transactionId}`, payload);
+  return res.data;
+};
+
+// ── Suspension (A3) ──────────────────────────────────────────────────────────
+
+export const suspendUser = async (userId: number, reason: string): Promise<UserProfile> => {
+  const res = await apiClient.post<UserProfile>(`/admin/users/${userId}/suspend`, { reason });
+  return res.data;
+};
+
+export const reinstateUser = async (userId: number): Promise<UserProfile> => {
+  const res = await apiClient.post<UserProfile>(`/admin/users/${userId}/reinstate`);
   return res.data;
 };

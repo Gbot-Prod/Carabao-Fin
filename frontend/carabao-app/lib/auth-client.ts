@@ -43,6 +43,10 @@ export const signIn = {
   email: async (credentials: { email: string; password: string }) => {
     const { data, error } = await authClient.signIn.email(credentials);
 
+    // BetterAuth's admin plugin reports an account an admin suspended as BANNED_USER.
+    if (error?.code === "BANNED_USER") {
+      throw new Error("This account has been suspended. Contact Carabao support.");
+    }
     if (error || !data) {
       throw new Error(getErrorMessage(error, "Login failed"));
     }

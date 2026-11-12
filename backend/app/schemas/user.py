@@ -60,6 +60,8 @@ class UserCartInfo(BaseModel):
 class UserResponse(UserBase):
     id: int
     is_admin: bool = False
+    suspended_at: datetime | None = None
+    suspension_reason: str | None = None
     notifications_preferences: dict | None = None
     merchant: UserMerchantInfo | None = None
     cart: UserCartInfo | None = None

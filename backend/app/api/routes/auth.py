@@ -20,6 +20,7 @@ from app.api.dependencies import get_current_user, get_db
 from app.core.security import create_access_token
 from app.models.mobile_credential import MobileCredential
 from app.models.user import User, normalize_email
+from app.services.account_suspension import suspended_detail
 
 router = APIRouter(tags=["auth"])
 
@@ -198,6 +199,9 @@ def sync_auth(
                 detail="This email is already linked to another account",
             ) from None
     db.refresh(user)
+
+    if user.suspended_at is not None:
+        raise HTTPException(status_code=403, detail=suspended_detail(user))
 
     access_token = create_access_token(
         subject=user.external_auth_id,
@@ -471,6 +475,9 @@ def mobile_sign_in(
     if user is None or not user.external_auth_id:
         time.sleep(1)
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if user.suspended_at is not None:
+        raise HTTPException(status_code=403, detail=suspended_detail(user))
 
     access_token = create_access_token(
         subject=user.external_auth_id,

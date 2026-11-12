@@ -1,10 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import Date, cast, func, or_, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.merchant import Merchant
@@ -15,7 +15,7 @@ from app.models.payout_batch import PayoutBatch
 from app.models.statuses import PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.schemas.merchant import MerchantResponse
+from app.schemas.merchant import AdminMerchantResponse
 from app.schemas.merchant_application import (
     ApplicationReviewPayload,
     MerchantApplicationResponse,
@@ -28,6 +28,7 @@ from app.schemas.payout import (
 )
 from app.schemas.user import UserResponse
 from app.services import paymongo, r2_service
+from app.services.account_suspension import reinstate_user, suspend_user
 from app.services.merchant_service import create_merchant_from_application
 from app.services.payout_service import (
     PayoutError,
@@ -92,7 +93,7 @@ def list_all_users(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
-@router.get("/admin/merchants", response_model=Page[MerchantResponse])
+@router.get("/admin/merchants", response_model=Page[AdminMerchantResponse])
 def list_all_merchants(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -110,13 +111,65 @@ def list_all_merchants(
         )
     )
     total = q.count()
-    items = (
-        q.order_by(Merchant.id.asc())
+    merchants = (
+        q.options(selectinload(Merchant.user))
+        .order_by(Merchant.id.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
+    items = [
+        AdminMerchantResponse.model_validate(m).model_copy(
+            update={
+                "owner_suspended_at": m.user.suspended_at if m.user else None,
+                "owner_suspension_reason": (
+                    m.user.suspension_reason if m.user else None
+                ),
+            }
+        )
+        for m in merchants
+    ]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+class SuspendPayload(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+def _get_other_user(db: Session, user_id: int, admin: User) -> User:
+    if admin.id == user_id:
+        raise HTTPException(status_code=400, detail="You cannot suspend yourself")
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.post("/admin/users/{user_id}/suspend", response_model=UserResponse)
+def suspend_account(
+    user_id: int,
+    payload: SuspendPayload,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(_require_admin),
+):
+    if not payload.reason.strip():
+        raise HTTPException(status_code=422, detail="A reason is required")
+    user = _get_other_user(db, user_id, current_admin)
+    if user.suspended_at is not None:
+        raise HTTPException(status_code=409, detail="Account is already suspended")
+    return suspend_user(db, user, admin=current_admin, reason=payload.reason)
+
+
+@router.post("/admin/users/{user_id}/reinstate", response_model=UserResponse)
+def reinstate_account(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(_require_admin),
+):
+    user = _get_other_user(db, user_id, current_admin)
+    if user.suspended_at is None:
+        raise HTTPException(status_code=409, detail="Account is not suspended")
+    return reinstate_user(db, user)
 
 
 @router.get(

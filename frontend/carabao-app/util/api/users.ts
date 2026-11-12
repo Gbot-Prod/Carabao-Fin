@@ -10,6 +10,9 @@ export type UserProfile = {
   id: number;
   external_auth_id: string | null;
   is_admin: boolean;
+  // Set when an admin suspends the account (A3).
+  suspended_at?: string | null;
+  suspension_reason?: string | null;
   first_name: string | null;
   last_name: string | null;
   email: string;

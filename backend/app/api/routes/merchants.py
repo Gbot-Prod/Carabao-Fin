@@ -43,6 +43,7 @@ from app.schemas.payout import (
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
 from app.services import paymongo, r2_service
+from app.services.account_suspension import merchant_is_public
 from app.services.merchant_service import (
     find_deletion_blockers,
     get_active_merchant,
@@ -246,7 +247,7 @@ def list_merchants(db: Session = Depends(get_db)):
         )
         .outerjoin(MerchantApplication, MerchantApplication.user_id == Merchant.user_id)
         .filter(
-            Merchant.deleted_at.is_(None),
+            merchant_is_public(),
             or_(
                 MerchantApplication.id.is_(None),
                 MerchantApplication.status != "rejected",
@@ -265,7 +266,7 @@ def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
             selectinload(Merchant.user),
             selectinload(Merchant.produces.and_(is_listed(ph_today()))),
         )
-        .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
+        .filter(Merchant.id == merchant_id, merchant_is_public())
         .first()
     )
     if not merchant:
@@ -416,7 +417,7 @@ def list_merchant_produce(merchant_id: int, db: Session = Depends(get_db)):
     """The listings buyers can see: expired produce is left out."""
     merchant = (
         db.query(Merchant)
-        .filter(Merchant.id == merchant_id, Merchant.deleted_at.is_(None))
+        .filter(Merchant.id == merchant_id, merchant_is_public())
         .first()
     )
     if not merchant:
@@ -531,7 +532,7 @@ def get_merchant_shoppage(merchant_id: int, db: Session = Depends(get_db)):
     shop_page = (
         db.query(ShopPage)
         .join(Merchant, Merchant.id == ShopPage.merchant_id)
-        .filter(ShopPage.merchant_id == merchant_id, Merchant.deleted_at.is_(None))
+        .filter(ShopPage.merchant_id == merchant_id, merchant_is_public())
         .first()
     )
     if not shop_page:

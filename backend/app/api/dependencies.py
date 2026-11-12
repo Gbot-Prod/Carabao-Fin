@@ -4,6 +4,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.core.database import SessionLocal
 from app.core.security import decode_access_token
 from app.models.user import User
+from app.services.account_suspension import suspended_detail
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -51,6 +52,11 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
+        )
+
+    if user.suspended_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=suspended_detail(user)
         )
 
     return user

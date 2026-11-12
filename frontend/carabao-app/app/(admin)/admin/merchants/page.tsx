@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ADMIN_PAGE_SIZE, fetchAdminMerchantsPage, type Merchant } from "@/util/api/admin";
+import { ADMIN_PAGE_SIZE, fetchAdminMerchantsPage, type AdminMerchant } from "@/util/api/admin";
 import Pagination from "../../Pagination";
+import SuspendControl from "../../SuspendControl";
 import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
@@ -21,7 +22,7 @@ function AdminMerchantsContent() {
   const searchParams = useSearchParams();
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
 
-  const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [merchants, setMerchants] = useState<AdminMerchant[]>([]);
   const [total, setTotal] = useState(0);
   const [loadedPage, setLoadedPage] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +62,7 @@ function AdminMerchantsContent() {
               <th>Delivery</th>
               <th>Rating</th>
               <th>Products</th>
+              <th>Account</th>
             </tr>
           </thead>
           <tbody>
@@ -78,6 +80,21 @@ function AdminMerchantsContent() {
                 </td>
                 <td>{m.rating ?? <span className={styles.empty}>—</span>}</td>
                 <td className={styles.mono}>{m.produces.length}</td>
+                <td>
+                  <SuspendControl
+                    userId={m.user_id}
+                    suspendedAt={m.owner_suspended_at}
+                    reason={m.owner_suspension_reason}
+                    isMerchant
+                    onChange={(suspendedAt, reason) =>
+                      setMerchants((prev) =>
+                        prev.map((x) =>
+                          x.id === m.id ? { ...x, owner_suspended_at: suspendedAt, owner_suspension_reason: reason } : x,
+                        ),
+                      )
+                    }
+                  />
+                </td>
               </tr>
             ))}
           </tbody>

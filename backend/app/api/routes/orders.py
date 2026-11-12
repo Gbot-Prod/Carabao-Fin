@@ -160,7 +160,11 @@ def place_order_from_cart(
         .populate_existing()
         .first()
     )
-    if merchant is None or merchant.deleted_at is not None:
+    if (
+        merchant is None
+        or merchant.deleted_at is not None
+        or (merchant.user is not None and merchant.user.suspended_at is not None)
+    ):
         raise HTTPException(
             status_code=400, detail="This merchant is no longer accepting orders"
         )
