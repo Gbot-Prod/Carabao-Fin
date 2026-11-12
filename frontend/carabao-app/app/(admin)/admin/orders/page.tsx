@@ -17,6 +17,7 @@ import {
 import Pagination from "../../Pagination";
 import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
+import OrderChat from "@/components/OrderChat/OrderChat";
 
 const ORDER_STATUSES: AdminOrderStatus[] = ["pending", "processing", "shipped", "out_for_delivery", "delivered", "cancelled"];
 const PAYMENT_STATUSES: AdminPaymentStatus[] = ["awaiting_payment", "paid", "refund_pending", "refunded", "unpaid"];
@@ -293,6 +294,9 @@ function OrderDetailPanel({ orderId, onClose }: { orderId: number; onClose: () =
                 <dt>Confirmed by</dt><dd>{d.delivery.delivery_confirmed_by ?? "Not confirmed"}</dd>
               </dl>
             </section>
+
+            {/* Admins can read the buyer-farm chat and join in (CH1b). */}
+            <OrderChat orderId={d.id} />
           </>
         )}
       </aside>

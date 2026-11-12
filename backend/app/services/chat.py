@@ -33,7 +33,11 @@ def role_in_order(order: Order, user: User) -> str | None:
     if merchant is not None and merchant.user_id == user.id:
         return "merchant"
     if user.is_admin:
-        return "admin"
+        # Same rule as the admin API (E8c): admins need two-step verification.
+        from app.api.routes.admin import admin_requires_two_factor
+
+        if not admin_requires_two_factor() or user.two_factor_enabled:
+            return "admin"
     return None
 
 

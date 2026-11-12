@@ -159,3 +159,16 @@ def test_read_messages_are_not_texted(db, merchant, buyer, order, monkeypatch): 
         == 0
     )
     assert texts == []
+
+
+def test_admin_without_two_factor_cannot_read_chat(db, buyer, order, monkeypatch):  # noqa: F811
+    # E8c applies here too: admin access needs two-step verification.
+    monkeypatch.setenv("ADMIN_REQUIRE_2FA", "true")
+    _post(_client(db, buyer[0]), order.id, "Private")
+    admin = User(email="admin2@example.com", is_admin=True, notifications_preferences={})
+    db.add(admin)
+    db.commit()
+    assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 404
+    admin.two_factor_enabled = True
+    db.commit()
+    assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 200

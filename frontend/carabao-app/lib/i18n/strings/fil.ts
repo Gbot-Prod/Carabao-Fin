@@ -341,6 +341,19 @@ const fil: Strings = {
     markAll: 'Markahang nabasa lahat',
     empty: 'Wala pang abiso. Dito lalabas ang balita sa order, payout at review.',
   },
+  chat: {
+    title: 'Mga mensahe tungkol sa order na ito',
+    loading: 'Nilo-load ang mga mensahe…',
+    empty: 'Wala pang mensahe. Magtanong tungkol sa ani, sa delivery, o anupaman.',
+    placeholder: 'Sumulat ng mensahe',
+    send: 'Ipadala',
+    sending: 'Ipinapadala…',
+    sendError: 'Hindi naipadala. Pakisubukang muli.',
+    you: 'Ikaw',
+    roles: { buyer: 'Mamimili', merchant: 'Bukid', admin: 'Carabao support' },
+    closed: 'Nagsara ang chat na ito 7 araw matapos ang delivery. Makipag-ugnayan sa Carabao support para sa tulong.',
+    closesOn: 'Magsasara ang chat na ito sa {date}.',
+  },
 };
 
 export default fil;

@@ -332,6 +332,19 @@ const en = {
     markAll: 'Mark all read',
     empty: 'No notifications yet. Order updates, payouts and reviews appear here.',
   },
+  chat: {
+    title: 'Messages about this order',
+    loading: 'Loading messages…',
+    empty: 'No messages yet. Ask about the produce, the delivery or anything else.',
+    placeholder: 'Write a message',
+    send: 'Send',
+    sending: 'Sending…',
+    sendError: "Couldn't send. Please try again.",
+    you: 'You',
+    roles: { buyer: 'Buyer', merchant: 'Farm', admin: 'Carabao support' },
+    closed: 'This chat closed 7 days after delivery. Contact Carabao support for help.',
+    closesOn: 'This chat closes on {date}.',
+  },
 };
 
 export type Strings = typeof en;

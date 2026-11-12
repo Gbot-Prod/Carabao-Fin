@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
+import OrderChat from "@/components/OrderChat/OrderChat";
 import {
   confirmOrderReceived,
   createOrderReview,
@@ -384,6 +385,9 @@ export default function OrderDetailPage() {
       </div>
 
       <ReviewSection key={order.review?.id ?? "new"} order={order} onSaved={handleReviewSaved} />
+
+      {/* Chat with the farm (CH1b) */}
+      <OrderChat orderId={order.order_id} />
     </div>
   );
 }
