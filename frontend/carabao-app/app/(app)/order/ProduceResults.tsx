@@ -115,7 +115,7 @@ export default function ProduceResults({ query }: { query: string }) {
               <Link href={`/merchant/${p.merchant_id}`} className={styles.card}>
                 {p.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.image_url} alt={p.name ?? ""} className={styles.image} loading="lazy" />
+                  <img src={p.image_url} alt={p.name ? `Photo of ${p.name}` : "Produce photo"} className={styles.image} loading="lazy" />
                 ) : (
                   <div className={styles.imagePlaceholder} aria-hidden />
                 )}

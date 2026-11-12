@@ -102,7 +102,7 @@
 .formCard textarea:focus {
   outline: none;
   border-color: #079135;
-  box-shadow: 0 0 0 3px rgba(7, 145, 53, 0.15);
+  box-shadow: var(--focus-ring);
 }
 
 .formCard select:disabled {

@@ -26,7 +26,9 @@
   --text-faint: #9aab9d;
   --border-strong: #d0e4d5;
   --surface-muted: #f0f5f2;
-  --focus-ring: 0 0 0 3px rgba(49, 146, 93, 0.35);
+  /* Q2a: solid two-tone ring (white gap + dark green) so focus shows on any
+     background and meets WCAG 3:1 for non-text contrast. */
+  --focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px var(--green-900);
 
   /* Spacing */
   --spacing-sm: 0.5rem;
@@ -130,8 +132,10 @@ button:disabled {
 /* Keyboard focus indicator (mouse clicks stay clean) */
 button:focus-visible,
 a:focus-visible,
-[role="button"]:focus-visible {
-  outline: 2px solid var(--green-600);
+summary:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--green-900);
   outline-offset: 2px;
 }
 

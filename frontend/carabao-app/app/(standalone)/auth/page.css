@@ -248,7 +248,7 @@
 .auth-input:focus {
   outline: none;
   border-color: var(--focus);
-  box-shadow: 0 0 0 4px rgb(47 143 87 / 0.15);
+  box-shadow: var(--focus-ring);
 }
 
 .auth-submit {

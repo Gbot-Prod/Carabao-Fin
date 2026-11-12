@@ -117,7 +117,7 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
                   <div className={styles.produceThumbPlaceholder}>…</div>
                 ) : produce.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={produce.image_url} alt={produce.name ?? ""} className={styles.produceThumb} />
+                  <img src={produce.image_url} alt={produce.name ? `Photo of ${produce.name}` : "Produce photo"} className={styles.produceThumb} />
                 ) : (
                   <div className={styles.produceThumbPlaceholder}>+</div>
                 )}

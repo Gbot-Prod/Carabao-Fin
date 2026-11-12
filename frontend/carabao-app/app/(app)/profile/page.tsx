@@ -28,7 +28,7 @@ function UserAvatar({ pictureUrl, uploading, onUpload }: {
         <div className={styles.avatarPlaceholder}><span className={styles.avatarSpinner} /></div>
       ) : pictureUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={pictureUrl} alt="Profile" className={styles.avatar} />
+        <img src={pictureUrl} alt="Your profile photo" className={styles.avatar} />
       ) : (
         <svg className={styles.avatar} viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <circle cx="40" cy="40" r="40" fill="#d7e7da" />

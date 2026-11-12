@@ -238,7 +238,7 @@ export default function MerchantDetailPage() {
                   <div className={styles.productImage}>
                     {produce.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={produce.image_url} alt={produce.name ?? ''} />
+                      <img src={produce.image_url} alt={produce.name ? `Photo of ${produce.name}` : 'Produce photo'} />
                     ) : null}
                     {produce.category && (
                       <span className={styles.badge}>{produce.category}</span>
