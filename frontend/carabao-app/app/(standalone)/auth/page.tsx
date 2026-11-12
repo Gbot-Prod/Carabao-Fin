@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import Logo from "@/public/images/icons/carabaoLogo.png";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import getApiErrorMessage from "@/util/errorHelper";
 import "./page.css";
 
 export default function SignupPage() {
@@ -84,7 +85,9 @@ export default function SignupPage() {
         router.push("/");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : t.auth.genericError;
+      // Backend errors (e.g. 429 "Too many attempts. Please try again in 5 minutes.")
+      // carry their reason in `detail`; BetterAuth errors arrive as Error messages.
+      const message = getApiErrorMessage(err) ?? (err instanceof Error ? err.message : t.auth.genericError);
       setError(message);
     } finally {
       setIsLoading(false);

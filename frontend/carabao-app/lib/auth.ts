@@ -141,6 +141,20 @@ export const auth = betterAuth({
     },
   },
   database: pool,
+  // E7: BetterAuth limits by client IP. Defaults to production only; stricter
+  // rules for the credential endpoints. (Per-email limits for the app and the
+  // OTP steps live in the FastAPI backend, app/services/rate_limit.py.)
+  rateLimit: {
+    enabled: process.env.NODE_ENV === "production" || process.env.BETTER_AUTH_RATE_LIMIT === "true",
+    window: 60,
+    max: 100,
+    customRules: {
+      "/sign-in/email": { window: 900, max: 10 },
+      "/sign-up/email": { window: 3600, max: 10 },
+      "/request-password-reset": { window: 900, max: 5 },
+      "/reset-password": { window: 900, max: 10 },
+    },
+  },
   session: {
     cookieCache: {
       enabled: true,

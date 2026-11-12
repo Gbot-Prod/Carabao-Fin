@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import bcrypt as _bcrypt
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -23,6 +23,7 @@ from app.api.dependencies import get_current_user, get_db
 from app.core.security import create_access_token
 from app.models.mobile_credential import MobileCredential
 from app.models.user import User, normalize_email
+from app.services import rate_limit
 from app.services.account_suspension import suspended_detail
 from app.services.email import send_password_reset_otp_email
 
@@ -369,8 +370,10 @@ def _sync_backend_user_from_better_auth(
 @router.post("/auth/mobile/sign-up", response_model=AuthSyncResponse)
 def mobile_sign_up(
     payload: MobileSignUpPayload,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> AuthSyncResponse:
+    rate_limit.enforce(request, "sign_up", normalize_email(payload.email))
     if not payload.password or len(payload.password) < 8:
         raise HTTPException(
             status_code=400, detail="Password must be at least 8 characters"
@@ -425,8 +428,10 @@ def mobile_sign_up(
 @router.post("/auth/mobile/sign-in", response_model=AuthSyncResponse)
 def mobile_sign_in(
     payload: MobileSignInPayload,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> AuthSyncResponse:
+    rate_limit.enforce(request, "sign_in", normalize_email(payload.email))
     user = db.query(User).filter(User.email == payload.email).first()
 
     credential = None
@@ -575,12 +580,13 @@ class PasswordResetConfirm(BaseModel):
 
 @router.post("/auth/mobile/password-reset/request")
 def request_mobile_password_reset(
-    payload: PasswordResetRequest, db: Session = Depends(get_db)
+    payload: PasswordResetRequest, request: Request, db: Session = Depends(get_db)
 ):
     """Email a reset code. Always answers ok, so it can't reveal who has an account."""
     from app.api.routes import sms
 
     email = normalize_email(payload.email)
+    rate_limit.enforce(request, "otp_send", email)
     key = _reset_key(email)
     with sms._otp_lock:
         sms._check_resend_cooldown(key)
@@ -603,7 +609,7 @@ def request_mobile_password_reset(
 
 @router.post("/auth/mobile/password-reset/confirm")
 def confirm_mobile_password_reset(
-    payload: PasswordResetConfirm, db: Session = Depends(get_db)
+    payload: PasswordResetConfirm, request: Request, db: Session = Depends(get_db)
 ):
     from app.api.routes import sms
 
@@ -613,6 +619,7 @@ def confirm_mobile_password_reset(
             detail=f"Password must be at least {MIN_PASSWORD_LENGTH} characters",
         )
     email = normalize_email(payload.email)
+    rate_limit.enforce(request, "otp_verify", email)
     # Raises 400 for a wrong or expired code (and counts attempts).
     sms._check_otp(_reset_key(email), payload.otp.strip())
 
