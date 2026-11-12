@@ -497,6 +497,11 @@ def mobile_sign_in(
     if user.suspended_at is not None:
         raise HTTPException(status_code=403, detail=suspended_detail(user))
 
+    # E8d: the app can't ask for the authenticator code yet, so a password alone
+    # must not get an account with two-step verification in.
+    if _two_factor_on(db, user):
+        raise HTTPException(status_code=403, detail=MOBILE_TWO_FACTOR_DETAIL)
+
     access_token = create_access_token(
         subject=user.external_auth_id,
         expires_minutes=60 * 24 * 7,
@@ -515,6 +520,31 @@ def mobile_sign_in(
         access_token=access_token,
         expires_in=60 * 60 * 24 * 7,
     )
+
+
+MOBILE_TWO_FACTOR_DETAIL = (
+    "This account uses two-step verification, which the app doesn't support yet. "
+    "Please sign in on the Carabao website."
+)
+
+
+def _two_factor_on(db: Session, user: User) -> bool:
+    """Two-step verification per the synced flag or BetterAuth itself (E8d)."""
+    if user.two_factor_enabled:
+        return True
+    ba_id = user.external_auth_id
+    if not ba_id or ba_id.startswith("mobile:"):
+        return False
+    try:
+        with db.begin_nested():
+            value = db.execute(
+                text('SELECT "twoFactorEnabled" FROM "user" WHERE id = :id'),
+                {"id": ba_id},
+            ).scalar()
+    except SQLAlchemyError:
+        # No BetterAuth table/column (e.g. before its migration): nothing enabled.
+        return False
+    return bool(value)
 
 
 class MobileSetPasswordPayload(BaseModel):

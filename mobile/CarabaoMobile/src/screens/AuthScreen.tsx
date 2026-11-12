@@ -3,11 +3,12 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Dimensions,
+  Dimensions, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
+import { ApiError, WEB_BASE } from '../lib/api';
 import { PasswordResetSheet } from '../components/PasswordResetSheet';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
@@ -21,6 +22,8 @@ export default function AuthScreen() {
   // Forgot password (E6).
   const [resetOpen, setResetOpen] = useState(false);
   const [notice, setNotice] = useState('');
+  // E8d: accounts with two-step verification sign in on the website for now.
+  const [needsWeb, setNeedsWeb] = useState(false);
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -61,6 +64,7 @@ export default function AuthScreen() {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Authentication failed. Please try again.';
+      setNeedsWeb(err instanceof ApiError && err.status === 403 && /two-step verification/i.test(msg));
       setError(msg);
     } finally {
       setLoading(false);
@@ -125,6 +129,15 @@ export default function AuthScreen() {
               <Ionicons name="warning-outline" size={15} color={Colors.error} style={{ marginRight: 6 }} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
+          ) : null}
+          {needsWeb ? (
+            <TouchableOpacity
+              style={styles.webBtn}
+              onPress={() => void Linking.openURL(`${WEB_BASE}/auth`)}
+              accessibilityRole="link"
+            >
+              <Text style={styles.webBtnText}>Open the Carabao website to sign in</Text>
+            </TouchableOpacity>
           ) : null}
 
           {/* Fields */}
@@ -230,6 +243,11 @@ export default function AuthScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.offWhite },
+  webBtn: {
+    borderWidth: 1, borderColor: Colors.primary, borderRadius: Radius.md,
+    paddingVertical: Spacing.sm, alignItems: 'center', marginBottom: Spacing.sm,
+  },
+  webBtnText: { color: Colors.primary, fontWeight: '700', fontSize: FontSize.sm },
   forgotWrap: { alignSelf: 'flex-end', paddingVertical: 4 },
   forgotText: { color: Colors.primary, fontWeight: '600', fontSize: FontSize.sm },
   noticeText: { color: Colors.success, fontSize: FontSize.sm, marginTop: 4 },
