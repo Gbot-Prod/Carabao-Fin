@@ -1,0 +1,128 @@
+/* Extras on top of ../orders/page.module.css, which this page shares. */
+
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.headerRow h1 {
+  margin: 0;
+}
+
+.export {
+  padding: 8px 14px;
+  border: 1px solid var(--green-600);
+  border-radius: var(--radius-sm);
+  background: var(--green-600);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.export:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.export:focus-visible,
+.search button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.search {
+  display: flex;
+  gap: 6px;
+}
+
+.search input {
+  min-width: 260px;
+}
+
+.search button {
+  padding: 8px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.tile {
+  flex: 1 1 160px;
+  padding: 12px 16px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
+  background: var(--bg-white);
+}
+
+.tileLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  margin-bottom: 4px;
+}
+
+.tileValue {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green-900);
+  font-variant-numeric: tabular-nums;
+}
+
+.txn_paid {
+  background: #dcfce7;
+  color: var(--success-text);
+}
+
+.txn_pending,
+.txn_refund_pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.txn_refunded,
+.txn_failed {
+  background: #fee2e2;
+  color: var(--danger);
+}
+
+.ref {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.exportError {
+  margin: -12px 0 16px;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .search {
+    flex: 1 1 100%;
+  }
+
+  .search input {
+    min-width: 0;
+    flex: 1;
+  }
+}
