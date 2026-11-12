@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type { UserProfile } from './users';
 import type { Merchant } from './merchants';
+import type { OrderStatus, PayoutStatus } from './statuses';
 
 export type MerchantApplication = {
   id: number;
@@ -45,12 +46,12 @@ export type DailyRevenue = {
 };
 
 export type OrderStatusCount = {
-  status: string;
+  status: OrderStatus;
   count: number;
 };
 
 export type PayoutSummaryItem = {
-  status: string;
+  status: PayoutStatus;
   count: number;
   total_amount: number;
 };
@@ -73,7 +74,7 @@ export type PayoutBatch = {
   period_date: string;
   transaction_count: number;
   gross_amount: number;
-  status: string;
+  status: PayoutStatus;
   notes: string | null;
   released_at: string | null;
   created_at: string;

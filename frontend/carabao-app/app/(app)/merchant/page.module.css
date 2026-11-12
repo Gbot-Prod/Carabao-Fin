@@ -10,14 +10,14 @@
 
 .shopBanner {
   width: 100%;
-  height: 220px;
+  height: 120px;
   object-fit: cover;
   display: block;
 }
 
 .shopBannerPlaceholder {
   width: 100%;
-  height: 80px;
+  height: 40px;
   background: linear-gradient(135deg, #d7e7da 0%, #c0d9c6 100%);
 }
 
@@ -50,6 +50,44 @@
   font-weight: 700;
 }
 
+.ownerInfo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin: 0 0 0.6rem;
+}
+
+.ownerRow {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.ownerRow dt {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b806b;
+}
+
+.ownerRow dd {
+  margin: 0;
+  font-weight: 600;
+  color: #2f4a2f;
+  overflow-wrap: anywhere;
+}
+
+.ownerRow a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.ownerRow a:hover {
+  text-decoration: underline;
+}
+
 .merchantLocation {
   margin: 0 0 0.8rem;
   font-size: 1.1rem;
@@ -64,7 +102,7 @@
 
 .details {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
 }
 
@@ -194,7 +232,11 @@
 
 @media (max-width: 768px) {
   .shopBanner {
-    height: 150px;
+    height: 90px;
+  }
+
+  .ownerInfo {
+    flex-direction: column;
   }
 
   .merchantHeaderBody {

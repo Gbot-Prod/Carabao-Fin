@@ -12,6 +12,7 @@ import {
   type AdminStats,
   type PayoutBatch,
 } from "@/util/api/admin";
+import { ORDER_STATUS_LABELS, PAYOUT_STATUS_LABELS, type OrderStatus } from "@/util/api/statuses";
 import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
@@ -137,7 +138,7 @@ export default function AdminDashboard() {
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0ece5" horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 11, fill: "#647067" }} tickLine={false} axisLine={false} />
-                  <YAxis type="category" dataKey="status" tick={{ fontSize: 11, fill: "#647067" }} tickLine={false} axisLine={false} width={88} />
+                  <YAxis type="category" dataKey="status" tickFormatter={(s: OrderStatus) => ORDER_STATUS_LABELS[s] ?? s} tick={{ fontSize: 11, fill: "#647067" }} tickLine={false} axisLine={false} width={116} />
                   <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e0ece5" }} />
                   <Bar dataKey="count" name="Orders" fill="#31925d" radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -161,7 +162,7 @@ export default function AdminDashboard() {
                 <div key={p.status} className={styles.payoutRow}>
                   <div className={styles.payoutLeft}>
                     <span className={`${styles.payoutDot} ${styles[`dot_${p.status}`]}`} />
-                    <span className={styles.payoutStatus}>{p.status}</span>
+                    <span className={styles.payoutStatus}>{PAYOUT_STATUS_LABELS[p.status]}</span>
                     <span className={styles.payoutCount}>{p.count}</span>
                   </div>
                   <span className={styles.payoutAmount}>{peso(p.total_amount)}</span>

@@ -1,9 +1,8 @@
 /* ─── Page shell ─────────────────────────────────────────────────────────────── */
 .container {
   width: 100%;
-  min-height: 100vh;
-  padding: 32px;
-  background: linear-gradient(180deg, var(--bg-primary) 0%, #e4ebe1 100%);
+  min-height: 100%;
+  background: transparent;
 }
 
 .main {
@@ -756,8 +755,6 @@
 }
 
 @media (max-width: 480px) {
-  .container { padding: 16px; }
-
   .profileSnapshot { grid-template-columns: 1fr; }
   .snapshotCardWide { grid-column: 1; }
 

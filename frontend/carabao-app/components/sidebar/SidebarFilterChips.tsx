@@ -3,7 +3,13 @@
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export const SHOP_FILTERS = ["Fruits", "Veggies", "Popular", "Nearby", "Fast Delivery"];
+export const SHOP_FILTERS = [
+  "Fruits",
+  "Veggies",
+  // "Popular",
+  // "Nearby",
+  // "Fast Delivery",
+];
 const PRICE_OPTIONS = ["₱", "₱₱", "₱₱₱"];
 
 function FilterChipsInner() {
@@ -37,15 +43,20 @@ function FilterChipsInner() {
   return (
     <div className="sidebar__filters">
       <span className="sidebar__filters-label">Filter by</span>
-      <div className="sidebar__filter-chips">
+      <div className="sidebar__filter-checklist">
         {SHOP_FILTERS.map((f) => (
-          <button
+          <label
             key={f}
-            className={`sidebar__filter-chip${activeFilters.has(f) ? " sidebar__filter-chip--active" : ""}`}
-            onClick={() => toggleFilter(f)}
+            className="sidebar__filter-check-item"
           >
+            <input
+              type="checkbox"
+              checked={activeFilters.has(f)}
+              onChange={() => toggleFilter(f)}
+              className="sidebar__filter-checkbox"
+            />
             {f}
-          </button>
+          </label>
         ))}
       </div>
 
@@ -70,9 +81,12 @@ function FilterChipsInner() {
 const Fallback = () => (
   <div className="sidebar__filters">
     <span className="sidebar__filters-label">Filter by</span>
-    <div className="sidebar__filter-chips">
+    <div className="sidebar__filter-checklist">
       {SHOP_FILTERS.map((f) => (
-        <button key={f} className="sidebar__filter-chip">{f}</button>
+        <label key={f} className="sidebar__filter-check-item">
+          <input type="checkbox" className="sidebar__filter-checkbox" />
+          {f}
+        </label>
       ))}
     </div>
     <div className="sidebar__filter-group">

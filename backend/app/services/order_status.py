@@ -1,27 +1,114 @@
-"""Order status transitions and delivery confirmation.
+"""Order status transitions, payment status and delivery confirmation.
 
-Only the buyer, or the auto-confirm sweep after the holding window, may mark an
-order delivered. Payouts depend on ``delivered``, so merchants never set it.
+The one place that moves ``orders.status``. Payment (via
+``order_reservations.settle_checkout_payment``) is the only way out of
+``pending``; merchants act on paid orders only. Only the buyer, or the
+auto-confirm sweep after the holding window, may mark an order delivered.
+Payouts depend on ``delivered``, so merchants never set it.
 """
 
 import os
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import exists
 from sqlalchemy.orm import Session
 
 from app.models.order import Order
+from app.models.statuses import OrderStatus, PaymentStatus, TransactionStatus
+from app.models.transaction import Transaction
+from app.services.order_reservations import cancel_order
 
-IN_TRANSIT_STATUSES = {"shipped", "out_for_delivery"}
+IN_TRANSIT_STATUSES = frozenset({OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY})
+# Statuses the order has left the merchant in; drives the "shipped" flag.
+SHIPPED_STATUSES = IN_TRANSIT_STATUSES | {OrderStatus.DELIVERED}
+# Not finished yet: includes unpaid checkouts, which still hold stock.
+ACTIVE_ORDER_STATUSES = frozenset(
+    {
+        OrderStatus.PENDING,
+        OrderStatus.PROCESSING,
+        OrderStatus.SHIPPED,
+        OrderStatus.OUT_FOR_DELIVERY,
+    }
+)
+CLOSED_ORDER_STATUSES = frozenset({OrderStatus.DELIVERED, OrderStatus.CANCELLED})
 
-# Transitions a merchant may make. "delivered" is deliberately absent.
-MERCHANT_TRANSITIONS: dict[str, set[str]] = {
-    "pending": {"processing", "cancelled"},
-    "processing": {"shipped", "cancelled"},
-    "shipped": {"out_for_delivery", "cancelled"},
-    "out_for_delivery": {"cancelled"},
-    "delivered": set(),
-    "cancelled": set(),
+# Transaction states meaning money reached us for the order.
+MONEY_RECEIVED_STATUSES = frozenset(
+    {
+        TransactionStatus.PAID,
+        TransactionStatus.REFUND_PENDING,
+        TransactionStatus.REFUNDED,
+    }
+)
+
+# Transitions a merchant may make. "pending" is awaiting payment, so only the
+# payment webhook or the expiry sweep moves it; "delivered" is the buyer's.
+MERCHANT_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
+    OrderStatus.PENDING: frozenset(),
+    OrderStatus.PROCESSING: frozenset({OrderStatus.SHIPPED, OrderStatus.CANCELLED}),
+    OrderStatus.SHIPPED: frozenset(
+        {OrderStatus.OUT_FOR_DELIVERY, OrderStatus.CANCELLED}
+    ),
+    OrderStatus.OUT_FOR_DELIVERY: frozenset({OrderStatus.CANCELLED}),
+    OrderStatus.DELIVERED: frozenset(),
+    OrderStatus.CANCELLED: frozenset(),
 }
+
+
+class InvalidTransition(ValueError):
+    """The merchant asked for a move MERCHANT_TRANSITIONS doesn't allow."""
+
+
+class PaymentInProgress(RuntimeError):
+    """Cancelling now could race a payment that is still going through."""
+
+
+def payment_status(order: Order) -> PaymentStatus:
+    """The order's payment state, from its transactions.
+
+    A landed payment wins over refunds of extra payments, so an order paid once
+    and charged twice still reads as paid.
+    """
+    received = {txn.status for txn in order.transactions}
+    if TransactionStatus.PAID in received:
+        return PaymentStatus.PAID
+    if TransactionStatus.REFUND_PENDING in received:
+        return PaymentStatus.REFUND_PENDING
+    if TransactionStatus.REFUNDED in received:
+        return PaymentStatus.REFUNDED
+    if order.status == OrderStatus.PENDING:
+        return PaymentStatus.AWAITING_PAYMENT
+    return PaymentStatus.UNPAID
+
+
+def money_received_clause():
+    """SQL filter: orders a payment has landed on. What merchants get to see."""
+    return exists().where(
+        Transaction.order_id == Order.id,
+        Transaction.status.in_(MONEY_RECEIVED_STATUSES),
+    )
+
+
+def apply_merchant_transition(order: Order, new_status: OrderStatus, db: Session):
+    """Move ``order`` to ``new_status`` for its merchant; the caller commits.
+
+    Raises InvalidTransition or PaymentInProgress, leaving the order unchanged.
+    """
+    allowed = MERCHANT_TRANSITIONS.get(order.status, frozenset())
+    if new_status not in allowed:
+        raise InvalidTransition(
+            f"Cannot transition order from '{order.status}' to '{new_status}'"
+        )
+
+    if new_status == OrderStatus.CANCELLED:
+        if not cancel_order(order, db):
+            raise PaymentInProgress(
+                "A payment for this order is in progress; try again shortly"
+            )
+    elif new_status == OrderStatus.SHIPPED:
+        mark_shipped(order)
+    else:
+        order.status = new_status
 
 
 def auto_confirm_days() -> int:
@@ -37,19 +124,15 @@ def auto_confirm_at(order: Order) -> datetime | None:
 
 
 def mark_shipped(order: Order) -> None:
-    order.status = "shipped"
+    order.status = OrderStatus.SHIPPED
     if order.shipped_at is None:
         order.shipped_at = datetime.now(UTC)
-    if order.current_order:
-        order.current_order.status = "shipped"
 
 
 def mark_delivered(order: Order, confirmed_by: str) -> None:
-    order.status = "delivered"
+    order.status = OrderStatus.DELIVERED
     order.delivered_at = datetime.now(UTC)
     order.delivery_confirmed_by = confirmed_by
-    if order.current_order:
-        order.current_order.status = "delivered"
 
 
 def auto_confirm_delivered_orders(db: Session, days: int) -> int:

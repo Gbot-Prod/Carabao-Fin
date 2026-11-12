@@ -1,6 +1,7 @@
 import { MerchantApplication } from './admin';
 import { apiClient } from './client';
 import type { Produce } from './produce';
+import type { OrderStatus, PaymentStatus, PayoutStatus, TransactionStatus } from './statuses';
 
 export type Merchant = {
   id: number;
@@ -14,6 +15,9 @@ export type Merchant = {
   postal_code: string | null;
   category: string | null;
   contact_number: string;
+  contact_email?: string | null;
+  /** Owning user's full name. Only returned by the single-merchant endpoint. */
+  owner_name?: string | null;
   operating_hours: string | Record<string, string> | null;
   delivery_price: number | null;
   delivery_time: number | null;
@@ -59,6 +63,7 @@ export type MerchantPerformance = {
   merchant_id: number;
   merchant_name: string;
   rating?: number | null;
+  rating_count: number;
   total_products: number;
   total_orders: number;
   active_orders: number;
@@ -151,10 +156,12 @@ export const uploadShopLogo = async (file: File): Promise<ShopPage> => {
 
 // ── Payout ────────────────────────────────────────────────────────────────────
 
+export type PayoutType = 'bank' | 'gcash' | 'maya';
+
 export type PayoutInfo = {
   id: number;
   merchant_id: number;
-  payout_type: string;
+  payout_type: PayoutType;
   bank_code: string | null;
   account_number: string | null;
   account_name: string | null;
@@ -164,7 +171,7 @@ export type PayoutInfo = {
 };
 
 export type PayoutInfoPayload = {
-  payout_type: string;
+  payout_type: PayoutType;
   bank_code?: string | null;
   account_number?: string | null;
   account_name?: string | null;
@@ -177,7 +184,7 @@ export type MerchantPayoutBatch = {
   period_date: string;
   transaction_count: number;
   gross_amount: number;
-  status: string;
+  status: PayoutStatus;
   notes: string | null;
   released_at: string | null;
   created_at: string;
@@ -188,11 +195,11 @@ export type MerchantTransaction = {
   order_id: number;
   amount: number;
   merchant_amount: number;
-  status: string;
+  status: TransactionStatus;
   description: string | null;
   created_at: string;
   paid_at: string | null;
-  order_status: string | null;
+  order_status: OrderStatus | null;
 };
 
 export const fetchMyPayoutInfo = async (): Promise<PayoutInfo | null> => {
@@ -224,7 +231,8 @@ export const requestPayout = async (): Promise<MerchantPayoutBatch> => {
 
 export type MerchantOrder = {
   id: number;
-  status: string;
+  status: OrderStatus;
+  payment_status: PaymentStatus;
   total_price: number;
   items: Array<{ id?: string; produce?: string; quantity?: number; price?: number; unit?: string; farm?: string }>;
   delivery_address: string | null;
@@ -237,6 +245,10 @@ export type MerchantOrder = {
   shipment_id?: number | null;
   shipped_at?: string | null;
   auto_confirm_at?: string | null;
+  // What the buyer asked for at checkout; null on orders placed before scheduling.
+  requested_delivery_date: string | null; // YYYY-MM-DD
+  delivery_window: string | null; // e.g. "08:00 – 10:00"
+  notes: string | null;
 };
 
 export const fetchMyMerchantOrders = async (): Promise<MerchantOrder[]> => {
@@ -244,8 +256,8 @@ export const fetchMyMerchantOrders = async (): Promise<MerchantOrder[]> => {
   return response.data;
 };
 
-export const updateMerchantOrderStatus = async (orderId: number, status: string): Promise<MerchantOrder> => {
-  const response = await apiClient.patch<MerchantOrder>(`/merchants/me/orders/${orderId}/status`, null, { params: { status } });
+export const updateMerchantOrderStatus = async (orderId: number, status: OrderStatus): Promise<MerchantOrder> => {
+  const response = await apiClient.patch<MerchantOrder>(`/merchants/me/orders/${orderId}/status`, { status });
   return response.data;
 };
 
@@ -297,6 +309,8 @@ export type MerchantShipmentSummary = {
   id: number;
   status: string;
   stop_count: number;
+  // Stops whose order is delivered or cancelled; equals stop_count once the run is done.
+  completed_stop_count: number;
   created_at: string;
   shipped_at: string | null;
 };

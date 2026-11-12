@@ -14,7 +14,6 @@ from app.core.database import Base
 from app.core.database_url import normalize_database_url
 from app.models import (  # noqa: F401
     cart,
-    current_orders,
     merchant,
     order,
     order_history,

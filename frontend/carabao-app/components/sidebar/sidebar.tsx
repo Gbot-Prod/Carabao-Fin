@@ -61,6 +61,28 @@ function TrackIcon() {
   );
 }
 
+function StoreIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l1.5-5h15L21 9" />
+      <path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0" />
+      <path d="M5 12v8h14v-8" />
+      <path d="M10 20v-5h4v5" />
+    </svg>
+  );
+}
+
+function DashboardIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </svg>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
@@ -80,6 +102,9 @@ export default function Sidebar() {
   const displayName = profileName || user?.name || (isAuthenticated ? "Carabao User" : "Guest");
   const displayEmail = profile?.email ?? user?.email ?? null;
   const avatarUrl = profile?.profile_picture_url ?? null;
+  const profileBlocked = !isLoading && !isAuthenticated;
+  // A merchant row only exists once an admin approves the application.
+  const merchantId = isBackendAuthenticated ? profile?.merchant?.id ?? null : null;
   const initials = displayName
     .split(/\s+/)
     .map((part) => part[0])
@@ -156,7 +181,14 @@ export default function Sidebar() {
           <span className="sidebarBrandName">Carabao</span>
         </div>
 
-        <div className="sidebar__account">
+        
+        <Link
+          href={profileBlocked ? "#" : "/profile"}
+          className={`sidebar__account${pathname === "/profile" ? " sidebar__account--active" : ""}`}
+          onClick={profileBlocked ? (e) => { e.preventDefault(); showPrompt(); } : () => setIsMobileOpen(false)}
+          aria-label="Open profile"
+        >
+          
           <div className="sidebar__avatar">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -169,18 +201,29 @@ export default function Sidebar() {
             <span className="sidebar__account-name">{isLoading ? "Loading..." : displayName}</span>
             {displayEmail && <span className="sidebar__account-email">{displayEmail}</span>}
           </div>
-        </div>
+        </Link>
 
         <nav className="sidebar__nav">
           <div className="sidebar__section">
             <ul className="sidebar__nav-list">
-              {renderNavLink("/profile", "Profile", <UserIcon />, true)}
               {renderNavLink("/order", "Shops", <ShopIcon />)}
               {renderNavLink("/cart", "Cart", <CartIcon />)}
               {renderNavLink("/track", "Track", <TrackIcon />, true)}
               {renderNavLink("/orders", "Orders", <ReceiptIcon />, true)}
             </ul>
           </div>
+
+          {merchantId != null && (
+            <div className="sidebar__section sidebar__section--divided">
+              <div className="sidebar__merchant">
+                <span className="sidebar__merchant-label">Merchant</span>
+                <ul className="sidebar__nav-list">
+                  {renderNavLink(`/merchant/${merchantId}`, "My Shop Page", <StoreIcon />, true)}
+                  {renderNavLink("/merchantDashboard", "Dashboard", <DashboardIcon />, true)}
+                </ul>
+              </div>
+            </div>
+          )}
 
           <div className="sidebar__section sidebar__section--divided">
             <SidebarFilterChips />

@@ -16,6 +16,7 @@ type FarmView = {
   category: string;
   deliveryFee: number;
   logoUrl: string | null;
+  bannerUrl: string | null;
 };
 
 type SortKey = 'recommended' | 'rating' | 'fastest' | 'fee';
@@ -35,6 +36,7 @@ const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]
   category: merchant.category ?? 'Farm Goods',
   deliveryFee: merchant.delivery_price ?? 0,
   logoUrl: null,
+  bannerUrl: null,
 });
 
 const formatDeliveryTime = (days: number | null) => {
@@ -69,17 +71,27 @@ function OrderContent() {
         setFarmList(merchants.map(toFarmView));
         setIsLoading(false);
 
-        // Logos load after the list renders so cards appear immediately.
+        // Logos and banners load after the list renders so cards appear immediately.
         const shopPages = await Promise.allSettled(
           merchants.map((m) => fetchMerchantShopPage(m.id))
         );
         if (cancelled) return;
-        const logos = new Map<number, string | null>();
+        const images = new Map<number, { logo: string | null; banner: string | null }>();
         shopPages.forEach((result, i) => {
-          if (result.status === 'fulfilled') logos.set(merchants[i].id, result.value.logo_url);
+          if (result.status === 'fulfilled') {
+            images.set(merchants[i].id, {
+              logo: result.value.logo_url,
+              banner: result.value.banner_image_url,
+            });
+          }
         });
         setFarmList((prev) =>
-          prev.map((farm) => ({ ...farm, logoUrl: logos.get(farm.merchantId) ?? farm.logoUrl }))
+          prev.map((farm) => {
+            const found = images.get(farm.merchantId);
+            return found
+              ? { ...farm, logoUrl: found.logo ?? farm.logoUrl, bannerUrl: found.banner ?? farm.bannerUrl }
+              : farm;
+          })
         );
       } catch {
         if (!cancelled) {
@@ -251,16 +263,22 @@ function OrderContent() {
               className={styles.farmCard}
             >
               <div className={styles.cardImage}>
-                {farm.logoUrl ? (
+                {farm.bannerUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={farm.logoUrl} alt="" className={styles.cardLogo} loading="lazy" />
-                ) : (
-                  <span className={styles.cardInitials} aria-hidden>{getInitials(farm.name)}</span>
+                  <img src={farm.bannerUrl} alt="" className={styles.cardBanner} loading="lazy" />
                 )}
                 <span className={styles.categoryChip}>{farm.category}</span>
               </div>
 
               <div className={styles.cardContent}>
+                <div className={styles.cardAvatar} aria-hidden>
+                  {farm.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={farm.logoUrl} alt="" className={styles.cardAvatarImg} loading="lazy" />
+                  ) : (
+                    <span className={styles.cardInitials}>{getInitials(farm.name)}</span>
+                  )}
+                </div>
                 <div className={styles.cardTitleRow}>
                   <h3 className={styles.cardTitle}>{farm.name}</h3>
                   {farm.rating > 0 && (

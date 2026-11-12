@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_db
 from app.models.transaction import Transaction
 from app.services.order_reservations import settle_checkout_payment
+from app.services.sms_service import notify_merchant_new_order
 from app.services.paymongo import get_webhook_secret, verify_webhook_signature
 
 logger = logging.getLogger(__name__)
@@ -97,3 +98,5 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
         logger.info(
             "Transaction %s marked paid, order %s -> processing", txn.id, txn.order_id
         )
+        if txn.order is not None:
+            notify_merchant_new_order(order=txn.order)

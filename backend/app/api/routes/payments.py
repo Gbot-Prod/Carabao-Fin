@@ -8,20 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
-from app.models.current_orders import CurrentOrder
 from app.models.merchant import Merchant
-from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
 from app.models.order_history import OrderHistory
+from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.schemas.payment import (
-    CheckoutResponse,
-    MerchantPayoutInfoCreate,
-    MerchantPayoutInfoResponse,
-    TransactionResponse,
-)
-from app.services.merchant_service import get_active_merchant
+from app.schemas.payment import CheckoutResponse, TransactionResponse
 from app.services.order_reservations import (
     close_checkout_sessions,
     expire_stale_reservations,
@@ -30,6 +23,7 @@ from app.services.order_reservations import (
     settle_checkout_payment,
 )
 from app.services.paymongo import create_checkout_session, retrieve_checkout_session
+from app.services.sms_service import notify_merchant_new_order
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -42,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 def _reconcile_transaction_from_paymongo(txn: Transaction, db: Session) -> None:
     """Recover a missed webhook while keeping the client-facing status current."""
-    if txn.status != "pending" or not txn.paymongo_session_id:
+    if txn.status != TransactionStatus.PENDING or not txn.paymongo_session_id:
         return
 
     try:
@@ -69,6 +63,8 @@ def _reconcile_transaction_from_paymongo(txn: Transaction, db: Session) -> None:
     logger.info(
         "Reconciled transaction %s (%s), order %s", txn.id, outcome, txn.order_id
     )
+    if outcome == "paid" and txn.order is not None:
+        notify_merchant_new_order(order=txn.order)
 
 
 def _validate_frontend_url(frontend_url: str) -> None:
@@ -93,12 +89,12 @@ def create_payment_checkout(
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order.status != "pending":
+    if order.status != OrderStatus.PENDING:
         raise HTTPException(status_code=400, detail="This order is no longer awaiting payment")
 
     already_paid = (
         db.query(Transaction)
-        .filter(Transaction.order_id == order_id, Transaction.status == "paid")
+        .filter(Transaction.order_id == order_id, Transaction.status == TransactionStatus.PAID)
         .first()
     )
     if already_paid:
@@ -109,7 +105,7 @@ def create_payment_checkout(
         .filter(
             Transaction.order_id == order_id,
             Transaction.user_id == current_user.id,
-            Transaction.status == "pending",
+            Transaction.status == TransactionStatus.PENDING,
         )
         .order_by(Transaction.created_at.desc())
         .first()
@@ -141,8 +137,8 @@ def create_payment_checkout(
         )
     (
         db.query(Transaction)
-        .filter(Transaction.order_id == order_id, Transaction.status == "pending")
-        .update({Transaction.status: "expired"}, synchronize_session=False)
+        .filter(Transaction.order_id == order_id, Transaction.status == TransactionStatus.PENDING)
+        .update({Transaction.status: TransactionStatus.EXPIRED}, synchronize_session=False)
     )
 
     merchant = db.query(Merchant).filter(Merchant.id == order.merchant_id).first()
@@ -165,7 +161,7 @@ def create_payment_checkout(
             reference_number=str(order_id),
         )
     except requests.HTTPError as e:
-        release_order_reservation(order, db, transaction_status="failed")
+        release_order_reservation(order, db, transaction_status=TransactionStatus.FAILED)
         db.commit()
         response_text = ""
         if e.response is not None:
@@ -177,12 +173,12 @@ def create_payment_checkout(
             status_code=502, detail=f"PayMongo error: {response_text[:2000]}"
         ) from e
     except RuntimeError as e:
-        release_order_reservation(order, db, transaction_status="failed")
+        release_order_reservation(order, db, transaction_status=TransactionStatus.FAILED)
         db.commit()
         logger.error("Payment configuration error: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
-        release_order_reservation(order, db, transaction_status="failed")
+        release_order_reservation(order, db, transaction_status=TransactionStatus.FAILED)
         db.commit()
         logger.exception("Unexpected error while creating checkout session")
         raise HTTPException(
@@ -196,7 +192,7 @@ def create_payment_checkout(
         amount=amount,
         platform_fee=platform_fee,
         merchant_amount=merchant_amount,
-        status="pending",
+        status=TransactionStatus.PENDING,
         description=f"Carabao Order #{order_id}",
         paymongo_session_id=session_data["id"],
         checkout_url=session_data["attributes"]["checkout_url"],
@@ -234,14 +230,14 @@ def cancel_payment_checkout(
 
     paid = (
         db.query(Transaction.id)
-        .filter(Transaction.order_id == order.id, Transaction.status == "paid")
+        .filter(Transaction.order_id == order.id, Transaction.status == TransactionStatus.PAID)
         .first()
     )
     if paid:
         raise HTTPException(status_code=409, detail="Order has already been paid")
 
-    if order.status == "pending" and not release_order_reservation(
-        order, db, transaction_status="failed"
+    if order.status == OrderStatus.PENDING and not release_order_reservation(
+        order, db, transaction_status=TransactionStatus.FAILED
     ):
         raise HTTPException(
             status_code=409, detail="A payment for this order is already in progress"
@@ -289,84 +285,3 @@ def get_transaction(
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return txn
-
-
-# ---------------------------------------------------------------------------
-# Merchant payout info
-# ---------------------------------------------------------------------------
-
-
-@router.post("/merchant/payout-info", response_model=MerchantPayoutInfoResponse)
-def upsert_merchant_payout_info(
-    payload: MerchantPayoutInfoCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    merchant = get_active_merchant(db, current_user.id)
-    if not merchant:
-        raise HTTPException(status_code=403, detail="Not a merchant account")
-
-    info = (
-        db.query(MerchantPayoutInfo)
-        .filter(MerchantPayoutInfo.merchant_id == merchant.id)
-        .first()
-    )
-
-    if info:
-        for k, v in payload.model_dump(exclude_unset=True).items():
-            setattr(info, k, v)
-    else:
-        info = MerchantPayoutInfo(merchant_id=merchant.id, **payload.model_dump())
-        db.add(info)
-
-    db.commit()
-    db.refresh(info)
-    return info
-
-
-@router.get("/merchant/payout-info", response_model=MerchantPayoutInfoResponse)
-def get_merchant_payout_info(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    merchant = get_active_merchant(db, current_user.id)
-    if not merchant:
-        raise HTTPException(status_code=403, detail="Not a merchant account")
-
-    info = (
-        db.query(MerchantPayoutInfo)
-        .filter(MerchantPayoutInfo.merchant_id == merchant.id)
-        .first()
-    )
-    if not info:
-        raise HTTPException(status_code=404, detail="No payout info configured")
-    return info
-
-
-# ---------------------------------------------------------------------------
-# Admin: order status maintenance
-# ---------------------------------------------------------------------------
-
-
-def _require_admin(current_user: User = Depends(get_current_user)) -> User:
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin only")
-    return current_user
-
-
-@router.post("/admin/sync-current-order-statuses")
-def sync_current_order_statuses(
-    db: Session = Depends(get_db),
-    admin: User = Depends(_require_admin),
-):
-    """One-shot fix: copy Order.status -> CurrentOrder.status where they're out of sync."""
-    stale = (
-        db.query(CurrentOrder)
-        .join(Order, CurrentOrder.order_id == Order.id)
-        .filter(CurrentOrder.status != Order.status)
-        .all()
-    )
-    for co in stale:
-        co.status = co.order.status
-    db.commit()
-    return {"synced": len(stale)}

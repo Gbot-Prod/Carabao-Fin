@@ -10,7 +10,6 @@ from app.api.routes import auth, users
 from app.core.security import create_access_token
 from app.models import (  # noqa: F401  (registers User's related mappers)
     cart,
-    current_orders,
     merchant,
     merchant_application,
     merchant_payout,

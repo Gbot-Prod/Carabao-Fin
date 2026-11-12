@@ -7,7 +7,7 @@ import { useRef, useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import mapboxgl from 'mapbox-gl';
 import OrderCard from './components/orderCard';
-import { fetchCurrentOrders, fetchTracking, type TrackingData, type Waypoint } from '@/util/api';
+import { fetchCurrentOrders, fetchTracking, isInTransit as isInTransitStatus, type TrackingData, type Waypoint } from '@/util/api';
 import { fetchShipmentTracking } from '@/util/api';
 import { fetchRouteGeoJSON, getPositionAlongRoute, type RouteGeoJSON } from '@/util/tracking';
 import getApiErrorMessage, { getApiErrorStatus } from '@/util/errorHelper';
@@ -26,19 +26,16 @@ type TrackOrder = {
   status: string;
 };
 
-// Matches the backend's IN_TRANSIT_STATUSES; only these orders have a route to track.
-const IN_TRANSIT_STATUSES = new Set(['shipped', 'out_for_delivery']);
-
+// Only in-transit orders have a route to track.
 const isInTransit = (order: Awaited<ReturnType<typeof fetchCurrentOrders>>[number]) =>
-  IN_TRANSIT_STATUSES.has(order.status?.toLowerCase());
+  isInTransitStatus(order.status);
 
 const toTrackOrder = (order: Awaited<ReturnType<typeof fetchCurrentOrders>>[number]): TrackOrder => ({
   id: order.id,
   orderId: order.order_id,
   merchant: order.merchant,
   merchantId: order.merchant_id ?? null,
-  // current_order.shipped is never flipped by the backend, so derive it from status.
-  shipped: order.shipped || isInTransit(order),
+  shipped: order.shipped,
   dateBought: new Date(order.date_bought).toLocaleDateString(),
   timeOfArrival: order.time_of_arrival
     ? new Date(order.time_of_arrival).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })

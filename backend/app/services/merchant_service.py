@@ -7,17 +7,16 @@ from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.order import Order
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
+from app.models.statuses import OPEN_PAYOUT_STATUSES, PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
-
-ACTIVE_ORDER_STATUSES = ("pending", "processing", "shipped", "out_for_delivery")
-OPEN_PAYOUT_STATUSES = ("pending", "approved", "processing")
+from app.services.order_status import ACTIVE_ORDER_STATUSES
 
 
 def get_active_merchant(
     db: Session, user_id: int, *, for_update: bool = False
 ) -> Merchant | None:
-    """The user's merchant profile, or None if they have none or closed it."""
+    """The users merchant profile"""
     query = db.query(Merchant).filter(
         Merchant.user_id == user_id, Merchant.deleted_at.is_(None)
     )
@@ -27,9 +26,9 @@ def get_active_merchant(
 
 
 def find_deletion_blockers(db: Session, merchant_id: int) -> dict[str, int]:
-    """Obligations that must be settled before the merchant can be closed.
+    """stuff that must be settled before the merchant can be closed
 
-    Returns only the non-zero counts; an empty dict means deletion is safe.
+    returns only the non zero counts, if its empty then deleting is safe
     """
     active_orders = (
         db.query(func.count(Order.id))
@@ -42,7 +41,8 @@ def find_deletion_blockers(db: Session, merchant_id: int) -> dict[str, int]:
     pending_payments = (
         db.query(func.count(Transaction.id))
         .filter(
-            Transaction.merchant_id == merchant_id, Transaction.status == "pending"
+            Transaction.merchant_id == merchant_id,
+            Transaction.status == TransactionStatus.PENDING,
         )
         .scalar()
     )
@@ -50,7 +50,7 @@ def find_deletion_blockers(db: Session, merchant_id: int) -> dict[str, int]:
         db.query(func.count(Transaction.id))
         .filter(
             Transaction.merchant_id == merchant_id,
-            Transaction.status == "refund_pending",
+            Transaction.status == TransactionStatus.REFUND_PENDING,
         )
         .scalar()
     )
@@ -60,14 +60,14 @@ def find_deletion_blockers(db: Session, merchant_id: int) -> dict[str, int]:
     released_ids = (
         db.query(PayoutBatchItem.transaction_id)
         .join(PayoutBatch, PayoutBatch.id == PayoutBatchItem.batch_id)
-        .filter(PayoutBatch.status == "released")
+        .filter(PayoutBatch.status == PayoutStatus.RELEASED)
         .scalar_subquery()
     )
     unpaid_earnings = (
         db.query(func.coalesce(func.sum(Transaction.merchant_amount), 0))
         .filter(
             Transaction.merchant_id == merchant_id,
-            Transaction.status == "paid",
+            Transaction.status == TransactionStatus.PAID,
             Transaction.id.not_in(released_ids),
         )
         .scalar()
@@ -143,7 +143,7 @@ def create_merchant_from_application(
     if existing_merchant is not None:
         if existing_merchant.deleted_at is None:
             raise ValueError("User already has a merchant profile")
-        # user_id is unique, so a returning merchant reuses their closed row.
+        # user_id is unique, so its fine if they deleted and remade it, i think.
         for field, value in fields.items():
             setattr(existing_merchant, field, value)
         existing_merchant.deleted_at = None

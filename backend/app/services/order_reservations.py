@@ -10,6 +10,7 @@ from app.models.cart import Cart
 from app.models.order import Order
 from app.models.order_history import OrderHistory
 from app.models.produce import Produce
+from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.services.paymongo import expire_checkout_session
 
@@ -44,7 +45,7 @@ def close_checkout_sessions(order: Order, db: Session) -> bool:
             db.query(Transaction.paymongo_session_id)
             .filter(
                 Transaction.order_id == order.id,
-                Transaction.status == "pending",
+                Transaction.status == TransactionStatus.PENDING,
                 Transaction.paymongo_session_id.isnot(None),
             )
             .all()
@@ -66,14 +67,14 @@ def close_checkout_sessions(order: Order, db: Session) -> bool:
 
 
 def release_order_reservation(
-    order: Order, db: Session, transaction_status: str
+    order: Order, db: Session, transaction_status: TransactionStatus
 ) -> bool:
     """Return an unpaid order's stock exactly once and close its checkout.
 
     Returns False (and keeps the stock held) while one of its PayMongo sessions
     may still be paid; the webhook or a later sweep settles it.
     """
-    if order.status != "pending":
+    if order.status != OrderStatus.PENDING:
         return False
     if not close_checkout_sessions(order, db):
         return False
@@ -83,7 +84,7 @@ def release_order_reservation(
 
     (
         db.query(Transaction)
-        .filter(Transaction.order_id == order.id, Transaction.status == "pending")
+        .filter(Transaction.order_id == order.id, Transaction.status == TransactionStatus.PENDING)
         .update({Transaction.status: transaction_status}, synchronize_session=False)
     )
     return True
@@ -113,9 +114,7 @@ def restore_order_stock(order: Order, db: Session) -> None:
 
 
 def _mark_cancelled(order: Order) -> None:
-    order.status = "cancelled"
-    if order.current_order:
-        order.current_order.status = "cancelled"
+    order.status = OrderStatus.CANCELLED
 
 
 def cancel_order(order: Order, db: Session) -> bool:
@@ -126,16 +125,16 @@ def cancel_order(order: Order, db: Session) -> bool:
     Paid transactions move to ``refund_pending`` so they are never paid out to
     the merchant.
     """
-    if order.status == "pending":
-        return release_order_reservation(order, db, transaction_status="expired")
+    if order.status == OrderStatus.PENDING:
+        return release_order_reservation(order, db, transaction_status=TransactionStatus.EXPIRED)
 
     restore_order_stock(order, db)
     _mark_cancelled(order)
 
     (
         db.query(Transaction)
-        .filter(Transaction.order_id == order.id, Transaction.status == "paid")
-        .update({Transaction.status: "refund_pending"}, synchronize_session=False)
+        .filter(Transaction.order_id == order.id, Transaction.status == TransactionStatus.PAID)
+        .update({Transaction.status: TransactionStatus.REFUND_PENDING}, synchronize_session=False)
     )
     return True
 
@@ -155,20 +154,22 @@ def settle_checkout_payment(
     order = db.query(Order).filter(Order.id == txn.order_id).with_for_update().first()
     db.refresh(txn, with_for_update=True)
 
-    if txn.status in ("paid", "refund_pending", "refunded"):
+    if txn.status in (
+        TransactionStatus.PAID,
+        TransactionStatus.REFUND_PENDING,
+        TransactionStatus.REFUNDED,
+    ):
         return "duplicate"
 
     txn.paymongo_payment_id = payment_id
     txn.paid_at = datetime.now(UTC)
 
-    if txn.status != "pending" or not order or order.status != "pending":
-        txn.status = "refund_pending"
+    if txn.status != TransactionStatus.PENDING or not order or order.status != OrderStatus.PENDING:
+        txn.status = TransactionStatus.REFUND_PENDING
         return "refund"
 
-    txn.status = "paid"
-    order.status = "processing"
-    if order.current_order:
-        order.current_order.status = "processing"
+    txn.status = TransactionStatus.PAID
+    order.status = OrderStatus.PROCESSING
     if order.order_history_id:
         history = (
             db.query(OrderHistory)
@@ -194,7 +195,7 @@ def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
         order_id
         for (order_id,) in (
             db.query(Order.id)
-            .filter(Order.status == "pending", Order.ordered_at < cutoff)
+            .filter(Order.status == OrderStatus.PENDING, Order.ordered_at < cutoff)
             .all()
         )
     ]
@@ -207,7 +208,7 @@ def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
             .with_for_update()
             .first()
         )
-        if not order or order.status != "pending":
+        if not order or order.status != OrderStatus.PENDING:
             continue
 
         # A newer checkout session may have been created for an older order.
@@ -215,7 +216,7 @@ def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
             db.query(Transaction.id)
             .filter(
                 Transaction.order_id == order.id,
-                Transaction.status == "pending",
+                Transaction.status == TransactionStatus.PENDING,
                 Transaction.created_at >= cutoff,
             )
             .first()
@@ -223,7 +224,7 @@ def expire_stale_reservations(db: Session, ttl_minutes: int) -> int:
         if has_live_checkout:
             continue
 
-        if release_order_reservation(order, db, transaction_status="expired"):
+        if release_order_reservation(order, db, transaction_status=TransactionStatus.EXPIRED):
             released += 1
 
     return released

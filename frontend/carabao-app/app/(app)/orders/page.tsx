@@ -9,26 +9,115 @@ import {
   fetchOrderHistory,
   deleteOrderFromHistory,
   confirmOrderReceived,
+  isInTransit,
+  ORDER_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
   type CurrentOrderItem,
   type OrderHistoryItem,
+  type OrderStatus,
+  type PaymentStatus,
 } from "@/util/api";
+
+// ── Shop avatar ───────────────────────────────────────────────────────────────
+
+const getInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
+
+function ShopAvatar({ name, logoUrl, href }: { name: string; logoUrl?: string | null; href: string | null }) {
+  const content = logoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={logoUrl} alt="" className={styles.avatarImg} loading="lazy" />
+  ) : (
+    <span className={styles.avatarInitials}>{getInitials(name) || "?"}</span>
+  );
+
+  // Hidden from screen readers: the merchant name link right beside it says the same thing.
+  return href ? (
+    <Link href={href} className={styles.avatar} aria-hidden tabIndex={-1}>{content}</Link>
+  ) : (
+    <div className={styles.avatar} aria-hidden>{content}</div>
+  );
+}
 
 // ── Current orders ────────────────────────────────────────────────────────────
 
-function StatusBadge({ shipped, status }: { shipped: boolean; status: string }) {
-  const normalized = status.toLowerCase();
-  let cls = styles.badgePending;
-  if (shipped || normalized === "shipped" || normalized === "delivered") cls = styles.badgeShipped;
-  else if (normalized === "cancelled") cls = styles.badgeCancelled;
+function StatusBadge({ status }: { status: OrderStatus }) {
+  const cls = status === "cancelled" ? styles.badgeCancelled
+    : status === "pending" || status === "processing" ? styles.badgePending
+    : styles.badgeShipped;
+  return <span className={`${styles.badge} ${cls}`}>{ORDER_STATUS_LABELS[status]}</span>;
+}
 
-  const label = normalized === "delivered"
-    ? "Delivered"
-    : shipped ? "Shipped" : status.charAt(0).toUpperCase() + status.slice(1);
-  return <span className={`${styles.badge} ${cls}`}>{label}</span>;
+// Shown beside the order status. A pending order's badge already says
+// "Awaiting payment", so it gets no second label.
+function PaymentLabel({ status, payment }: { status: OrderStatus; payment: PaymentStatus }) {
+  if (status === "pending") return null;
+  return <><span className={styles.dot}>•</span><span>{PAYMENT_STATUS_LABELS[payment]}</span></>;
 }
 
 const formatShortDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
+
+// "2026-11-14" parsed as local midnight; new Date("YYYY-MM-DD") would be UTC and can shift a day.
+const formatCalendarDate = (value: string) => {
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-PH", {
+    weekday: "short", year: "numeric", month: "short", day: "numeric",
+  });
+};
+
+type OrderDetailsData = Pick<
+  OrderHistoryItem,
+  "items" | "delivery_address" | "requested_delivery_date" | "delivery_window" | "notes"
+> & { total?: number };
+
+function OrderDetails({ order }: { order: OrderDetailsData }) {
+  const schedule = order.requested_delivery_date
+    ? [formatCalendarDate(order.requested_delivery_date), order.delivery_window].filter(Boolean).join(", ")
+    : order.delivery_window ?? null;
+
+  return (
+    <details className={styles.details}>
+      <summary className={styles.detailsSummary}>Order details</summary>
+      <dl className={styles.detailsList}>
+        <dt>Delivery date/time</dt>
+        <dd>{schedule ?? <span className={styles.detailsEmpty}>Not specified</span>}</dd>
+
+        <dt>Delivery address</dt>
+        <dd>{order.delivery_address || <span className={styles.detailsEmpty}>Not specified</span>}</dd>
+
+        <dt>Notes</dt>
+        <dd className={styles.detailsNotes}>
+          {order.notes || <span className={styles.detailsEmpty}>None</span>}
+        </dd>
+
+        <dt>Items</dt>
+        <dd>
+          <ul className={styles.detailsItems}>
+            {order.items.map((item, index) => (
+              <li key={`${item.id}-${index}`}>
+                <span>{item.quantity} × {item.produce}{item.unit ? ` (${item.unit})` : ""}</span>
+                <span>₱{(item.quantity * item.price).toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        </dd>
+
+        {order.total != null && (
+          <>
+            <dt>Total</dt>
+            <dd className={styles.detailsTotal}>₱{order.total.toLocaleString()}</dd>
+          </>
+        )}
+      </dl>
+    </details>
+  );
+}
 
 function OrderCard({
   order,
@@ -40,7 +129,7 @@ function OrderCard({
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const awaitingConfirmation = ["shipped", "out_for_delivery"].includes(order.status.toLowerCase());
+  const awaitingConfirmation = isInTransit(order.status);
 
   const handleConfirmReceived = async () => {
     setSubmitting(true);
@@ -72,6 +161,8 @@ function OrderCard({
 
   return (
     <li className={styles.card}>
+      <ShopAvatar name={order.merchant} logoUrl={order.merchant_logo_url} href={merchantHref} />
+      <div className={styles.cardBody}>
       <div className={styles.cardTop}>
         <div>
           <h3 className={styles.merchant}>
@@ -79,18 +170,22 @@ function OrderCard({
           </h3>
           {itemSummary && <p className={styles.itemSummary}>{itemSummary}</p>}
         </div>
-        <StatusBadge shipped={order.shipped} status={order.status} />
+        <StatusBadge status={order.status} />
       </div>
 
       <div className={styles.cardMeta}>
         <span>Ordered {dateBought}</span>
+        <PaymentLabel status={order.status} payment={order.payment_status} />
         {eta && <><span className={styles.dot}>•</span><span>ETA {eta}</span></>}
         <span className={styles.dot}>•</span>
         <span>₱{order.delivery_fee.toLocaleString()} delivery</span>
       </div>
 
+      <OrderDetails order={{ ...order, total: order.total_amount }} />
+
       <div className={styles.cardActions}>
         <Link href="/track" className={styles.trackBtn}>Live Tracking</Link>
+        <Link href={`/orders/${order.order_id}`} className={styles.receivedBtn}>View order</Link>
         {awaitingConfirmation && !confirming && (
           <button type="button" className={styles.receivedBtn} onClick={() => setConfirming(true)}>
             Order Received
@@ -126,6 +221,7 @@ function OrderCard({
         </div>
       )}
       {error && <p className={styles.confirmError}>{error}</p>}
+      </div>
     </li>
   );
 }
@@ -160,6 +256,8 @@ function PastOrderCard({
 
   return (
     <li className={styles.card}>
+      <ShopAvatar name={order.merchant} logoUrl={order.merchant_logo_url} href={merchantHref} />
+      <div className={styles.cardBody}>
       <div className={styles.cardTop}>
         <div>
           <p className={styles.orderId}>Order #{order.order_id}</p>
@@ -168,7 +266,7 @@ function PastOrderCard({
           </h3>
         </div>
         <div className={styles.pastCardRight}>
-          <span className={`${styles.badge} ${styles.badgeShipped}`}>{order.status}</span>
+          <StatusBadge status={order.status} />
           {!confirming && (
             <button type="button" className={styles.deleteBtn} onClick={() => setConfirming(true)}>
               Remove
@@ -179,8 +277,17 @@ function PastOrderCard({
 
       <div className={styles.cardMeta}>
         <span>{orderDate}</span>
+        <PaymentLabel status={order.status} payment={order.payment_status} />
         <span className={styles.dot}>•</span>
         <span>₱{order.total_amount.toLocaleString()}</span>
+      </div>
+
+      <OrderDetails order={{ ...order, total: order.total_amount }} />
+
+      <div className={styles.cardActions}>
+        <Link href={`/orders/${order.order_id}`} className={styles.receivedBtn}>
+          {order.status === "delivered" ? "View & review" : "View order"}
+        </Link>
       </div>
 
       {confirming && (
@@ -204,6 +311,7 @@ function PastOrderCard({
           </button>
         </div>
       )}
+      </div>
     </li>
   );
 }

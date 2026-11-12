@@ -53,9 +53,16 @@ class MerchantResponse(BaseModel):
     price_range_min: int
     price_range_max: int
     rating: float | None = None
+    rating_count: int = 0
     deleted_at: datetime | None = None
 
     shop_page: MerchantShopResponse | None = None
     produces: list[ProduceResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MerchantDetailResponse(MerchantResponse):
+    """Public merchant profile, plus the owning user's name for transparency."""
+
+    owner_name: str | None = None

@@ -128,7 +128,31 @@ export default function MerchantDetailPage() {
               ) : null}
               <div className={styles.merchantInfo}>
                 <h1 className={styles.merchantName}>{merchant.merchant_name}</h1>
-                <p className={styles.merchantLocation}>Location: {merchantLocation ?? 'Not specified'}</p>
+                <dl className={styles.ownerInfo}>
+                  <div className={styles.ownerRow}>
+                    <dt>Owner</dt>
+                    <dd>{merchant.owner_name || 'Not provided'}</dd>
+                  </div>
+                  <div className={styles.ownerRow}>
+                    <dt>Contact</dt>
+                    <dd>
+                      {merchant.contact_number ? (
+                        <a href={`tel:${merchant.contact_number}`}>{merchant.contact_number}</a>
+                      ) : (
+                        'Not provided'
+                      )}
+                    </dd>
+                  </div>
+                  {merchant.contact_email && (
+                    <div className={styles.ownerRow}>
+                      <dt>Email</dt>
+                      <dd>
+                        <a href={`mailto:${merchant.contact_email}`}>{merchant.contact_email}</a>
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+                <p className={styles.merchantLocation}>Location: {merchantLocation || 'Not specified'}</p>
                 {(shopPage?.description) && (
                   <p className={styles.merchantDesc}>{shopPage.description}</p>
                 )}
@@ -144,10 +168,6 @@ export default function MerchantDetailPage() {
                   <div className={styles.detailItem}>
                     <span className={styles.label}>Hours</span>
                     <span className={styles.value}>{merchant.operating_hours != null ? (typeof merchant.operating_hours === 'string' ? merchant.operating_hours : JSON.stringify(merchant.operating_hours)) : 'Not available'}</span>
-                  </div>
-                  <div className={styles.detailItem}>
-                    <span className={styles.label}>Contact</span>
-                    <span className={styles.value}>{merchant.contact_number}</span>
                   </div>
                 </div>
               </div>

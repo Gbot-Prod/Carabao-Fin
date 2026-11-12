@@ -9,6 +9,7 @@ import {
   type PayoutBatch,
   type Merchant,
 } from "@/util/api/admin";
+import { PAYOUT_STATUS_LABELS } from "@/util/api/statuses";
 import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
@@ -181,7 +182,7 @@ export default function PayoutsPage() {
                     <td className={styles.amount}>{peso(batch.gross_amount)}</td>
                     <td>
                       <span className={`${styles.badge} ${styles[`badge_${batch.status}`]}`}>
-                        {batch.status}
+                        {PAYOUT_STATUS_LABELS[batch.status]}
                       </span>
                     </td>
                     <td>

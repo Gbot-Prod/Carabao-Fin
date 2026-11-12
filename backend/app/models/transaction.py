@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.models.statuses import TransactionStatus, status_type
 
 
 class Transaction(Base):
@@ -21,8 +22,12 @@ class Transaction(Base):
     platform_fee = Column(Integer, nullable=False)  # 2% of amount, can be changed
     merchant_amount = Column(Integer, nullable=False)  # 99% of amount
 
-    status = Column(String, nullable=False, default="pending", index=True)
-    # pending | paid | failed | expired
+    status = Column(
+        status_type(TransactionStatus, "ck_transactions_status"),
+        nullable=False,
+        default=TransactionStatus.PENDING,
+        index=True,
+    )
 
     description = Column(String, nullable=True)
     paymongo_session_id = Column(String, nullable=True, unique=True, index=True)
@@ -34,7 +39,7 @@ class Transaction(Base):
     )
     paid_at = Column(DateTime(timezone=True), nullable=True)
 
-    order = relationship("Order")
+    order = relationship("Order", back_populates="transactions")
     merchant = relationship("Merchant")
     user = relationship("User")
     payout_items = relationship("PayoutBatchItem", back_populates="transaction")
