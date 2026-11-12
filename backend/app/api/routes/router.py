@@ -14,6 +14,7 @@ from .merchants import router as merchants_router
 from .misc import router as misc_router
 from .orders import router as orders_router
 from .payments import router as payments_router
+from .reference_prices import router as reference_prices_router
 from .reviews import router as reviews_router
 from .shipments import router as shipments_router
 from .sms import router as sms_router
@@ -40,4 +41,5 @@ router.include_router(sms_router)
 router.include_router(shipments_router)
 router.include_router(tracking_router)
 router.include_router(payments_router)
+router.include_router(reference_prices_router)
 router.include_router(paymongo_webhook_router)
