@@ -26,6 +26,7 @@ from app.models import (  # noqa: F401
     transaction,
     user,
 )
+from app.services.chat import send_unread_merchant_sms
 from app.services.order_reservations import (
     expire_stale_reservations,
     reservation_ttl_minutes,
@@ -64,11 +65,26 @@ async def lifespan(_: FastAPI):
         finally:
             db.close()
 
+    def text_merchants_about_unread_chat() -> None:
+        # CH1: a buyer message still unread after 15 minutes texts the farm once.
+        db = SessionLocal()
+        try:
+            sent = send_unread_merchant_sms(db)
+            db.commit()
+            if sent:
+                logger.info("Texted %s merchant(s) about unread chat", sent)
+        except Exception:
+            db.rollback()
+            logger.exception("Could not send unread-chat texts")
+        finally:
+            db.close()
+
     async def reservation_cleanup_loop() -> None:
         while True:
             # DB and PayMongo calls block, so keep them off the event loop.
             await asyncio.to_thread(release_expired_reservations)
             await asyncio.to_thread(confirm_unconfirmed_deliveries)
+            await asyncio.to_thread(text_merchants_about_unread_chat)
             await asyncio.sleep(60)
 
     cleanup_task = asyncio.create_task(reservation_cleanup_loop())

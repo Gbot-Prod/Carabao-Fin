@@ -8,6 +8,7 @@ from .admin_orders import router as admin_orders_router
 from .admin_produce import router as admin_produce_router
 from .auth import router as auth_router
 from .carts import router as carts_router
+from .chat import router as chat_router
 from .email import router as email_router
 from .follows import router as follows_router
 from .merchant_onboarding import router as merchant_onboarding_router
@@ -32,6 +33,7 @@ router.include_router(produce_search_router)
 router.include_router(reorder_router)
 router.include_router(follows_router)
 router.include_router(notifications_router)
+router.include_router(chat_router)
 router.include_router(admin_router)
 router.include_router(admin_orders_router)
 router.include_router(admin_audit_router)
