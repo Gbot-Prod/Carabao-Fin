@@ -9,6 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
 import { api, merchantLocation, type ApiMerchant, type ApiProduce } from '../lib/api';
+import { matchReferencePrice, referenceLabel, type ApiReferencePrice } from '../lib/referencePrices';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
@@ -49,6 +50,7 @@ function MerchantScreenContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
+  const [referencePrices, setReferencePrices] = useState<ApiReferencePrice[]>([]);
 
   useEffect(() => {
     if (!farmId) return;
@@ -63,6 +65,11 @@ function MerchantScreenContent() {
         ]);
         setMerchant(m);
         setProducts(p);
+        // Optional fair-price info (P1); the shop works without it.
+        api.referencePrices
+          .list(token)
+          .then(setReferencePrices)
+          .catch(() => setReferencePrices([]));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load merchant');
       } finally {
@@ -211,6 +218,10 @@ function MerchantScreenContent() {
                       ) : null}
                       <Text style={styles.productFreshness}>{freshnessLabel(product)}</Text>
                       {terms ? <Text style={styles.productFreshness}>{terms}</Text> : null}
+                      {(() => {
+                        const ref = matchReferencePrice(referencePrices, product.name, product.unit);
+                        return ref ? <Text style={styles.productReference}>{referenceLabel(ref)}</Text> : null;
+                      })()}
                       <View style={styles.productFooter}>
                         <Text style={styles.productPrice}>₱{product.price.toLocaleString()}</Text>
                         <TouchableOpacity
@@ -325,6 +336,7 @@ const styles = StyleSheet.create({
   productFreshness: { fontSize: FontSize.xs, color: Colors.textMuted },
   productFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   productPrice: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.primary },
+  productReference: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   addBtn: { backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.md },
   addBtnAdded: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   addBtnText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '700' },

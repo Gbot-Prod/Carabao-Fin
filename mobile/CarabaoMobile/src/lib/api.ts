@@ -1,3 +1,5 @@
+import type { ApiReferencePrice } from './referencePrices';
+
 // FastAPI backend. Not the Next.js site — that serves HTML 404s for API paths.
 // On a physical device "localhost" is the phone itself, so set EXPO_PUBLIC_API_URL
 // (e.g. your PC's LAN IP for local dev) rather than relying on this fallback.
@@ -356,6 +358,10 @@ export const api = {
   tracking: {
     forOrder: (token: string | null, orderId: number) =>
       request<ApiTracking>(`/tracking/${orderId}`, token),
+  },
+  referencePrices: {
+    list: (token: string | null) =>
+      request<ApiReferencePrice[]>('/reference-prices', token),
   },
   users: {
     me: (token: string | null) =>

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
+import ReferencePriceHint, { useReferencePrices } from '@/components/ReferencePrice/ReferencePriceHint';
 import { formatRequestedDate } from '@/app/(app)/merchantDashboard/lib/format';
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
 
@@ -12,6 +13,8 @@ export default function MerchantDetailPage() {
   const params = useParams<{ merchantID?: string }>();
   const merchantID = Number(params?.merchantID ?? '0');
   const hasValidMerchantId = Number.isFinite(merchantID) && merchantID > 0;
+  // Market reference ranges (P1), fetched once and matched per card.
+  const referencePrices = useReferencePrices();
 
   const [merchant, setMerchant] = useState<Merchant | undefined>(undefined);
   const [shopPage, setShopPage] = useState<ShopPage | null>(null);
@@ -209,6 +212,7 @@ export default function MerchantDetailPage() {
                       </p>
                     )}
                     <p className={styles.price}>₱{produce.price} / {produce.unit_quantity && produce.unit_quantity !== 1 ? produce.unit_quantity : ""}{produce.unit}</p>
+                    <ReferencePriceHint name={produce.name} unit={produce.unit} variant="card" prices={referencePrices} />
                     <button
                       className={styles.addBtn}
                       disabled={addingId === produce.id}
