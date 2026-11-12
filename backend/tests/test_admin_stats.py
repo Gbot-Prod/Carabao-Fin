@@ -94,3 +94,55 @@ def test_weekly_signups_buckets_by_manila_week(db, merchant):
     assert weeks[-2] == {"week_start": "2026-11-02", "buyers": 1, "merchants": 0}
     assert weeks[0]["week_start"] == "2026-08-24"
     assert sum(w["buyers"] for w in weeks) == 3
+
+
+def test_top_categories_from_paid_orders(db, merchant):
+    from datetime import UTC, datetime, timedelta
+
+    from app.api.routes.admin import _top_categories
+    from app.models.produce import Produce
+
+    def produce(name, category):
+        row = Produce(
+            merchant_id=merchant.id,
+            name=name,
+            price=10,
+            stock_quantity=100,
+            category=category,
+        )
+        db.add(row)
+        db.commit()
+        return row
+
+    talong = produce("Talong", "Vegetables")
+    mango = produce("Mango", "Fruits")
+    odd = produce("Mystery", None)
+    buyer = _buyer(db)
+    now = datetime.now(UTC)
+
+    def paid_order(items, status="paid", paid_days_ago=1):
+        order = _order(db, merchant, buyer, items=items)
+        txn = _txn(db, order, status)
+        txn.paid_at = now - timedelta(days=paid_days_ago)
+        db.commit()
+
+    paid_order(
+        [
+            {"produce_id": talong.id, "quantity": 3, "price": 50},
+            {"produceId": mango.id, "quantity": 1, "price": 200},
+        ]
+    )
+    paid_order([{"id": talong.id, "quantity": 2, "price": 40}])
+    paid_order([{"produce_id": odd.id, "quantity": 5, "price": 1}])
+    paid_order([{"produce_id": 999, "quantity": 1, "price": 7}])  # deleted produce
+    paid_order([{"produce_id": mango.id, "quantity": 9, "price": 999}], "pending")
+    paid_order(
+        [{"produce_id": mango.id, "quantity": 9, "price": 999}], paid_days_ago=40
+    )
+
+    result = _top_categories(db, now - timedelta(days=30))
+    assert result == [
+        {"category": "Vegetables", "revenue": 230, "quantity": 5},
+        {"category": "Fruits", "revenue": 200, "quantity": 1},
+        {"category": "Uncategorized", "revenue": 12, "quantity": 6},
+    ]

@@ -12,6 +12,7 @@ from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
 from app.models.payout_batch import PayoutBatch
+from app.models.produce import Produce
 from app.models.statuses import PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -30,7 +31,6 @@ from app.schemas.user import UserResponse
 from app.services import audit_log, paymongo, r2_service
 from app.services.account_suspension import reinstate_user, suspend_user
 from app.services.merchant_service import create_merchant_from_application
-from app.services.produce_freshness import PH_TZ
 from app.services.payout_service import (
     PayoutError,
     get_payout_info,
@@ -40,6 +40,7 @@ from app.services.payout_service import (
     send_payout,
     transfer_fee,
 )
+from app.services.produce_freshness import PH_TZ
 
 router = APIRouter(tags=["admin"])
 
@@ -242,6 +243,65 @@ def _weekly_signups(db: Session, now: datetime | None = None) -> list[dict]:
     return [{"week_start": str(week), **counts} for week, counts in weeks.items()]
 
 
+UNCATEGORIZED = "Uncategorized"
+
+
+def _item_int(item: dict, *keys: str) -> int | None:
+    for key in keys:
+        try:
+            return int(item[key])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
+def _top_categories(db: Session, since: datetime, limit: int = 8) -> list[dict]:
+    """Item revenue and quantity by produce category, from orders paid since ``since``.
+
+    Item revenue is unit price x quantity (delivery fee excluded). Categories come
+    from the produce row as it is now; deleted produce counts as Uncategorized.
+    """
+    paid_orders = (
+        db.query(Order.items)
+        .filter(
+            Order.id.in_(
+                db.query(Transaction.order_id).filter(
+                    Transaction.status == TransactionStatus.PAID,
+                    Transaction.paid_at >= since,
+                )
+            )
+        )
+        .all()
+    )
+    lines = []
+    for (items,) in paid_orders:
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            quantity = _item_int(item, "quantity") or 0
+            price = _item_int(item, "price") or 0
+            if quantity <= 0:
+                continue
+            lines.append(
+                (_item_int(item, "produce_id", "produceId", "id"), quantity, price)
+            )
+
+    produce_ids = {pid for pid, _, _ in lines if pid is not None}
+    categories = dict(
+        db.query(Produce.id, Produce.category).filter(Produce.id.in_(produce_ids)).all()
+        if produce_ids
+        else []
+    )
+    totals: dict[str, dict[str, int]] = {}
+    for pid, quantity, price in lines:
+        name = (categories.get(pid) or "").strip() or UNCATEGORIZED
+        bucket = totals.setdefault(name, {"revenue": 0, "quantity": 0})
+        bucket["revenue"] += price * quantity
+        bucket["quantity"] += quantity
+    ranked = sorted(totals.items(), key=lambda kv: (-kv[1]["revenue"], kv[0]))
+    return [{"category": name, **values} for name, values in ranked[:limit]]
+
+
 @router.get("/admin/stats")
 def get_admin_stats(
     db: Session = Depends(get_db),
@@ -332,6 +392,7 @@ def get_admin_stats(
             "refunds_pending": int(refunds_pending),
         },
         "weekly_signups": _weekly_signups(db),
+        "top_categories": _top_categories(db, since),
         "daily_revenue": [
             {
                 "date": str(r.date),

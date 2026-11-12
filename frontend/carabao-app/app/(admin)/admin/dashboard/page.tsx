@@ -180,6 +180,38 @@ export default function AdminDashboard() {
         )}
       </section>
 
+      {/* Top produce categories (A5c) */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Top Produce Categories — Last 30 Days</h2>
+        {stats.top_categories.length === 0 ? (
+          <p className={styles.emptyText}>No paid orders in the last 30 days.</p>
+        ) : (
+          <div className={styles.chartWrap}>
+            <ResponsiveContainer width="100%" height={Math.max(160, stats.top_categories.length * 40)}>
+              <BarChart
+                data={stats.top_categories}
+                layout="vertical"
+                barSize={14}
+                margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0ece5" horizontal={false} />
+                <XAxis type="number" tickFormatter={(v: number) => peso(v)} tick={{ fontSize: 11, fill: "#647067" }} tickLine={false} axisLine={false} />
+                <YAxis type="category" dataKey="category" tick={{ fontSize: 11, fill: "#647067" }} tickLine={false} axisLine={false} width={116} />
+                <Tooltip
+                  formatter={(value, name, item) =>
+                    name === "Item revenue"
+                      ? [`${peso(Number(value))} · ${(item.payload as { quantity: number }).quantity.toLocaleString()} units`, name]
+                      : [value, name]
+                  }
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e0ece5" }}
+                />
+                <Bar dataKey="revenue" name="Item revenue" fill="#31925d" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </section>
+
       {/* Order status + Payout summary */}
       <div className={styles.row}>
         <section className={`${styles.section} ${styles.flex1}`}>

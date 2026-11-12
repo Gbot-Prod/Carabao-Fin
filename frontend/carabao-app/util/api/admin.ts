@@ -62,6 +62,12 @@ export type WeeklySignups = {
   merchants: number;
 };
 
+export type CategorySales = {
+  category: string;
+  revenue: number; // item revenue in pesos, delivery fee excluded
+  quantity: number;
+};
+
 export type AdminStats = {
   total_revenue: number;
   platform_fees: number;
@@ -75,6 +81,7 @@ export type AdminStats = {
     refunds_pending: number;
   };
   weekly_signups: WeeklySignups[];
+  top_categories: CategorySales[];
   daily_revenue: DailyRevenue[];
   order_breakdown: OrderStatusCount[];
   payout_summary: PayoutSummaryItem[];

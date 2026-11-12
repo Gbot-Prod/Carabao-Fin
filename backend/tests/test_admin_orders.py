@@ -30,7 +30,9 @@ def _admin(db) -> User:
     return admin
 
 
-def _order(db, merchant, buyer, status="processing", ordered_at=None, **extra):
+def _order(
+    db, merchant, buyer, status="processing", ordered_at=None, items=None, **extra
+):
     user, history = buyer
     order = Order(
         order_history_id=history.id,
@@ -38,7 +40,11 @@ def _order(db, merchant, buyer, status="processing", ordered_at=None, **extra):
         merchant_id=merchant.id,
         status=status,
         total_price=500,
-        items=[{"produce_id": 1, "name": "Talong", "quantity": 2, "price": 250}],
+        items=(
+            items
+            if items is not None
+            else [{"produce_id": 1, "name": "Talong", "quantity": 2, "price": 250}]
+        ),
         ordered_at=ordered_at or datetime(2026, 11, 10, 9, tzinfo=UTC),
         **extra,
     )
