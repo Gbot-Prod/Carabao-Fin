@@ -6,6 +6,7 @@ import { ADMIN_PAGE_SIZE, fetchAdminMerchantsPage, type AdminMerchant } from "@/
 import Pagination from "../../Pagination";
 import SuspendControl from "../../SuspendControl";
 import styles from "./page.module.css";
+import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
 export default function AdminMerchantsPage() {
@@ -49,7 +50,7 @@ function AdminMerchantsContent() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.heading}>Merchants <span className={styles.count}>{total}</span></h1>
+      <PageHeader eyebrow="People" title="Merchants" count={total} description="Approved stores selling on Carabao." />
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>

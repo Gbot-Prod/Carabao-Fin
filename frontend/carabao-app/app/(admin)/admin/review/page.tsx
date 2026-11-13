@@ -8,6 +8,7 @@ import {
   type MerchantApplication,
 } from "@/util/api/admin";
 import styles from "./page.module.css";
+import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -268,10 +269,12 @@ export default function AdminReviewPage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.heading}>
-        Application Review{" "}
-        <span className={styles.count}>{pending.length} pending</span>
-      </h1>
+      <PageHeader
+        eyebrow="People"
+        title="Merchant applications"
+        count={`${pending.length} pending`}
+        description="Approve, reject or ask a seller for more information before their store goes live."
+      />
 
       {applications.length === 0 && (
         <p className={styles.emptyState}>No applications yet.</p>

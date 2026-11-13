@@ -16,6 +16,7 @@ import {
 } from "@/util/api/admin";
 import Pagination from "../../Pagination";
 import styles from "./page.module.css";
+import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import OrderChat from "@/components/OrderChat/OrderChat";
 
@@ -99,7 +100,7 @@ function AdminOrdersContent() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.heading}>Orders <span className={styles.count}>{total}</span></h1>
+      <PageHeader eyebrow="Money" title="Orders" count={total} description="Every order across all merchants. Click a row for details." />
 
       <div className={styles.filters}>
         <label className={styles.field}>

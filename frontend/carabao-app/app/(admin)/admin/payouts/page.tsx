@@ -16,6 +16,7 @@ import {
   type PayoutType,
 } from "@/util/api/merchants";
 import styles from "./page.module.css";
+import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
 const peso = (v: number) =>
@@ -193,15 +194,11 @@ export default function PayoutsPage() {
     <div className={styles.page}>
       {toast && <div className={styles.toast}>{toast}</div>}
 
-      <div className={styles.header}>
-        <div>
-          <h1 className={styles.heading}>Payouts</h1>
-          <p className={styles.subheading}>
-            Merchants request cash outs; sending one transfers it from the PayMongo wallet (InstaPay, or PESONet
-            for GCash).
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        eyebrow="Money"
+        title="Payouts"
+        description="Merchants request cash outs; sending one transfers it from the PayMongo wallet (InstaPay, or PESONet for GCash)."
+      />
 
       <div className={styles.kpiRow}>
         <div className={`${styles.kpiCard} ${needsAction.length > 0 ? styles.kpiCardAlert : ""}`}>

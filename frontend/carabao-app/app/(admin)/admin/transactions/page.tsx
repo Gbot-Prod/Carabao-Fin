@@ -17,7 +17,9 @@ import type { TransactionStatus } from "@/util/api/statuses";
 import Pagination from "../../Pagination";
 import base from "../orders/page.module.css";
 import styles from "./page.module.css";
+import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
+import { Download } from "lucide-react";
 
 const TXN_STATUSES: TransactionStatus[] = ["pending", "paid", "failed", "expired", "refund_pending", "refunded"];
 const FILTER_KEYS = ["status", "merchant_id", "date_from", "date_to", "q"] as const;
@@ -116,12 +118,12 @@ function AdminTransactionsContent() {
 
   return (
     <div className={base.page}>
-      <div className={styles.headerRow}>
-        <h1 className={base.heading}>Transactions <span className={base.count}>{total}</span></h1>
+      <PageHeader eyebrow="Money" title="Transactions" count={total} description="Checkout payments through PayMongo, with fees and each merchant's share.">
         <button type="button" className={styles.export} onClick={handleExport} disabled={exporting || total === 0}>
+          <Download size={16} strokeWidth={1.9} />
           {exporting ? "Exporting…" : "Export CSV"}
         </button>
-      </div>
+      </PageHeader>
       {exportError && <p className={styles.exportError}>{exportError}</p>}
 
       <div className={base.filters}>

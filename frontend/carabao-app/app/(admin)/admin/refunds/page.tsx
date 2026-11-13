@@ -13,6 +13,7 @@ import getApiErrorMessage from "@/util/errorHelper";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import own from "./page.module.css";
+import PageHeader from "../../PageHeader";
 
 type Tab = "refund_pending" | "refunded";
 
@@ -46,12 +47,12 @@ export default function AdminRefundsPage() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.heading}>
-        Refunds {tab === "refund_pending" && !loading && <span className={styles.count}>{rows.length}</span>}
-      </h1>
-      <p className={own.intro}>
-        Send the money back outside Carabao (PayMongo dashboard, GCash, Maya or bank), then record the method and reference here. The buyer is notified by email and SMS.
-      </p>
+      <PageHeader
+        eyebrow="Money"
+        title="Refunds"
+        count={tab === "refund_pending" && !loading ? rows.length : undefined}
+        description="Send the money back outside Carabao (PayMongo dashboard, GCash, Maya or bank), then record the method and reference here. The buyer is notified by email and SMS."
+      />
 
       <div className={own.tabs} role="tablist">
         {(["refund_pending", "refunded"] as Tab[]).map((t) => (

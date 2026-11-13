@@ -93,7 +93,7 @@ def upload_my_avatar(
 
 # ─── Payment methods ────────────────────────────────────────────────────
 
-
+"""
 @router.get("/users/me/payment-methods", response_model=list[SavedCard])
 def list_my_payment_methods(
     db: Session = Depends(get_db),
@@ -142,10 +142,10 @@ def detach_my_payment_method(
         raise HTTPException(
             status_code=502, detail=f"PayMongo error: {body[:400]}"
         ) from e
-
+"""
 
 def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
-    """Records that a hard delete of this user would violate or destroy.
+    """Dont delete 
 
     Transactions, shipments and payout batches hold non-nullable FKs to the
     user, their orders or their merchant row, so the delete cannot proceed

@@ -27,9 +27,9 @@
 
 .action {
   padding: 4px 10px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--green-border);
   border-radius: var(--radius-sm);
-  background: transparent;
+  background: var(--bg-white);
   color: var(--green-600);
   font: inherit;
   font-size: 12px;

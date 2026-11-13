@@ -6,6 +6,8 @@ import getApiErrorMessage from "@/util/errorHelper";
 import OrderChat from "@/components/OrderChat/OrderChat";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
+import own from "./page.module.css";
+import PageHeader from "../../PageHeader";
 
 type SupportConversation = {
   conversation_id: number;
@@ -48,11 +50,15 @@ export default function AdminSupportPage() {
 
   return (
     <div className={styles.page}>
-      <h1>Support</h1>
-      <p>Messages users send from their profile. Unanswered conversations are listed first.</p>
-      {error && <p role="alert">{error}</p>}
+      <PageHeader
+        eyebrow="Support"
+        title="Support"
+        count={rows.length}
+        description="Messages users send from their profile. Unanswered conversations are listed first."
+      />
+      {error && <p role="alert" className={styles.stateError}>{error}</p>}
       {rows.length === 0 ? (
-        <p>No support conversations yet.</p>
+        <div className={styles.state}>No support conversations yet.</div>
       ) : (
         <div className={styles.tableWrap}>
           <table className={styles.table}>
@@ -69,13 +75,13 @@ export default function AdminSupportPage() {
                 <tr
                   key={r.conversation_id}
                   onClick={() => setSelected(r.conversation_id)}
-                  style={{ cursor: "pointer", fontWeight: r.unread ? 700 : undefined }}
+                  className={`${styles.row} ${r.conversation_id === selected ? styles.rowSelected : ""} ${r.unread ? own.unread : ""}`}
                   aria-selected={r.conversation_id === selected}
                 >
                   <td>{r.user_name ?? r.user_email ?? `User #${r.user_id ?? "?"}`}</td>
-                  <td>{r.last_message ?? "—"}</td>
-                  <td>{r.last_at ? new Date(r.last_at).toLocaleString("en-PH") : "—"}</td>
-                  <td>{r.unread || ""}</td>
+                  <td className={own.lastMessage}>{r.last_message ?? "—"}</td>
+                  <td className={styles.mono}>{r.last_at ? new Date(r.last_at).toLocaleString("en-PH") : "—"}</td>
+                  <td>{r.unread ? <span className={own.unreadCount}>{r.unread}</span> : ""}</td>
                 </tr>
               ))}
             </tbody>
@@ -84,16 +90,18 @@ export default function AdminSupportPage() {
       )}
 
       {current && (
-        <section className={styles.panel}>
-          <div className={styles.panelHeader}>
+        <section className={own.conversation}>
+          <div className={own.conversationHeader}>
             <h2>{current.user_name ?? current.user_email ?? "User"}</h2>
-            <button type="button" onClick={() => { setSelected(null); void load(); }}>Close</button>
+            <button type="button" className={styles.clear} onClick={() => { setSelected(null); void load(); }}>Close</button>
           </div>
-          <OrderChat
-            key={current.conversation_id}
-            endpoint={`/admin/support/${current.conversation_id}/messages`}
-            title={current.user_email ?? "Support conversation"}
-          />
+          <div className={own.conversationBody}>
+            <OrderChat
+              key={current.conversation_id}
+              endpoint={`/admin/support/${current.conversation_id}/messages`}
+              title={current.user_email ?? "Support conversation"}
+            />
+          </div>
         </section>
       )}
     </div>

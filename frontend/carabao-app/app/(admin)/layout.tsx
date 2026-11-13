@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import AdminSidebar from "./AdminSidebar";
+import AdminShell from "./AdminShell";
 import Link from "next/link";
 import styles from "./layout.module.css";
 import { TWO_FACTOR_ENABLED } from "@/lib/features";
@@ -37,9 +37,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className={styles.shell}>
-      <AdminSidebar />
-      <main className={styles.main}>{children}</main>
-    </div>
+    <AdminShell user={{ name: session.user.name ?? "", email: session.user.email ?? "" }}>
+      {children}
+    </AdminShell>
   );
 }

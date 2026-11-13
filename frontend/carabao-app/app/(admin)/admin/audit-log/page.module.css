@@ -1,11 +1,3 @@
-.intro {
-  max-width: 720px;
-  margin: -12px 0 20px;
-  color: var(--text-subtle);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
 .changeCell {
   white-space: normal !important;
   min-width: 260px;

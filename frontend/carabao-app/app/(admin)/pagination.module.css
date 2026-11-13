@@ -20,16 +20,16 @@
 }
 
 .btn {
+  padding: 6px 14px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+  color: var(--text-strong);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: var(--green-900);
-  background: var(--bg-white);
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-sm);
-  padding: 6px 14px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  box-shadow: var(--admin-card-shadow);
 }
 
 .btn:hover:not(:disabled) {
@@ -39,4 +39,9 @@
 .btn:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }

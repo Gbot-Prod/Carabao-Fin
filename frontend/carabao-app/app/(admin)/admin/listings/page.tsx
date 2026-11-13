@@ -14,6 +14,7 @@ import Pagination from "../../Pagination";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import suspend from "../../suspend.module.css";
+import PageHeader from "../../PageHeader";
 
 type Visibility = "" | "visible" | "hidden";
 
@@ -112,7 +113,7 @@ function ListingsContent() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.heading}>Listings <span className={styles.count}>{total}</span></h1>
+      <PageHeader eyebrow="People" title="Listings" count={total} description="Products merchants have posted. Hide anything that shouldn't be shown to buyers." />
 
       <div className={styles.filters}>
         <label className={styles.field}>

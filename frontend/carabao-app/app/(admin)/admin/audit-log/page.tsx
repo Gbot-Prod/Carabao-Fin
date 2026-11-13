@@ -12,6 +12,7 @@ import Pagination from "../../Pagination";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import own from "./page.module.css";
+import PageHeader from "../../PageHeader";
 
 const ACTION_LABELS: Record<string, string> = {
   "user.role_change": "Role change",
@@ -103,8 +104,12 @@ function AuditLogContent() {
 
   return (
     <div className={styles.page}>
-      <h1 className={styles.heading}>Audit log <span className={styles.count}>{total}</span></h1>
-      <p className={own.intro}>Every admin action, with who did it, when, and what changed. Entries can&apos;t be edited or deleted.</p>
+      <PageHeader
+        eyebrow="Support"
+        title="Audit log"
+        count={total}
+        description={<>Every admin action, with who did it, when, and what changed. Entries can&apos;t be edited or deleted.</>}
+      />
 
       <div className={styles.filters}>
         <label className={styles.field}>
