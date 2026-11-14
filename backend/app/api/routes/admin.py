@@ -3,7 +3,7 @@ from datetime import UTC, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import Date, cast, func, or_, text
+from sqlalchemy import Date, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -29,7 +29,7 @@ from app.schemas.payout import (
     WalletBalance,
 )
 from app.schemas.user import UserResponse
-from app.services import audit_log, paymongo, r2_service
+from app.services import audit_log, better_auth_store, paymongo, r2_service
 from app.services.account_suspension import reinstate_user, suspend_user
 from app.services.features import two_factor_enabled
 from app.services.merchant_service import create_merchant_from_application
@@ -97,12 +97,7 @@ def set_user_admin_role(
         before=before,
         after={"is_admin": payload.is_admin},
     )
-    if user.external_auth_id:
-        ba_role = "admin" if payload.is_admin else "user"
-        db.execute(
-            text('UPDATE "user" SET role = :role WHERE id = :ba_id'),
-            {"role": ba_role, "ba_id": user.external_auth_id},
-        )
+    better_auth_store.set_role(db, user.external_auth_id, is_admin=payload.is_admin)
     db.commit()
     db.refresh(user)
     return user
@@ -118,8 +113,13 @@ def list_all_users(
     q = db.query(User)
     total = q.count()
     items = (
-        q.order_by(User.id.asc()).offset((page - 1) * page_size).limit(page_size).all()
+        q.options(selectinload(User.addresses))
+        .order_by(User.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
     )
+    better_auth_store.load_two_factor(db, items)
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 

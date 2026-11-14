@@ -1,9 +1,10 @@
 import { createAuthClient } from "better-auth/react";
-import { adminClient, twoFactorClient } from "better-auth/client/plugins";
+import { jwtClient, twoFactorClient } from "better-auth/client/plugins";
 
 const authClient = createAuthClient({
   plugins: [
-    adminClient(),
+    // Access tokens for the FastAPI backend (GET /api/auth/token).
+    jwtClient(),
     // E8: a sign-in that needs a second factor continues on the code page.
     twoFactorClient({
       onTwoFactorRedirect: () => {
@@ -13,25 +14,57 @@ const authClient = createAuthClient({
   ],
 });
 
-const syncBackendSession = async () => {
+// ── Backend access token ─────────────────────────────────────────────
+// A short-lived (15 min) JWT from BetterAuth that FastAPI verifies with the
+// public keys at /api/auth/jwks. Kept in memory only, never in a cookie or
+// storage, and fetched again shortly before it expires.
+
+const REFRESH_EARLY_MS = 60_000;
+let cachedToken: { token: string; expiresAt: number } | null = null;
+let pendingToken: Promise<string | null> | null = null;
+
+function tokenExpiry(token: string): number {
   try {
-    const response = await fetch("/api/auth", {
-      method: "POST",
-      credentials: "include",
-    });
-
-    if (!response.ok) {
-      console.warn(
-        `Backend session sync skipped: /api/auth returned ${response.status}`
-      );
-      return null;
-    }
-
-    return response.json();
-  } catch (error) {
-    console.warn("Backend session sync skipped: /api/auth request failed", error);
-    return null;
+    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const { exp } = JSON.parse(atob(payload)) as { exp?: number };
+    return typeof exp === "number" ? exp * 1000 : 0;
+  } catch {
+    return 0;
   }
+}
+
+/** The current backend token, or null when signed out. Concurrent callers share one fetch. */
+export const getBackendToken = ({ forceRefresh = false } = {}): Promise<string | null> => {
+  if (!forceRefresh && cachedToken && cachedToken.expiresAt - REFRESH_EARLY_MS > Date.now()) {
+    return Promise.resolve(cachedToken.token);
+  }
+  pendingToken ??= authClient
+    .token()
+    .then(({ data }) => {
+      const token = data?.token ?? null;
+      cachedToken = token ? { token, expiresAt: tokenExpiry(token) } : null;
+      return token;
+    })
+    .catch(() => {
+      cachedToken = null;
+      return null;
+    })
+    .finally(() => {
+      pendingToken = null;
+    });
+  return pendingToken;
+};
+
+/** Forget the cached token, e.g. on sign-in/out or when its claims change. */
+export const clearBackendToken = () => {
+  cachedToken = null;
+};
+
+// The token carries twoFactorEnabled. Re-read the session past BetterAuth's
+// 5-minute cookie cache so the next token has the new value (admin access, E8c).
+const refreshTokenClaims = async () => {
+  await authClient.getSession({ query: { disableCookieCache: true } }).catch(() => null);
+  clearBackendToken();
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -59,13 +92,14 @@ export const signIn = {
       throw new Error(getErrorMessage(error, "Login failed"));
     }
 
-    // Two-step verification (E8b): no session until the code page succeeds,
-    // so skip the backend sync; the client plugin is already on its way there.
+    // Two-step verification (E8b): no session until the code page succeeds;
+    // the client plugin is already on its way there.
     if ((data as { twoFactorRedirect?: boolean }).twoFactorRedirect) {
       return { twoFactorRedirect: true as const };
     }
 
-    await syncBackendSession();
+    // A different account may have been signed in before.
+    clearBackendToken();
     return data;
   },
 };
@@ -88,7 +122,7 @@ export const signUp = {
     // requireEmailVerification means sign-up never opens a session, and an
     // existing email gets a look-alike success (anti-enumeration). Callers
     // either sign in next (email-OTP signups) or wait for the emailed link,
-    // which lands on /email-verified and syncs there.
+    // which lands on /email-verified.
     return data;
   },
 };
@@ -111,16 +145,12 @@ export const resendVerificationEmail = async (email: string) => {
 };
 
 export const signOut = async () => {
+  clearBackendToken();
   const { data, error } = await authClient.signOut();
 
   if (error || !data) {
     throw new Error(getErrorMessage(error, "Logout failed"));
   }
-
-  await fetch("/api/auth/backend-token", {
-    method: "DELETE",
-    credentials: "include",
-  });
 
   return data;
 };
@@ -157,18 +187,18 @@ export const enableTwoFactor = async (password: string) => {
 export const verifyTwoFactorSetup = async (code: string) => {
   const { error } = await authClient.twoFactor.verifyTotp({ code });
   if (error) throw new Error(getErrorMessage(error, "That code didn't match. Try the newest code."));
-  // Tell the backend straight away (admin access depends on it, E8c).
-  await syncBackendSession();
+  // The backend reads the flag from the token (admin access depends on it, E8c).
+  await refreshTokenClaims();
 };
 
 export const disableTwoFactor = async (password: string) => {
   const { error } = await authClient.twoFactor.disable({ password });
   if (error) throw new Error(getErrorMessage(error, "Could not turn off two-step verification"));
-  await syncBackendSession();
+  await refreshTokenClaims();
 };
 
 // Second step of a two-step sign-in (E8b): an authenticator or backup code
-// finishes the BetterAuth session; then the FastAPI token is synced as usual.
+// finishes the BetterAuth session.
 export const completeTwoFactorSignIn = async (
   code: string,
   { backup = false, trustDevice = false }: { backup?: boolean; trustDevice?: boolean } = {},
@@ -181,5 +211,5 @@ export const completeTwoFactorSignIn = async (
     if (code === "INVALID_TWO_FACTOR_COOKIE") throw new Error("SIGN_IN_AGAIN");
     throw new Error(getErrorMessage(error, "That code didn't work."));
   }
-  await syncBackendSession();
+  clearBackendToken();
 };

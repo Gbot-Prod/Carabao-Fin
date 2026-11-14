@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.models.merchant import Merchant
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -84,8 +83,7 @@ def create_payment_checkout(
     expire_stale_reservations(db, reservation_ttl_minutes())
     order = (
         db.query(Order)
-        .join(OrderHistory, Order.order_history_id == OrderHistory.id)
-        .filter(Order.id == order_id, OrderHistory.user_id == current_user.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
         .with_for_update()
         .first()
     )
@@ -240,8 +238,7 @@ def cancel_payment_checkout(
     """Release stock when PayMongo returns the buyer without a payment."""
     order = (
         db.query(Order)
-        .join(OrderHistory, Order.order_history_id == OrderHistory.id)
-        .filter(Order.id == order_id, OrderHistory.user_id == current_user.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
         .with_for_update()
         .first()
     )

@@ -29,6 +29,7 @@ from .sms import router as sms_router
 from .stock_alerts import router as stock_alerts_router
 from .support_chat import router as support_chat_router
 from .tracking import router as tracking_router
+from .user_addresses import router as user_addresses_router
 from .users import router as users_router
 
 router = APIRouter()
@@ -53,6 +54,7 @@ router.include_router(misc_router)
 router.include_router(merchant_onboarding_router)
 router.include_router(merchants_router)
 router.include_router(users_router)
+router.include_router(user_addresses_router)
 router.include_router(carts_router)
 router.include_router(orders_router)
 router.include_router(reviews_router)

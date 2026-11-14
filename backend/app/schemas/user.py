@@ -2,22 +2,14 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr
 
+from app.schemas.user_address import UserAddressResponse
+
 
 class UserBase(BaseModel):
     external_auth_id: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
+    name: str | None = None
     email: EmailStr
     phone_number: str | None = None
-    region: str | None = None
-    province: str | None = None
-    city: str | None = None
-    barangay: str | None = None
-    address: str | None = None
-    postal_code: str | None = None
-    # Map pin for the address (U1).
-    lat: float | None = None
-    lng: float | None = None
     created_at: datetime | None = None
     profile_picture_url: str | None = None
     notifications_preferences: dict | None = None
@@ -29,22 +21,13 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     # Identity fields (email, external_auth_id) are owned by Better Auth and
-    # only change through /auth/sync. Unknown fields are rejected so they
-    # can't be smuggled in.
+    # only change through its access tokens. Addresses have their own endpoints
+    # (/users/me/addresses). Unknown fields are rejected so they can't be
+    # smuggled in.
     model_config = ConfigDict(extra="forbid")
 
-    first_name: str | None = None
-    last_name: str | None = None
+    name: str | None = None
     phone_number: str | None = None
-    region: str | None = None
-    province: str | None = None
-    city: str | None = None
-    barangay: str | None = None
-    address: str | None = None
-    postal_code: str | None = None
-    # Map pin for the address (U1).
-    lat: float | None = None
-    lng: float | None = None
     notifications_preferences: dict | None = None
 
 
@@ -72,5 +55,7 @@ class UserResponse(UserBase):
     notifications_preferences: dict | None = None
     merchant: UserMerchantInfo | None = None
     cart: UserCartInfo | None = None
+    # Saved delivery addresses, default first.
+    addresses: list[UserAddressResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

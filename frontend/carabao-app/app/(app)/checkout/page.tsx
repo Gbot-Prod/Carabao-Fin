@@ -4,7 +4,7 @@ import axios from "axios";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
-import { cancelPaymentCheckout, createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
+import { cancelPaymentCheckout, createPaymentCheckout, defaultAddress, fetchMyAddresses, fetchMyCart, placeOrderFromCart, type CartItem, type UserAddress } from "@/util/api";
 import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { clearPendingPayments, loadPendingPayments, savePendingPayments } from "@/util/pendingPayments";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
@@ -41,14 +41,30 @@ export default function CheckoutPage() {
   const [notes, setNotes] = useState("");
   const [deliveryDate, setDeliveryDate] = useState(() => localIsoDate(1));
   const [deliveryWindow, setDeliveryWindow] = useState(TIME_WINDOWS[0]);
-  // Delivery pin (U1b): starts at the profile's saved pin, if any.
+  // Delivery pin (U1b): starts at the saved address's pin, if any.
   const [pin, setPin] = useState<Pin | null>(null);
+  // Saved addresses; the default one pre-fills the form.
+  const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
+  const [savedAddressId, setSavedAddressId] = useState<number | null>(null);
   const [addressForm, setAddressForm] = useState<LocationSelectsValue>({
     region: "",
     province: "",
     city: "",
     barangay: "",
   });
+
+  const applySavedAddress = (a: UserAddress | null) => {
+    setSavedAddressId(a?.id ?? null);
+    setStreet(a?.address ?? "");
+    setPostal(a?.postal_code ?? "");
+    setPin(a?.lat != null && a?.lng != null ? { lat: a.lat, lng: a.lng } : null);
+    setAddressForm({
+      region: a?.region ?? "",
+      province: a?.province ?? "",
+      city: a?.city ?? "",
+      barangay: a?.barangay ?? "",
+    });
+  };
 
   useEffect(() => {
     const loadCart = async () => {
@@ -62,25 +78,19 @@ export default function CheckoutPage() {
       }
     };
 
-    const loadProfile = async () => {
+    const loadAddresses = async () => {
       try {
-        const profile = await fetchMyProfile();
-        if (profile.address) setStreet(profile.address);
-        if (profile.postal_code) setPostal(profile.postal_code);
-        if (profile.lat != null && profile.lng != null) setPin({ lat: profile.lat, lng: profile.lng });
-        setAddressForm({
-          region: profile.region ?? "",
-          province: profile.province ?? "",
-          city: profile.city ?? "",
-          barangay: profile.barangay ?? "",
-        });
+        const addresses = await fetchMyAddresses();
+        setSavedAddresses(addresses);
+        const initial = defaultAddress(addresses);
+        if (initial) applySavedAddress(initial);
       } catch {
-        // leave address blank if profile fetch fails
+        // leave address blank if the fetch fails
       }
     };
 
     void loadCart();
-    void loadProfile();
+    void loadAddresses();
   }, []);
 
   useEffect(() => {
@@ -189,6 +199,25 @@ export default function CheckoutPage() {
         <section className={styles.formCard}>
           <div className={styles.block}>
             <h2>{t.checkout.deliveryInfo}</h2>
+            {savedAddresses.length > 1 && (
+              <label>
+                {t.checkout.savedAddress}
+                <select
+                  value={savedAddressId ?? ""}
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    applySavedAddress(savedAddresses.find((a) => a.id === id) ?? null);
+                  }}
+                >
+                  {savedAddresses.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {[a.label, a.address, a.city].filter(Boolean).join(" · ") || `#${a.id}`}
+                    </option>
+                  ))}
+                  <option value="">{t.checkout.newAddress}</option>
+                </select>
+              </label>
+            )}
             <label>
               {t.checkout.street}
               <input

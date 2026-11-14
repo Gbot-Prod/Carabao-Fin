@@ -15,8 +15,44 @@ DEFAULT_PERF_DATABASE_URL = (
     f"postgresql+psycopg://postgres@127.0.0.1:{LOCAL_PERF_PORT}/carabao_perf"
 )
 
-# Seeded accounts only exist in the throwaway perf database.
-PERF_PASSWORD = "PerfTest!2026"
+# Sign-in lives in BetterAuth, which the perf run doesn't start. The instrumented
+# app trusts this fixed key instead (instrumented_app.py), and the load test signs
+# its own tokens with it. Only ever trusted by the perf app, never the real one.
+PERF_ISSUER = "http://perf.carabao.local"
+PERF_AUDIENCE = "carabao-api"
+
+
+def perf_signing_key():
+    import hashlib
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    return Ed25519PrivateKey.from_private_bytes(
+        hashlib.sha256(b"carabao-perf-signing-key").digest()
+    )
+
+
+def perf_subject(email: str) -> str:
+    """The seeded external_auth_id for an email, and the token subject."""
+    return f"perf:{email}"
+
+
+def perf_token(email: str, ttl_seconds: int = 900) -> str:
+    import time
+
+    import jwt
+
+    now = int(time.time())
+    claims = {
+        "sub": perf_subject(email),
+        "email": email,
+        "emailVerified": True,
+        "iss": PERF_ISSUER,
+        "aud": PERF_AUDIENCE,
+        "iat": now,
+        "exp": now + ttl_seconds,
+    }
+    return jwt.encode(claims, perf_signing_key(), algorithm="EdDSA")
 
 
 def buyer_email(index: int) -> str:

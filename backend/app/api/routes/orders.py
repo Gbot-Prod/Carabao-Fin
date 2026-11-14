@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.dependencies import get_current_user, get_db
 from app.models.merchant import Merchant
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.produce import Produce
 from app.models.review import Review
 from app.models.statuses import OrderStatus
@@ -53,10 +52,8 @@ from app.services.service_area import (
 from ._order_helpers import (
     _extract_item_int,
     _to_int,
-    get_history_orders,
+    get_buyer_orders,
     get_or_create_cart,
-    get_or_create_order_history,
-    get_order_history,
     order_item_load,
     to_current_order_item,
     to_order_history_item,
@@ -93,7 +90,6 @@ def place_order_from_cart(
         )
 
     today = ph_today()
-    history = get_or_create_order_history(db, current_user.id)
     # Lock stock rows in id order so two carts sharing items can't deadlock.
     locked_produce = {
         produce.id: produce
@@ -192,7 +188,6 @@ def place_order_from_cart(
             )
         service_fee = merchant.delivery_price or 0
         order = Order(
-            order_history_id=history.id,
             user_id=current_user.id,
             merchant_id=merchant.id,
             status=OrderStatus.PENDING,
@@ -252,12 +247,8 @@ def get_my_order_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    history = get_order_history(db, current_user.id)
-    if history is None:
-        return []
-
     orders = sorted(
-        get_history_orders(db, history),
+        get_buyer_orders(db, current_user.id),
         key=lambda order: order.ordered_at or datetime.min,
         reverse=True,
     )
@@ -270,13 +261,9 @@ def delete_order_from_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    history = get_order_history(db, current_user.id)
-    if history is None:
-        raise HTTPException(status_code=404, detail="Order not found")
-
     order = (
         db.query(Order)
-        .filter(Order.id == order_id, Order.order_history_id == history.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
         .first()
     )
     if order is None:
@@ -308,9 +295,8 @@ def get_my_current_orders(
     orders = (
         db.query(Order)
         .options(*order_item_load())
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
         .filter(
-            OrderHistory.user_id == current_user.id,
+            Order.user_id == current_user.id,
             Order.status.in_(ACTIVE_ORDER_STATUSES),
         )
         .order_by(Order.id.asc())
@@ -329,8 +315,7 @@ def get_my_order(
     order = (
         db.query(Order)
         .options(*order_item_load())
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
-        .filter(Order.id == order_id, OrderHistory.user_id == current_user.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
         .first()
     )
     if order is None:
@@ -364,8 +349,7 @@ def confirm_order_received(
     """Buyer confirms delivery, which makes the order's earnings payable."""
     order = (
         db.query(Order)
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
-        .filter(Order.id == order_id, OrderHistory.user_id == current_user.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
         .with_for_update(of=Order)
         .first()
     )

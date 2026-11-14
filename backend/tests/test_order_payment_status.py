@@ -16,9 +16,8 @@ from tests.test_reviews import _client, buyer, db, merchant  # noqa: F401 - fixt
 
 
 def _order(db, merchant, buyer, status, *txn_statuses, total=500):
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,

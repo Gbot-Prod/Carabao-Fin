@@ -12,7 +12,7 @@ from app.api.routes.admin import _require_admin, admin_requires_two_factor
 from app.api.routes.chat import ChatMessageOut, _out
 from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.user import User
-from app.services import chat, notifications
+from app.services import better_auth_store, chat, notifications
 
 router = APIRouter(tags=["support"])
 
@@ -83,10 +83,17 @@ def _post(
 
 
 def _admins(db: Session) -> list[User]:
-    q = db.query(User).filter(User.is_admin.is_(True), User.suspended_at.is_(None))
-    if admin_requires_two_factor():
-        q = q.filter(User.two_factor_enabled.is_(True))
-    return q.all()
+    admins = (
+        db.query(User)
+        .filter(User.is_admin.is_(True), User.suspended_at.is_(None))
+        .all()
+    )
+    if not admin_requires_two_factor():
+        return admins
+    enabled = better_auth_store.two_factor_identities(
+        db, (a.external_auth_id for a in admins)
+    )
+    return [a for a in admins if a.external_auth_id in enabled]
 
 
 # ── The user's side ─────────────────────────────────────────────────────────
@@ -122,7 +129,7 @@ def write_to_support(
         db.add(conv)
         db.flush()
     message = _post(db, conv, current_user, "user", payload.body)
-    name = " ".join(p for p in (current_user.first_name, current_user.last_name) if p)
+    name = current_user.name
     for admin in _admins(db):
         if admin.id != current_user.id:
             notifications.notify(
@@ -189,10 +196,7 @@ def list_support_conversations(
             SupportConversationSummary(
                 conversation_id=conv.id,
                 user_id=conv.user_id,
-                user_name=" ".join(p for p in (user.first_name, user.last_name) if p)
-                or None
-                if user
-                else None,
+                user_name=(user.name or None) if user else None,
                 user_email=user.email if user else None,
                 last_message=last.body[:120] if last else None,
                 last_at=last.created_at if last else None,

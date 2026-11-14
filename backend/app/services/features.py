@@ -13,7 +13,6 @@ def two_factor_enabled() -> bool:
     """E8 two-step verification. Off unless TWO_FACTOR_ENABLED=true.
 
     Must match NEXT_PUBLIC_FEATURE_TWO_FACTOR on the web. When off, admins are
-    not required to have it and mobile sign-in doesn't refuse accounts that
-    turned it on earlier.
+    not required to have it.
     """
     return os.getenv("TWO_FACTOR_ENABLED", "false").strip().lower() in _TRUE

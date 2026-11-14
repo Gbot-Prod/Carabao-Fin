@@ -13,7 +13,6 @@ export async function GET(req: NextRequest) {
             email: "mock.user@carabao.local",
             name: "Mock User",
           },
-          backendAuthenticated: true,
         },
       });
     }
@@ -23,8 +22,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ session: null });
     }
 
-    const backendToken = req.cookies.get("backend_access_token")?.value;
-
     return NextResponse.json({
       session: {
         user: {
@@ -33,7 +30,6 @@ export async function GET(req: NextRequest) {
           name: session.user.name,
           role: session.user.role ?? null,
         },
-        backendAuthenticated: !!backendToken,
       },
     });
   } catch {

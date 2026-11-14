@@ -8,16 +8,14 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
-from app.models.mobile_credential import MobileCredential
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.payout_batch import PayoutBatch
 from app.models.shipment import Shipment
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.payment import AttachPaymentMethodRequest, SavedCard
 from app.schemas.user import UserResponse, UserUpdate
-from app.services import r2_service
+from app.services import better_auth_store, r2_service
 from app.services.order_status import ACTIVE_ORDER_STATUSES
 from app.services.paymongo import (
     attach_payment_method,
@@ -25,7 +23,6 @@ from app.services.paymongo import (
     get_or_create_paymongo_customer,
     list_customer_payment_methods,
 )
-from app.services.pinned_location import validate_pin
 
 router = APIRouter(tags=["users"])
 logger = logging.getLogger(__name__)
@@ -43,12 +40,10 @@ def update_current_user_profile(
     current_user: User = Depends(get_current_user),
 ):
     updates = user_update.model_dump(exclude_unset=True)
-    if "lat" in updates or "lng" in updates:
-        validate_pin(
-            updates.get("lat", current_user.lat), updates.get("lng", current_user.lng)
-        )
     for field, value in updates.items():
         setattr(current_user, field, value)
+    # Name and phone show in the BetterAuth session too; same transaction.
+    better_auth_store.update_profile(db, current_user.external_auth_id, updates)
 
     db.commit()
     db.refresh(current_user)
@@ -86,6 +81,9 @@ def upload_my_avatar(
         ) from exc
 
     current_user.profile_picture_url = url
+    better_auth_store.update_profile(
+        db, current_user.external_auth_id, {"profile_picture_url": url}
+    )
     db.commit()
     db.refresh(current_user)
     return current_user
@@ -153,9 +151,8 @@ def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
     """
     active_orders = (
         db.query(func.count(Order.id))
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
         .filter(
-            OrderHistory.user_id == user.id,
+            Order.user_id == user.id,
             Order.status.in_(ACTIVE_ORDER_STATUSES),
         )
         .scalar()
@@ -163,10 +160,7 @@ def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
     payment_records = (
         db.query(func.count(Transaction.id))
         .join(Order, Order.id == Transaction.order_id)
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
-        .filter(
-            (Transaction.user_id == user.id) | (OrderHistory.user_id == user.id)
-        )
+        .filter((Transaction.user_id == user.id) | (Order.user_id == user.id))
         .scalar()
     )
     blockers = {"active_orders": active_orders, "payment_records": payment_records}
@@ -230,10 +224,13 @@ def delete_my_account(
             {"merchant_id": None}, synchronize_session=False
         )
 
-    # MobileCredential has no cascade on the User side, delete it manually.
-    db.query(MobileCredential).filter(
-        MobileCredential.user_id == current_user.id
-    ).delete(synchronize_session=False)
+    # The buyer's own orders go with the account (formerly via the
+    # order_histories cascade). The blockers above leave only closed, unpaid ones.
+    db.query(Order).filter(Order.user_id == current_user.id).delete(
+        synchronize_session=False
+    )
 
+    # The login goes too, or the next sign-in would bring back an empty account.
+    better_auth_store.delete_identity(db, current_user.external_auth_id)
     db.delete(current_user)
     db.commit()

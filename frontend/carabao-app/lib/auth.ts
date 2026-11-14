@@ -1,7 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
-import { admin, twoFactor } from "better-auth/plugins";
+import { expo } from "@better-auth/expo";
+import { betterAuth, type BetterAuthPlugin } from "better-auth";
+import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import { admin, jwt, twoFactor } from "better-auth/plugins";
+import { AUTH_BASE_PATH, isBlockedAuthPath } from "@/lib/blocked-auth-paths";
 import { TWO_FACTOR_ENABLED } from "@/lib/features";
 import { Pool } from "pg";
 
@@ -78,8 +80,17 @@ const appBaseUrl =
   toOrigin(process.env.NEXT_PUBLIC_APP_URL) ||
   "http://localhost:3000";
 
-const trustedOrigins = Array.from(
-  new Set(
+// The mobile app (Expo) signs in here too. Its requests carry the app scheme as
+// their origin; custom schemes have no URL origin, so they're listed as-is.
+const MOBILE_APP_SCHEME = "carabaomobile";
+const mobileOrigins = [
+  `${MOBILE_APP_SCHEME}://`,
+  // Expo Go / dev builds on the LAN.
+  ...(process.env.NODE_ENV !== "production" ? ["exp://", "exp://**"] : []),
+];
+
+const trustedOrigins = [
+  ...new Set(
     [
       appBaseUrl,
       process.env.NEXT_PUBLIC_APP_URL,
@@ -89,13 +100,52 @@ const trustedOrigins = Array.from(
     ]
       .map(toOrigin)
       .filter((origin): origin is string => Boolean(origin))
-  )
-);
+  ),
+  ...mobileOrigins,
+];
 
-type SignupVerification = { channel: "email" | "phone"; identifier: string };
+// Access tokens for the FastAPI backend (jwt plugin). FastAPI verifies them with
+// the public keys at /api/auth/jwks and checks this issuer and audience; keep
+// BETTER_AUTH_JWT_AUDIENCE in step on the backend if this ever changes.
+const JWT_AUDIENCE = "carabao-api";
+
+// Closes the admin plugin's HTTP endpoints (see lib/blocked-auth-paths.ts). Ban
+// enforcement at sign-in runs in the plugin's session hook, so it keeps working;
+// server-side auth.api.* calls don't go through onRequest and are unaffected.
+const blockAdminEndpoints = (): BetterAuthPlugin => ({
+  id: "carabao-block-admin-endpoints",
+  onRequest: async (request) => {
+    if (isBlockedAuthPath(new URL(request.url).pathname)) {
+      return { response: new Response("Not Found", { status: 404 }) };
+    }
+  },
+});
+
+// Two-step verification is for admins only: nobody else can turn it on.
+// Turning it off stays open to everyone (e.g. a demoted admin).
+const adminOnlyTwoFactor = (): BetterAuthPlugin => ({
+  id: "carabao-admin-only-two-factor",
+  hooks: {
+    before: [
+      {
+        matcher: (ctx) => ctx.path === "/two-factor/enable",
+        handler: createAuthMiddleware(async (ctx) => {
+          const session = await getSessionFromCtx(ctx);
+          if (session?.user.role !== "admin") {
+            throw new APIError("FORBIDDEN", { message: "Two-step verification is only available for admin accounts." });
+          }
+        }),
+      },
+    ],
+  },
+});
+
+type SignupVerification ={ channel: "email" | "phone"; identifier: string };
 
 // Reads the pre-account OTP token issued by FastAPI's /auth/signup-verification/verify.
-// Mirrors read_token in backend/app/services/phone_verification.py.
+// Mirrors read_token in backend/app/services/phone_verification.py. The web sends
+// it as a cookie; the mobile app, which can't set cookies, as a header.
+export const SIGNUP_VERIFICATION_HEADER = "x-signup-verification";
 function readSignupVerification(token: string | null | undefined): SignupVerification | null {
   const secret = process.env.AUTH_SYNC_SHARED_SECRET;
   if (!token || !secret) return null;
@@ -117,10 +167,40 @@ function readSignupVerification(token: string | null | undefined): SignupVerific
 }
 
 export const auth = betterAuth({
-  // E8: TOTP two-step verification ("Carabao" is the name shown in authenticator apps).
+  // E8: TOTP two-step verification ("Carabao" is the name shown in authenticator apps),
+  // admins only (adminOnlyTwoFactor above).
   // Switched off for now (lib/features.ts): without the plugin, sign-in never asks
   // for a code, even for accounts that turned it on earlier.
-  plugins: TWO_FACTOR_ENABLED ? [admin(), twoFactor({ issuer: "Carabao" })] : [admin()],
+  plugins: [
+    blockAdminEndpoints(),
+    admin(),
+    ...(TWO_FACTOR_ENABLED ? [adminOnlyTwoFactor(), twoFactor({ issuer: "Carabao" })] : []),
+    expo(),
+    jwt({
+      jwt: {
+        issuer: appBaseUrl,
+        audience: JWT_AUDIENCE,
+        expirationTime: "15m",
+        // Only what the backend needs; it looks everything else up itself.
+        definePayload: ({ user }) => ({
+          email: user.email,
+          emailVerified: user.emailVerified,
+          name: user.name,
+          role: user.role ?? null,
+          twoFactorEnabled: Boolean(user.twoFactorEnabled),
+          phoneNumber: user.phoneNumber ?? null,
+          // A Google sign-in's photo; the backend uses it as the first avatar.
+          image: user.image ?? null,
+        }),
+      },
+    }),
+  ],
+  user: {
+    additionalFields: {
+      // The number a phone signup verified (set by the create hook below).
+      phoneNumber: { type: "string", required: false, input: false },
+    },
+  },
   databaseHooks: {
     user: {
       create: {
@@ -129,7 +209,9 @@ export const auth = betterAuth({
         // unverified and can't sign in until the emailed link is clicked.
         before: async (user, ctx) => {
           if (ctx?.path !== "/sign-up/email") return;
-          const verification = readSignupVerification(ctx.getCookie("pending_signup_verification"));
+          const verification = readSignupVerification(
+            ctx.getCookie("pending_signup_verification") ?? ctx.headers?.get(SIGNUP_VERIFICATION_HEADER)
+          );
           if (!verification) {
             throw new APIError("FORBIDDEN", { message: "Verify your email or phone number before signing up." });
           }
@@ -139,7 +221,7 @@ export const auth = betterAuth({
             }
             return { data: { ...user, emailVerified: true } };
           }
-          return { data: { ...user, emailVerified: false } };
+          return { data: { ...user, emailVerified: false, phoneNumber: verification.identifier } };
         },
       },
     },
@@ -167,7 +249,7 @@ export const auth = betterAuth({
   },
   baseURL: appBaseUrl,
   trustedOrigins,
-  basePath: "/api/auth",
+  basePath: AUTH_BASE_PATH,
   secret: process.env.BETTER_AUTH_SECRET,
   emailAndPassword: {
     enabled: true,
@@ -177,6 +259,13 @@ export const auth = betterAuth({
     // Whoever proves the inbox via a reset kicks out anyone who registered
     // the address first.
     revokeSessionsOnPasswordReset: true,
+    // Following the emailed link proves the inbox, so the reset also verifies the
+    // email. Accounts moved over from the old app login (no password yet) get in
+    // with a single reset.
+    onPasswordReset: async ({ user }) => {
+      if (user.emailVerified) return;
+      await pool.query('UPDATE "user" SET "emailVerified" = true, "updatedAt" = now() WHERE id = $1', [user.id]);
+    },
     // Forgot-password (E6): the link goes out through the backend's email service.
     sendResetPassword: async ({ user, url }) => {
       const sharedSecret = process.env.AUTH_SYNC_SHARED_SECRET;

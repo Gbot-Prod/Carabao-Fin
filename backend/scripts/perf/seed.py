@@ -18,13 +18,10 @@ common.use_perf_database()
 
 from sqlalchemy import insert, text  # noqa: E402
 
-from app.api.routes.auth import _bcrypt_hash  # noqa: E402
 from app.core.database import Base, engine  # noqa: E402
 from app.models.cart import Cart  # noqa: E402
 from app.models.merchant import Merchant  # noqa: E402
-from app.models.mobile_credential import MobileCredential  # noqa: E402
 from app.models.order import Order  # noqa: E402
-from app.models.order_history import OrderHistory  # noqa: E402
 from app.models.produce import Produce  # noqa: E402
 from app.models.shopPage import ShopPage  # noqa: E402
 from app.models.transaction import Transaction  # noqa: E402
@@ -61,9 +58,8 @@ def build_users(n_buyers: int, n_merchants: int, now: datetime) -> list[dict]:
             "id": user_id,
             # Phone numbers stay NULL so no order update can ever trigger an SMS.
             "email": email,
-            "external_auth_id": f"mobile:perf-{user_id}",
-            "first_name": "Perf",
-            "last_name": f"User{user_id}",
+            "external_auth_id": common.perf_subject(email),
+            "name": f"Perf User{user_id}",
             "address": f"{user_id} Sampaguita St",
             "city": CITIES[user_id % len(CITIES)],
             "notifications_preferences": {},
@@ -196,7 +192,6 @@ def build_orders(
         orders.append(
             {
                 "id": order_id,
-                "order_history_id": buyer_id,
                 "user_id": buyer_id,
                 "merchant_id": merchant["id"],
                 "status": status,
@@ -246,38 +241,12 @@ def main() -> None:
     orders, transactions = build_orders(
         rng, args.orders, args.buyers, produce, merchants, now
     )
-    password_hash = _bcrypt_hash(common.PERF_PASSWORD)
 
     Base.metadata.create_all(bind=engine)
     tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     rows_by_model = [
         (User, users),
-        (
-            MobileCredential,
-            [
-                {
-                    "id": u["id"],
-                    "user_id": u["id"],
-                    "password_hash": password_hash,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-                for u in users
-            ],
-        ),
         (Cart, [{"id": u["id"], "user_id": u["id"], "items": []} for u in users]),
-        (
-            OrderHistory,
-            [
-                {
-                    "id": i,
-                    "user_id": i,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-                for i in range(1, args.buyers + 1)
-            ],
-        ),
         (Merchant, merchants),
         (
             ShopPage,

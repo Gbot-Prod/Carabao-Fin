@@ -35,12 +35,6 @@
   gap: 14px;
 }
 
-.nameRow {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-}
-
 .label {
   display: block;
   margin-bottom: 5px;

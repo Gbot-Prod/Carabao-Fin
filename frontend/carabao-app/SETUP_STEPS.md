@@ -15,7 +15,6 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 BETTER_AUTH_SECRET=your-random-secret-here
 MOCK_AUTH_SESSION=false
 AUTH_SYNC_SHARED_SECRET=your-shared-secret-between-next-and-fastapi
-FASTAPI_JWT_SECRET=your-fastapi-jwt-signing-secret
 ```
 
 ### Optional: Enable mock auth session for UI testing
@@ -33,12 +32,17 @@ When enabled:
 
 Set `MOCK_AUTH_SESSION=false` to return to normal Better Auth behavior.
 
-### FastAPI as auth source of truth
+### Better Auth is the only identity provider
 
-For Better Auth -> FastAPI sync and FastAPI-issued API token flow:
+Web and mobile both sign in through Better Auth (`/api/auth/*`). Its jwt plugin
+issues 15-minute EdDSA access tokens; FastAPI verifies them with the public keys
+at `/api/auth/jwks` and creates the backend user row on first use.
 
-- `AUTH_SYNC_SHARED_SECRET` must be the same value in Next.js and FastAPI env.
-- `FASTAPI_JWT_SECRET` must be set in FastAPI env to issue/verify backend access tokens.
+- FastAPI env: `BETTER_AUTH_URL` = this app's origin (e.g. `http://localhost:3000`).
+  It is the token issuer and where the keys are fetched from.
+- `AUTH_SYNC_SHARED_SECRET` must be the same value in Next.js and FastAPI env
+  (sign-up verification codes and the email relay still use it).
+- Run `alembic upgrade head` in `backend/` (creates the `jwks` table).
 
 Generate a random secret:
 

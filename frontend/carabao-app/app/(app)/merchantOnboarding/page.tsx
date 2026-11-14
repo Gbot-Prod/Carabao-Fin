@@ -8,6 +8,7 @@ import styles from "./page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
 import {
+  defaultAddress,
   fetchMyProfile,
   submitMyMerchantOnboarding,
   sendOtp,
@@ -103,14 +104,15 @@ export default function MerchantOnboardingPage() {
     const prefill = async () => {
       try {
         const p = await fetchMyProfile();
+        const a = defaultAddress(p.addresses);
         setForm((prev) => ({
           ...prev,
           contact_email: prev.contact_email || p.email || "",
           contact_number: prev.contact_number || (p.phone_number?.replace(/^\+63\s?/, "") ?? ""),
-          address: prev.address || (p.address ?? ""),
-          city: prev.city || (p.city ?? ""),
-          province: prev.province || (p.province ?? ""),
-          postal_code: prev.postal_code || (p.postal_code ?? ""),
+          address: prev.address || (a?.address ?? ""),
+          city: prev.city || (a?.city ?? ""),
+          province: prev.province || (a?.province ?? ""),
+          postal_code: prev.postal_code || (a?.postal_code ?? ""),
         }));
       } catch {
         // No prefill on error.

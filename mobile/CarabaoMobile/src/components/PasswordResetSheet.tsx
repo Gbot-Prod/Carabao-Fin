@@ -1,79 +1,52 @@
 // src/components/PasswordResetSheet.tsx
-// Forgot password on mobile (E6): email a 6-digit code, then set a new password.
-// Same backend as the app's sign-in; it also updates the web password.
+// Forgot password on mobile (E6): BetterAuth emails a reset link, the same one
+// the website sends. The new password is chosen on the website and works in
+// both places; then the user signs in here.
 import React, { useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { request } from '../lib/api';
+import { authClient } from '../lib/authClient';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 
 type Props = {
   visible: boolean;
   initialEmail: string;
   onClose: () => void;
-  /** Called after the password changed, with the email to sign in with. */
+  /** Called once the link is on its way, with the email it went to. */
   onDone: (email: string) => void;
 };
 
-const MIN_LENGTH = 8;
-
 export function PasswordResetSheet({ visible, initialEmail, onClose, onDone }: Props) {
-  const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState(initialEmail);
-  const [code, setCode] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const reset = () => {
-    setStep('email');
-    setCode('');
-    setPassword('');
-    setConfirm('');
-    setError('');
-  };
-
   const close = () => {
-    reset();
+    setError('');
     onClose();
   };
 
-  const sendCode = async () => {
-    if (!email.trim()) return setError('Enter your account email.');
+  const send = async () => {
+    const address = email.trim();
+    if (!address) return setError('Enter your account email.');
     setBusy(true);
     setError('');
     try {
-      await request('/auth/mobile/password-reset/request', null, {
-        method: 'POST',
-        body: JSON.stringify({ email: email.trim() }),
+      // Relative: BetterAuth builds the link on the website's own address.
+      // It answers the same whether or not the email has an account.
+      const { error: err } = await authClient.requestPasswordReset({
+        email: address,
+        redirectTo: '/reset-password',
       });
-      setStep('code');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send the code. Try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const save = async () => {
-    if (!/^\d{6}$/.test(code.trim())) return setError('Enter the 6-digit code from the email.');
-    if (password.length < MIN_LENGTH) return setError(`Use at least ${MIN_LENGTH} characters.`);
-    if (password !== confirm) return setError('The passwords do not match.');
-    setBusy(true);
-    setError('');
-    try {
-      await request('/auth/mobile/password-reset/confirm', null, {
-        method: 'POST',
-        body: JSON.stringify({ email: email.trim(), otp: code.trim(), new_password: password }),
-      });
-      const done = email.trim();
-      reset();
-      onDone(done);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not reset the password.');
+      if (err) {
+        setError(err.status === 429 ? 'Too many requests. Wait a few minutes and try again.' : err.message || 'Could not send the reset email.');
+        return;
+      }
+      onDone(address);
+    } catch {
+      setError('Could not reach Carabao. Check your connection.');
     } finally {
       setBusy(false);
     }
@@ -85,74 +58,25 @@ export function PasswordResetSheet({ visible, initialEmail, onClose, onDone }: P
         <View style={styles.sheet}>
           <Text style={styles.title}>Reset your password</Text>
           <Text style={styles.sub}>
-            {step === 'email'
-              ? "Enter your account's email and we'll send you a 6-digit code."
-              : `If ${email.trim()} has an account, a code is on its way. Enter it with your new password.`}
+            Enter your account&apos;s email and we&apos;ll send you a link to choose a new password.
           </Text>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {step === 'email' ? (
-            <TextInput
-              style={styles.input}
-              placeholder="Email address"
-              placeholderTextColor={Colors.textLight}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-            />
-          ) : (
-            <>
-              <TextInput
-                style={styles.input}
-                placeholder="6-digit code"
-                placeholderTextColor={Colors.textLight}
-                value={code}
-                onChangeText={setCode}
-                keyboardType="number-pad"
-                maxLength={6}
-                autoComplete="one-time-code"
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="New password"
-                placeholderTextColor={Colors.textLight}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                maxLength={72}
-                autoComplete="password-new"
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm new password"
-                placeholderTextColor={Colors.textLight}
-                value={confirm}
-                onChangeText={setConfirm}
-                secureTextEntry
-                maxLength={72}
-              />
-            </>
-          )}
+          <TextInput
+            style={styles.input}
+            placeholder="Email address"
+            placeholderTextColor={Colors.textLight}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+          />
 
-          <TouchableOpacity
-            style={[styles.primary, busy && styles.disabled]}
-            onPress={step === 'email' ? sendCode : save}
-            disabled={busy}
-          >
-            {busy ? (
-              <ActivityIndicator color={Colors.white} />
-            ) : (
-              <Text style={styles.primaryText}>{step === 'email' ? 'Send code' : 'Save new password'}</Text>
-            )}
+          <TouchableOpacity style={[styles.primary, busy && styles.disabled]} onPress={send} disabled={busy}>
+            {busy ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.primaryText}>Send reset link</Text>}
           </TouchableOpacity>
-          {step === 'code' && (
-            <TouchableOpacity onPress={sendCode} disabled={busy}>
-              <Text style={styles.link}>Send a new code</Text>
-            </TouchableOpacity>
-          )}
           <TouchableOpacity onPress={close}>
             <Text style={styles.link}>Cancel</Text>
           </TouchableOpacity>

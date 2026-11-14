@@ -27,6 +27,7 @@ const fil: Strings = {
     signIn: 'Mag-sign in',
     loading: 'Naglo-load...',
     openProfile: 'Buksan ang profile',
+    help: 'Tulong at Suporta',
   },
   auth: {
     logoAlt: 'Logo ng Carabao',
@@ -149,6 +150,8 @@ const fil: Strings = {
     title: 'Checkout',
     subtitle: 'Kumpirmahin ang mga detalye ng delivery bago magbayad.',
     deliveryInfo: 'Impormasyon sa Delivery',
+    savedAddress: 'Naka-save na address',
+    newAddress: 'Maglagay ng ibang address',
     street: 'Kalye / Numero ng Bahay',
     postal: 'Postal code',
     schedule: 'Iskedyul ng Delivery',

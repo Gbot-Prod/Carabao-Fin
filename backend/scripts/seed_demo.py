@@ -58,13 +58,13 @@ from app.models import (  # noqa: E402,F401
 from app.models.merchant import Merchant  # noqa: E402
 from app.models.merchant_application import MerchantApplication  # noqa: E402
 from app.models.order import Order  # noqa: E402
-from app.models.order_history import OrderHistory  # noqa: E402
 from app.models.produce import Produce  # noqa: E402
 from app.models.review import Review  # noqa: E402
 from app.models.shopPage import ShopPage  # noqa: E402
 from app.models.statuses import OrderStatus, TransactionStatus  # noqa: E402
 from app.models.transaction import Transaction  # noqa: E402
 from app.models.user import User, normalize_email  # noqa: E402
+from app.models.user_address import UserAddress  # noqa: E402
 
 DEMO_DOMAIN = "demo.carabao.ph"
 PLATFORM_FEE_RATE = 0.02
@@ -235,7 +235,7 @@ def wipe(db, hub_email: str | None) -> None:
             synchronize_session=False
         )
     for u in demo_users:
-        db.delete(u)  # cascades cart / order_history
+        db.delete(u)  # cascades cart
     db.commit()
     print(f"Wiped {len(demo_users)} demo users, {len(merchant_ids)} merchants, {len(order_ids)} orders.")
 
@@ -243,18 +243,17 @@ def wipe(db, hub_email: str | None) -> None:
 # --------------------------------------------------------------------------- builders
 
 
-def make_user(db, email, first, last, idx, **extra) -> User:
+def make_user(db, email, first, last, idx, **address) -> User:
+    """Address fields, if any, become the user's default saved address."""
     user = User(
         email=normalize_email(email),
-        first_name=first,
-        last_name=last,
+        name=f"{first} {last}",
         phone_number=phone(idx),
         notifications_preferences={},
-        **extra,
     )
+    if address:
+        user.addresses.append(UserAddress(label="Home", is_default=True, **address))
     db.add(user)
-    db.flush()
-    db.add(OrderHistory(user_id=user.id))
     db.flush()
     return user
 
@@ -347,16 +346,16 @@ def make_order(db, buyer, merchant, produce_list, status, ordered_at, *, address
     items, subtotal = order_items(merchant, produce_list, RNG.randint(1, 3))
     fee = merchant.delivery_price or 0
     total = subtotal + fee
+    saved = buyer.default_address
     order = Order(
-        order_history_id=buyer.order_history.id,
         user_id=buyer.id,
         merchant_id=merchant.id,
         status=status,
         total_price=total,
         items=items,
-        delivery_address=address or buyer.address,
-        delivery_lat=(pin or (buyer.lat, buyer.lng))[0],
-        delivery_lng=(pin or (buyer.lat, buyer.lng))[1],
+        delivery_address=address or saved.address,
+        delivery_lat=(pin or (saved.lat, saved.lng))[0],
+        delivery_lng=(pin or (saved.lat, saved.lng))[1],
         requested_delivery_date=(ordered_at + timedelta(days=1)).date(),
         delivery_window=RNG.choice(WINDOWS),
         notes="Please call upon arrival.",
@@ -385,7 +384,6 @@ def make_order(db, buyer, merchant, produce_list, status, ordered_at, *, address
             paid_at=ordered_at + timedelta(minutes=2),
         )
     )
-    buyer.order_history.last_order_at = ordered_at
     return order
 
 

@@ -15,9 +15,7 @@ from app.models import (  # noqa: F401
     merchant,
     merchant_application,
     merchant_payout,
-    mobile_credential,
     order,
-    order_history,
     payout_batch,
     produce,
     review,
@@ -25,6 +23,7 @@ from app.models import (  # noqa: F401
     shopPage,
     transaction,
     user,
+    user_address,
 )
 from app.services.chat import send_unread_merchant_sms
 from app.services.order_reservations import (

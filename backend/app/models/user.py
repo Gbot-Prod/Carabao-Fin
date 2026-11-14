@@ -3,8 +3,8 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
-    Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -13,6 +13,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.models.user_address import UserAddress
 
 
 def normalize_email(value: str) -> str:
@@ -20,13 +21,24 @@ def normalize_email(value: str) -> str:
     return value.strip().lower()
 
 
+def split_name(full_name: str | None) -> tuple[str | None, str | None]:
+    """(first, rest) for services that want two name fields, e.g. PayMongo."""
+    parts = (full_name or "").split()
+    if not parts:
+        return None, None
+    return parts[0], " ".join(parts[1:]) or None
+
+
 class User(Base):
     __tablename__ = "backend_users"
 
     id = Column(Integer, primary_key=True, index=True)
     external_auth_id = Column(String, unique=True, index=True, nullable=True)
-    first_name = Column(String, index=True, nullable=True)
-    last_name = Column(String, index=True, nullable=True)
+    # Full name as one field, the same shape as BetterAuth's "user".name (kept
+    # in step by PATCH /users/me).
+    name = Column(String, index=True, nullable=True)
+    # Stored normalized (normalize_email); also unique case-insensitively via
+    # ix_backend_users_email_lower below (migration b7e3c1d9a420).
     email = Column(String, unique=True, index=True, nullable=False)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -38,24 +50,14 @@ class User(Base):
         nullable=False,
     )
     phone_number = Column(String, unique=True, index=True, nullable=True)
-    region = Column(String, index=True, nullable=True)
-    province = Column(String, index=True, nullable=True)
-    city = Column(String, index=True, nullable=True)
-    barangay = Column(String, index=True, nullable=True)
-    address = Column(String, index=True, nullable=True)
-    postal_code = Column(String, index=True, nullable=True)
-    # Map pin for the saved address (U1); routing prefers it over geocoding.
-    lat = Column(Float, nullable=True)
-    lng = Column(Float, nullable=True)
     notifications_preferences = Column(JSON, nullable=False, default=dict)
 
     profile_picture_url = Column(String, nullable=True)
     paymongo_customer_id = Column(String, unique=True, index=True, nullable=True)
     is_admin = Column(Boolean, nullable=False, default=False)
-    # Mirrors BetterAuth's twoFactorEnabled, set at /auth/sync (E8c).
-    two_factor_enabled = Column(
-        Boolean, nullable=False, default=False, server_default="false"
-    )
+    # Not a column: BetterAuth's "user"."twoFactorEnabled", read live by
+    # better_auth_store.load_two_factor (for admins in get_current_user, E8c).
+    two_factor_enabled = False
     # Set by an admin (A3). A suspended user can't sign in or call the API, and
     # a suspended merchant's shop and listings are hidden from buyers.
     suspended_at = Column(DateTime(timezone=True), nullable=True, index=True)
@@ -70,9 +72,22 @@ class User(Base):
     cart = relationship(
         "Cart", back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
-    order_history = relationship(
-        "OrderHistory",
+    # Saved delivery addresses (user_addresses), default first.
+    addresses = relationship(
+        UserAddress,
         back_populates="user",
-        uselist=False,
         cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by=(UserAddress.is_default.desc(), UserAddress.id.asc()),
+    )
+
+    @property
+    def default_address(self) -> UserAddress | None:
+        """The default saved address, else the oldest one, else None."""
+        return next((a for a in self.addresses if a.is_default), None) or (
+            self.addresses[0] if self.addresses else None
+        )
+
+    __table_args__ = (
+        Index("ix_backend_users_email_lower", func.lower(email), unique=True),
     )

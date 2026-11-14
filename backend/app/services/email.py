@@ -84,22 +84,3 @@ def send_password_reset_email(to: str, reset_url: str) -> None:
             """,
         }
     )
-
-
-def send_password_reset_otp_email(to: str, otp: str) -> None:
-    """Mobile reset code (E6)."""
-    resend.Emails.send(
-        {
-            "from": FROM_ADDRESS,
-            "to": [to],
-            "subject": "Your Carabao password reset code",
-            "html": f"""
-                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#f7fcf8;border-radius:12px">
-                  <h2 style="color:#173d25;margin:0 0 8px">Reset your password</h2>
-                  <p style="color:#4a5e4d;margin:0 0 24px">Enter this code in the Carabao app to choose a new password:</p>
-                  <p style="font-size:28px;letter-spacing:0.2em;font-weight:700;color:#173d25;margin:0 0 24px">{escape(otp)}</p>
-                  <p style="color:#8a9a8c;font-size:12px;margin:0">This code expires in 10 minutes. If you didn't ask for a reset, you can ignore this email.</p>
-                </div>
-            """,
-        }
-    )

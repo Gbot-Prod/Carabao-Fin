@@ -7,7 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
 import { useRouter } from 'expo-router';
-import { api, type ApiUserProfile } from '../lib/api';
+import { api, defaultAddress, type ApiUserProfile } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 
@@ -60,12 +60,11 @@ function ProfileScreenContent() {
     void api.users.me(token).then(setProfile).catch(() => { });
   }, [token]);
 
-  const firstName = profile?.first_name ?? user?.firstName ?? '';
-  const lastName = profile?.last_name ?? user?.lastName ?? '';
   const email = profile?.email ?? user?.email ?? '';
-  const displayName = [firstName, lastName].filter(Boolean).join(' ') || email.split('@')[0] || 'User';
+  const displayName = profile?.name || user?.name || email.split('@')[0] || 'User';
   const phone = profile?.phone_number;
-  const address = [profile?.address, profile?.city, profile?.country].filter(Boolean).join(', ');
+  const saved = defaultAddress(profile?.addresses);
+  const address = [saved?.address, saved?.city, saved?.province].filter(Boolean).join(', ');
   const memberSince = profile?.created_at
     ? new Date(profile.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long' })
     : null;

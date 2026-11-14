@@ -23,11 +23,12 @@ def _env(monkeypatch):
 def sent(monkeypatch):
     messages = []
 
-    def fake_send(*, number, message, **_):
-        messages.append((number, message))
-        return [{"status": "Queued"}]
+    def fake_send(*, number, message, code, **_):
+        assert "{otp}" in message  # Semaphore fills the placeholder, not us
+        messages.append((number, message.replace("{otp}", code)))
+        return code
 
-    monkeypatch.setattr(sms, "semaphore_send_sms", fake_send)
+    monkeypatch.setattr(sms, "semaphore_send_otp", fake_send)
     return messages
 
 
@@ -116,14 +117,23 @@ def test_semaphore_error_details_not_leaked(monkeypatch):
     def failing_send(**_):
         raise sms.SemaphoreError("Semaphore error: {'apikey': 'secret-ish'}")
 
-    monkeypatch.setattr(sms, "semaphore_send_sms", failing_send)
+    monkeypatch.setattr(sms, "semaphore_send_otp", failing_send)
     resp = _client().post("/sms/otp/send", json={"number": NUMBER})
     assert resp.status_code == 502
     assert "apikey" not in resp.text
 
 
-def test_signup_token_still_readable_by_auth_route(sent):
-    from app.api.routes.auth import _verified_signup_identifier
+def test_stores_code_semaphore_reports_delivered(monkeypatch):
+    monkeypatch.setattr(sms, "semaphore_send_otp", lambda **_: "424242")
+    client = _client()
+    client.post("/sms/otp/send", json={"number": NUMBER})
+    resp = client.post("/sms/otp/verify", json={"number": NUMBER, "otp": "424242"})
+    assert resp.status_code == 200
+
+
+def test_signup_token_round_trips(sent):
+    # lib/auth.ts reads the same token in BetterAuth's sign-up hook.
+    from app.services.phone_verification import read_token
 
     client = _client(user_id=None)
     body = {"channel": "phone", "identifier": NUMBER}
@@ -133,4 +143,5 @@ def test_signup_token_still_readable_by_auth_route(sent):
     )
     assert resp.status_code == 200
     token = resp.json()["verification_token"]
-    assert _verified_signup_identifier(token) == ("phone", NORMALIZED)
+    data = read_token(token)
+    assert (data["channel"], data["identifier"]) == ("phone", NORMALIZED)

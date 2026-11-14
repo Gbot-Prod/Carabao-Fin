@@ -1,4 +1,6 @@
-"""Per-IP and per-identifier rate limits for sign-in, sign-up and OTP (E7).
+"""Per-IP and per-identifier rate limits for the OTP endpoints (E7).
+
+Sign-in and sign-up are limited by BetterAuth (lib/auth.ts rateLimit).
 
 A sliding window held in process memory: enough for one API instance. With
 several workers or instances each keeps its own counts, so the effective limit
@@ -30,8 +32,6 @@ class Limit:
 LIMITS: dict[str, tuple[Limit, Limit]] = {
     "otp_send": (Limit(20, 900), Limit(5, 900)),
     "otp_verify": (Limit(30, 900), Limit(10, 900)),
-    "sign_in": (Limit(30, 900), Limit(10, 900)),
-    "sign_up": (Limit(10, 3600), Limit(5, 3600)),
 }
 
 _hits: dict[str, deque[float]] = {}

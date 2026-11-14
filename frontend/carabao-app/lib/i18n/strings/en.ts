@@ -18,6 +18,7 @@ const en = {
     signIn: 'Sign In',
     loading: 'Loading...',
     openProfile: 'Open profile',
+    help: 'Help & Support',
   },
   auth: {
     logoAlt: 'Carabao Logo',
@@ -140,6 +141,8 @@ const en = {
     title: 'Checkout',
     subtitle: 'Confirm your delivery details before paying.',
     deliveryInfo: 'Delivery Information',
+    savedAddress: 'Saved address',
+    newAddress: 'Enter a different address',
     street: 'Street / House No.',
     postal: 'Postal code',
     schedule: 'Delivery Schedule',

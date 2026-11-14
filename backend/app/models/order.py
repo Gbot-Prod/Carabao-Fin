@@ -21,9 +21,6 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    order_history_id = Column(
-        Integer, ForeignKey("order_histories.id"), nullable=False, index=True
-    )
     user_id = Column(
         Integer,
         ForeignKey("backend_users.id", ondelete="SET NULL"),
@@ -61,7 +58,6 @@ class Order(Base):
     delivery_fee = Column(Integer, nullable=False, default=0, server_default="0")
     image = Column(String, nullable=True)
 
-    order_history = relationship("OrderHistory", back_populates="orders")
     user = relationship("User")
     merchant = relationship("Merchant", back_populates="orders")
     shipment = relationship("Shipment", back_populates="orders")

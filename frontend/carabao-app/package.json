@@ -7,11 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test util/navigation.test.ts",
+    "test": "node --test util/navigation.test.ts lib/blocked-auth-paths.test.ts",
     "auth:migrate": "node scripts/better-auth-migrate.mjs",
     "auth:migrate:apply": "node scripts/better-auth-migrate.mjs --apply"
   },
   "dependencies": {
+    "@better-auth/expo": "^1.6.5",
     "@turf/along": "^7.3.5",
     "@turf/length": "^7.3.5",
     "axios": "^1.13.6",

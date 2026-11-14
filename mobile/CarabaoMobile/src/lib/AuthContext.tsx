@@ -1,113 +1,156 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { request } from './api';
+import { ApiError, request } from './api';
+import { authClient, clearAccessToken, getAccessToken } from './authClient';
 import { awayTooLong, idleTimeoutMs } from './idle';
 
-const TOKEN_KEY = 'carabao_token';
-const USER_KEY = 'carabao_user';
-const TOKEN_EXPIRY_KEY = 'carabao_token_expiry';
 // When the app last left the foreground; also survives the app being killed (E5).
 const LEFT_AT_KEY = 'carabao_left_at';
+// The old app login kept a 7-day token here; cleared on start so none lingers.
+const LEGACY_KEYS = ['carabao_token', 'carabao_user', 'carabao_token_expiry'];
+
+// Sent with sign-up so BetterAuth knows the email was verified with a code.
+// Must match SIGNUP_VERIFICATION_HEADER in the web's lib/auth.ts.
+const SIGNUP_VERIFICATION_HEADER = 'x-signup-verification';
 
 interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  name: string;
   role?: 'user' | 'merchant' | 'admin';
 }
 
-interface MobileAuthResponse {
-  ok: boolean;
-  user_id: number;
+interface MeResponse {
+  id: number;
   email: string;
-  first_name?: string | null;
-  last_name?: string | null;
-  role?: string;
-  access_token: string;
-  expires_in?: number;
+  name?: string | null;
+  is_admin?: boolean;
+}
+
+/** The account uses two-step verification, which the app can't ask for yet (E8d). */
+export class TwoFactorRequiredError extends Error {
+  constructor() {
+    super("This account uses two-step verification, which the app doesn't support yet. Please sign in on the Carabao website.");
+    this.name = 'TwoFactorRequiredError';
+  }
 }
 
 interface AuthContextType {
   user: User | null;
+  /** A current backend token while signed in, else null. Pass it to request(). */
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  tokenExpiry: number | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
+  /** `verificationToken` comes from /auth/signup-verification/verify for this email. */
+  signUp: (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    verificationToken: string,
+  ) => Promise<void>;
   signOut: () => Promise<void>;
-  validateToken: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function buildUser(data: MobileAuthResponse): User {
+function buildUser(me: MeResponse): User {
   return {
-    id: String(data.user_id),
-    email: data.email,
-    firstName: data.first_name ?? '',
-    lastName: data.last_name ?? '',
-    role: (data.role as 'user' | 'merchant' | 'admin') ?? 'user',
+    id: String(me.id),
+    email: me.email,
+    name: me.name ?? '',
+    role: me.is_admin ? 'admin' : 'user',
   };
+}
+
+type BetterAuthError = { code?: string; message?: string; status?: number } | null | undefined;
+
+function signInMessage(error: BetterAuthError): string {
+  switch (error?.code) {
+    case 'INVALID_EMAIL_OR_PASSWORD':
+      return 'Invalid email or password. Made your account in the app before? Use "Forgot password?" to set a new one.';
+    case 'EMAIL_NOT_VERIFIED':
+      return "Verify your email first: we've sent you a link. Open it, then sign in here.";
+    case 'BANNED_USER':
+      return 'This account has been suspended. Contact Carabao support.';
+    default:
+      if (error?.status === 429) return 'Too many attempts. Wait a few minutes and try again.';
+      return error?.message || 'Sign-in failed. Please try again.';
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [tokenExpiry, setTokenExpiry] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore persisted session on mount
+  const clearLocal = useCallback(() => {
+    clearAccessToken();
+    setToken(null);
+    setUser(null);
+    void AsyncStorage.removeItem(LEFT_AT_KEY).catch(() => {});
+  }, []);
+
+  const signOut = useCallback(async () => {
+    clearLocal();
+    await authClient.signOut().catch(() => {});
+  }, [clearLocal]);
+
+  // Fetch a token for the current session and the backend profile it belongs to.
+  // The first call also creates the backend row for a new account.
+  const loadUser = useCallback(async () => {
+    const accessToken = await getAccessToken({ forceRefresh: true });
+    if (!accessToken) throw new Error('Sign-in failed. Please try again.');
+    try {
+      const me = await request<MeResponse>('/auth/me', accessToken);
+      setToken(accessToken);
+      setUser(buildUser(me));
+    } catch (err) {
+      // e.g. suspended (403): don't leave a half-signed-in session behind.
+      await signOut();
+      throw err;
+    }
+  }, [signOut]);
+
+  // Restore the session on launch.
   useEffect(() => {
     const restore = async () => {
       try {
-        const [savedToken, savedUserJson, savedExpiry, savedLeftAt] = await Promise.all([
-          AsyncStorage.getItem(TOKEN_KEY),
-          AsyncStorage.getItem(USER_KEY),
-          AsyncStorage.getItem(TOKEN_EXPIRY_KEY),
-          AsyncStorage.getItem(LEFT_AT_KEY),
-        ]);
-        if (savedToken && savedUserJson) {
-          const expiry = savedExpiry ? parseInt(savedExpiry, 10) : null;
-          const leftAt = savedLeftAt ? parseInt(savedLeftAt, 10) : null;
-          // Valid token, and the app wasn't closed for longer than the idle limit.
-          if (expiry && expiry > Date.now() && !awayTooLong(leftAt, Date.now(), idleTimeoutMs())) {
-            setToken(savedToken);
-            setUser(JSON.parse(savedUserJson) as User);
-            setTokenExpiry(expiry);
-          } else {
-            // Token expired, clear everything
-            await clearAuth();
-          }
+        void AsyncStorage.multiRemove(LEGACY_KEYS).catch(() => {});
+        const leftAtRaw = await AsyncStorage.getItem(LEFT_AT_KEY).catch(() => null);
+        const leftAt = leftAtRaw ? parseInt(leftAtRaw, 10) : null;
+        if (awayTooLong(leftAt, Date.now(), idleTimeoutMs())) {
+          await signOut();
+          return;
         }
+        const { data } = await authClient.getSession();
+        if (data?.session) await loadUser();
       } catch {
-        // Storage read failed — start unauthenticated
+        // Offline or the session ended: start signed out.
+        clearLocal();
       } finally {
         setIsLoading(false);
       }
     };
     void restore();
-  }, []);
+  }, [clearLocal, loadUser, signOut]);
 
-  const clearAuth = async () => {
-    setToken(null);
-    setUser(null);
-    setTokenExpiry(null);
-    await Promise.all([
-      AsyncStorage.removeItem(TOKEN_KEY),
-      AsyncStorage.removeItem(USER_KEY),
-      AsyncStorage.removeItem(TOKEN_EXPIRY_KEY),
-      AsyncStorage.removeItem(LEFT_AT_KEY),
-    ]);
-  };
+  // Keep the context token current, so screens that hold it never pass a stale one.
+  useEffect(() => {
+    if (!user) return;
+    const id = setInterval(() => {
+      void getAccessToken().then((t) => t && setToken(t));
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [user]);
 
   // E5: leaving the app records the time; coming back after the idle limit
   // signs out, so the next protected screen sends the user to sign in.
   const leftAtRef = useRef<number | null>(null);
   const signedInRef = useRef(false);
-  signedInRef.current = !!token;
+  signedInRef.current = !!user;
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (!signedInRef.current) return;
@@ -120,56 +163,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const leftAt = leftAtRef.current;
         leftAtRef.current = null;
         void AsyncStorage.removeItem(LEFT_AT_KEY).catch(() => {});
-        if (awayTooLong(leftAt, Date.now(), idleTimeoutMs())) void clearAuth();
+        if (awayTooLong(leftAt, Date.now(), idleTimeoutMs())) void signOut();
       }
     });
     return () => sub.remove();
-  }, []);
-
-  const persist = async (t: string, u: User, expiry: number) => {
-    await Promise.all([
-      AsyncStorage.setItem(TOKEN_KEY, t),
-      AsyncStorage.setItem(USER_KEY, JSON.stringify(u)),
-      AsyncStorage.setItem(TOKEN_EXPIRY_KEY, String(expiry)),
-    ]);
-  };
-
-  const validateToken = (): boolean => {
-    if (!token || !tokenExpiry) {
-      return false;
-    }
-    return tokenExpiry > Date.now();
-  };
+  }, [signOut]);
 
   const signIn = async (email: string, password: string) => {
-    const data = await request<MobileAuthResponse>('/auth/mobile/sign-in', null, {
-      method: 'POST',
-      body: JSON.stringify({ email: email.trim(), password }),
-    });
-    const u = buildUser(data);
-    const expiry = Date.now() + (data.expires_in ?? 3600) * 1000;
-    // Set all three together so isAuthenticated becomes true in one render
-    setToken(data.access_token);
-    setUser(u);
-    setTokenExpiry(expiry);
-    await persist(data.access_token, u, expiry);
+    clearAccessToken();
+    const { data, error } = await authClient.signIn.email({ email: email.trim(), password });
+    if (error) throw new ApiError(signInMessage(error), error.status ?? 400);
+    if ((data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) {
+      throw new TwoFactorRequiredError();
+    }
+    await loadUser();
   };
 
-  const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
-    const data = await request<MobileAuthResponse>('/auth/mobile/sign-up', null, {
-      method: 'POST',
-      body: JSON.stringify({ email: email.trim(), password, first_name: firstName, last_name: lastName }),
-    });
-    const u = buildUser(data);
-    const expiry = Date.now() + (data.expires_in ?? 3600) * 1000;
-    setToken(data.access_token);
-    setUser(u);
-    setTokenExpiry(expiry);
-    await persist(data.access_token, u, expiry);
-  };
-
-  const signOut = async () => {
-    await clearAuth();
+  const signUp = async (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    verificationToken: string,
+  ) => {
+    const name = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') || email.trim().split('@')[0];
+    const { error } = await authClient.signUp.email(
+      { email: email.trim(), password, name },
+      { headers: { [SIGNUP_VERIFICATION_HEADER]: verificationToken } },
+    );
+    if (error) throw new ApiError(error.message || 'Sign-up failed. Please try again.', error.status ?? 400);
+    // The verified-email signup opens no session by itself (requireEmailVerification);
+    // sign in with the same details.
+    await signIn(email, password);
   };
 
   return (
@@ -177,13 +202,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         token,
-        tokenExpiry,
-        isAuthenticated: !!user && validateToken(),
+        isAuthenticated: !!user && !!token,
         isLoading,
         signIn,
         signUp,
         signOut,
-        validateToken,
       }}
     >
       {children}

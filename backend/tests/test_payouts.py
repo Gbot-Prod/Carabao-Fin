@@ -64,9 +64,8 @@ def transfers(monkeypatch):
 
 
 def _delivered_sale(db, merchant, buyer, merchant_amount=490):  # noqa: F811
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=OrderStatus.DELIVERED,

@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.shipment import Shipment
 from app.models.user import User
 from app.routing.eta import _eta_from_waypoints
@@ -149,8 +148,7 @@ def get_order_tracking(
 ):
     order = (
         db.query(Order)
-        .join(OrderHistory)
-        .filter(Order.id == order_id, OrderHistory.user_id == current_user.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
         .first()
     )
     if not order:

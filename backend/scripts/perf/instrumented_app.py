@@ -49,14 +49,21 @@ elif not os.getenv("PAYMONGO_SECRET_TEST_KEY"):
     raise SystemExit("PERF_PAYMONGO=real needs PAYMONGO_SECRET_TEST_KEY in .env.")
 if MAPBOX == "stub":
     os.environ["MAPBOX_ACCESS_TOKEN"] = ""
+# Tokens come from common.perf_token, not a running BetterAuth.
+os.environ["BETTER_AUTH_URL"] = common.PERF_ISSUER
+os.environ["BETTER_AUTH_JWT_AUDIENCE"] = common.PERF_AUDIENCE
 
 from sqlalchemy import event  # noqa: E402
 
 from app.api.routes import merchants, payments  # noqa: E402
 from app.api.webhooks import paymongo as paymongo_webhook  # noqa: E402
+from app.core import security  # noqa: E402
 from app.core.database import engine  # noqa: E402
 from app.services import order_reservations, sms_service  # noqa: E402
 from main import app  # noqa: E402
+
+_PERF_PUBLIC_KEY = common.perf_signing_key().public_key()
+security._signing_key = lambda _token: _PERF_PUBLIC_KEY
 
 logging.getLogger().setLevel(logging.WARNING)
 

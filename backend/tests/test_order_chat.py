@@ -27,9 +27,8 @@ def _client(db, user) -> TestClient:  # noqa: F811
 
 @pytest.fixture
 def order(db, merchant, buyer):  # noqa: F811
-    user, history = buyer
+    user, _ = buyer
     row = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status="processing",
@@ -169,6 +168,5 @@ def test_admin_without_two_factor_cannot_read_chat(db, buyer, order, monkeypatch
     db.add(admin)
     db.commit()
     assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 404
-    admin.two_factor_enabled = True
-    db.commit()
+    admin.two_factor_enabled = True  # as get_current_user loads it from BetterAuth
     assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 200

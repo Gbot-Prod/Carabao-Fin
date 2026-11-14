@@ -3,15 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { fetchMyProfile, updateMyProfile } from "@/util/api";
+import { createMyAddress, defaultAddress, fetchMyProfile, updateMyAddress, updateMyProfile } from "@/util/api";
 import { signIn, signUp } from "@/lib/auth-client";
 import TermsModal from "@/components/TermsModal/TermsModal";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import styles from "./page.module.css";
 
 type FormData = {
-  firstName: string;
-  lastName: string;
+  name: string;
   phoneNumber: string;
   streetAddress: string;
   region: string;
@@ -21,7 +20,7 @@ type FormData = {
   zipCode: string;
 };
 
-const EMPTY: FormData = { firstName: "", lastName: "", phoneNumber: "", streetAddress: "", region: "", province: "", city: "", barangay: "", zipCode: "" };
+const EMPTY: FormData = { name: "", phoneNumber: "", streetAddress: "", region: "", province: "", city: "", barangay: "", zipCode: "" };
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -34,6 +33,8 @@ export default function OnboardingPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>(EMPTY);
+  // The default saved address, updated on submit (created if there is none).
+  const [defaultAddressId, setDefaultAddressId] = useState<number | null>(null);
   const [awaitingEmailVerification, setAwaitingEmailVerification] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,16 +56,17 @@ export default function OnboardingPage() {
     const prefill = async () => {
       try {
         const p = await fetchMyProfile();
+        const a = defaultAddress(p.addresses);
+        setDefaultAddressId(a?.id ?? null);
         setFormData({
-          firstName: p.first_name ?? "",
-          lastName: p.last_name ?? "",
+          name: p.name ?? "",
           phoneNumber: p.phone_number ?? "",
-          streetAddress: p.address ?? "",
-          region: p.region ?? "",
-          province: p.province ?? "",
-          city: p.city ?? "",
-          barangay: p.barangay ?? "",
-          zipCode: p.postal_code ?? "",
+          streetAddress: a?.address ?? "",
+          region: a?.region ?? "",
+          province: a?.province ?? "",
+          city: a?.city ?? "",
+          barangay: a?.barangay ?? "",
+          zipCode: a?.postal_code ?? "",
         });
       } catch {
         // No prefill on error — user starts with empty form.
@@ -99,7 +101,7 @@ export default function OnboardingPage() {
         await signUp.email({
           email,
           password,
-          name: `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim(),
+          name: formData.name.trim().replace(/\s+/g, " "),
         });
 
         if (pendingSignup.channel === "phone") {
@@ -119,16 +121,24 @@ export default function OnboardingPage() {
       }
 
       await updateMyProfile({
-        first_name: formData.firstName.trim() || null,
-        last_name: formData.lastName.trim() || null,
+        name: formData.name.trim().replace(/\s+/g, " ") || null,
         phone_number: formData.phoneNumber.trim() || null,
+      });
+      // The address is saved as the user's default address.
+      const address = {
         address: formData.streetAddress.trim() || null,
         region: formData.region.trim() || null,
         province: formData.province.trim() || null,
         city: formData.city.trim() || null,
         barangay: formData.barangay.trim() || null,
         postal_code: formData.zipCode.trim() || null,
-      });
+      };
+      if (defaultAddressId != null) {
+        await updateMyAddress(defaultAddressId, address);
+      } else if (Object.values(address).some(Boolean)) {
+        const created = await createMyAddress({ label: "Home", ...address, is_default: true });
+        setDefaultAddressId(created.id);
+      }
       sessionStorage.removeItem("pending_signup");
       document.cookie = "pending_signup_verification=; Path=/; Max-Age=0; SameSite=Lax";
       router.push("/order");
@@ -210,16 +220,9 @@ export default function OnboardingPage() {
             </>
           )}
 
-          {/* Name row */}
-          <div className={styles.nameRow}>
-            <div>
-              <label htmlFor="onboarding-firstname" className={styles.label}>First name</label>
-              <input id="onboarding-firstname" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="Juan" className={styles.input} />
-            </div>
-            <div>
-              <label htmlFor="onboarding-lastname" className={styles.label}>Last name</label>
-              <input id="onboarding-lastname" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="dela Cruz" className={styles.input} />
-            </div>
+          <div>
+            <label htmlFor="onboarding-name" className={styles.label}>Full name</label>
+            <input id="onboarding-name" name="name" value={formData.name} onChange={handleChange} placeholder="Juan dela Cruz" autoComplete="name" className={styles.input} />
           </div>
 
           <div>

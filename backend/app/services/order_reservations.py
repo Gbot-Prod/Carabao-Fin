@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.models.cart import Cart
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.produce import Produce
 from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
@@ -204,15 +203,6 @@ def settle_checkout_payment(
         f"PHP {getattr(order, 'total_price', 0):,}. Open your dashboard to prepare it.",
         "/merchantDashboard",
     )
-    if order.order_history_id:
-        history = (
-            db.query(OrderHistory)
-            .filter(OrderHistory.id == order.order_history_id)
-            .first()
-        )
-        if history:
-            history.last_order_at = datetime.now(UTC)
-
     # Drop only what this order bought: a multi-merchant checkout (C1) leaves
     # the other merchants' items in the cart until their orders are paid.
     cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()

@@ -17,7 +17,6 @@ from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.produce import Produce
 from app.models.shipment import Shipment  # noqa: F401 - registers the table
@@ -80,10 +79,8 @@ def buyer(db):
     user = User(email="buyer@example.com")
     db.add(user)
     db.flush()
-    history = OrderHistory(user_id=user.id)
-    db.add(history)
     db.commit()
-    return user, history
+    return user, None  # (user, _): kept for the many call sites
 
 
 def _client(db, user) -> TestClient:
@@ -96,9 +93,8 @@ def _client(db, user) -> TestClient:
 
 
 def _order(db, merchant, buyer, status):
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,

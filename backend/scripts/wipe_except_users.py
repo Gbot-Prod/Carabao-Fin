@@ -25,12 +25,13 @@ from app.core.database_url import normalize_database_url  # noqa: E402
 # Users and their login data (FastAPI + Better Auth). Everything else is wiped.
 KEEP_TABLES = {
     "backend_users",
-    "mobile_credentials",
+    "user_addresses",
     "user",
     "session",
     "account",
     "verification",
     "twoFactor",
+    "jwks",
     "alembic_version",
 }
 

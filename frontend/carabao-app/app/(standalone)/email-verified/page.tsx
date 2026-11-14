@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiClient } from "@/util/api/client";
 import "./page.css";
 
 export default function EmailVerifiedPage() {
@@ -11,14 +12,8 @@ export default function EmailVerifiedPage() {
   useEffect(() => {
     const syncAndRedirect = async () => {
       try {
-        const res = await fetch("/api/auth", {
-          method: "POST",
-          credentials: "include",
-        });
-        if (!res.ok) {
-          setError(true);
-          return;
-        }
+        // The first backend call creates the account's backend row.
+        await apiClient.get("/auth/me");
         router.replace("/onboarding");
       } catch {
         setError(true);

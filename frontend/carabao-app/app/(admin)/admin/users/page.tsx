@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ADMIN_PAGE_SIZE, fetchAdminUsers, setUserAdminRole, type UserProfile } from "@/util/api/admin";
+import { defaultAddress } from "@/util/api/users";
 import Pagination from "../../Pagination";
 import SuspendControl from "../../SuspendControl";
 import styles from "./page.module.css";
@@ -83,10 +84,10 @@ function AdminUsersContent() {
             {users.map((u) => (
               <tr key={u.id}>
                 <td className={styles.mono}>{u.id}</td>
-                <td>{[u.first_name, u.last_name].filter(Boolean).join(" ") || <span className={styles.empty}>—</span>}</td>
+                <td>{u.name || <span className={styles.empty}>—</span>}</td>
                 <td>{u.email}</td>
                 <td>{u.phone_number ?? <span className={styles.empty}>—</span>}</td>
-                <td>{u.city ?? <span className={styles.empty}>—</span>}</td>
+                <td>{defaultAddress(u.addresses)?.city ?? <span className={styles.empty}>—</span>}</td>
                 <td>{u.merchant ? u.merchant.merchant_name : <span className={styles.empty}>—</span>}</td>
                 <td className={styles.mono}>{u.created_at ? new Date(u.created_at).toLocaleDateString("en-PH") : "—"}</td>
                 <td>

@@ -19,7 +19,6 @@ from ._order_helpers import (
     _extract_item_int,
     _to_int,
     get_or_create_cart,
-    get_order_history,
 )
 
 router = APIRouter(tags=["orders"])
@@ -59,13 +58,10 @@ def reorder(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    history = get_order_history(db, current_user.id)
     order = (
         db.query(Order)
-        .filter(Order.id == order_id, Order.order_history_id == history.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
         .first()
-        if history is not None
-        else None
     )
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")

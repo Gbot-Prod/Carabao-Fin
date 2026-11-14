@@ -12,7 +12,6 @@ from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.produce import Produce
 from app.models.shopPage import ShopPage
@@ -130,18 +129,10 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
     merchant_address = ", ".join(part for part in whole_address if part)
     delivery_address = order.delivery_address
 
-    if not delivery_address:
-        # Try to get from order history user
-        order_history = (
-            db.query(OrderHistory)
-            .filter(OrderHistory.id == order.order_history_id)
-            .first()
-        )
-        if order_history:
-            user = db.query(User).filter(User.id == order_history.user_id).first()
-            if user:
-                parts = [p for p in [user.address, user.city] if p]
-                delivery_address = ", ".join(parts) if parts else None
+    # Fall back to the buyer's default saved address.
+    saved_address = order.user.default_address if order.user else None
+    if not delivery_address and saved_address is not None:
+        delivery_address = saved_address.short_line
 
     if not delivery_address and order.delivery_lat is None:
         print(
@@ -153,8 +144,7 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
 
     # Saved map pins first (U1); geocode the address text only without one.
     origin_coords = merchant_point(order.merchant, merchant_address, _geocode)
-    buyer = order.order_history.user if order.order_history else None
-    dest_coords = delivery_point(order, buyer, delivery_address, _geocode)
+    dest_coords = delivery_point(order, saved_address, delivery_address, _geocode)
 
     if not origin_coords:
         print(
@@ -279,10 +269,7 @@ def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
     response = MerchantDetailResponse.model_validate(merchant)
     owner = merchant.user
     if owner is not None:
-        full_name = " ".join(
-            part.strip() for part in (owner.first_name, owner.last_name) if part and part.strip()
-        )
-        response.owner_name = full_name or None
+        response.owner_name = (owner.name or "").strip() or None
     return response
 
 
@@ -935,7 +922,7 @@ def _to_merchant_order_response(
     """One order as the merchant's orders tab shows it."""
     buyer_name = None
     if user:
-        buyer_name = " ".join(filter(None, [user.first_name, user.last_name])) or None
+        buyer_name = user.name or None
     return MerchantOrderResponse(
         id=order.id,
         status=order.status,
@@ -1020,14 +1007,7 @@ def update_my_merchant_order_status(
 
     db.commit()
 
-    order_history = (
-        db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
-    )
-    user = (
-        db.query(User).filter(User.id == order_history.user_id).first()
-        if order_history
-        else None
-    )
+    user = order.user
 
     notify_order_shipped(
         # U5: only when the buyer accepts SMS updates.

@@ -16,7 +16,6 @@ from app.models import (  # noqa: F401
     cart,
     merchant,
     order,
-    order_history,
     produce,
     shopPage,
     user,

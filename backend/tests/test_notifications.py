@@ -38,9 +38,8 @@ def _kinds(db, user_id):  # noqa: F811
 
 
 def _order(db, merchant, buyer, status="pending"):  # noqa: F811
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,

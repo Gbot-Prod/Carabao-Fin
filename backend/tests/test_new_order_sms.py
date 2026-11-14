@@ -24,7 +24,7 @@ class FakeDB:
     """Just enough Session for the webhook and settle_checkout_payment."""
 
     def __init__(self, txn, order):
-        self.rows = {"Transaction": txn, "Order": order, "OrderHistory": None, "Cart": None}
+        self.rows = {"Transaction": txn, "Order": order, "Cart": None}
         self.commits = 0
 
     def query(self, model):
@@ -45,7 +45,6 @@ def _order(status="pending", phone="09171234567"):
     return SimpleNamespace(
         id=42,
         status=status,
-        order_history_id=None,
         ordered_at=datetime(2026, 11, 12, 9, 30),
         items=[{"produce": "Tomato", "quantity": 2}, {"produce": "Okra", "quantity": 1}],
         total_price=1540,

@@ -33,9 +33,8 @@ def _admin(db) -> User:
 def _order(
     db, merchant, buyer, status="processing", ordered_at=None, items=None, **extra
 ):
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,

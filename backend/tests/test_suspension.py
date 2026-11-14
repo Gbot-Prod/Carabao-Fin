@@ -7,19 +7,15 @@ from sqlalchemy import text
 
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import admin, auth, merchants, users
-from app.core.security import create_access_token
-from app.models.mobile_credential import MobileCredential
 from app.models.produce import Produce
 from app.models.user import User
 from tests.test_reviews import db, merchant  # noqa: F401 - fixtures
-
-SECRET = "test-secret"
+from tests.tokens import bearer, trust_test_key
 
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
-    monkeypatch.setenv("AUTH_SYNC_SHARED_SECRET", SECRET)
-    monkeypatch.setenv("FASTAPI_JWT_SECRET", "suspension-test-jwt-secret-0123456789")
+    trust_test_key(monkeypatch)
 
 
 def _app(db, as_user=None) -> TestClient:
@@ -81,8 +77,7 @@ def test_non_admin_cannot_suspend(db, merchant):
 
 def test_suspended_token_is_rejected(db, merchant):
     target = _user(db, "buyer@example.com", external_auth_id="ba_buyer")
-    token = create_access_token(subject="ba_buyer", expires_minutes=5)
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = bearer(sub="ba_buyer", email="buyer@example.com")
     plain = _app(db)
     assert plain.get("/users/me", headers=headers).status_code == 200
 
@@ -90,33 +85,6 @@ def test_suspended_token_is_rejected(db, merchant):
     res = plain.get("/users/me", headers=headers)
     assert res.status_code == 403
     assert "Fraudulent listings" in res.json()["detail"]
-
-
-def test_suspended_user_cannot_sync_web_session(db, merchant):
-    target = _user(db, "buyer@example.com", external_auth_id="ba_buyer")
-    _suspend(_admin_client(db), target.id)
-    res = _app(db).post(
-        "/auth/sync",
-        json={"provider_user_id": "ba_buyer", "email": "buyer@example.com"},
-        headers={"X-Internal-Auth-Sync-Secret": SECRET},
-    )
-    assert res.status_code == 403
-
-
-def test_suspended_user_cannot_sign_in_on_mobile(db, merchant):
-    target = _user(db, "buyer@example.com", external_auth_id="mobile-user-1")
-    db.add(
-        MobileCredential(
-            user_id=target.id, password_hash=auth._bcrypt_hash("pw-123456")
-        )
-    )
-    db.commit()
-    plain = _app(db)
-    body = {"email": "buyer@example.com", "password": "pw-123456"}
-    assert plain.post("/auth/mobile/sign-in", json=body).status_code == 200
-
-    _suspend(_admin_client(db), target.id)
-    assert plain.post("/auth/mobile/sign-in", json=body).status_code == 403
 
 
 def test_better_auth_user_is_banned_and_sessions_ended(db, merchant):

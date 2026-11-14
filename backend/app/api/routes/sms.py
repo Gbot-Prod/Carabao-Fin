@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.api.dependencies import get_current_user
 from app.integrations.sms.semaphore import SemaphoreError
-from app.integrations.sms.semaphore import send_sms as semaphore_send_sms
+from app.integrations.sms.semaphore import send_otp as semaphore_send_otp
 from app.models.user import User, normalize_email
 from app.services import rate_limit
 from app.services.email import send_signup_otp_email
@@ -28,6 +28,7 @@ _OTP_MAX_ATTEMPTS = 5
 _OTP_USER_HOURLY_LIMIT = 5
 _PHONE_VERIFICATION_TTL = 1800  # 30 minutes to finish onboarding after verifying
 
+# Literal {otp} is Semaphore's placeholder — do not .format() this.
 _OTP_MESSAGE = "Your Carabao verification code is {otp}. Valid for 10 minutes. Do not share this with anyone."
 
 
@@ -45,9 +46,10 @@ def _generate_otp() -> str:
     return "".join(secrets.choice("0123456789") for _ in range(6))
 
 
-def _semaphore_send(number: str, message: str) -> None:
+def _semaphore_send_otp(number: str, otp: str) -> str:
+    """Send via Semaphore's OTP route; returns the code actually delivered."""
     try:
-        semaphore_send_sms(number=number, message=message)
+        return semaphore_send_otp(number=number, message=_OTP_MESSAGE, code=otp)
     except SemaphoreError as exc:
         logger.exception("[sms] Semaphore send failed")
         if "not configured" in str(exc):
@@ -143,8 +145,7 @@ def send_otp_code(
         recent.append(now)
         _user_send_log[current_user.id] = recent
 
-    otp = _generate_otp()
-    _semaphore_send(number, _OTP_MESSAGE.format(otp=otp))
+    otp = _semaphore_send_otp(number, _generate_otp())
     _store_otp(key, otp)
     return {"ok": True}
 
@@ -204,7 +205,7 @@ def request_signup_verification(body: SignupVerificationRequest, request: Reques
         if channel == "email":
             send_signup_otp_email(to=identifier, otp=otp)
         else:
-            _semaphore_send(identifier, _OTP_MESSAGE.format(otp=otp))
+            otp = _semaphore_send_otp(identifier, otp)
     except HTTPException:
         raise
     except Exception as exc:

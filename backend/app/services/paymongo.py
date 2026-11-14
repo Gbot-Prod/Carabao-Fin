@@ -6,6 +6,8 @@ import time
 
 import requests
 
+from app.models.user import split_name
+
 PAYMONGO_BASE_URL = "https://api.paymongo.com/v1"
 
 SUPPORTED_METHODS = [
@@ -137,14 +139,15 @@ def get_or_create_paymongo_customer(db, user) -> str:
     if user.paymongo_customer_id:
         return user.paymongo_customer_id
 
+    first_name, last_name = split_name(user.name)
     response = requests.post(
         f"{PAYMONGO_BASE_URL}/customers",
         json={
             "data": {
                 "attributes": {
                     "email": user.email,
-                    "first_name": user.first_name or "",
-                    "last_name": user.last_name or "",
+                    "first_name": first_name or "",
+                    "last_name": last_name or "",
                     "phone": user.phone_number or "",
                     "default_device": "phone",
                 }

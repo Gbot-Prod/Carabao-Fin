@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.cart import Cart
 from app.models.merchant import Merchant
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.produce import Produce
 from app.services.order_status import (
     SHIPPED_STATUSES,
@@ -43,31 +42,11 @@ def get_or_create_cart(db: Session, user_id: int) -> Cart:
     return cart
 
 
-def get_order_history(db: Session, user_id: int) -> OrderHistory | None:
-    return db.query(OrderHistory).filter(OrderHistory.user_id == user_id).first()
-
-
-def get_or_create_order_history(db: Session, user_id: int) -> OrderHistory:
-    history = get_order_history(db, user_id)
-    if history is not None:
-        return history
-
-    history = OrderHistory(user_id=user_id)
-    try:
-        with db.begin_nested():
-            db.add(history)
-            db.flush()
-    except IntegrityError:
-        # A concurrent request for this user created the history first.
-        return db.query(OrderHistory).filter(OrderHistory.user_id == user_id).one()
-    return history
-
-
-def get_history_orders(db: Session, history: OrderHistory) -> list[Order]:
+def get_buyer_orders(db: Session, user_id: int) -> list[Order]:
     return (
         db.query(Order)
         .options(*order_item_load())
-        .filter(Order.order_history_id == history.id)
+        .filter(Order.user_id == user_id)
         .all()
     )
 

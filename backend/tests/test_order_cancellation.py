@@ -118,7 +118,7 @@ def test_cancel_pending_order_refused_while_payment_in_progress(monkeypatch):
 
 class SettleDB:
     def __init__(self, order, cart):
-        self.rows = {"Order": order, "Cart": cart, "OrderHistory": None}
+        self.rows = {"Order": order, "Cart": cart}
         self.refreshed = []
 
     def query(self, model):
@@ -141,7 +141,6 @@ def _txn(status="pending"):
 def _settle_order(status, items=None):
     return SimpleNamespace(
         status=status,
-        order_history_id=None,
         items=items if items is not None else [{"produce_id": 1, "quantity": 2}],
     )
 
