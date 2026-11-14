@@ -10,12 +10,17 @@ export type UserProfile = {
   id: number;
   external_auth_id: string | null;
   is_admin: boolean;
-  // Set when an admin suspends the account (A3).
-  suspended_at?: string | null;
+  // An admin suspended the account (A3).
+  is_suspended?: boolean;
   suspension_reason?: string | null;
+  // Identity, read live from BetterAuth. email is null for a phone signup
+  // that hasn't added one; phone_number is "+639XXXXXXXXX".
   name: string | null;
-  email: string;
+  email: string | null;
+  email_verified: boolean;
   phone_number: string | null;
+  // Checkout, merchant applications and order chat need this.
+  phone_verified: boolean;
   created_at: string | null;
   profile_picture_url: string | null;
   notifications_preferences: Partial<NotificationPrefs> | null;
@@ -55,9 +60,8 @@ export type UserAddress = UserAddressFields & {
 // Setting is_default: true makes it the default; false does nothing.
 export type UserAddressPayload = Partial<UserAddressFields> & { is_default?: boolean };
 
+// Name, email and phone change through BetterAuth (lib/auth-client.ts).
 export type UserProfileUpdatePayload = {
-  name?: string | null;
-  phone_number?: string | null;
   notifications_preferences?: Partial<NotificationPrefs> | null;
 };
 

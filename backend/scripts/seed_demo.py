@@ -12,16 +12,18 @@ What it creates (every seeded account uses an @demo.carabao.ph email):
     dashboard and merchant sales charts have history
   * 1 merchant application in "submitted" state for the admin approval demo
 
-Logging in: seeded rows have no BetterAuth account. To log in as the hub
-merchant, sign up through the normal web flow with the --merchant-email
-address and verify it. /auth/sync links the BetterAuth login to the existing
-unclaimed row by email, so you get the seeded merchant with all its orders.
-If --merchant-email already belongs to a real account with a merchant
-profile, the orders are attached to that merchant instead.
+Logging in: identity lives in BetterAuth, so every seeded user gets a BetterAuth
+"user" row (no password; nobody signs in as them). For the hub, pass --merchant
+with the phone number (or email) of the account you demo with:
+  * already signed up: the hub is your account (your merchant profile if you
+    have one, otherwise a new seeded one);
+  * not signed up yet: a BetterAuth user with that verified number is created.
+    Sign in by choosing "Forgot password" with the number: the SMS code lets
+    you set a password.
 
 Usage (from backend/):
-  uv run python scripts/seed_demo.py --merchant-email you@example.com
-  uv run python scripts/seed_demo.py --merchant-email you@example.com --wipe
+  uv run python scripts/seed_demo.py --merchant +639171234567
+  uv run python scripts/seed_demo.py --merchant +639171234567 --wipe
   uv run python scripts/seed_demo.py --wipe-only
 
 --wipe removes everything previously seeded (all @demo.carabao.ph users and
@@ -55,6 +57,7 @@ from app.models import (  # noqa: E402,F401
     search_log,
     shipment,
 )
+from app.models.auth_identity import PLACEHOLDER_EMAIL_DOMAIN, AuthIdentity  # noqa: E402
 from app.models.merchant import Merchant  # noqa: E402
 from app.models.merchant_application import MerchantApplication  # noqa: E402
 from app.models.order import Order  # noqa: E402
@@ -65,6 +68,7 @@ from app.models.statuses import OrderStatus, TransactionStatus  # noqa: E402
 from app.models.transaction import Transaction  # noqa: E402
 from app.models.user import User, normalize_email  # noqa: E402
 from app.models.user_address import UserAddress  # noqa: E402
+from app.services.phone_verification import normalize_ph_mobile  # noqa: E402
 
 DEMO_DOMAIN = "demo.carabao.ph"
 PLATFORM_FEE_RATE = 0.02
@@ -236,6 +240,13 @@ def wipe(db, hub_email: str | None) -> None:
         )
     for u in demo_users:
         db.delete(u)  # cascades cart
+    db.flush()
+    # Their BetterAuth users too (sessions and accounts cascade).
+    db.execute(
+        AuthIdentity.__table__.delete().where(
+            AuthIdentity.email.ilike(f"%@{DEMO_DOMAIN}")
+        )
+    )
     db.commit()
     print(f"Wiped {len(demo_users)} demo users, {len(merchant_ids)} merchants, {len(order_ids)} orders.")
 
@@ -243,14 +254,32 @@ def wipe(db, hub_email: str | None) -> None:
 # --------------------------------------------------------------------------- builders
 
 
+def add_identity(db, identity_id, *, email, name, phone_number) -> None:
+    """A BetterAuth user, as BetterAuth would write it (no password)."""
+    db.execute(
+        AuthIdentity.__table__.insert().values(
+            id=identity_id,
+            name=name,
+            email=email,
+            email_verified=not email.endswith(PLACEHOLDER_EMAIL_DOMAIN),
+            phone_number=phone_number,
+            phone_number_verified=True,
+            role="user",
+            banned=False,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+    )
+
+
 def make_user(db, email, first, last, idx, **address) -> User:
     """Address fields, if any, become the user's default saved address."""
-    user = User(
-        email=normalize_email(email),
-        name=f"{first} {last}",
-        phone_number=phone(idx),
-        notifications_preferences={},
+    email = normalize_email(email)
+    identity_id = f"demo:{email}"
+    add_identity(
+        db, identity_id, email=email, name=f"{first} {last}", phone_number=phone(idx)
     )
+    user = User(external_auth_id=identity_id, notifications_preferences={})
     if address:
         user.addresses.append(UserAddress(label="Home", is_default=True, **address))
     db.add(user)
@@ -390,18 +419,54 @@ def make_order(db, buyer, merchant, produce_list, status, ordered_at, *, address
 # --------------------------------------------------------------------------- seed
 
 
-def resolve_hub(db, email: str, hub_point, hub_name) -> tuple[Merchant, bool]:
-    """Existing merchant for this email, or a fresh seeded one at the hub."""
-    email = normalize_email(email)
-    user = db.query(User).filter(User.email == email).first()
+def find_account(db, who: str) -> User | None:
+    """The backend user for a phone number or email, if they've signed in."""
+    digits = normalize_ph_mobile(who)
+    if digits:
+        return db.query(User).filter(User.phone_number == f"+{digits}").first()
+    return db.query(User).filter(User.email == normalize_email(who)).first()
+
+
+def resolve_hub(db, who: str, hub_point, hub_name) -> tuple[Merchant, bool]:
+    """Existing merchant for this account, or a fresh seeded one at the hub."""
+    user = find_account(db, who)
+    if user is None:
+        digits = normalize_ph_mobile(who)
+        identity = db.execute(
+            AuthIdentity.__table__.select().where(
+                AuthIdentity.phone_number == f"+{digits}"
+                if digits
+                else AuthIdentity.email == normalize_email(who)
+            )
+        ).first()
+        if identity is not None:
+            # Signed up but never used the app: give them their backend row.
+            user = User(external_auth_id=identity.id, notifications_preferences={})
+            db.add(user)
+            db.flush()
     if user and user.merchant and user.merchant.deleted_at is None:
         m = user.merchant
         if m.lat is None:
             m.lat, m.lng = hub_point
-        print(f"Using existing merchant #{m.id} '{m.merchant_name}' for {email}.")
+        print(f"Using existing merchant #{m.id} '{m.merchant_name}' for {who}.")
         return m, False
     if user is None:
-        user = make_user(db, email, "Demo", "Merchant", 999)
+        digits = normalize_ph_mobile(who)
+        if not digits:
+            raise SystemExit(
+                f"No account for {who}. Pass the phone number you'll sign in with."
+            )
+        identity_id = f"demo-hub:{digits}"
+        add_identity(
+            db,
+            identity_id,
+            email=f"{digits}@{PLACEHOLDER_EMAIL_DOMAIN}",
+            name="Demo Merchant",
+            phone_number=f"+{digits}",
+        )
+        user = User(external_auth_id=identity_id, notifications_preferences={})
+        db.add(user)
+        db.flush()
     farm = {
         "slug": "carabao-cubao-hub",
         "name": "Carabao Farmers Hub – Cubao",
@@ -412,7 +477,10 @@ def resolve_hub(db, email: str, hub_point, hub_name) -> tuple[Merchant, bool]:
         "produce": HUB_PRODUCE,
     }
     m = make_merchant(db, user, farm, 99)
-    print(f"Created hub merchant #{m.id} for {email} (sign up with this email to log in).")
+    print(
+        f"Created hub merchant #{m.id} for {who}. If you haven't signed up, sign in "
+        'with "Forgot password" and this number to set a password.'
+    )
     return m, True
 
 
@@ -501,7 +569,12 @@ def seed(db, hub_email: str, n_ready: int, n_history: int) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--merchant-email", help="Email of the merchant account you demo with.")
+    ap.add_argument(
+        "--merchant",
+        "--merchant-email",
+        dest="merchant",
+        help="Phone number (or email) of the account you demo with.",
+    )
     ap.add_argument("--ready", type=int, default=12, help="Processing orders for the ALNS demo (default 12).")
     ap.add_argument("--history", type=int, default=60, help="Delivered past orders (default 60).")
     ap.add_argument("--wipe", action="store_true", help="Remove previous demo seed first.")
@@ -511,12 +584,12 @@ def main() -> None:
     db = SessionLocal()
     try:
         if args.wipe or args.wipe_only:
-            wipe(db, args.merchant_email)
+            wipe(db, args.merchant)
         if args.wipe_only:
             return
-        if not args.merchant_email:
-            ap.error("--merchant-email is required unless --wipe-only")
-        seed(db, args.merchant_email, args.ready, args.history)
+        if not args.merchant:
+            ap.error("--merchant is required unless --wipe-only")
+        seed(db, args.merchant, args.ready, args.history)
     except Exception:
         db.rollback()
         raise

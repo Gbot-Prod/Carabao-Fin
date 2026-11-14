@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { displayEmail } from "@/lib/phone";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -26,8 +27,10 @@ export async function GET(req: NextRequest) {
       session: {
         user: {
           id: session.user.id,
-          email: session.user.email,
+          // null for a phone signup that hasn't added an email
+          email: displayEmail(session.user.email),
           name: session.user.name,
+          phoneNumber: (session.user as { phoneNumber?: string | null }).phoneNumber ?? null,
           role: session.user.role ?? null,
         },
       },

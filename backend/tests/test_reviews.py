@@ -28,6 +28,7 @@ from app.services.review_service import (
     ensure_reviewable,
     reviewer_display_name,
 )
+from tests.better_auth import make_user
 
 
 @compiles(JSONB, "sqlite")
@@ -56,7 +57,7 @@ def db():
 
 @pytest.fixture
 def merchant(db):
-    owner = User(email="farmer@example.com")
+    owner = make_user(db, "farmer@example.com")
     db.add(owner)
     db.flush()
     merchant = Merchant(
@@ -80,7 +81,7 @@ def merchant(db):
 
 
 def _buyer(db, email="buyer@example.com", name="Juan dela Cruz"):
-    user = User(email=email, name=name)
+    user = make_user(db, email, name=name)
     db.add(user)
     db.flush()
     db.commit()

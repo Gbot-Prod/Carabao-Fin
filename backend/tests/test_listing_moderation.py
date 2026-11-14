@@ -8,6 +8,7 @@ from app.api.routes import admin, admin_audit, admin_produce, merchants
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.produce import Produce
 from app.models.user import User
+from tests.better_auth import make_user
 from tests.test_reviews import _buyer, db, merchant  # noqa: F401 - fixtures
 
 
@@ -22,7 +23,7 @@ def _client(db, user=None) -> TestClient:
 
 
 def _staff(db) -> User:
-    staff = User(email="admin@example.com", is_admin=True, notifications_preferences={})
+    staff = make_user(db, "admin@example.com", is_admin=True, notifications_preferences={})
     db.add(staff)
     db.commit()
     return staff

@@ -9,6 +9,7 @@ from app.models.cart import Cart
 from app.models.order import Order
 from app.models.produce import Produce
 from app.models.user import User
+from tests.better_auth import set_identity
 from tests.test_merchant_listings import _other_merchant
 from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -95,10 +96,9 @@ def test_any_problem_places_no_orders(db, merchant, buyer):  # noqa: F811
 
 
 def test_suspended_merchant_in_cart_blocks_checkout_and_names_them(db, merchant, buyer):  # noqa: F811
-    from datetime import UTC, datetime
 
     rival, *_ = _setup(db, merchant, buyer)
-    db.get(User, rival.user_id).suspended_at = datetime.now(UTC)
+    set_identity(db, db.get(User, rival.user_id), banned=True)
     db.commit()
 
     resp = _client(db, buyer[0]).post("/orders/me/place", json={})

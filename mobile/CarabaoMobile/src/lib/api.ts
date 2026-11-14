@@ -198,9 +198,14 @@ export type ApiCartItem = {
 
 export type ApiUserProfile = {
   id: number;
+  // Identity, read live from BetterAuth. email is null for a phone signup
+  // that hasn't added one; phone_number is "+639XXXXXXXXX".
   name: string | null;
-  email: string;
+  email: string | null;
+  email_verified: boolean;
   phone_number: string | null;
+  // Checkout, merchant applications and order chat need this.
+  phone_verified: boolean;
   created_at: string | null;
   merchant: { id: number; merchant_name: string } | null;
   cart: { id: number; total_items: number; total_price: number } | null;

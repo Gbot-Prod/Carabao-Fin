@@ -1,5 +1,7 @@
 """The produce endpoints the web dashboard and mobile "My listings" share."""
 
+from datetime import date, timedelta
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -8,7 +10,14 @@ from app.api.routes import merchants
 from app.models.merchant import Merchant
 from app.models.produce import Produce
 from app.models.user import User
+from tests.better_auth import make_user
 from tests.test_reviews import db, merchant  # noqa: F401 - fixtures
+
+# Every listing needs both dates (services/produce_freshness.py).
+HARVEST = date.today()
+BEST_BEFORE = HARVEST + timedelta(days=7)
+DATES = {"harvest_date": HARVEST.isoformat(), "best_before": BEST_BEFORE.isoformat()}
+ROW_DATES = {"harvest_date": HARVEST, "best_before": BEST_BEFORE}
 
 
 def _client(db, user_id: int) -> TestClient:
@@ -20,7 +29,7 @@ def _client(db, user_id: int) -> TestClient:
 
 
 def _other_merchant(db) -> Merchant:
-    owner = User(email="rival@example.com")
+    owner = make_user(db, "rival@example.com")
     db.add(owner)
     db.flush()
     other = Merchant(
@@ -47,7 +56,7 @@ def test_create_then_list_own_produce(db, merchant):  # noqa: F811
     client = _client(db, merchant.user_id)
 
     created = client.post(
-        "/produce/", json={"name": "Talong", "price": 80, "stock_quantity": 12}
+        "/produce/", json={"name": "Talong", "price": 80, "stock_quantity": 12, **DATES}
     )
     assert created.status_code == 200, created.text
     assert created.json()["merchant_id"] == merchant.id
@@ -57,7 +66,7 @@ def test_create_then_list_own_produce(db, merchant):  # noqa: F811
 
 
 def test_update_changes_only_sent_fields(db, merchant):  # noqa: F811
-    produce = Produce(merchant_id=merchant.id, name="Kamatis", price=60, stock_quantity=5)
+    produce = Produce(**ROW_DATES, merchant_id=merchant.id, name="Kamatis", price=60, stock_quantity=5)
     db.add(produce)
     db.commit()
 
@@ -72,7 +81,7 @@ def test_update_changes_only_sent_fields(db, merchant):  # noqa: F811
 
 def test_cannot_update_another_merchants_produce(db, merchant):  # noqa: F811
     other = _other_merchant(db)
-    theirs = Produce(merchant_id=other.id, name="Sitaw", price=50, stock_quantity=3)
+    theirs = Produce(**ROW_DATES, merchant_id=other.id, name="Sitaw", price=50, stock_quantity=3)
     db.add(theirs)
     db.commit()
 
@@ -86,6 +95,7 @@ def test_cannot_update_another_merchants_produce(db, merchant):  # noqa: F811
 def test_mobile_edit_form_payload_is_accepted(db, merchant):  # noqa: F811
     """The mobile form always sends all five fields; category may be cleared."""
     produce = Produce(
+        **ROW_DATES,
         merchant_id=merchant.id, name="Okra", price=40, stock_quantity=2, category="Vegetables"
     )
     db.add(produce)
@@ -118,6 +128,7 @@ def test_mobile_create_form_payload_is_accepted(db, merchant):  # noqa: F811
             "stock_quantity": 8,
             "unit": "kg",
             "category": None,
+            **DATES,
         },
     )
 
@@ -127,11 +138,11 @@ def test_mobile_create_form_payload_is_accepted(db, merchant):  # noqa: F811
 
 
 def test_non_merchant_cannot_create_produce(db, merchant):  # noqa: F811
-    buyer = User(email="shopper@example.com")
+    buyer = make_user(db, "shopper@example.com")
     db.add(buyer)
     db.commit()
 
-    res = _client(db, buyer.id).post("/produce/", json={"name": "Mais", "price": 30})
+    res = _client(db, buyer.id).post("/produce/", json={"name": "Mais", "price": 30, **DATES})
 
     assert res.status_code == 404
     assert db.query(Produce).filter_by(name="Mais").count() == 0

@@ -11,9 +11,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api.dependencies import get_current_user, get_db
+from app.api.dependencies import get_db
 from app.api.routes import auth, users
 from app.core import security
+from app.core.database import Base
 from app.models import (  # noqa: F401  (registers User's related mappers)
     cart,
     merchant,
@@ -51,8 +52,11 @@ def db():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    User.__table__.create(engine)
+    Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
+    better_auth.create_tables(session)
+    # The identity behind the default test token (tests/tokens.py make_token).
+    better_auth.add_identity(session, "ba_user", email="user@example.com")
     yield session
     session.close()
 
@@ -64,13 +68,6 @@ def client(db):
     app.include_router(users.router)
     app.dependency_overrides[get_db] = lambda: db
     return TestClient(app)
-
-
-def _add_user(db, **fields):
-    user = User(notifications_preferences={}, **fields)
-    db.add(user)
-    db.commit()
-    return user
 
 
 def _me(client, **token):
@@ -166,326 +163,216 @@ def test_jwks_url_follows_better_auth_url(monkeypatch):
     assert security.jwks_url() == "https://shop.example.com/api/auth/jwks"
 
 
-# ── Creating and linking rows ────────────────────────────────────────────
+# ── Rows for BetterAuth identities ───────────────────────────────────────
 
 
-def test_first_request_creates_the_row_from_the_claims(client, db):
-    res = _me(
-        client,
-        sub="ba_new",
-        email="New@Example.com",
+def _row(db, identity_id):
+    return db.query(User).filter_by(external_auth_id=identity_id).one()
+
+
+def test_first_request_creates_the_row_and_reads_identity_live(client, db):
+    better_auth.add_identity(
+        db,
+        "ba_new",
+        email="new@example.com",
         name="Juan dela Cruz",
-        phoneNumber="639123456789",
+        phoneNumber="+639123456789",
+        phoneNumberVerified=True,
     )
+    # The token's claims don't matter: identity comes from BetterAuth's table.
+    res = _me(client, sub="ba_new", email="stale@example.com", name="Stale")
 
     assert res.status_code == 200
-    user = db.query(User).one()
-    assert (user.external_auth_id, user.email) == ("ba_new", "new@example.com")
-    assert user.name == "Juan dela Cruz"
-    assert user.phone_number == "639123456789"
-    assert user.is_admin is False
+    body = res.json()
+    assert body["email"] == "new@example.com" and body["name"] == "Juan dela Cruz"
+    assert body["phone_number"] == "+639123456789" and body["phone_verified"] is True
+    assert body["is_admin"] is False
+    assert db.query(User).filter_by(external_auth_id="ba_new").count() == 1
 
 
-def test_unverified_email_gets_no_row(client, db):
-    assert _me(client, emailVerified=False).status_code == 403
-    assert db.query(User).count() == 0
-
-
-def test_verified_email_links_an_unclaimed_row(client, db):
-    row = _add_user(db, email="Victim@Example.com", name="Kept")
-
-    assert _me(client, sub="ba_owner", email="victim@example.com").status_code == 200
-
-    db.refresh(row)
-    assert row.external_auth_id == "ba_owner"
-    assert row.name == "Kept"
-    assert db.query(User).count() == 1
-
-
-def test_unverified_email_cannot_link_an_existing_row(client, db):
-    _add_user(db, email="victim@example.com")
-
-    res = _me(
-        client, sub="ba_attacker", email="victim@example.com", emailVerified=False
-    )
-
-    assert res.status_code == 403
-    assert db.query(User).one().external_auth_id is None
-
-
-def test_new_identity_cannot_take_over_a_linked_row(client, db):
-    _add_user(db, email="victim@example.com", external_auth_id="ba_owner")
-
-    res = _me(client, sub="ba_attacker", email="victim@example.com")
-
-    assert res.status_code == 409
-    assert db.query(User).one().external_auth_id == "ba_owner"
-
-
-def test_phone_already_used_is_left_off_the_new_row(client, db):
-    _add_user(db, email="a@example.com", phone_number="639123456789")
-
-    assert (
-        _me(client, email="b@example.com", phoneNumber="639123456789").status_code
-        == 200
-    )
-
-    assert db.query(User).filter_by(email="b@example.com").one().phone_number is None
-
-
-def test_admin_role_is_taken_only_when_the_row_is_created(client, db):
-    assert (
-        _me(client, sub="ba_a", email="a@example.com", role="admin").status_code == 200
-    )
-    user = db.query(User).one()
-    assert user.is_admin is True
-
-    # Demoted in the backend; an older token still saying "admin" can't undo it.
-    user.is_admin = False
-    db.commit()
-    _me(client, sub="ba_a", email="a@example.com", role="admin")
-    db.refresh(user)
-    assert user.is_admin is False
-
-
-# ── Keeping the row in step ──────────────────────────────────────────────
-
-
-def test_google_photo_becomes_the_avatar_on_first_login(client, db):
-    _me(client, sub="ba_g", image="https://lh3.example/photo.jpg")
-    assert db.query(User).one().profile_picture_url == "https://lh3.example/photo.jpg"
-
-
-def test_google_photo_does_not_replace_an_existing_avatar(client, db):
-    row = _add_user(db, email="me@example.com", profile_picture_url="mine.png")
-
-    _me(client, sub="ba_me", email="me@example.com", image="https://lh3.example/p")
-
-    db.refresh(row)
-    assert row.profile_picture_url == "mine.png"
-
-
-def test_verified_email_change_is_applied(client, db):
-    user = _add_user(db, email="old@example.com", external_auth_id="ba_me")
-
-    assert _me(client, sub="ba_me", email="new@example.com").status_code == 200
-
-    db.refresh(user)
-    assert user.email == "new@example.com"
-
-
-def test_unverified_email_change_is_ignored(client, db):
-    user = _add_user(db, email="old@example.com", external_auth_id="ba_me")
-
-    _me(client, sub="ba_me", email="victim@example.com", emailVerified=False)
-
-    db.refresh(user)
-    assert user.email == "old@example.com"
-
-
-def test_email_change_to_a_used_address_keeps_the_old_one(client, db):
-    _add_user(db, email="taken@example.com", external_auth_id="ba_other")
-    user = _add_user(db, email="old@example.com", external_auth_id="ba_me")
-
-    assert _me(client, sub="ba_me", email="taken@example.com").status_code == 200
-
-    db.refresh(user)
-    assert user.email == "old@example.com"
-
-
-def test_names_edited_in_the_backend_are_not_overwritten(client, db):
-    user = _add_user(
-        db, email="me@example.com", external_auth_id="ba_me", name="Edited"
-    )
-
-    _me(client, sub="ba_me", email="me@example.com", name="Original Name")
-
-    db.refresh(user)
-    assert user.name == "Edited"
-
-
-def test_suspended_user_is_refused(client, db):
-    from datetime import UTC, datetime
-
-    _add_user(
+def test_phone_signup_has_no_email(client, db):
+    better_auth.add_identity(
         db,
-        email="me@example.com",
-        external_auth_id="ba_me",
-        suspended_at=datetime.now(UTC),
+        "ba_phone",
+        email="639123456789@phone.carabao.invalid",
+        emailVerified=False,
+        phoneNumber="+639123456789",
+        phoneNumberVerified=True,
     )
-    assert _me(client, sub="ba_me", email="me@example.com").status_code == 403
+    body = _me(client, sub="ba_phone").json()
+    assert body["email"] is None and body["email_verified"] is False
+    assert body["phone_verified"] is True
 
 
-def test_patch_me_rejects_identity_fields(client, db):
-    user = _add_user(db, email="me@example.com", external_auth_id="ba_me")
-    client.app.dependency_overrides[get_current_user] = lambda: user
-
-    for field, value in (
-        ("email", "victim@example.com"),
-        ("external_auth_id", "ba_victim"),
-    ):
-        res = client.patch("/users/me", json={field: value})
-        assert res.status_code == 422
-
-    db.refresh(user)
-    assert (user.email, user.external_auth_id) == ("me@example.com", "ba_me")
-
-
-# ── BetterAuth rows (better_auth_store) ──────────────────────────────────
-
-
-def _better_auth_tables(db, *user_ids):
-    better_auth.create_tables(db)
-    for uid in user_ids:
-        better_auth.add_identity(db, uid)
+def test_unverified_email_is_not_required(client, db):
+    better_auth.add_identity(db, "ba_g", email="g@example.com", emailVerified=False)
+    res = _me(client, sub="ba_g", emailVerified=False)
+    assert res.status_code == 200
+    assert res.json()["email_verified"] is False
 
 
 def test_token_for_a_deleted_identity_creates_no_row(client, db):
-    _better_auth_tables(db, "ba_someone_else")
-
     res = _me(client, sub="ba_deleted", email="gone@example.com")
-
     assert res.status_code == 401
     assert db.query(User).count() == 0
 
 
-def test_existing_identity_is_created_as_usual(client, db):
-    _better_auth_tables(db, "ba_new")
-    assert _me(client, sub="ba_new", email="new@example.com").status_code == 200
+def test_admin_role_is_read_live_from_better_auth(client, db):
+    better_auth.add_identity(db, "ba_a", role="admin")
+    assert _me(client, sub="ba_a").json()["is_admin"] is True
+
+    # Demoted in BetterAuth: an older token still saying "admin" changes nothing.
+    better_auth.set_identity(db, _row(db, "ba_a"), role="user")
+    assert _me(client, sub="ba_a", role="admin").json()["is_admin"] is False
+
+
+def test_banned_identity_is_refused(client, db):
+    better_auth.add_identity(db, "ba_me", banned=True, banReason="Spam")
+    res = _me(client, sub="ba_me")
+    assert res.status_code == 403
+    assert "Spam" in res.json()["detail"]
+
+
+def test_google_photo_becomes_the_avatar_on_first_login_only(client, db):
+    better_auth.add_identity(db, "ba_g", image="https://lh3.example/photo.jpg")
+    _me(client, sub="ba_g")
+    row = _row(db, "ba_g")
+    assert row.profile_picture_url == "https://lh3.example/photo.jpg"
+
+    row.profile_picture_url = "mine.png"
+    db.commit()
+    _me(client, sub="ba_g")
+    db.refresh(row)
+    assert row.profile_picture_url == "mine.png"
+
+
+def test_patch_me_rejects_identity_fields(client, db):
+    _me(client)
+    for field, value in (
+        ("email", "victim@example.com"),
+        ("name", "Someone Else"),
+        ("phone_number", "+639170000000"),
+        ("external_auth_id", "ba_victim"),
+    ):
+        res = client.patch("/users/me", json={field: value}, headers=bearer())
+        assert res.status_code == 422, field
+
+    identity = better_auth.get_identity(db, "ba_user")
+    assert identity["email"] == "user@example.com" and identity["phoneNumber"] is None
+
+
+def test_orm_cannot_write_identity(db):
+    from app.models.auth_identity import AuthIdentity
+
+    db.get(AuthIdentity, "ba_user").name = "Changed"
+    with pytest.raises(RuntimeError, match="read-only"):
+        db.flush()
+    db.rollback()
+
+
+# ── Verified phone gate ──────────────────────────────────────────────────
+
+
+def test_verified_phone_is_required_where_asked(db):
+    from fastapi import Depends
+
+    from app.api.dependencies import PHONE_VERIFICATION_REQUIRED, require_verified_phone
+
+    app = FastAPI()
+
+    @app.post("/buy")
+    def buy(user: User = Depends(require_verified_phone)):
+        return {"ok": True}
+
+    app.dependency_overrides[get_db] = lambda: db
+    gate = TestClient(app)
+
+    # A Google sign-in: no phone yet.
+    res = gate.post("/buy", headers=bearer())
+    assert res.status_code == 403
+    assert res.json()["detail"] == PHONE_VERIFICATION_REQUIRED
+
+    # A number that isn't verified doesn't count either.
+    better_auth.set_identity(db, _row(db, "ba_user"), phoneNumber="+639170000000")
+    assert gate.post("/buy", headers=bearer()).status_code == 403
+
+    better_auth.set_identity(db, _row(db, "ba_user"), phoneNumberVerified=True)
+    assert gate.post("/buy", headers=bearer()).status_code == 200
+
+
+# ── Writes to BetterAuth (better_auth_store) ─────────────────────────────
 
 
 def test_deleting_the_account_removes_the_login_too(client, db):
     from sqlalchemy import text
 
-    from app.core.database import Base
+    better_auth.add_identity(db, "ba_me")
+    assert _me(client, sub="ba_me").status_code == 200
 
-    Base.metadata.create_all(db.get_bind())  # deletion checks orders etc. first
-    _better_auth_tables(db, "ba_me", "ba_other")
-    assert _me(client, sub="ba_me", email="me@example.com").status_code == 200
-
-    res = client.delete(
-        "/users/me", headers=bearer(sub="ba_me", email="me@example.com")
-    )
+    res = client.delete("/users/me", headers=bearer(sub="ba_me"))
 
     assert res.status_code == 204, res.text
     ids = db.execute(text('SELECT id FROM "user"')).scalars().all()
-    assert ids == ["ba_other"]
+    assert "ba_me" not in ids and "ba_user" in ids
     # The same (still unexpired) token can't bring the account back.
-    assert _me(client, sub="ba_me", email="me@example.com").status_code == 401
-    assert db.query(User).count() == 0
+    assert _me(client, sub="ba_me").status_code == 401
+    assert db.query(User).filter_by(external_auth_id="ba_me").count() == 0
 
 
-def test_role_and_ban_writes_and_missing_tables(db):
-    from sqlalchemy import text
-
+def test_role_writes(db):
     from app.services import better_auth_store
 
-    # No BetterAuth tables: nothing happens, nothing raises.
-    better_auth_store.set_role(db, "ba_x", is_admin=True)
-    better_auth_store.delete_identity(db, "ba_x")
-    assert better_auth_store.identity_exists(db, "ba_x") is True
-
-    _better_auth_tables(db, "ba_x")
-    db.execute(text("""INSERT INTO "session" (id, "userId") VALUES ('s1', 'ba_x')"""))
-    better_auth_store.set_role(db, "ba_x", is_admin=True)
-    assert db.execute(text('SELECT role FROM "user"')).scalar() == "admin"
-    better_auth_store.set_role(db, "ba_x", is_admin=False)
-    assert db.execute(text('SELECT role FROM "user"')).scalar() == "user"
+    better_auth_store.set_role(db, "ba_user", is_admin=True)
+    assert better_auth.get_identity(db, "ba_user")["role"] == "admin"
+    better_auth_store.set_role(db, "ba_user", is_admin=False)
+    assert better_auth.get_identity(db, "ba_user")["role"] == "user"
 
 
-# ── Writing profile edits back to BetterAuth ─────────────────────────────
+def test_writes_refresh_an_identity_already_loaded(client, db):
+    from app.services import better_auth_store
+
+    _me(client)
+    user = _row(db, "ba_user")
+    assert user.is_admin is False
+    better_auth_store.set_role(db, "ba_user", is_admin=True)
+    assert user.is_admin is True
 
 
-def _me_headers():
-    return bearer(sub="ba_me", email="me@example.com")
-
-
-@pytest.fixture
-def full_schema(db):
-    """The profile response loads the user's merchant and cart."""
-    from app.core.database import Base
-
-    Base.metadata.create_all(db.get_bind())
-
-
-def test_profile_edit_is_written_back_to_better_auth(client, db, full_schema):
-    _better_auth_tables(db, "ba_me")
-    assert _me(client, sub="ba_me", email="me@example.com").status_code == 200
-
-    res = client.patch(
-        "/users/me",
-        json={"name": "Maria Santos", "phone_number": "639170000000"},
-        headers=_me_headers(),
-    )
-
-    assert res.status_code == 200, res.text
-    assert res.json()["name"] == "Maria Santos"
-    identity = better_auth.get_identity(db, "ba_me")
-    assert (identity["name"], identity["phoneNumber"]) == ("Maria Santos", "639170000000")
-
-
-def test_cleared_name_is_stored_empty_in_better_auth(client, db, full_schema):
-    _better_auth_tables(db, "ba_me")
-    _me(client, sub="ba_me", email="me@example.com", name="Old Name")
-
-    client.patch("/users/me", json={"name": None}, headers=_me_headers())
-
-    assert better_auth.get_identity(db, "ba_me")["name"] == ""
-
-
-def test_avatar_upload_is_written_back_to_better_auth(
-    client, db, full_schema, monkeypatch
-):
+def test_avatar_upload_is_written_back_to_better_auth(client, db, monkeypatch):
     from app.services import r2_service
 
     monkeypatch.setattr(
         r2_service, "upload_avatar", lambda *a, **k: "https://cdn.example/a.png"
     )
-    _better_auth_tables(db, "ba_me")
-    _me(client, sub="ba_me", email="me@example.com")
-
     res = client.post(
         "/users/me/avatar",
         files={"avatar": ("a.png", b"png", "image/png")},
-        headers=_me_headers(),
+        headers=bearer(),
     )
 
     assert res.status_code == 200, res.text
-    assert better_auth.get_identity(db, "ba_me")["image"] == "https://cdn.example/a.png"
-
-
-def test_failed_write_back_rolls_the_profile_edit_back(client, db, full_schema):
-    _better_auth_tables(db, "ba_me")
-    _me(client, sub="ba_me", email="me@example.com", name="Old Name")
-    better_auth.break_user_table(db)
-
-    res = client.patch("/users/me", json={"name": "New Name"}, headers=_me_headers())
-
-    assert res.status_code == 503
-    db.rollback()  # get_db closes the request's session without committing
-    assert db.query(User).one().name == "Old Name"
+    assert (
+        better_auth.get_identity(db, "ba_user")["image"] == "https://cdn.example/a.png"
+    )
 
 
 def test_failed_identity_delete_keeps_the_account(client, db):
-    from app.core.database import Base
-
-    Base.metadata.create_all(db.get_bind())
-    _better_auth_tables(db, "ba_me")
-    _me(client, sub="ba_me", email="me@example.com")
+    _me(client)
     better_auth.break_user_table(db)
 
-    res = client.delete("/users/me", headers=_me_headers())
+    res = client.delete("/users/me", headers=bearer())
 
     assert res.status_code == 503
     db.rollback()  # get_db closes the request's session without committing
     assert db.query(User).count() == 1
-    assert better_auth.get_identity(db, "ba_me") is not None
+    assert better_auth.get_identity(db, "ba_user") is not None
 
 
-def test_profile_edit_without_better_auth_tables_still_saves(client, db, full_schema):
-    _me(client, sub="ba_me", email="me@example.com")
-
-    res = client.patch("/users/me", json={"name": "Solo"}, headers=_me_headers())
-
-    assert res.status_code == 200
-    assert db.query(User).one().name == "Solo"
+def test_placeholder_email_is_null_in_queries_too(db):
+    phone = better_auth.make_user(db, identity_id="ba_ph", phone_number="+639171112222")
+    real = better_auth.make_user(db, identity_id="ba_real", email="ana@example.com")
+    db.commit()
+    assert db.query(User).filter(User.email.ilike("%639%")).count() == 0
+    assert db.query(User).filter(User.email.ilike("%invalid%")).count() == 0
+    assert db.query(User).filter(User.email.is_(None)).one().id == phone.id
+    assert db.query(User).filter(User.email == "ana@example.com").one().id == real.id

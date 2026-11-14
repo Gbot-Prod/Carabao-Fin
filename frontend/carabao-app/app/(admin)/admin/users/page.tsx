@@ -1,5 +1,6 @@
 "use client";
 
+import { formatPhMobile } from "@/lib/phone";
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ADMIN_PAGE_SIZE, fetchAdminUsers, setUserAdminRole, type UserProfile } from "@/util/api/admin";
@@ -85,8 +86,8 @@ function AdminUsersContent() {
               <tr key={u.id}>
                 <td className={styles.mono}>{u.id}</td>
                 <td>{u.name || <span className={styles.empty}>—</span>}</td>
-                <td>{u.email}</td>
-                <td>{u.phone_number ?? <span className={styles.empty}>—</span>}</td>
+                <td>{u.email ?? <span className={styles.empty}>—</span>}</td>
+                <td>{u.phone_number ? formatPhMobile(u.phone_number) : <span className={styles.empty}>—</span>}</td>
                 <td>{defaultAddress(u.addresses)?.city ?? <span className={styles.empty}>—</span>}</td>
                 <td>{u.merchant ? u.merchant.merchant_name : <span className={styles.empty}>—</span>}</td>
                 <td className={styles.mono}>{u.created_at ? new Date(u.created_at).toLocaleDateString("en-PH") : "—"}</td>
@@ -106,12 +107,12 @@ function AdminUsersContent() {
                 <td>
                   <SuspendControl
                     userId={u.id}
-                    suspendedAt={u.suspended_at}
+                    suspended={u.is_suspended}
                     reason={u.suspension_reason}
                     isMerchant={Boolean(u.merchant)}
-                    onChange={(suspendedAt, reason) =>
+                    onChange={(suspended, reason) =>
                       setUsers((prev) =>
-                        prev.map((x) => (x.id === u.id ? { ...x, suspended_at: suspendedAt, suspension_reason: reason } : x)),
+                        prev.map((x) => (x.id === u.id ? { ...x, is_suspended: suspended, suspension_reason: reason } : x)),
                       )
                     }
                   />

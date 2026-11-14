@@ -12,6 +12,7 @@ from app.models.produce import Produce
 from app.models.search_log import SearchLog
 from app.models.user import User
 from app.services.produce_freshness import ph_today
+from tests.better_auth import set_identity
 from tests.test_merchant_listings import _other_merchant
 from tests.test_reviews import db, merchant  # noqa: F401 - fixtures
 
@@ -137,7 +138,7 @@ def test_sorting_and_pagination(client, listings):
 
 
 def test_suspended_merchant_is_left_out(db, client, listings, merchant):  # noqa: F811
-    db.get(User, merchant.user_id).suspended_at = datetime.now(UTC)
+    set_identity(db, db.get(User, merchant.user_id), banned=True)
     db.commit()
     assert set(_names(client.get("/produce/search"))) == {"Carabao Mango"}
 

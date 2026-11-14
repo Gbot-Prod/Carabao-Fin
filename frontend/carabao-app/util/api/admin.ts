@@ -123,7 +123,7 @@ export const fetchAdminUsers = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Pro
 };
 
 export type AdminMerchant = Merchant & {
-  owner_suspended_at: string | null;
+  owner_is_suspended: boolean;
   owner_suspension_reason: string | null;
 };
 

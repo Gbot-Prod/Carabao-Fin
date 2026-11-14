@@ -86,8 +86,8 @@ def set_user_admin_role(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    before = {"is_admin": bool(user.is_admin)}
-    user.is_admin = payload.is_admin
+    before = {"is_admin": user.is_admin}
+    better_auth_store.set_role(db, user.external_auth_id, is_admin=payload.is_admin)
     audit_log.record_admin_action(
         db,
         admin=current_admin,
@@ -97,7 +97,6 @@ def set_user_admin_role(
         before=before,
         after={"is_admin": payload.is_admin},
     )
-    better_auth_store.set_role(db, user.external_auth_id, is_admin=payload.is_admin)
     db.commit()
     db.refresh(user)
     return user
@@ -119,7 +118,6 @@ def list_all_users(
         .limit(page_size)
         .all()
     )
-    better_auth_store.load_two_factor(db, items)
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
@@ -151,7 +149,7 @@ def list_all_merchants(
     items = [
         AdminMerchantResponse.model_validate(m).model_copy(
             update={
-                "owner_suspended_at": m.user.suspended_at if m.user else None,
+                "owner_is_suspended": bool(m.user and m.user.is_suspended),
                 "owner_suspension_reason": (
                     m.user.suspension_reason if m.user else None
                 ),
@@ -185,7 +183,7 @@ def suspend_account(
     if not payload.reason.strip():
         raise HTTPException(status_code=422, detail="A reason is required")
     user = _get_other_user(db, user_id, current_admin)
-    if user.suspended_at is not None:
+    if user.is_suspended:
         raise HTTPException(status_code=409, detail="Account is already suspended")
     return suspend_user(db, user, admin=current_admin, reason=payload.reason)
 
@@ -197,7 +195,7 @@ def reinstate_account(
     current_admin: User = Depends(_require_admin),
 ):
     user = _get_other_user(db, user_id, current_admin)
-    if user.suspended_at is None:
+    if not user.is_suspended:
         raise HTTPException(status_code=409, detail="Account is not suspended")
     return reinstate_user(db, user, admin=current_admin)
 
@@ -244,7 +242,7 @@ def _weekly_signups(db: Session, now: datetime | None = None) -> list[dict]:
         .outerjoin(Merchant, Merchant.user_id == User.id)
         .filter(
             User.created_at >= since,
-            User.is_admin.is_(False),
+            ~User.is_admin,
             Merchant.id.is_(None),
         )
         .all()

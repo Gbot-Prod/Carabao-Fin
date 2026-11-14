@@ -4,6 +4,7 @@ import pytest
 
 from app.models.transaction import Transaction
 from app.services import refund_service
+from tests.better_auth import set_identity
 from tests.test_admin_orders import _admin, _client, _order, _txn
 from tests.test_reviews import _buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -22,7 +23,7 @@ def sent(monkeypatch):
 
 def _pending(db, merchant):
     user, history = _buyer(db)
-    user.phone_number = "639171112222"
+    set_identity(db, user, phoneNumber="639171112222")
     db.commit()
     order = _order(db, merchant, (user, history), "cancelled")
     return _txn(db, order, "refund_pending")

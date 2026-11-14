@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import user_addresses, users
 from app.api.routes.user_addresses import MAX_ADDRESSES
-from app.models.user import User
 from app.models.user_address import UserAddress
+from tests.better_auth import make_user
 from tests.test_reviews import buyer, db  # noqa: F401 - fixtures
 
 
@@ -65,7 +65,7 @@ def test_deleting_default_promotes_oldest_remaining(db, buyer):  # noqa: F811
 
 
 def test_cannot_touch_someone_elses_address(db, buyer):  # noqa: F811
-    other = User(email="other@example.com")
+    other = make_user(db, "other@example.com")
     db.add(other)
     db.flush()
     theirs = UserAddress(user_id=other.id, city="Malolos", is_default=True)

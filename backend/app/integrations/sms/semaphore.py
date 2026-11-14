@@ -60,7 +60,8 @@ def _post(
 
     data: dict[str, str] = {
         "apikey": cfg.api_key,
-        "number": str(number).strip(),
+        # BetterAuth stores +639XXXXXXXXX; Semaphore expects 639XXXXXXXXX.
+        "number": str(number).strip().lstrip("+"),
         "message": str(message),
     }
     effective_sender = (sendername or cfg.sendername or "").strip() or None

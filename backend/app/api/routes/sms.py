@@ -4,16 +4,16 @@ import logging
 import secrets
 import time
 from threading import Lock
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, require_internal_secret
 from app.integrations.sms.semaphore import SemaphoreError
 from app.integrations.sms.semaphore import send_otp as semaphore_send_otp
-from app.models.user import User, normalize_email
+from app.models.user import User
 from app.services import rate_limit
-from app.services.email import send_signup_otp_email
 from app.services.phone_verification import normalize_ph_mobile, sign_token
 
 router = APIRouter(tags=["sms"])
@@ -47,9 +47,13 @@ def _generate_otp() -> str:
 
 
 def _semaphore_send_otp(number: str, otp: str) -> str:
+    return _semaphore_send_otp_message(number, otp, _OTP_MESSAGE)
+
+
+def _semaphore_send_otp_message(number: str, otp: str, message: str) -> str:
     """Send via Semaphore's OTP route; returns the code actually delivered."""
     try:
-        return semaphore_send_otp(number=number, message=_OTP_MESSAGE, code=otp)
+        return semaphore_send_otp(number=number, message=message, code=otp)
     except SemaphoreError as exc:
         logger.exception("[sms] Semaphore send failed")
         if "not configured" in str(exc):
@@ -64,7 +68,10 @@ def _semaphore_send_otp(number: str, otp: str) -> str:
 def _check_resend_cooldown(key: str) -> None:
     """Raise 429 if a code was sent to this key too recently. Caller holds the lock."""
     previous = _otp_store.get(key)
-    if previous and time.monotonic() < float(previous["sent_at"]) + _OTP_RESEND_COOLDOWN:
+    if (
+        previous
+        and time.monotonic() < float(previous["sent_at"]) + _OTP_RESEND_COOLDOWN
+    ):
         raise HTTPException(
             status_code=429, detail="Please wait before requesting another code"
         )
@@ -106,7 +113,7 @@ def _store_otp(key: str, otp: str) -> None:
         }
 
 
-# ── Merchant onboarding phone verification (logged-in users) ────────────
+# ── Merchant onboarding: the shop's contact number (logged-in users) ────────
 
 
 class OTPSendRequest(BaseModel):
@@ -169,69 +176,54 @@ def verify_otp_code(
     return {"ok": True, "verification_token": token}
 
 
-# ── Signup verification (public, pre-account) ──────────────────────────
+# ── Account phone OTPs (BetterAuth phoneNumber plugin) ──────────────────
+#
+# BetterAuth generates, stores and checks these codes; lib/auth.ts sendOTP asks
+# the backend to deliver them so the Semaphore key and the per-number limit
+# live in one place. Per-IP limits are BetterAuth's (lib/auth.ts rateLimit).
+
+_ACCOUNT_OTP_MESSAGES = {
+    "verify": "Your Carabao verification code is {otp}. Valid for 5 minutes. "
+    "Do not share this with anyone.",
+    "password_reset": "Your Carabao password reset code is {otp}. Valid for "
+    "5 minutes. If you didn't ask for it, ignore this message.",
+}
+
+_sent_today: dict[str, int] = {"day": 0, "count": 0}
 
 
-class SignupVerificationRequest(BaseModel):
-    channel: str
-    identifier: str
+class AccountOTPRequest(BaseModel):
+    phone_number: str
+    code: str
+    purpose: Literal["verify", "password_reset"] = "verify"
 
 
-class SignupVerificationVerifyRequest(SignupVerificationRequest):
-    otp: str
-
-
-@router.post("/auth/signup-verification/request")
-def request_signup_verification(body: SignupVerificationRequest, request: Request):
-    channel = body.channel.strip().lower()
-    identifier = body.identifier.strip()
-    if channel not in {"email", "phone"} or not identifier:
-        raise HTTPException(
-            status_code=400, detail="A valid signup identifier is required"
-        )
-    if channel == "email" and ("@" not in identifier or len(identifier) > 254):
-        raise HTTPException(status_code=400, detail="A valid email address is required")
-    if channel == "email":
-        identifier = normalize_email(identifier)
-    if channel == "phone":
-        identifier = _normalize_phone_number(identifier)
-    rate_limit.enforce(request, "otp_send", identifier)
-
-    otp = _generate_otp()
-    key = f"signup:{channel}:{identifier}"
+def _count_send() -> int:
+    """Account OTPs sent today (UTC, this process), logged to spot SMS pumping."""
+    today = int(time.time() // 86400)
     with _otp_lock:
-        _check_resend_cooldown(key)
-    try:
-        if channel == "email":
-            send_signup_otp_email(to=identifier, otp=otp)
-        else:
-            otp = _semaphore_send_otp(identifier, otp)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Signup verification delivery failed for channel=%s", channel)
-        raise HTTPException(
-            status_code=502, detail="Verification message could not be sent"
-        ) from exc
-
-    _store_otp(key, otp)
-    return {"ok": True}
+        if _sent_today["day"] != today:
+            _sent_today.update(day=today, count=0)
+        _sent_today["count"] += 1
+        return _sent_today["count"]
 
 
-@router.post("/auth/signup-verification/verify")
-def verify_signup_verification(
-    body: SignupVerificationVerifyRequest, request: Request
-):
-    channel = body.channel.strip().lower()
-    identifier = body.identifier.strip()
-    if channel == "email":
-        identifier = normalize_email(identifier)
-    if channel == "phone":
-        identifier = _normalize_phone_number(identifier)
-    rate_limit.enforce(request, "otp_verify", identifier)
-    _check_otp(f"signup:{channel}:{identifier}", body.otp)
-    try:
-        token = sign_token({"channel": channel, "identifier": identifier}, 1800)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"ok": True, "verification_token": token}
+@router.post(
+    "/internal/sms/account-otp", dependencies=[Depends(require_internal_secret)]
+)
+def send_account_otp(body: AccountOTPRequest):
+    number = _normalize_phone_number(body.phone_number)
+    if not body.code.isdigit():
+        raise HTTPException(status_code=400, detail="The code must be numeric")
+    rate_limit.enforce_identifier("account_otp", number)
+    delivered = _semaphore_send_otp_message(
+        number, body.code, _ACCOUNT_OTP_MESSAGES[body.purpose]
+    )
+    logger.info(
+        "[sms] Account OTP sent purpose=%s to=...%s today=%d",
+        body.purpose,
+        number[-4:],
+        _count_send(),
+    )
+    # Semaphore may substitute its own code; BetterAuth stores whatever this says.
+    return {"ok": True, "code": delivered}

@@ -10,6 +10,9 @@ import { useRouter } from 'expo-router';
 import { api, defaultAddress, type ApiUserProfile } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { PhoneVerifySheet } from '../components/PhoneVerifySheet';
+import { AddEmailSheet } from '../components/AddEmailSheet';
+import { formatPhMobile } from '../lib/phone';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -49,20 +52,25 @@ function SectionHeader({ title }: { title: string }) {
 }
 
 function ProfileScreenContent() {
-  const { user, token, signOut } = useAuth();
+  const { user, token, signOut, refreshUser } = useAuth();
   const router = useRouter();
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [promoEnabled, setPromoEnabled] = useState(false);
   const [profile, setProfile] = useState<ApiUserProfile | null>(null);
+  const [phoneSheetOpen, setPhoneSheetOpen] = useState(false);
+  const [emailSheetOpen, setEmailSheetOpen] = useState(false);
 
-  useEffect(() => {
+  const loadProfile = React.useCallback(() => {
     if (!token) return;
     void api.users.me(token).then(setProfile).catch(() => { });
   }, [token]);
 
+  useEffect(loadProfile, [loadProfile]);
+
   const email = profile?.email ?? user?.email ?? '';
-  const displayName = profile?.name || user?.name || email.split('@')[0] || 'User';
-  const phone = profile?.phone_number;
+  const phone = profile?.phone_number ?? user?.phoneNumber ?? null;
+  const phoneVerified = profile?.phone_verified ?? user?.phoneVerified ?? false;
+  const displayName = profile?.name || user?.name || email.split('@')[0] || formatPhMobile(phone) || 'User';
   const saved = defaultAddress(profile?.addresses);
   const address = [saved?.address, saved?.city, saved?.province].filter(Boolean).join(', ');
   const memberSince = profile?.created_at
@@ -109,7 +117,7 @@ function ProfileScreenContent() {
             </TouchableOpacity>
           </View>
           <Text style={styles.displayName}>{displayName}</Text>
-          <Text style={styles.userEmail}>{email || 'Not signed in'}</Text>
+          <Text style={styles.userEmail}>{email || formatPhMobile(phone) || 'Not signed in'}</Text>
           <TouchableOpacity style={styles.editProfileBtn}>
             <Text style={styles.editProfileText}>Edit Profile</Text>
           </TouchableOpacity>
@@ -149,8 +157,18 @@ function ProfileScreenContent() {
           {/* Account */}
           <SectionHeader title="Account" />
           <View style={styles.settingsGroup}>
-            <SettingItem icon="mail-outline" label="Email" value={email || 'Not set'} />
-            <SettingItem icon="call-outline" label="Phone" value={phone ?? 'Not set'} onPress={() => { }} />
+            <SettingItem
+              icon="mail-outline"
+              label="Email"
+              value={email || 'Add an email'}
+              onPress={() => setEmailSheetOpen(true)}
+            />
+            <SettingItem
+              icon="call-outline"
+              label="Phone"
+              value={phone ? `${formatPhMobile(phone)}${phoneVerified ? '' : ' (not verified)'}` : 'Add a mobile number'}
+              onPress={() => setPhoneSheetOpen(true)}
+            />
             <SettingItem icon="location-outline" label="Address" value={address || 'Not set'} onPress={() => { }} />
             <SettingItem icon="card-outline" label="Payment Methods" value="No cards saved" onPress={() => { }} />
             <SettingItem icon="receipt-outline" label="Order History" onPress={() => router.push('/(tabs)/history')} />
@@ -222,6 +240,23 @@ function ProfileScreenContent() {
         {/* App version */}
         <Text style={styles.version}>Carabao v1.0.0  •  Made in the Philippines 🇵🇭</Text>
       </ScrollView>
+      <PhoneVerifySheet
+        visible={phoneSheetOpen}
+        onClose={() => setPhoneSheetOpen(false)}
+        onVerified={() => {
+          setPhoneSheetOpen(false);
+          loadProfile();
+          void refreshUser();
+        }}
+      />
+      <AddEmailSheet
+        visible={emailSheetOpen}
+        onClose={() => setEmailSheetOpen(false)}
+        onSent={(address) => {
+          setEmailSheetOpen(false);
+          Alert.alert('Check your email', `We sent a link to ${address}. Open it to add the email to your account.`);
+        }}
+      />
     </SafeAreaView>
   );
 }

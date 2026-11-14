@@ -1,6 +1,7 @@
 """Per-IP and per-identifier rate limits for the OTP endpoints (E7).
 
-Sign-in and sign-up are limited by BetterAuth (lib/auth.ts rateLimit).
+Sign-in, sign-up and BetterAuth's phone OTP endpoints are limited per IP by
+BetterAuth (lib/auth.ts rateLimit); the backend adds the per-number limit.
 
 A sliding window held in process memory: enough for one API instance. With
 several workers or instances each keeps its own counts, so the effective limit
@@ -32,6 +33,14 @@ class Limit:
 LIMITS: dict[str, tuple[Limit, Limit]] = {
     "otp_send": (Limit(20, 900), Limit(5, 900)),
     "otp_verify": (Limit(30, 900), Limit(10, 900)),
+}
+
+# scope -> per identifier, for server-to-server calls where the client IP is
+# checked upstream (BetterAuth limits its OTP endpoints per IP).
+IDENTIFIER_LIMITS: dict[str, Limit] = {
+    # Signup / phone-change / password-reset codes per number. Lenient on
+    # purpose (no CAPTCHA yet); tighten with ACCOUNT_OTP_PER_HOUR.
+    "account_otp": Limit(int(os.getenv("ACCOUNT_OTP_PER_HOUR", "5")), 3600),
 }
 
 _hits: dict[str, deque[float]] = {}
@@ -91,13 +100,28 @@ def enforce(request: Request, scope: str, identifier: str | None = None) -> None
             raise HTTPException(
                 status_code=429,
                 detail=(
-                    "Too many attempts. Please try again in "
-                    f"{_humanize(retry_after)}."
+                    f"Too many attempts. Please try again in {_humanize(retry_after)}."
                 ),
                 headers={"Retry-After": str(retry_after)},
             )
         for key, limit in keys:
             _check(key, limit, now)
+
+
+def enforce_identifier(scope: str, identifier: str) -> None:
+    """Raise 429 with Retry-After when ``identifier`` is over its limit."""
+    limit = IDENTIFIER_LIMITS[scope]
+    with _lock:
+        wait = _check(
+            f"{scope}:id:{identifier.strip().lower()}", limit, time.monotonic()
+        )
+    if wait is not None:
+        retry_after = max(1, math.ceil(wait))
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many codes requested. Please try again in {_humanize(retry_after)}.",
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 def _humanize(seconds: int) -> str:

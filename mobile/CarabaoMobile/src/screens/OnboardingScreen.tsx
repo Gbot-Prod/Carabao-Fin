@@ -49,7 +49,7 @@ function OnboardingScreenContent() {
     try {
       // The backend's /merchant-onboarding/me needs an RSBSA document upload and
       // an SMS-verified contact number, which only the web flow collects today.
-      await WebBrowser.openBrowserAsync(`${WEB_BASE}/onboarding`);
+      await WebBrowser.openBrowserAsync(`${WEB_BASE}/merchantOnboarding`);
       Alert.alert(
         'Finish on the Web',
         'Complete your merchant application (documents and phone verification) in the browser. Sign in with the same account.',

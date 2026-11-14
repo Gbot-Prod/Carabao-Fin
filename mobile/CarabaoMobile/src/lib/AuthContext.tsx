@@ -4,27 +4,30 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiError, request } from './api';
 import { authClient, clearAccessToken, getAccessToken } from './authClient';
 import { awayTooLong, idleTimeoutMs } from './idle';
+import { normalizePhMobile, PHONE_HINT } from './phone';
 
 // When the app last left the foreground; also survives the app being killed (E5).
 const LEFT_AT_KEY = 'carabao_left_at';
 // The old app login kept a 7-day token here; cleared on start so none lingers.
 const LEGACY_KEYS = ['carabao_token', 'carabao_user', 'carabao_token_expiry'];
 
-// Sent with sign-up so BetterAuth knows the email was verified with a code.
-// Must match SIGNUP_VERIFICATION_HEADER in the web's lib/auth.ts.
-const SIGNUP_VERIFICATION_HEADER = 'x-signup-verification';
-
 interface User {
   id: string;
-  email: string;
+  /** null for a phone signup that hasn't added an email */
+  email: string | null;
   name: string;
+  phoneNumber: string | null;
+  /** Checkout, merchant applications and order chat need this. */
+  phoneVerified: boolean;
   role?: 'user' | 'merchant' | 'admin';
 }
 
 interface MeResponse {
   id: number;
-  email: string;
+  email: string | null;
   name?: string | null;
+  phone_number?: string | null;
+  phone_verified?: boolean;
   is_admin?: boolean;
 }
 
@@ -42,15 +45,25 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  /** `verificationToken` comes from /auth/signup-verification/verify for this email. */
-  signUp: (
-    email: string,
-    password: string,
-    firstName: string,
-    lastName: string,
-    verificationToken: string,
-  ) => Promise<void>;
+  /** A mobile number, or an email the account has verified. */
+  signIn: (identifier: string, password: string) => Promise<void>;
+  /** Texts a 6-digit code (signup, or adding a number while signed in). */
+  sendPhoneCode: (phoneNumber: string) => Promise<void>;
+  /**
+   * Checks the code, which creates the account and signs in, then sets the
+   * password and name. A number that already has an account is refused
+   * (the code is not a login; sign in with the password).
+   */
+  signUpWithPhone: (details: {
+    phoneNumber: string;
+    code: string;
+    name: string;
+    password: string;
+  }) => Promise<void>;
+  /** Adds or changes the signed-in account's number; the code proves it. */
+  verifyPhone: (phoneNumber: string, code: string) => Promise<void>;
+  /** Re-reads the profile after a name, phone or email change. */
+  refreshUser: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -59,8 +72,10 @@ const AuthContext = createContext<AuthContextType | null>(null);
 function buildUser(me: MeResponse): User {
   return {
     id: String(me.id),
-    email: me.email,
+    email: me.email ?? null,
     name: me.name ?? '',
+    phoneNumber: me.phone_number ?? null,
+    phoneVerified: !!me.phone_verified,
     role: me.is_admin ? 'admin' : 'user',
   };
 }
@@ -70,15 +85,41 @@ type BetterAuthError = { code?: string; message?: string; status?: number } | nu
 function signInMessage(error: BetterAuthError): string {
   switch (error?.code) {
     case 'INVALID_EMAIL_OR_PASSWORD':
-      return 'Invalid email or password. Made your account in the app before? Use "Forgot password?" to set a new one.';
-    case 'EMAIL_NOT_VERIFIED':
-      return "Verify your email first: we've sent you a link. Open it, then sign in here.";
+    case 'INVALID_PHONE_NUMBER_OR_PASSWORD':
+      return 'Wrong number, email or password. Use "Forgot password?" to set a new one.';
     case 'BANNED_USER':
       return 'This account has been suspended. Contact Carabao support.';
     default:
       if (error?.status === 429) return 'Too many attempts. Wait a few minutes and try again.';
       return error?.message || 'Sign-in failed. Please try again.';
   }
+}
+
+/** The message for a wrong, expired or used-up texted code. */
+export function codeMessage(error: BetterAuthError): string {
+  switch (error?.code) {
+    case 'INVALID_OTP':
+      return "That code didn't match. Check the latest text and try again.";
+    case 'OTP_EXPIRED':
+    case 'OTP_NOT_FOUND':
+      return 'That code has expired. Send a new one.';
+    case 'TOO_MANY_ATTEMPTS':
+      return 'Too many wrong codes. Send a new one.';
+    case 'PHONE_NUMBER_EXIST':
+      return 'That number belongs to another account.';
+    case 'BANNED_USER':
+      return 'This account has been suspended. Contact Carabao support.';
+    default:
+      if (error?.status === 429) return 'Too many codes requested. Wait a while and try again.';
+      return error?.message || "We couldn't check the code.";
+  }
+}
+
+/** Normalizes a typed number or throws the message to show. */
+export function requirePhone(value: string): string {
+  const phone = normalizePhMobile(value);
+  if (!phone) throw new ApiError(PHONE_HINT, 400);
+  return phone;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -169,9 +210,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [signOut]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (identifier: string, password: string) => {
     clearAccessToken();
-    const { data, error } = await authClient.signIn.email({ email: email.trim(), password });
+    const value = identifier.trim();
+    const { data, error } = value.includes('@')
+      ? await authClient.signIn.email({ email: value, password })
+      : await authClient.signIn.phoneNumber({ phoneNumber: requirePhone(value), password });
     if (error) throw new ApiError(signInMessage(error), error.status ?? 400);
     if ((data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) {
       throw new TwoFactorRequiredError();
@@ -179,22 +223,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadUser();
   };
 
-  const signUp = async (
-    email: string,
-    password: string,
-    firstName: string,
-    lastName: string,
-    verificationToken: string,
-  ) => {
-    const name = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') || email.trim().split('@')[0];
-    const { error } = await authClient.signUp.email(
-      { email: email.trim(), password, name },
-      { headers: { [SIGNUP_VERIFICATION_HEADER]: verificationToken } },
+  const sendPhoneCode = async (phoneNumber: string) => {
+    const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: requirePhone(phoneNumber) });
+    if (error) {
+      throw new ApiError(error.message || "We couldn't send the code. Try again shortly.", error.status ?? 400);
+    }
+  };
+
+  const signUpWithPhone: AuthContextType['signUpWithPhone'] = async ({ phoneNumber, code, name, password }) => {
+    clearAccessToken();
+    const { error } = await authClient.phoneNumber.verify({
+      phoneNumber: requirePhone(phoneNumber),
+      code: code.trim(),
+    });
+    if (error) {
+      const message = error.code === 'PHONE_NUMBER_EXIST' ? 'That number already has an account. Log in instead.' : codeMessage(error);
+      throw new ApiError(message, error.status ?? 400);
+    }
+
+    const set = await authClient.$fetch('/phone-number/set-password', {
+      method: 'POST',
+      body: { newPassword: password },
+    });
+    if (set.error) {
+      throw new ApiError(set.error.message || "We couldn't set your password.", set.error.status ?? 400);
+    }
+    // New accounts start with an empty name (getTempName on the web server).
+    const cleanName = name.trim().replace(/\s+/g, ' ');
+    if (cleanName) await authClient.updateUser({ name: cleanName });
+    await loadUser();
+  };
+
+  const refreshUser = useCallback(async () => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+    setUser(buildUser(await request<MeResponse>('/auth/me', accessToken)));
+  }, []);
+
+  const verifyPhone = async (phoneNumber: string, code: string) => {
+    const phone = requirePhone(phoneNumber);
+    // A number already on this account (unverified) only needs marking
+    // verified: BetterAuth refuses updatePhoneNumber for a number on any
+    // account, this one included.
+    const { data: session } = await authClient.getSession({ query: { disableCookieCache: true } });
+    const ownNumber = (session?.user as { phoneNumber?: string | null } | undefined)?.phoneNumber === phone;
+    const { error } = await authClient.phoneNumber.verify(
+      ownNumber
+        ? { phoneNumber: phone, code: code.trim(), disableSession: true }
+        : { phoneNumber: phone, code: code.trim(), updatePhoneNumber: true },
     );
-    if (error) throw new ApiError(error.message || 'Sign-up failed. Please try again.', error.status ?? 400);
-    // The verified-email signup opens no session by itself (requireEmailVerification);
-    // sign in with the same details.
-    await signIn(email, password);
+    if (error) throw new ApiError(codeMessage(error), error.status ?? 400);
+    await refreshUser();
   };
 
   return (
@@ -205,7 +284,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user && !!token,
         isLoading,
         signIn,
-        signUp,
+        sendPhoneCode,
+        signUpWithPhone,
+        verifyPhone,
+        refreshUser,
         signOut,
       }}
     >

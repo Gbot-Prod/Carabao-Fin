@@ -1,13 +1,12 @@
 """Admin suspension of accounts (A3).
 
-The backend user row is the source of truth: ``get_current_user`` refuses a
-suspended user on every request. The BetterAuth user is also banned and its
-sessions deleted (better_auth_store), so sign-in stops at once on web and app.
+A suspension is a BetterAuth ban (admin plugin's ``banned`` / ``banReason``):
+BetterAuth refuses sign-in and the ban deletes the user's sessions, so web and
+app sign out at once. ``get_current_user`` reads the ban live too, so an access
+token issued before it stops working immediately.
 """
 
 from __future__ import annotations
-
-from datetime import UTC, datetime
 
 from sqlalchemy import and_, exists, not_
 from sqlalchemy.orm import Session
@@ -29,26 +28,21 @@ def merchant_is_public():
     """SQL filter: merchants buyers may see (not deleted, owner not suspended)."""
     return and_(
         Merchant.deleted_at.is_(None),
-        not_(
-            exists().where(User.id == Merchant.user_id, User.suspended_at.isnot(None))
-        ),
+        not_(exists().where(User.id == Merchant.user_id, User.is_suspended)),
     )
 
 
 def _suspension_state(user: User) -> dict:
     return {
-        "suspended_at": user.suspended_at,
+        "is_suspended": user.is_suspended,
         "suspension_reason": user.suspension_reason,
     }
 
 
 def suspend_user(db: Session, user: User, *, admin: User, reason: str) -> User:
     before = _suspension_state(user)
-    user.suspended_at = datetime.now(UTC)
-    user.suspension_reason = reason.strip()
-    user.suspended_by = admin.id
     better_auth_store.set_banned(
-        db, user.external_auth_id, banned=True, reason=user.suspension_reason
+        db, user.external_auth_id, banned=True, reason=reason.strip()
     )
     audit_log.record_admin_action(
         db,
@@ -66,9 +60,6 @@ def suspend_user(db: Session, user: User, *, admin: User, reason: str) -> User:
 
 def reinstate_user(db: Session, user: User, *, admin: User) -> User:
     before = _suspension_state(user)
-    user.suspended_at = None
-    user.suspension_reason = None
-    user.suspended_by = None
     better_auth_store.set_banned(db, user.external_auth_id, banned=False, reason=None)
     audit_log.record_admin_action(
         db,

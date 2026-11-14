@@ -7,16 +7,16 @@ import styles from "./suspend.module.css";
 
 type Props = {
   userId: number;
-  suspendedAt: string | null | undefined;
+  suspended: boolean | null | undefined;
   reason: string | null | undefined;
   /** What gets hidden, for the confirmation text. */
   isMerchant?: boolean;
   disabled?: boolean;
-  onChange: (suspendedAt: string | null, reason: string | null) => void;
+  onChange: (suspended: boolean, reason: string | null) => void;
 };
 
 /** Suspend (with a reason) or reinstate an account (A3). */
-export default function SuspendControl({ userId, suspendedAt, reason, isMerchant, disabled, onChange }: Props) {
+export default function SuspendControl({ userId, suspended, reason, isMerchant, disabled, onChange }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +34,7 @@ export default function SuspendControl({ userId, suspendedAt, reason, isMerchant
     setError(null);
     try {
       const user = await suspendUser(userId, entered.trim());
-      onChange(user.suspended_at ?? null, user.suspension_reason ?? null);
+      onChange(Boolean(user.is_suspended), user.suspension_reason ?? null);
     } catch (err) {
       setError(getApiErrorMessage(err) ?? "Could not suspend.");
     } finally {
@@ -48,7 +48,7 @@ export default function SuspendControl({ userId, suspendedAt, reason, isMerchant
     setError(null);
     try {
       await reinstateUser(userId);
-      onChange(null, null);
+      onChange(false, null);
     } catch (err) {
       setError(getApiErrorMessage(err) ?? "Could not reinstate.");
     } finally {
@@ -58,7 +58,7 @@ export default function SuspendControl({ userId, suspendedAt, reason, isMerchant
 
   return (
     <div className={styles.wrap}>
-      {suspendedAt ? (
+      {suspended ? (
         <>
           <span className={styles.suspended} title={reason ?? undefined}>Suspended</span>
           <button type="button" className={styles.action} onClick={() => void reinstate()} disabled={busy || disabled}>
@@ -73,7 +73,7 @@ export default function SuspendControl({ userId, suspendedAt, reason, isMerchant
           </button>
         </>
       )}
-      {suspendedAt && reason && <span className={styles.reason}>{reason}</span>}
+      {suspended && reason && <span className={styles.reason}>{reason}</span>}
       {error && <span className={styles.error} role="alert">{error}</span>}
     </div>
   );

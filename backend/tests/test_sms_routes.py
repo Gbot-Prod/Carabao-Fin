@@ -83,7 +83,9 @@ def test_otp_send_hourly_cap_per_user(sent):
 def test_otp_verify_returns_token_bound_to_user_and_number(sent):
     client = _client(user_id=7)
     client.post("/sms/otp/send", json={"number": NUMBER})
-    resp = client.post("/sms/otp/verify", json={"number": NUMBER, "otp": _last_otp(sent)})
+    resp = client.post(
+        "/sms/otp/verify", json={"number": NUMBER, "otp": _last_otp(sent)}
+    )
     assert resp.status_code == 200
     data = read_token(resp.json()["verification_token"])
     assert data["purpose"] == "merchant_phone"
@@ -131,17 +133,56 @@ def test_stores_code_semaphore_reports_delivered(monkeypatch):
     assert resp.status_code == 200
 
 
-def test_signup_token_round_trips(sent):
-    # lib/auth.ts reads the same token in BetterAuth's sign-up hook.
-    from app.services.phone_verification import read_token
+def test_signup_verification_routes_removed():
+    # Signup OTPs are BetterAuth's phoneNumber plugin now (lib/auth.ts).
+    paths = {route.path for route in sms.router.routes}
+    assert "/auth/signup-verification/request" not in paths
+    assert "/auth/signup-verification/verify" not in paths
 
-    client = _client(user_id=None)
-    body = {"channel": "phone", "identifier": NUMBER}
-    assert client.post("/auth/signup-verification/request", json=body).status_code == 200
-    resp = client.post(
-        "/auth/signup-verification/verify", json={**body, "otp": _last_otp(sent)}
+
+def _account_otp(body, secret="test-secret"):
+    return _client(user_id=None).post(
+        "/internal/sms/account-otp",
+        json=body,
+        headers={"X-Internal-Auth-Sync-Secret": secret} if secret else {},
     )
+
+
+def test_account_otp_needs_the_internal_secret(sent):
+    body = {"phone_number": NUMBER, "code": "123456"}
+    assert _account_otp(body, secret=None).status_code == 401
+    assert _account_otp(body, secret="wrong").status_code == 401
+    assert sent == []
+
+
+def test_account_otp_sends_betterauths_code_to_normalized_number(sent):
+    resp = _account_otp({"phone_number": NUMBER, "code": "123456"})
     assert resp.status_code == 200
-    token = resp.json()["verification_token"]
-    data = read_token(token)
-    assert (data["channel"], data["identifier"]) == ("phone", NORMALIZED)
+    assert resp.json()["code"] == "123456"
+    number, message = sent[-1]
+    assert number == NORMALIZED and "verification code is 123456" in message
+
+    _account_otp(
+        {"phone_number": NUMBER, "code": "654321", "purpose": "password_reset"}
+    )
+    assert "password reset code is 654321" in sent[-1][1]
+
+
+def test_account_otp_reports_the_code_semaphore_used(monkeypatch):
+    # lib/auth.ts stores this one so the user's code still works.
+    monkeypatch.setattr(sms, "semaphore_send_otp", lambda **_: "424242")
+    resp = _account_otp({"phone_number": NUMBER, "code": "123456"})
+    assert resp.json()["code"] == "424242"
+
+
+def test_account_otp_rejects_bad_input(sent):
+    assert (
+        _account_otp({"phone_number": "+1 555 123 4567", "code": "1"}).status_code
+        == 400
+    )
+    assert _account_otp({"phone_number": NUMBER, "code": "abc"}).status_code == 400
+    assert (
+        _account_otp({"phone_number": NUMBER, "code": "1", "purpose": "x"}).status_code
+        == 422
+    )
+    assert sent == []

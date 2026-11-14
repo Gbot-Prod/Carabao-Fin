@@ -9,6 +9,7 @@ from app.models.admin_audit_log import AdminAuditLog
 from app.models.merchant_application import MerchantApplication
 from app.models.user import User
 from app.services import refund_service
+from tests.better_auth import make_user
 from tests.test_admin_orders import _order, _txn
 from tests.test_payouts import _env, _requested_batch, transfers  # noqa: F401
 from tests.test_reviews import _buyer, buyer, db, merchant  # noqa: F401 - fixtures
@@ -24,7 +25,7 @@ def _client(db, user) -> TestClient:
 
 
 def _staff(db, email="admin@example.com") -> User:
-    staff = User(email=email, is_admin=True, notifications_preferences={})
+    staff = make_user(db, email, is_admin=True, notifications_preferences={})
     db.add(staff)
     db.commit()
     return staff
@@ -59,11 +60,11 @@ def test_suspend_and_reinstate_are_logged(db, merchant):
     client.post(f"/admin/users/{target.id}/reinstate")
     suspend, reinstate = _entries(db)
     assert suspend.action == "user.suspend"
-    assert suspend.before["suspended_at"] is None
+    assert suspend.before["is_suspended"] is False
     assert suspend.after["suspension_reason"] == "Spam"
     assert reinstate.action == "user.reinstate"
     assert reinstate.before["suspension_reason"] == "Spam"
-    assert reinstate.after == {"suspended_at": None, "suspension_reason": None}
+    assert reinstate.after == {"is_suspended": False, "suspension_reason": None}
 
 
 def test_application_review_is_logged(db, merchant):

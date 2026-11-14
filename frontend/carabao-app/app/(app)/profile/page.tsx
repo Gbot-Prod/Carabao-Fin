@@ -10,7 +10,6 @@ import {
   fetchMyAddresses,
   fetchMyProfile,
   updateMyAddress,
-  updateMyProfile,
   uploadProfilePicture,
   type UserAddress,
   type UserProfile,
@@ -21,10 +20,11 @@ import type { Pin } from '@/util/reverseGeocode';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import TwoFactorSettings from '@/components/TwoFactorSettings/TwoFactorSettings';
 import { TWO_FACTOR_ENABLED } from '@/lib/features';
-import { signOut } from '@/lib/auth-client';
+import { addEmail, signOut, updateName } from '@/lib/auth-client';
+import { formatPhMobile } from '@/lib/phone';
+import PhoneVerifyDialog from '@/components/PhoneVerifyDialog/PhoneVerifyDialog';
 
 // Hidden for now — kept as components in ./components so they can be re-enabled:
-//   PaymentPanel        (💳 Payment Methods)  <PaymentPanel userEmail={profile?.email} />
 //   NotificationsPanel  (🔔 Notifications)    <NotificationsPanel profile={profile} onSaved={setProfile} />
 //   SupportPanel        (💬 Contact support)  <SupportPanel />
 // The "View Merchant Page" / "Merchant Dashboard" links were also removed from
@@ -246,10 +246,11 @@ function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | nul
 }
 
 // ─── Edit profile form ────────────────────────────────────────────────────────
-type EditForm = { name: string; phone_number: string };
+// Name, email and phone are BetterAuth's: the name saves through its client,
+// an email only once its link is opened, a phone once its texted code is entered.
+type EditForm = { name: string; email: string };
 
-const profileToForm = (p: UserProfile): EditForm =>
-  ({ name: p.name ?? '', phone_number: p.phone_number ?? '' });
+const profileToForm = (p: UserProfile): EditForm => ({ name: p.name ?? '', email: '' });
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Profile() {
@@ -259,9 +260,11 @@ export default function Profile() {
   const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<EditForm>({ name: '', phone_number: '' });
+  const [form, setForm] = useState<EditForm>({ name: '', email: '' });
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
 
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -271,7 +274,13 @@ export default function Profile() {
       .then(data => { setProfile(data); setForm(profileToForm(data)); })
       .catch(() => setLoadError('Could not load profile. Please refresh.'))
       .finally(() => setIsLoading(false));
+    // Back from the link sent to a newly added email (/email-verified).
+    if (new URLSearchParams(window.location.search).get('email') === 'verified') {
+      queueMicrotask(() => setNotice('Your email is verified.'));
+    }
   }, []);
+
+  const reloadProfile = async () => setProfile(await fetchMyProfile());
 
   const handleAvatarUpload = async (file: File) => {
     setAvatarUploading(true);
@@ -290,14 +299,18 @@ export default function Profile() {
   const handleSave = async () => {
     setIsSaving(true); setSaveError(null);
     try {
-      const updated = await updateMyProfile({
-        name: form.name.trim().replace(/\s+/g, ' ') || null,
-        phone_number: form.phone_number.trim() || null,
-      });
-      setProfile(updated);
+      const name = form.name.trim().replace(/\s+/g, ' ');
+      if (name && name !== (profile?.name ?? '')) await updateName(name);
+      const email = form.email.trim();
+      if (email) {
+        await addEmail(email);
+        setNotice(`We sent a link to ${email}. Open it to add the email to your account.`);
+      }
+      await reloadProfile();
       setModalOpen(false);
-    } catch { setSaveError('Failed to save. Please try again.'); }
-    finally { setIsSaving(false); }
+    } catch (err) {
+      setSaveError(err instanceof Error && err.message ? err.message : 'Failed to save. Please try again.');
+    } finally { setIsSaving(false); }
   };
 
   const set = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -336,17 +349,25 @@ export default function Profile() {
 
             <div className={styles.nameBlock}>
               <h2 className={styles.name}>{fullName ?? '—'}</h2>
-              <p className={styles.email}>{profile?.email ?? '—'}</p>
+              <p className={styles.email}>{profile?.email ?? 'No email added'}</p>
             </div>
 
             <div className={styles.metaBlock}>
               <div className={styles.metaRow}>
                 <span className={styles.metaLabel}>Phone</span>
-                <span className={styles.metaValue}>{profile?.phone_number ?? 'No data'}</span>
+                <span className={styles.metaValue}>
+                  {profile?.phone_number
+                    ? `${formatPhMobile(profile.phone_number)}${profile.phone_verified ? '' : ' (not verified)'}`
+                    : 'No data'}
+                </span>
               </div>
+              <button className={styles.panelEditBtn} onClick={() => setPhoneDialogOpen(true)} disabled={!!loadError} type="button">
+                {profile?.phone_verified ? 'Change number' : 'Add mobile number'}
+              </button>
             </div>
 
             {loadError && <p className={styles.errorBanner}>{loadError}</p>}
+            {notice && <p className={styles.noticeBanner} role="status">{notice}</p>}
 
             <button className={styles.editBtn} onClick={openModal} disabled={!!loadError} type="button">
               Edit Profile
@@ -452,11 +473,19 @@ export default function Profile() {
                 <input id="profile-name" className={styles.formInput} value={form.name} onChange={set('name')} placeholder="Juan dela Cruz" autoComplete="name" />
               </div>
               <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
-                <label htmlFor="profile-phone-number" className={styles.formLabel}>Phone number</label>
-                <div className={styles.phoneRow}>
-                  <span className={styles.phonePrefix}>+63</span>
-                  <input id="profile-phone-number" className={`${styles.formInput} ${styles.phoneInput}`} value={form.phone_number} onChange={set('phone_number')} placeholder="912 345 6789" />
-                </div>
+                <label htmlFor="profile-email" className={styles.formLabel}>
+                  {profile?.email_verified ? 'Change email' : 'Add an email'}
+                </label>
+                <input
+                  id="profile-email"
+                  type="email"
+                  className={styles.formInput}
+                  value={form.email}
+                  onChange={set('email')}
+                  placeholder={profile?.email ?? 'you@example.com'}
+                  autoComplete="email"
+                />
+                <span className={styles.formHint}>For receipts and resetting your password by email. We&apos;ll send a link to confirm it.</span>
               </div>
             </div>
             {saveError && <p className={styles.saveError}>{saveError}</p>}
@@ -466,6 +495,18 @@ export default function Profile() {
             </div>
           </div>
         </div>
+      )}
+
+      {phoneDialogOpen && (
+        <PhoneVerifyDialog
+          initialNumber={profile?.phone_number}
+          onClose={() => setPhoneDialogOpen(false)}
+          onVerified={() => {
+            setPhoneDialogOpen(false);
+            setNotice('Your mobile number is verified.');
+            void reloadProfile();
+          }}
+        />
       )}
     </div>
   );

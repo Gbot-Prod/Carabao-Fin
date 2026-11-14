@@ -12,7 +12,7 @@ from app.api.routes.admin import _require_admin, admin_requires_two_factor
 from app.api.routes.chat import ChatMessageOut, _out
 from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.user import User
-from app.services import better_auth_store, chat, notifications
+from app.services import chat, notifications
 
 router = APIRouter(tags=["support"])
 
@@ -83,17 +83,10 @@ def _post(
 
 
 def _admins(db: Session) -> list[User]:
-    admins = (
-        db.query(User)
-        .filter(User.is_admin.is_(True), User.suspended_at.is_(None))
-        .all()
-    )
+    admins = db.query(User).filter(User.is_admin, ~User.is_suspended).all()
     if not admin_requires_two_factor():
         return admins
-    enabled = better_auth_store.two_factor_identities(
-        db, (a.external_auth_id for a in admins)
-    )
-    return [a for a in admins if a.external_auth_id in enabled]
+    return [a for a in admins if a.two_factor_enabled]
 
 
 # ── The user's side ─────────────────────────────────────────────────────────
@@ -136,7 +129,7 @@ def write_to_support(
                 db,
                 admin.id,
                 "support_message",
-                f"Support message from {name or current_user.email}",
+                f"Support message from {name or current_user.email or current_user.phone_number}",
                 payload.body.strip()[:120],
                 "/admin/support",
             )

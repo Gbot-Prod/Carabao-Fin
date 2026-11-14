@@ -13,6 +13,7 @@ from app.models.notification import Notification
 from app.models.order import Order
 from app.models.user import User
 from app.services import chat
+from tests.better_auth import make_user, set_identity
 from tests.test_merchant_listings import _other_merchant
 from tests.test_reviews import _buyer, buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -47,7 +48,7 @@ def _post(client, order_id, body):
 
 def test_buyer_and_farm_talk_and_admin_can_join(db, merchant, buyer, order):  # noqa: F811
     farmer = db.get(User, merchant.user_id)
-    admin = User(email="admin@example.com", is_admin=True, notifications_preferences={})
+    admin = make_user(db, "admin@example.com", is_admin=True, notifications_preferences={})
     db.add(admin)
     db.commit()
 
@@ -164,9 +165,8 @@ def test_admin_without_two_factor_cannot_read_chat(db, buyer, order, monkeypatch
     # E8c applies here too: admin access needs two-step verification.
     monkeypatch.setenv("ADMIN_REQUIRE_2FA", "true")
     _post(_client(db, buyer[0]), order.id, "Private")
-    admin = User(email="admin2@example.com", is_admin=True, notifications_preferences={})
-    db.add(admin)
+    admin = make_user(db, "admin2@example.com", is_admin=True)
     db.commit()
     assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 404
-    admin.two_factor_enabled = True  # as get_current_user loads it from BetterAuth
+    set_identity(db, admin, twoFactorEnabled=True)  # turned on in BetterAuth
     assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 200

@@ -13,7 +13,8 @@ import type { Pin } from "@/util/reverseGeocode";
 import { isLuzonRegion } from "@/util/serviceArea";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt } from "@/lib/i18n/format";
-import { getApiErrorStatus } from "@/util/errorHelper";
+import { getApiErrorStatus, isPhoneVerificationRequired } from "@/util/errorHelper";
+import PhoneVerifyDialog from "@/components/PhoneVerifyDialog/PhoneVerifyDialog";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
 // Same windows the mobile app offers, so both clients store comparable values.
@@ -32,6 +33,9 @@ export default function CheckoutPage() {
   const [isLoadingCart, setIsLoadingCart] = useState(true);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The account has no verified mobile number yet (e.g. a Google sign-in):
+  // verify one, then place the order again.
+  const [needsPhone, setNeedsPhone] = useState(false);
   // Set by the mount-only payment-return effect; translated at render time so it
   // follows the language toggle without re-running that effect.
   const [returnNotice, setReturnNotice] = useState<"errPaymentProcessing" | "errPaymentCancelled" | null>(null);
@@ -170,6 +174,10 @@ export default function CheckoutPage() {
       const checkout = await createPaymentCheckout(placed ? placed[0].order_id : result.order_id);
       window.location.href = checkout.checkout_url;
     } catch (err) {
+      if (isPhoneVerificationRequired(err)) {
+        setNeedsPhone(true);
+        return;
+      }
       let message = t.checkout.errGeneric;
 
       if (axios.isAxiosError(err)) {
@@ -361,6 +369,17 @@ export default function CheckoutPage() {
           </Link>
         </aside>
       </div>
+
+      {needsPhone && (
+        <PhoneVerifyDialog
+          reason="Before your first order, verify a mobile number so the farm and rider can reach you."
+          onClose={() => setNeedsPhone(false)}
+          onVerified={() => {
+            setNeedsPhone(false);
+            void handlePlaceOrder();
+          }}
+        />
+      )}
     </div>
   );
 }

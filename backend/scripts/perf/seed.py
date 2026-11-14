@@ -19,6 +19,7 @@ common.use_perf_database()
 from sqlalchemy import insert, text  # noqa: E402
 
 from app.core.database import Base, engine  # noqa: E402
+from app.models.auth_identity import AuthIdentity  # noqa: E402
 from app.models.cart import Cart  # noqa: E402
 from app.models.merchant import Merchant  # noqa: E402
 from app.models.order import Order  # noqa: E402
@@ -26,6 +27,7 @@ from app.models.produce import Produce  # noqa: E402
 from app.models.shopPage import ShopPage  # noqa: E402
 from app.models.transaction import Transaction  # noqa: E402
 from app.models.user import User  # noqa: E402
+from app.models.user_address import UserAddress  # noqa: E402
 from main import app  # noqa: E402, F401  (registers every mapper)
 
 RNG_SEED = 42
@@ -50,25 +52,51 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_users(n_buyers: int, n_merchants: int, now: datetime) -> list[dict]:
+def build_users(
+    n_buyers: int, n_merchants: int, now: datetime
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """BetterAuth identities, backend users and their default addresses."""
     emails = [common.buyer_email(i) for i in range(n_buyers)]
     emails += [common.merchant_email(i) for i in range(n_merchants)]
-    return [
-        {
-            "id": user_id,
-            # Phone numbers stay NULL so no order update can ever trigger an SMS.
-            "email": email,
-            "external_auth_id": common.perf_subject(email),
-            "name": f"Perf User{user_id}",
-            "address": f"{user_id} Sampaguita St",
-            "city": CITIES[user_id % len(CITIES)],
-            "notifications_preferences": {},
-            "is_admin": False,
-            "created_at": now,
-            "updated_at": now,
-        }
-        for user_id, email in enumerate(emails, start=1)
-    ]
+    identities, users, addresses = [], [], []
+    for user_id, email in enumerate(emails, start=1):
+        subject = common.perf_subject(email)
+        identities.append(
+            {
+                "id": subject,
+                "name": f"Perf User{user_id}",
+                "email": email,
+                "email_verified": True,
+                # Checkout needs a verified phone. The perf app strips the SMS
+                # keys (instrumented_app.py), so nothing is ever texted.
+                "phone_number": f"+63917{user_id:07d}",
+                "phone_number_verified": True,
+                "role": "user",
+                "banned": False,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        users.append(
+            {
+                "id": user_id,
+                "external_auth_id": subject,
+                "notifications_preferences": {},
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        addresses.append(
+            {
+                "id": user_id,
+                "user_id": user_id,
+                "label": "Home",
+                "address": f"{user_id} Sampaguita St",
+                "city": CITIES[user_id % len(CITIES)],
+                "is_default": True,
+            }
+        )
+    return identities, users, addresses
 
 
 def build_merchants(n_merchants: int, first_user_id: int, now: datetime) -> list[dict]:
@@ -235,7 +263,7 @@ def main() -> None:
     rng = random.Random(RNG_SEED)
     now = datetime.now(UTC)
 
-    users = build_users(args.buyers, args.merchants, now)
+    identities, users, addresses = build_users(args.buyers, args.merchants, now)
     merchants = build_merchants(args.merchants, args.buyers + 1, now)
     produce = build_produce(rng, args.produce, args.merchants)
     orders, transactions = build_orders(
@@ -246,6 +274,7 @@ def main() -> None:
     tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     rows_by_model = [
         (User, users),
+        (UserAddress, addresses),
         (Cart, [{"id": u["id"], "user_id": u["id"], "items": []} for u in users]),
         (Merchant, merchants),
         (
@@ -267,6 +296,8 @@ def main() -> None:
     ]
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+        # Text ids, no sequence to move.
+        conn.execute(insert(AuthIdentity), identities)
         for model, rows in rows_by_model:
             conn.execute(insert(model), rows)
             # Rows carry explicit ids, so move the sequence past them.

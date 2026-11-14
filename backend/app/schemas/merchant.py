@@ -69,7 +69,7 @@ class MerchantResponse(BaseModel):
 
 class AdminMerchantResponse(MerchantResponse):
     # The owner's account suspension (A3); a suspended merchant is hidden.
-    owner_suspended_at: datetime | None = None
+    owner_is_suspended: bool = False
     owner_suspension_reason: str | None = None
 
 

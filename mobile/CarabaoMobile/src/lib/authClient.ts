@@ -2,7 +2,7 @@
 // The session lives in SecureStore (expoClient); the FastAPI backend gets a
 // short-lived access token (15 min) fetched from the session, kept in memory only.
 import { createAuthClient } from 'better-auth/react';
-import { jwtClient } from 'better-auth/client/plugins';
+import { jwtClient, phoneNumberClient } from 'better-auth/client/plugins';
 import { expoClient } from '@better-auth/expo/client';
 import * as SecureStore from 'expo-secure-store';
 import { WEB_BASE } from './config';
@@ -15,6 +15,8 @@ export const authClient = createAuthClient({
   plugins: [
     expoClient({ scheme: APP_SCHEME, storagePrefix: 'carabao', storage: SecureStore }),
     jwtClient(),
+    // Phone signup, sign-in, verification and SMS password reset.
+    phoneNumberClient(),
   ],
 });
 

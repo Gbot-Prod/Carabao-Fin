@@ -10,6 +10,7 @@ from app.api.routes import demand_insight
 from app.models.merchant import Merchant
 from app.models.search_log import SearchLog
 from app.models.user import User
+from tests.better_auth import make_user
 from tests.test_merchant_sales import _order
 from tests.test_reviews import _buyer, buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -23,7 +24,7 @@ def _client(db, user) -> TestClient:  # noqa: F811
 
 
 def _other_farm(db, province):  # noqa: F811
-    owner = User(email=f"farm-{province}@example.com")
+    owner = make_user(db, f"farm-{province}@example.com")
     db.add(owner)
     db.flush()
     farm = Merchant(

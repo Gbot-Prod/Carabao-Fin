@@ -48,7 +48,7 @@ def _merchant_open(merchant: Merchant | None) -> bool:
     return (
         merchant is not None
         and merchant.deleted_at is None
-        and (merchant.user is None or merchant.user.suspended_at is None)
+        and (merchant.user is None or not merchant.user.is_suspended)
     )
 
 

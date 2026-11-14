@@ -36,6 +36,12 @@ export function getApiErrorDetail(error: unknown): string | undefined {
   return undefined;
 }
 
+/** The backend refused because the account has no verified mobile number
+ * (checkout, merchant applications, order chat). Show PhoneVerifyDialog, then retry. */
+export function isPhoneVerificationRequired(error: unknown): boolean {
+  return getApiErrorStatus(error) === 403 && getApiErrorDetail(error) === "PHONE_VERIFICATION_REQUIRED";
+}
+
 export default function getApiErrorMessage(error: unknown): string | undefined;
 export default function getApiErrorMessage(
   error: unknown,

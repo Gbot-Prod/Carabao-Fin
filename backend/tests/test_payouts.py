@@ -23,8 +23,8 @@ from app.models.order import Order
 from app.models.payout_batch import PayoutBatch
 from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
-from app.models.user import User
 from app.services import paymongo, payout_service
+from tests.better_auth import make_user
 from tests.test_merchant_orders import _merchant_client
 from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -91,7 +91,7 @@ def _delivered_sale(db, merchant, buyer, merchant_amount=490):  # noqa: F811
 
 
 def _admin_client(db) -> TestClient:  # noqa: F811
-    staff = User(email="admin@example.com", is_admin=True)
+    staff = make_user(db, "admin@example.com", is_admin=True)
     db.add(staff)
     db.commit()
     app = FastAPI()

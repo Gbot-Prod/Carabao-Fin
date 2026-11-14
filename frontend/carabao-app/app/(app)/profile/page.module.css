@@ -812,3 +812,18 @@
 
   .panelFormRow { flex-direction: column; }
 }
+
+/* Confirmation after adding a phone or email */
+.noticeBanner {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: #eaf6ee;
+  color: #1e6f44;
+  font-size: 13px;
+}
+
+.formHint {
+  font-size: 12px;
+  color: var(--text-muted);
+}

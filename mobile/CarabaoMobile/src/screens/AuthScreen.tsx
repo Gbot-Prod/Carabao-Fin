@@ -7,15 +7,22 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
-import { TwoFactorRequiredError, useAuth } from '../lib/AuthContext';
-import { request, WEB_BASE } from '../lib/api';
+import { requirePhone, TwoFactorRequiredError, useAuth } from '../lib/AuthContext';
+import { WEB_BASE } from '../lib/api';
+import { formatPhMobile } from '../lib/phone';
 import { PasswordResetSheet } from '../components/PasswordResetSheet';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 const { width } = Dimensions.get('window');
 
+const RESEND_COOLDOWN_MS = 60_000;
+
+/**
+ * Sign in with a mobile number (or a verified email) and password. Sign up with
+ * a mobile number only: we text a code, and checking it creates the account.
+ */
 export default function AuthScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, sendPhoneCode, signUpWithPhone } = useAuth();
   // "Create account" from the cart prompt (E4) opens on sign-up.
   const params = useLocalSearchParams<{ mode?: string }>();
   const [mode, setMode] = useState<'signin' | 'signup'>(params.mode === 'signup' ? 'signup' : 'signin');
@@ -25,7 +32,9 @@ export default function AuthScreen() {
   // E8d: accounts with two-step verification sign in on the website for now.
   const [needsWeb, setNeedsWeb] = useState(false);
   const [form, setForm] = useState({
-    email: '',
+    // Sign-in: a mobile number or an email the account has verified.
+    identifier: '',
+    phone: '',
     password: '',
     confirmPassword: '',
     firstName: '',
@@ -33,40 +42,39 @@ export default function AuthScreen() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  // Sign-up proves the email with a 6-digit code first, like the website.
+  // Sign-up texts a 6-digit code to the number first.
   const [codeSent, setCodeSent] = useState(false);
   const [code, setCode] = useState('');
+  const [lastSentAt, setLastSentAt] = useState(0);
 
   const switchMode = (next: 'signin' | 'signup') => {
     setMode(next);
     setError('');
+    setNotice('');
     setCodeSent(false);
     setCode('');
   };
 
   const sendSignupCode = async () => {
-    await request('/auth/signup-verification/request', null, {
-      method: 'POST',
-      body: JSON.stringify({ channel: 'email', identifier: form.email.trim() }),
-    });
+    if (Date.now() - lastSentAt < RESEND_COOLDOWN_MS) {
+      setError('Please wait a minute before asking for another code.');
+      return;
+    }
+    await sendPhoneCode(form.phone);
+    setLastSentAt(Date.now());
     setCodeSent(true);
-    setNotice(`We sent a 6-digit code to ${form.email.trim()}.`);
+    setNotice(`We texted a 6-digit code to ${formatPhMobile(requirePhone(form.phone))}.`);
   };
 
   const finishSignup = async () => {
     if (!/^\d{6}$/.test(code.trim())) {
-      setError('Enter the 6-digit code from the email.');
+      setError('Enter the 6-digit code from the text.');
       return;
     }
-    const { verification_token } = await request<{ verification_token: string }>(
-      '/auth/signup-verification/verify',
-      null,
-      {
-        method: 'POST',
-        body: JSON.stringify({ channel: 'email', identifier: form.email.trim(), otp: code.trim() }),
-      },
-    );
-    await signUp(form.email, form.password, form.firstName, form.lastName, verification_token);
+    const name = [form.firstName.trim(), form.lastName.trim()].filter(Boolean).join(' ');
+    // Signed in either way; a number that already had an account keeps its
+    // password. Like sign-in, the app moves on once the session is set.
+    await signUpWithPhone({ phoneNumber: form.phone, code, name, password: form.password });
   };
 
   const handleChange = (key: string, val: string) =>
@@ -74,7 +82,22 @@ export default function AuthScreen() {
 
   const handleSubmit = async () => {
     setError('');
-    if (!form.email || !form.password) {
+    if (mode === 'signup' && !codeSent) {
+      if (!form.phone.trim()) {
+        setError('Enter your mobile number.');
+        return;
+      }
+      setLoading(true);
+      try {
+        await sendSignupCode();
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'We couldn\'t send the code.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+    if ((mode === 'signin' && !form.identifier) || !form.password) {
       setError('Please fill in all required fields');
       return;
     }
@@ -94,9 +117,7 @@ export default function AuthScreen() {
     setNeedsWeb(false);
     try {
       if (mode === 'signin') {
-        await signIn(form.email, form.password);
-      } else if (!codeSent) {
-        await sendSignupCode();
+        await signIn(form.identifier, form.password);
       } else {
         await finishSignup();
       }
@@ -157,8 +178,8 @@ export default function AuthScreen() {
           </Text>
           <Text style={styles.formSub}>
             {mode === 'signin'
-              ? 'Sign in to continue your fresh journey'
-              : 'Join thousands of happy farmers and buyers'}
+              ? 'Sign in with your mobile number or email'
+              : 'Sign up with your mobile number. You can add an email later in your profile.'}
           </Text>
 
           {/* Error */}
@@ -179,7 +200,55 @@ export default function AuthScreen() {
           ) : null}
 
           {/* Fields */}
-          {mode === 'signup' && (
+          {mode === 'signin' ? (
+            <TextInput
+              style={styles.input}
+              placeholder="Mobile number or email"
+              placeholderTextColor={Colors.textLight}
+              value={form.identifier}
+              onChangeText={(v) => handleChange('identifier', v)}
+              autoCapitalize="none"
+              autoComplete="username"
+            />
+          ) : (
+            <TextInput
+              style={styles.input}
+              placeholder="Mobile number, e.g. 0912 345 6789"
+              placeholderTextColor={Colors.textLight}
+              value={form.phone}
+              onChangeText={(v) => {
+                handleChange('phone', v);
+                // A code is for one number; a changed number needs a new one.
+                if (codeSent) { setCodeSent(false); setCode(''); setNotice(''); }
+              }}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+            />
+          )}
+
+          {mode === 'signup' && codeSent && (
+            <>
+              <TextInput
+                style={styles.input}
+                placeholder="6-digit code from the text"
+                placeholderTextColor={Colors.textLight}
+                value={code}
+                onChangeText={setCode}
+                keyboardType="number-pad"
+                maxLength={6}
+                autoComplete="one-time-code"
+              />
+              <TouchableOpacity
+                onPress={() => { setError(''); void sendSignupCode().catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not send the code.')); }}
+                style={styles.forgotWrap}
+                disabled={loading}
+              >
+                <Text style={styles.forgotText}>Send a new code</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {mode === 'signup' && codeSent && (
             <View style={styles.nameRow}>
               <TextInput
                 style={[styles.input, styles.halfInput]}
@@ -200,31 +269,19 @@ export default function AuthScreen() {
             </View>
           )}
 
-          <TextInput
-            style={styles.input}
-            placeholder="Email address"
-            placeholderTextColor={Colors.textLight}
-            value={form.email}
-            onChangeText={(v) => {
-              handleChange('email', v);
-              // A code is for one address; a changed email needs a new one.
-              if (codeSent) { setCodeSent(false); setCode(''); setNotice(''); }
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor={Colors.textLight}
-            value={form.password}
-            onChangeText={(v) => handleChange('password', v)}
-            secureTextEntry
-            autoComplete="password"
-            maxLength={128}
-          />
-          {mode === 'signup' && (
+          {(mode === 'signin' || codeSent) && (
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={Colors.textLight}
+              value={form.password}
+              onChangeText={(v) => handleChange('password', v)}
+              secureTextEntry
+              autoComplete={mode === 'signin' ? 'password' : 'password-new'}
+              maxLength={128}
+            />
+          )}
+          {mode === 'signup' && codeSent && (
             <TextInput
               style={styles.input}
               placeholder="Confirm password"
@@ -234,27 +291,6 @@ export default function AuthScreen() {
               secureTextEntry
               maxLength={128}
             />
-          )}
-          {mode === 'signup' && codeSent && (
-            <>
-              <TextInput
-                style={styles.input}
-                placeholder="6-digit code from the email"
-                placeholderTextColor={Colors.textLight}
-                value={code}
-                onChangeText={setCode}
-                keyboardType="number-pad"
-                maxLength={6}
-                autoComplete="one-time-code"
-              />
-              <TouchableOpacity
-                onPress={() => { setError(''); void sendSignupCode().catch((e: unknown) => setError(e instanceof Error ? e.message : 'Could not send the code.')); }}
-                style={styles.forgotWrap}
-                disabled={loading}
-              >
-                <Text style={styles.forgotText}>Send a new code</Text>
-              </TouchableOpacity>
-            </>
           )}
 
           {mode === 'signin' && (
@@ -275,7 +311,7 @@ export default function AuthScreen() {
               <ActivityIndicator color={Colors.white} />
             ) : (
               <Text style={styles.submitText}>
-                {mode === 'signin' ? 'Sign In' : codeSent ? 'Verify & Create Account' : 'Send Code'}
+                {mode === 'signin' ? 'Sign In' : codeSent ? 'Create Account' : 'Text Me a Code'}
               </Text>
             )}
           </TouchableOpacity>
@@ -290,14 +326,18 @@ export default function AuthScreen() {
       </ScrollView>
       <PasswordResetSheet
         visible={resetOpen}
-        initialEmail={form.email}
+        initialIdentifier={form.identifier}
         onClose={() => setResetOpen(false)}
-        onDone={(email) => {
+        onDone={({ identifier, byEmail }) => {
           setResetOpen(false);
           setError('');
-          handleChange('email', email);
+          handleChange('identifier', identifier);
           handleChange('password', '');
-          setNotice('Check your email for a reset link. Choose a new password there, then sign in here.');
+          setNotice(
+            byEmail
+              ? 'Check your email for a reset link. Choose a new password there, then sign in here.'
+              : 'Your password has been changed. Sign in with it now.',
+          );
         }}
       />
     </KeyboardAvoidingView>

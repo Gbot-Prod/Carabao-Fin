@@ -7,7 +7,7 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user, get_db
+from app.api.dependencies import get_current_user, get_db, require_verified_phone
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.statuses import OrderStatus, TransactionStatus
@@ -78,7 +78,7 @@ def _validate_frontend_url(frontend_url: str) -> None:
 def create_payment_checkout(
     order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_phone),
 ):
     expire_stale_reservations(db, reservation_ttl_minutes())
     order = (

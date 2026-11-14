@@ -5,8 +5,9 @@ import { useEffect, useState } from "react";
 type AuthSession = {
   user: {
     id: string;
-    email: string;
+    email: string | null;
     name?: string | null;
+    phoneNumber?: string | null;
     role?: string | null;
   };
 };

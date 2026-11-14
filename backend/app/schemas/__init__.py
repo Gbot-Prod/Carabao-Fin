@@ -10,7 +10,7 @@ from app.schemas.order import (
 )
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
-from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.schemas.user import UserResponse, UserUpdate
 
 __all__ = [
     "CartCreate",
@@ -29,7 +29,6 @@ __all__ = [
     "ShopPageCreate",
     "ShopPageResponse",
     "ShopPageUpdate",
-    "UserCreate",
     "UserResponse",
     "UserUpdate",
 ]

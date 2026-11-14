@@ -1,6 +1,8 @@
 "use client";
 
-import errorHelper from "@/util/errorHelper";
+import errorHelper, { isPhoneVerificationRequired } from "@/util/errorHelper";
+import PhoneVerifyDialog from "@/components/PhoneVerifyDialog/PhoneVerifyDialog";
+import { normalizePhMobile } from "@/lib/phone";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -76,6 +78,10 @@ export default function MerchantOnboardingPage() {
   const [otpError, setOtpError] = useState<string | null>(null);
   // Kept so a failed submit can be retried without re-entering a consumed code
   const [phoneVerificationToken, setPhoneVerificationToken] = useState<string | null>(null);
+  // The account's own verified number: used as the contact number, it needs no
+  // second code. Applying needs one at all (backend require_verified_phone).
+  const [accountPhone, setAccountPhone] = useState<string | null>(null);
+  const [needsAccountPhone, setNeedsAccountPhone] = useState(false);
 
   const [form, setForm] = useState<MerchantOnboardingPayload>({
     merchant_name: "",
@@ -105,6 +111,7 @@ export default function MerchantOnboardingPage() {
       try {
         const p = await fetchMyProfile();
         const a = defaultAddress(p.addresses);
+        setAccountPhone(p.phone_verified ? p.phone_number : null);
         setForm((prev) => ({
           ...prev,
           contact_email: prev.contact_email || p.email || "",
@@ -131,6 +138,7 @@ export default function MerchantOnboardingPage() {
   const progressLabel = useMemo(() => `${stepIndex + 1} / ${STEPS.length}`, [stepIndex]);
 
   const fullPhoneNumber = `+63${form.contact_number.replace(/\s/g, "")}`;
+  const isAccountPhone = accountPhone !== null && normalizePhMobile(fullPhoneNumber) === accountPhone;
 
   const setField =
     <K extends keyof MerchantOnboardingPayload>(key: K) =>
@@ -248,6 +256,10 @@ export default function MerchantOnboardingPage() {
       );
       setSuccessApplication(merchantApplication);
     } catch (error: unknown) {
+      if (isPhoneVerificationRequired(error)) {
+        setNeedsAccountPhone(true);
+        return;
+      }
       const message = errorHelper(error) ?? "Unable to submit your merchant application right now. Please try again.";
       setError(message);
     } finally {
@@ -257,6 +269,7 @@ export default function MerchantOnboardingPage() {
 
   const handleVerifyAndSubmit = async () => {
     setOtpError(null);
+    if (isAccountPhone) return submit("");
     let token = phoneVerificationToken;
     if (!token) {
       setIsVerifyingOtp(true);
@@ -577,7 +590,11 @@ export default function MerchantOnboardingPage() {
                 </button>
               </div>
 
-              {!otpSent ? (
+              {isAccountPhone ? (
+                <p className={styles.otpHint}>
+                  This is your account&apos;s verified number, so there&apos;s no code to enter.
+                </p>
+              ) : !otpSent ? (
                 <button
                   type="button"
                   className={styles.sendOtpBtn}
@@ -639,13 +656,27 @@ export default function MerchantOnboardingPage() {
               className={styles.primaryBtn}
               type="button"
               onClick={handleVerifyAndSubmit}
-              disabled={!otpSent || otpValue.length < 6 || isVerifyingOtp || isSubmitting}
+              disabled={(!isAccountPhone && (!otpSent || otpValue.length < 6)) || isVerifyingOtp || isSubmitting}
             >
-              {isVerifyingOtp || isSubmitting ? "Submitting…" : "Verify & Submit"}
+              {isVerifyingOtp || isSubmitting ? "Submitting…" : isAccountPhone ? "Submit" : "Verify & Submit"}
             </button>
           )}
         </footer>
       </section>
+
+      {needsAccountPhone && (
+        <PhoneVerifyDialog
+          reason="Merchant accounts need a verified mobile number."
+          initialNumber={normalizePhMobile(fullPhoneNumber)}
+          onClose={() => setNeedsAccountPhone(false)}
+          onVerified={(phone) => {
+            setNeedsAccountPhone(false);
+            setAccountPhone(phone);
+            // The token (if any) proves the contact number; the dialog the account's.
+            void submit(phoneVerificationToken ?? "");
+          }}
+        />
+      )}
     </div>
   );
 }

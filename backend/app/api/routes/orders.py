@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.dependencies import get_current_user, get_db
+from app.api.dependencies import get_current_user, get_db, require_verified_phone
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.produce import Produce
@@ -68,7 +68,7 @@ _PH_TZ = timezone(timedelta(hours=8))
 def place_order_from_cart(
     payload: PlaceOrderRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_phone),
 ):
     # Carabao delivers within Luzon only (B2).
     if payload.delivery_region is not None:
@@ -178,7 +178,7 @@ def place_order_from_cart(
         if (
             merchant is None
             or merchant.deleted_at is not None
-            or (merchant.user is not None and merchant.user.suspended_at is not None)
+            or (merchant.user is not None and merchant.user.is_suspended)
         ):
             name = merchant.merchant_name if merchant is not None else "A merchant"
             raise HTTPException(

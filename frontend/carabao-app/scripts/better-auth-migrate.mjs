@@ -3,7 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { getMigrations } from "better-auth/db/migration";
-import { admin, jwt, twoFactor } from "better-auth/plugins";
+import { admin, jwt, phoneNumber, twoFactor } from "better-auth/plugins";
 import { Pool } from "pg";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -70,12 +70,9 @@ const pool = new Pool({
 
 const config = {
   // Keep in step with lib/auth.ts (schema-bearing plugins and fields only).
-  plugins: [admin(), twoFactor(), jwt()],
-  user: {
-    additionalFields: {
-      phoneNumber: { type: "string", required: false, input: false },
-    },
-  },
+  // phoneNumber adds "phoneNumber" (unique) and "phoneNumberVerified"; the
+  // backend migration c3e8a1f5d7b9 adds the unique index on an existing column.
+  plugins: [admin(), twoFactor(), jwt(), phoneNumber({ sendOTP: () => {} })],
   database: pool,
   baseURL:
     env.NEXT_PUBLIC_APP_URL || env.BETTER_AUTH_URL || "http://localhost:3000",

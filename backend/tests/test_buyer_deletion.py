@@ -21,6 +21,7 @@ from app.models.shipment import Shipment
 from app.models.shopPage import ShopPage  # noqa: F401 - registers the table
 from app.models.transaction import Transaction
 from app.models.user import User
+from tests.better_auth import make_user
 
 
 @compiles(JSONB, "sqlite")
@@ -71,7 +72,7 @@ def _merchant(db, user):
 
 @pytest.fixture
 def seller(db):
-    user = User(email="farmer@example.com")
+    user = make_user(db, "farmer@example.com")
     db.add(user)
     db.flush()
     merchant = _merchant(db, user)
@@ -81,7 +82,7 @@ def seller(db):
 
 @pytest.fixture
 def buyer(db):
-    user = User(email="buyer@example.com")
+    user = make_user(db, "buyer@example.com")
     db.add(user)
     db.flush()
     db.commit()

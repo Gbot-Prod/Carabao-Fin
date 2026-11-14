@@ -13,6 +13,7 @@ from app.models.order import Order
 from app.models.produce import Produce
 from app.models.user import User
 from app.services.produce_freshness import ph_today
+from tests.better_auth import set_identity
 from tests.test_merchant_listings import _other_merchant
 from tests.test_reviews import _buyer, buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -66,7 +67,7 @@ def past_order(db, merchant, buyer):  # noqa: F811
     }
     db.add_all(rows.values())
     db.flush()
-    db.get(User, rival.user_id).suspended_at = datetime.now(UTC)
+    set_identity(db, db.get(User, rival.user_id), banned=True)
     user, _ = buyer
     items = [
         {"produce_id": rows["talong"].id, "produce": "Talong", "quantity": 3},

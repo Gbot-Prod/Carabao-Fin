@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user, get_db
+from app.api.dependencies import get_current_user, get_db, require_verified_phone
 from app.models.merchant_application import MerchantApplication
 from app.models.user import User
 from app.schemas.merchant_application import (
@@ -45,7 +45,7 @@ def submit_my_merchant_onboarding_route(
     payload: str = Form(...),
     rsbsa_file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_phone),
 ):
     try:
         parsed = json.loads(payload)
@@ -59,13 +59,19 @@ def submit_my_merchant_onboarding_route(
         raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
     validate_pin(data.lat, data.lng)
 
+    # The shop's contact number is proven either by being the account's own
+    # verified number or by a code sent to it (/sms/otp/verify).
+    contact = normalize_ph_mobile(data.contact_number)
+    account_phone = normalize_ph_mobile(current_user.phone_number or "")
     verified = read_token(data.phone_verification_token)
-    if (
-        verified is None
-        or verified.get("purpose") != "merchant_phone"
-        or verified.get("user_id") != current_user.id
-        or verified.get("number") != normalize_ph_mobile(data.contact_number)
-    ):
+    is_account_phone = contact is not None and contact == account_phone
+    has_token = (
+        verified is not None
+        and verified.get("purpose") == "merchant_phone"
+        and verified.get("user_id") == current_user.id
+        and verified.get("number") == contact
+    )
+    if not (is_account_phone or has_token):
         raise HTTPException(
             status_code=400, detail="Please verify your contact number first"
         )

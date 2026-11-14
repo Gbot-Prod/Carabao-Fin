@@ -1,6 +1,5 @@
 import logging
 
-import requests
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -13,16 +12,9 @@ from app.models.payout_batch import PayoutBatch
 from app.models.shipment import Shipment
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.schemas.payment import AttachPaymentMethodRequest, SavedCard
 from app.schemas.user import UserResponse, UserUpdate
 from app.services import better_auth_store, r2_service
 from app.services.order_status import ACTIVE_ORDER_STATUSES
-from app.services.paymongo import (
-    attach_payment_method,
-    detach_payment_method,
-    get_or_create_paymongo_customer,
-    list_customer_payment_methods,
-)
 
 router = APIRouter(tags=["users"])
 logger = logging.getLogger(__name__)
@@ -39,12 +31,11 @@ def update_current_user_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Name, email and phone are BetterAuth's; clients change them through its
+    # client (updateUser, changeEmail, phoneNumber.verify).
     updates = user_update.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(current_user, field, value)
-    # Name and phone show in the BetterAuth session too; same transaction.
-    better_auth_store.update_profile(db, current_user.external_auth_id, updates)
-
     db.commit()
     db.refresh(current_user)
     return current_user
@@ -81,69 +72,14 @@ def upload_my_avatar(
         ) from exc
 
     current_user.profile_picture_url = url
-    better_auth_store.update_profile(
-        db, current_user.external_auth_id, {"profile_picture_url": url}
-    )
+    better_auth_store.set_image(db, current_user.external_auth_id, url)
     db.commit()
     db.refresh(current_user)
     return current_user
 
 
-# ─── Payment methods ────────────────────────────────────────────────────
-
-"""
-@router.get("/users/me/payment-methods", response_model=list[SavedCard])
-def list_my_payment_methods(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if not current_user.paymongo_customer_id:
-        return []
-    try:
-        raw = list_customer_payment_methods(current_user.paymongo_customer_id)
-        return [SavedCard.from_paymongo(pm) for pm in raw]
-    except requests.HTTPError as e:
-        logger.warning("PayMongo list payment methods failed: %s", e)
-        return []
-
-
-@router.post("/users/me/payment-methods", response_model=SavedCard)
-def attach_my_payment_method(
-    payload: AttachPaymentMethodRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    try:
-        customer_id = get_or_create_paymongo_customer(db, current_user)
-        pm = attach_payment_method(customer_id, payload.payment_method_id)
-        return SavedCard.from_paymongo(pm)
-    except requests.HTTPError as e:
-        body = e.response.text if e.response is not None else ""
-        logger.warning("PayMongo attach payment method failed: %s", body)
-        raise HTTPException(
-            status_code=502, detail=f"PayMongo error: {body[:400]}"
-        ) from e
-
-
-@router.delete("/users/me/payment-methods/{payment_method_id}", status_code=204)
-def detach_my_payment_method(
-    payment_method_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if not current_user.paymongo_customer_id:
-        raise HTTPException(status_code=404, detail="No payment methods on file")
-    try:
-        detach_payment_method(current_user.paymongo_customer_id, payment_method_id)
-    except requests.HTTPError as e:
-        body = e.response.text if e.response is not None else ""
-        raise HTTPException(
-            status_code=502, detail=f"PayMongo error: {body[:400]}"
-        ) from e
-"""
-
 def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
-    """Dont delete 
+    """Dont delete
 
     Transactions, shipments and payout batches hold non-nullable FKs to the
     user, their orders or their merchant row, so the delete cannot proceed

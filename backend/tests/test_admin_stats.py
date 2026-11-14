@@ -4,6 +4,7 @@ from datetime import date
 
 from app.models.merchant_application import MerchantApplication
 from app.models.payout_batch import PayoutBatch
+from tests.better_auth import make_user
 from tests.test_admin_orders import _order, _txn
 from tests.test_audit_log import _client, _staff
 from tests.test_reviews import _buyer, db, merchant  # noqa: F401 - fixtures
@@ -74,7 +75,6 @@ def test_weekly_signups_buckets_by_manila_week(db, merchant):
     from datetime import UTC, datetime
 
     from app.api.routes.admin import WEEKS_SHOWN, _weekly_signups
-    from app.models.user import User
 
     now = datetime(2026, 11, 12, 4, tzinfo=UTC)  # Thu 12 Nov, 12:00 in Manila
     # Sunday 8 Nov 17:00 UTC is Monday 9 Nov 01:00 in Manila: this week.
@@ -82,8 +82,8 @@ def test_weekly_signups_buckets_by_manila_week(db, merchant):
     last_week = datetime(2026, 11, 3, tzinfo=UTC)
     too_old = datetime(2026, 6, 1, tzinfo=UTC)
     for i, created in enumerate([this_week, this_week, last_week, too_old]):
-        db.add(User(email=f"new{i}@example.com", created_at=created))
-    db.add(User(email="staff@example.com", is_admin=True, created_at=this_week))
+        make_user(db, f"new{i}@example.com", created_at=created)
+    make_user(db, "staff@example.com", is_admin=True, created_at=this_week)
     merchant.created_at = this_week
     merchant.user.created_at = this_week  # has a merchant profile: not a buyer
     db.commit()

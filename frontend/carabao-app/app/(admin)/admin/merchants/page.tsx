@@ -84,13 +84,13 @@ function AdminMerchantsContent() {
                 <td>
                   <SuspendControl
                     userId={m.user_id}
-                    suspendedAt={m.owner_suspended_at}
+                    suspended={m.owner_is_suspended}
                     reason={m.owner_suspension_reason}
                     isMerchant
-                    onChange={(suspendedAt, reason) =>
+                    onChange={(suspended, reason) =>
                       setMerchants((prev) =>
                         prev.map((x) =>
-                          x.id === m.id ? { ...x, owner_suspended_at: suspendedAt, owner_suspension_reason: reason } : x,
+                          x.id === m.id ? { ...x, owner_is_suspended: suspended, owner_suspension_reason: reason } : x,
                         ),
                       )
                     }

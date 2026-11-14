@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { apiClient } from "@/util/api/client";
-import getApiErrorMessage from "@/util/errorHelper";
+import getApiErrorMessage, { isPhoneVerificationRequired } from "@/util/errorHelper";
+import PhoneVerifyDialog from "@/components/PhoneVerifyDialog/PhoneVerifyDialog";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt } from "@/lib/i18n/format";
 import styles from "./OrderChat.module.css";
@@ -38,6 +39,10 @@ export default function OrderChat({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Buyers need a verified mobile number to message the farm.
+  const [needsPhone, setNeedsPhone] = useState(false);
+  // After verifying, the unsent message is still in the box; say so.
+  const [verified, setVerified] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const lastId = useRef(0);
   const listRef = useRef<HTMLOListElement | null>(null);
@@ -84,13 +89,15 @@ export default function OrderChat({
     if (!body) return;
     setSending(true);
     setError(null);
+    setVerified(false);
     try {
       const res = await apiClient.post<Message>(url, { body });
       lastId.current = Math.max(lastId.current, res.data.id);
       setMessages((prev) => [...prev, res.data]);
       setDraft("");
     } catch (err) {
-      setError(getApiErrorMessage(err) ?? c.sendError);
+      if (isPhoneVerificationRequired(err)) setNeedsPhone(true);
+      else setError(getApiErrorMessage(err) ?? c.sendError);
     } finally {
       setSending(false);
     }
@@ -144,6 +151,17 @@ export default function OrderChat({
         <p className={styles.note}>{fmt(c.closesOn, { date: new Date(closesAt).toLocaleDateString("en-PH") })}</p>
       )}
       {error && <p className={styles.error} role="alert">{error}</p>}
+      {verified && !error && <p className={styles.note} role="status">Number verified. Press Send to send your message.</p>}
+      {needsPhone && (
+        <PhoneVerifyDialog
+          reason="Verify your mobile number to message the farm."
+          onClose={() => setNeedsPhone(false)}
+          onVerified={() => {
+            setNeedsPhone(false);
+            setVerified(true);
+          }}
+        />
+      )}
     </section>
   );
 }
