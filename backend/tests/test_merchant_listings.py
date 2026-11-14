@@ -42,8 +42,6 @@ def _other_merchant(db) -> Merchant:
         postal_code="3000",
         available_days=["mon"],
         operating_hours={},
-        price_range_min=10,
-        price_range_max=100,
         business_type="individual",
         rsbsa_document_path="rsbsa/2.pdf",
     )

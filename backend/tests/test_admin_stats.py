@@ -41,8 +41,6 @@ def test_pending_work_counts(db, merchant):
                 postal_code="3000",
                 delivery_time=2,
                 delivery_price=50,
-                price_range_min=10,
-                price_range_max=100,
                 available_days=["mon"],
             )
             for applicant, status in zip(

@@ -183,14 +183,24 @@ export const signUpWithPhone = async ({
   });
   if (errorCode(error) === "BANNED_USER") throw new Error(SUSPENDED_MESSAGE);
   if (error) {
-    throw new Error(errorCode(error) === "PHONE_NUMBER_EXIST" ? "That number already has an account. Log in instead." : codeError(error));
+    throw new Error(
+      errorCode(error) === "PHONE_NUMBER_EXIST"
+        ? "That number already has an account. Log in, or use \"Forgot password\" if you don't have a password yet."
+        : codeError(error),
+    );
   }
 
   const set = await authClient.$fetch("/phone-number/set-password", {
     method: "POST",
     body: { newPassword: password },
   });
-  if (set.error) throw new Error(getErrorMessage(set.error, "We couldn't set your password."));
+  // The account already exists at this point, so signing up again is refused.
+  // An SMS password reset sets a first password, which finishes it.
+  if (set.error) {
+    throw new Error(
+      "Your account was created, but we couldn't set your password. Use \"Forgot password\" with your number to finish.",
+    );
+  }
   // New accounts start with an empty name (getTempName in lib/auth.ts).
   const cleanName = name.trim().replace(/\s+/g, " ");
   if (cleanName) await authClient.updateUser({ name: cleanName });
@@ -218,9 +228,10 @@ const codeError = (error: unknown) => {
 /** Adds or changes the account's number; the code proves it (checkout needs one). */
 export const verifyMyPhone = async (phoneNumber: string, code: string) => {
   const phone = requirePhone(phoneNumber);
-  // A number given at signup is already on the account, unverified. BetterAuth
-  // refuses updatePhoneNumber for a number that's on any account (this one
-  // too), so that case only marks it verified.
+  // Signups verify their number, so normally this adds or changes one
+  // (updatePhoneNumber). If the account somehow holds this number unverified,
+  // BetterAuth would refuse updatePhoneNumber (the number is on an account,
+  // this one), so that case only marks it verified.
   const { data: session } = await authClient.getSession({ query: { disableCookieCache: true } });
   const ownNumber = (session?.user as { phoneNumber?: string | null } | undefined)?.phoneNumber === phone;
   const { error } = await authClient.phoneNumber.verify(

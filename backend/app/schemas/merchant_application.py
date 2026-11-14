@@ -34,8 +34,6 @@ class MerchantOnboardingPayload(BaseModel):
     lng: float | None = None
     delivery_time: int = Field(ge=0)
     delivery_price: int = Field(ge=0)
-    price_range_min: int = Field(ge=0)
-    price_range_max: int = Field(ge=0)
     available_days: list[str] = Field(min_length=1)
 
     # Step 3
@@ -70,8 +68,6 @@ class MerchantApplicationResponse(BaseModel):
     postal_code: str
     delivery_time: int
     delivery_price: int
-    price_range_min: int
-    price_range_max: int
     available_days: list[str]
 
     rsbsa_number: str | None = None

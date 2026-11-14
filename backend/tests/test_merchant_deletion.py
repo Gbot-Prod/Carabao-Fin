@@ -60,8 +60,6 @@ def seller(db):
         postal_code="3000",
         available_days=["mon"],
         operating_hours={},
-        price_range_min=10,
-        price_range_max=100,
         business_type="individual",
         rsbsa_document_path="rsbsa/1.pdf",
     )
@@ -235,8 +233,6 @@ def test_delete_soft_deletes_and_keeps_financial_records(db, seller, buyer):
             postal_code="3000",
             delivery_time=2,
             delivery_price=40,
-            price_range_min=10,
-            price_range_max=100,
             available_days=["mon"],
         )
     )
@@ -323,8 +319,6 @@ def test_reapproved_application_reactivates_deleted_merchant(db, seller):
         postal_code="3000",
         delivery_time=2,
         delivery_price=40,
-        price_range_min=10,
-        price_range_max=100,
         available_days=["tue"],
     )
     db.add(application)

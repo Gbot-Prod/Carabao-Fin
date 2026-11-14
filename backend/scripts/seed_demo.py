@@ -288,7 +288,6 @@ def make_user(db, email, first, last, idx, **address) -> User:
 
 
 def make_merchant(db, user, farm, idx) -> Merchant:
-    prices = [p[2] for p in farm["produce"]]
     merchant = Merchant(
         user_id=user.id,
         merchant_name=farm["name"],
@@ -306,8 +305,6 @@ def make_merchant(db, user, farm, idx) -> Merchant:
         operating_hours=OPERATING_HOURS,
         delivery_time=2,
         delivery_price=RNG.choice([80, 90, 100]),
-        price_range_min=min(prices),
-        price_range_max=max(prices),
         legal_business_name=farm["name"],
         business_type="Farm",
         rsbsa_number=f"03-49-{idx:02d}-{RNG.randint(100, 999)}-{RNG.randint(10000, 99999)}",
@@ -555,7 +552,7 @@ def seed(db, hub_email: str, n_ready: int, n_history: int) -> None:
         rsbsa_document_path="demo/rsbsa-placeholder.pdf",
         region="Central Luzon", province="Tarlac", city="Capas",
         barangay="Sta. Lucia", address="Sitio Sta. Lucia", postal_code="2315",
-        delivery_time=2, delivery_price=90, price_range_min=40, price_range_max=200,
+        delivery_time=2, delivery_price=90,
         available_days=WEEKDAYS,
     ))
 

@@ -47,7 +47,7 @@ class MerchantApplication(Base):
     rsbsa_document_original_name = Column(String, nullable=True)
     rsbsa_document_content_type = Column(String, nullable=True)
 
-    # Step 2: Location / availability / price range
+    # Step 2: Location / availability
     region = Column(String, nullable=False)
     province = Column(String, nullable=False)
     city = Column(String, nullable=False)
@@ -59,8 +59,6 @@ class MerchantApplication(Base):
     lng = Column(Float, nullable=True)
     delivery_time = Column(Integer, nullable=False)
     delivery_price = Column(Integer, nullable=False)
-    price_range_min = Column(Integer, nullable=False)
-    price_range_max = Column(Integer, nullable=False)
     available_days = Column(JSON, nullable=False, default=list)
 
     # Admin review

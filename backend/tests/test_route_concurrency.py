@@ -91,8 +91,6 @@ def _add_merchants(session, count):
                 postal_code="1100",
                 available_days=["Mon"],
                 operating_hours={},
-                price_range_min=1,
-                price_range_max=2,
                 business_type="individual",
                 rsbsa_document_path="x.pdf",
             )

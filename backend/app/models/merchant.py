@@ -12,6 +12,7 @@ class Merchant(Base):
     id = Column(Integer, primary_key=True, index=True)
     merchant_name = Column(String, nullable=False, index=True)
     contact_number = Column(String, unique=True, index=True)
+
     # Cached average of reviews.rating; recomputed by review_service.
     rating = Column(Float, nullable=True, index=True)
     rating_count = Column(Integer, nullable=False, default=0, server_default="0")
@@ -28,13 +29,14 @@ class Merchant(Base):
     # orders, transactions and payouts stay attributable.
     deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
-    # Location / availability / price range
+    # Location / availability
     region = Column(String, nullable=False, index=True)
     province = Column(String, nullable=False, index=True)
     city = Column(String, nullable=True, index=True)
     barangay = Column(String, nullable=True, index=True)
     address = Column(String, nullable=False, index=True)
     postal_code = Column(String, nullable=False, index=True)
+
     # Map pin (U1).
     lat = Column(Float, nullable=True)
     lng = Column(Float, nullable=True)
@@ -44,10 +46,9 @@ class Merchant(Base):
     delivery_time = Column(Integer, nullable=True, index=True)
 
     delivery_price = Column(Integer, nullable=True, index=True)  # pesos
+
     # F1: listings at or below this stock are flagged on the dashboard (0 = off).
     low_stock_threshold = Column(Integer, nullable=False, default=5, server_default="5")
-    price_range_min = Column(Integer, nullable=False)
-    price_range_max = Column(Integer, nullable=False)
 
     # Legal details
     legal_business_name = Column(String, nullable=True)

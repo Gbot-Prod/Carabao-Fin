@@ -55,8 +55,6 @@ class MerchantResponse(BaseModel):
     operating_hours: Any
     delivery_price: int | None = None
     delivery_time: int | None = None
-    price_range_min: int
-    price_range_max: int
     rating: float | None = None
     rating_count: int = 0
     deleted_at: datetime | None = None

@@ -9,9 +9,11 @@ import requests
 
 _DEFAULT_BASE_URL = "https://api.semaphore.co"
 _SEND_MESSAGES_PATH = "/api/v4/messages"
+
 # Dedicated OTP route: separate telco route, not rate limited, 2 credits / 160 chars.
-# Semaphore says not to use it for regular messages.
+# Semaphore says not to use it for regular messages. might get in trouble if we do
 _SEND_OTP_PATH = "/api/v4/otp"
+
 OTP_PLACEHOLDER = "{otp}"
 
 logger = logging.getLogger(__name__)

@@ -124,10 +124,6 @@ function ApplicationCard({
             <Field label="City / Province" value={`${app.city}, ${app.province}`} />
             <Field label="Region" value={app.region} />
             <Field label="Postal Code" value={app.postal_code} />
-            <Field
-              label="Price Range"
-              value={`₱${app.price_range_min} – ₱${app.price_range_max}`}
-            />
             <Field label="Available Days" value={app.available_days.join(", ")} />
             <Field label="RSBSA No." value={app.rsbsa_number} />
             <Field

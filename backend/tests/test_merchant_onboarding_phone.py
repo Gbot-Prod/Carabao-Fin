@@ -31,8 +31,6 @@ PAYLOAD = {
     "postal_code": "3000",
     "delivery_time": 2,
     "delivery_price": 50,
-    "price_range_min": 10,
-    "price_range_max": 100,
     "available_days": ["mon"],
 }
 

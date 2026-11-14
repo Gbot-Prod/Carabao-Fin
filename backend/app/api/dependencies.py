@@ -63,9 +63,9 @@ def get_current_user(
 
 def ensure_phone_verified(user: User) -> None:
     """Checkout, merchant applications and buyers' order chat need a verified
-    number. Signups don't verify one (web phone signups give an unverified
-    number; Google/Facebook sign-ins have none), so the app asks for a texted
-    code the first time one of these is reached (BetterAuth's phoneNumber plugin)."""
+    number. Phone signups verify theirs by code; Google/Facebook signups have
+    none, so the app asks for a texted code the first time one of these is
+    reached (BetterAuth's phoneNumber plugin)."""
     if not user.phone_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=PHONE_VERIFICATION_REQUIRED

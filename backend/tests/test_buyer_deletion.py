@@ -60,8 +60,6 @@ def _merchant(db, user):
         postal_code="3000",
         available_days=["mon"],
         operating_hours={},
-        price_range_min=10,
-        price_range_max=100,
         business_type="individual",
         rsbsa_document_path="rsbsa/1.pdf",
     )
@@ -207,8 +205,6 @@ def test_account_delete_succeeds_for_merchant_without_sales(db, seller):
             postal_code="3000",
             delivery_time=2,
             delivery_price=40,
-            price_range_min=10,
-            price_range_max=100,
             available_days=["mon"],
         )
     )

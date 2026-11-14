@@ -46,8 +46,6 @@ export type MerchantOnboardingPayload = {
   // Farm map pin (U1c), optional.
   lat?: number | null;
   lng?: number | null;
-  price_range_min: number;
-  price_range_max: number;
   delivery_time: number;
   delivery_price: number;
   available_days: string[];

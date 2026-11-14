@@ -131,8 +131,6 @@ def test_onboarding_outside_luzon_is_rejected(db, buyer):  # noqa: F811
         "postal_code": "6000",
         "delivery_time": 2,
         "delivery_price": 50,
-        "price_range_min": 10,
-        "price_range_max": 100,
         "available_days": ["mon"],
     }
     resp = _client(db, buyer[0]).post(

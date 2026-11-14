@@ -3,6 +3,7 @@
 import errorHelper, { isPhoneVerificationRequired } from "@/util/errorHelper";
 import PhoneVerifyDialog from "@/components/PhoneVerifyDialog/PhoneVerifyDialog";
 import { normalizePhMobile } from "@/lib/phone";
+import { sendPhoneCode, verifyMyPhone } from "@/lib/auth-client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -23,9 +24,9 @@ type StepId = "legal" | "ops" | "docs" | "verify";
 
 const STEPS: { id: StepId; title: string; subtitle: string }[] = [
   { id: "legal", title: "Legal Details", subtitle: "Tell us who you are as a business." },
-  { id: "ops", title: "Operations", subtitle: "Where you operate, your pricing, and availability." },
+  { id: "ops", title: "Operations", subtitle: "Where you operate and your availability." },
   { id: "docs", title: "RSBSA Upload", subtitle: "Upload a photo or PDF of your Philippine RSBSA." },
-  { id: "verify", title: "Verify Phone", subtitle: "Confirm your contact number via SMS." },
+  { id: "verify", title: "Contact Number", subtitle: "Enter and confirm your contact number via SMS." },
 ];
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -100,8 +101,6 @@ export default function MerchantOnboardingPage() {
     postal_code: "",
     delivery_time: 0,
     delivery_price: 0,
-    price_range_min: 0,
-    price_range_max: 0,
     available_days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
     rsbsa_number: "",
   });
@@ -144,20 +143,22 @@ export default function MerchantOnboardingPage() {
     <K extends keyof MerchantOnboardingPayload>(key: K) =>
       (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const value = e.target.value;
-        setForm((prev) => {
-          if (key === "price_range_min" || key === "price_range_max") {
-            const num = Number(value);
-            return { ...prev, [key]: Number.isFinite(num) ? num : 0 } as MerchantOnboardingPayload;
-          }
-          return { ...prev, [key]: value } as MerchantOnboardingPayload;
-        });
+        setForm((prev) => ({ ...prev, [key]: value }) as MerchantOnboardingPayload);
       };
 
   const handleTIN = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, tin: formatTIN(e.target.value) }));
 
-  const handlePhone = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((prev) => ({ ...prev, contact_number: formatLocalPhone(e.target.value) }));
+  // A new number makes a sent code and its token not applicable.
+  const handlePhone = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = formatLocalPhone(e.target.value);
+    if (next === form.contact_number) return;
+    setForm((prev) => ({ ...prev, contact_number: next }));
+    setOtpSent(false);
+    setOtpValue("");
+    setOtpError(null);
+    setPhoneVerificationToken(null);
+  };
 
   const handleRegNum = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, registration_number: formatRegNum(e.target.value) }));
@@ -180,16 +181,11 @@ export default function MerchantOnboardingPage() {
       if (!form.legal_business_name.trim()) return "Legal business name is required.";
       if (!form.business_type.trim()) return "Business type is required.";
       if (!form.contact_email.trim()) return "Email is required.";
-      if (!form.contact_number.trim()) return "Contact number is required.";
       return null;
     }
     if (index === 1) {
       if (!form.address.trim()) return "Address is required.";
-      if (!Array.isArray(form.available_days) || form.available_days.length === 0) return "Select at least one available day.";
-      if (!Number.isFinite(form.price_range_min) || form.price_range_min < 0) return "Minimum price must be 0 or higher.";
-      if (!Number.isFinite(form.price_range_max) || form.price_range_max < 0) return "Maximum price must be 0 or higher.";
-      if (form.price_range_min > form.price_range_max) return "Minimum price must be less than or equal to maximum price.";
-      return null;
+      if (!Array.isArray(form.available_days) || form.available_days.length === 0) return "Select at least one available day.";      return null;
     }
     if (index === 2) {
       if (!rsbsaFile) return "Please upload your RSBSA document (photo or PDF).";
@@ -220,10 +216,18 @@ export default function MerchantOnboardingPage() {
   };
 
   const handleSendOtp = async () => {
-    setIsSendingOtp(true);
     setOtpError(null);
+    if (!normalizePhMobile(fullPhoneNumber)) {
+      setOtpError("Enter a Philippine mobile number, e.g. 912 345 6789.");
+      return;
+    }
+    setIsSendingOtp(true);
     try {
-      await sendOtp(fullPhoneNumber);
+      // No verified account number yet: the code verifies this number on the
+      // account (BetterAuth), and that also proves the contact number. One
+      // code then satisfies both backend checks.
+      if (accountPhone === null) await sendPhoneCode(fullPhoneNumber);
+      else await sendOtp(fullPhoneNumber);
       setPhoneVerificationToken(null);
       setOtpSent(true);
       setResendCooldown(60);
@@ -270,6 +274,20 @@ export default function MerchantOnboardingPage() {
   const handleVerifyAndSubmit = async () => {
     setOtpError(null);
     if (isAccountPhone) return submit("");
+    if (accountPhone === null) {
+      setIsVerifyingOtp(true);
+      try {
+        await verifyMyPhone(fullPhoneNumber, otpValue);
+      } catch (error: unknown) {
+        setOtpError(errorHelper(error) || "Incorrect code. Please try again.");
+        return;
+      } finally {
+        setIsVerifyingOtp(false);
+      }
+      // Now the account's number: a retry after a failed submit needs no code.
+      setAccountPhone(normalizePhMobile(fullPhoneNumber));
+      return submit("");
+    }
     let token = phoneVerificationToken;
     if (!token) {
       setIsVerifyingOtp(true);
@@ -391,23 +409,9 @@ export default function MerchantOnboardingPage() {
                 />
               </div>
 
-              <div className={styles.field}>
+              <div className={`${styles.field} ${styles.fieldFull}`}>
                 <label htmlFor="merchantonboarding-contact-email" className={styles.label}>Contact email</label>
                 <input id="merchantonboarding-contact-email" className={styles.input} type="email" value={form.contact_email} onChange={setField("contact_email")} placeholder="you@farm.com" />
-              </div>
-              <div className={styles.field}>
-                <label htmlFor="merchantonboarding-contact-number" className={styles.label}>Contact number</label>
-                <div className={styles.phoneRow}>
-                  <span className={styles.phonePrefix}>+63</span>
-                  <input id="merchantonboarding-contact-number"
-                    className={styles.phoneInput}
-                    value={form.contact_number}
-                    onChange={handlePhone}
-                    placeholder="912 345 6789"
-                    inputMode="numeric"
-                    maxLength={12}
-                  />
-                </div>
               </div>
             </div>
           )}
@@ -451,15 +455,6 @@ export default function MerchantOnboardingPage() {
                     }))
                   }
                 />
-              </div>
-
-              <div className={styles.field}>
-                <label htmlFor="merchantonboarding-price-range-min" className={styles.label}>Price range (min)</label>
-                <input id="merchantonboarding-price-range-min" className={styles.input} inputMode="numeric" value={String(form.price_range_min)} onChange={setField("price_range_min")} placeholder="0" />
-              </div>
-              <div className={styles.field}>
-                <label htmlFor="merchantonboarding-price-range-max" className={styles.label}>Price range (max)</label>
-                <input id="merchantonboarding-price-range-max" className={styles.input} inputMode="numeric" value={String(form.price_range_max)} onChange={setField("price_range_max")} placeholder="0" />
               </div>
 
               <div className={`${styles.field} ${styles.fieldFull}`}>
@@ -576,18 +571,20 @@ export default function MerchantOnboardingPage() {
 
           {step.id === "verify" && (
             <div className={styles.verifyStep}>
-              <div className={styles.verifyPhoneBox}>
-                <div className={styles.verifyPhoneLeft}>
-                  <span className={styles.verifyPhoneLabel}>Contact number</span>
-                  <span className={styles.verifyPhoneNum}>+63 {form.contact_number}</span>
+              <div className={styles.field}>
+                <label htmlFor="merchantonboarding-contact-number" className={styles.label}>Contact number</label>
+                <div className={styles.phoneRow}>
+                  <span className={styles.phonePrefix}>+63</span>
+                  <input id="merchantonboarding-contact-number"
+                    className={styles.phoneInput}
+                    value={form.contact_number}
+                    onChange={handlePhone}
+                    placeholder="912 345 6789"
+                    inputMode="numeric"
+                    maxLength={12}
+                    disabled={isVerifyingOtp || isSubmitting}
+                  />
                 </div>
-                <button
-                  type="button"
-                  className={styles.editPhoneBtn}
-                  onClick={() => { setStepIndex(0); setOtpSent(false); setOtpValue(""); setOtpError(null); }}
-                >
-                  Edit
-                </button>
               </div>
 
               {isAccountPhone ? (

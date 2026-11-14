@@ -23,8 +23,6 @@ export type MerchantApplication = {
   barangay: string | null;
   address: string | null;
   postal_code: string | null;
-  price_range_min: number;
-  price_range_max: number;
   delivery_time: number;
   delivery_price: number;
   available_days: string[];

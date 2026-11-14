@@ -139,8 +139,6 @@ def submit_my_merchant_onboarding_route(
     application.postal_code = data.postal_code
     application.lat = data.lat
     application.lng = data.lng
-    application.price_range_min = int(data.price_range_min)
-    application.price_range_max = int(data.price_range_max)
     application.available_days = data.available_days
     application.delivery_time = int(data.delivery_time)
     application.delivery_price = int(data.delivery_price)
