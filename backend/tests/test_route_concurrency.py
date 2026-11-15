@@ -19,14 +19,13 @@ from app.models import (  # noqa: F401  (registers related mappers)
     cart,
     merchant_application,
     merchant_payout,
-    mobile_credential,
     order,
-    order_history,
     payout_batch,
     shipment,
     transaction,
     user,
 )
+from app.models.auth_identity import AuthIdentity
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.produce import Produce
@@ -73,14 +72,14 @@ def db_engine():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    for model in (User, Merchant, MerchantApplication, ShopPage, Produce):
+    for model in (AuthIdentity, User, Merchant, MerchantApplication, ShopPage, Produce):
         model.__table__.create(engine)
     return engine
 
 
 def _add_merchants(session, count):
     for i in range(1, count + 1):
-        session.add(User(id=i, email=f"m{i}@example.com", notifications_preferences={}))
+        session.add(User(id=i, notifications_preferences={}))
         session.add(
             Merchant(
                 id=i,
@@ -92,8 +91,6 @@ def _add_merchants(session, count):
                 postal_code="1100",
                 available_days=["Mon"],
                 operating_hours={},
-                price_range_min=1,
-                price_range_max=2,
                 business_type="individual",
                 rsbsa_document_path="x.pdf",
             )

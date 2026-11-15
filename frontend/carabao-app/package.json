@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test util/navigation.test.ts",
+    "test": "node --test util/navigation.test.ts lib/blocked-auth-paths.test.ts lib/phone.test.ts lib/admin-two-factor.test.ts lib/next-path.test.ts",
     "auth:migrate": "node scripts/better-auth-migrate.mjs",
     "auth:migrate:apply": "node scripts/better-auth-migrate.mjs --apply"
   },
   "dependencies": {
+    "@better-auth/core": "^1.6.5",
+    "@better-auth/expo": "^1.6.5",
     "@turf/along": "^7.3.5",
     "@turf/length": "^7.3.5",
     "axios": "^1.13.6",
@@ -20,9 +22,11 @@
     "mapbox-gl": "^3.19.0",
     "next": "16.1.6",
     "pg": "^8.20.0",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

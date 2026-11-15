@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, object_session
 from sqlalchemy.orm.exc import UnmappedInstanceError
 
 from app.models.notification import Notification
+from app.models.user import User
 
 ORDER_PLACED = "order_placed"
 ORDER_PAID = "order_paid"
@@ -25,6 +26,8 @@ ORDER_DELIVERED = "order_delivered"
 REVIEW_RECEIVED = "review_received"
 PAYOUT_RELEASED = "payout_released"
 REFUND = "refund"
+PAYMENT_MISMATCH = "payment_mismatch"  # to admins (CF-0005)
+PAYOUT_DESTINATION_CHANGED = "payout_destination_changed"  # CF-0004
 
 
 def wants(user, channel: str) -> bool:
@@ -83,3 +86,11 @@ def order_link(order) -> str:
 def merchant_user_id(order) -> int | None:
     merchant = getattr(order, "merchant", None)
     return getattr(merchant, "user_id", None)
+
+
+def notify_admins(
+    db: Session, kind: str, title: str, body: str | None = None, link: str | None = None
+) -> None:
+    """``notify`` every admin who isn't suspended; the caller commits."""
+    for admin in db.query(User).filter(User.is_admin, ~User.is_suspended).all():
+        notify(db, admin.id, kind, title, body, link)

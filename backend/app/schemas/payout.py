@@ -108,6 +108,16 @@ class PayoutInfoUpdate(BaseModel):
         return self
 
 
+class PayoutInfoChange(PayoutInfoUpdate):
+    """A payout method plus the SMS code sent for exactly it (CF-0004)."""
+
+    code: str
+
+
+class PayoutCodeSent(BaseModel):
+    sent_to: str  # last 4 digits of the number the code went to
+
+
 class ReceivingInstitution(BaseModel):
     code: str
     name: str

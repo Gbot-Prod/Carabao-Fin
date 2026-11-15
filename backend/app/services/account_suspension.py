@@ -1,25 +1,19 @@
 """Admin suspension of accounts (A3).
 
-The backend user row is the source of truth: ``get_current_user``, the web auth
-sync and mobile sign-in all refuse a suspended user. The BetterAuth row is also
-banned (admin plugin columns) and its sessions are deleted so the web session
-ends immediately rather than when the backend token expires.
+A suspension is a BetterAuth ban (admin plugin's ``banned`` / ``banReason``):
+BetterAuth refuses sign-in and the ban deletes the user's sessions, so web and
+app sign out at once. ``get_current_user`` reads the ban live too, so an access
+token issued before it stops working immediately.
 """
 
 from __future__ import annotations
 
-import logging
-from datetime import UTC, datetime
-
-from sqlalchemy import and_, exists, not_, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import and_, exists, not_
 from sqlalchemy.orm import Session
 
 from app.models.merchant import Merchant
 from app.models.user import User
-from app.services import audit_log
-
-logger = logging.getLogger(__name__)
+from app.services import audit_log, better_auth_store
 
 SUSPENDED_DETAIL = "This account has been suspended. Contact Carabao support."
 
@@ -31,56 +25,27 @@ def suspended_detail(user: User) -> str:
 
 
 def merchant_is_public():
-    """SQL filter: merchants buyers may see (not deleted, owner not suspended)."""
+    """SQL filter: merchants buyers may see (not deleted, the shop not
+    suspended by an admin, owner not suspended)."""
     return and_(
         Merchant.deleted_at.is_(None),
-        not_(
-            exists().where(User.id == Merchant.user_id, User.suspended_at.isnot(None))
-        ),
+        Merchant.suspended_at.is_(None),
+        not_(exists().where(User.id == Merchant.user_id, User.is_suspended)),
     )
-
-
-def _sync_better_auth_ban(db: Session, user: User, *, banned: bool) -> None:
-    """Best effort: a missing BetterAuth table must not block the suspension."""
-    if not user.external_auth_id or user.external_auth_id.startswith("mobile:"):
-        return
-    try:
-        with db.begin_nested():
-            db.execute(
-                text(
-                    'UPDATE "user" SET banned = :banned, "banReason" = :reason '
-                    "WHERE id = :id"
-                ),
-                {
-                    "banned": banned,
-                    "reason": user.suspension_reason if banned else None,
-                    "id": user.external_auth_id,
-                },
-            )
-            if banned:
-                db.execute(
-                    text('DELETE FROM "session" WHERE "userId" = :id'),
-                    {"id": user.external_auth_id},
-                )
-    except SQLAlchemyError as exc:
-        logger.warning(
-            "[suspension] Could not update BetterAuth ban for user %s: %s", user.id, exc
-        )
 
 
 def _suspension_state(user: User) -> dict:
     return {
-        "suspended_at": user.suspended_at,
+        "is_suspended": user.is_suspended,
         "suspension_reason": user.suspension_reason,
     }
 
 
 def suspend_user(db: Session, user: User, *, admin: User, reason: str) -> User:
     before = _suspension_state(user)
-    user.suspended_at = datetime.now(UTC)
-    user.suspension_reason = reason.strip()
-    user.suspended_by = admin.id
-    _sync_better_auth_ban(db, user, banned=True)
+    better_auth_store.set_banned(
+        db, user.external_auth_id, banned=True, reason=reason.strip()
+    )
     audit_log.record_admin_action(
         db,
         admin=admin,
@@ -97,10 +62,7 @@ def suspend_user(db: Session, user: User, *, admin: User, reason: str) -> User:
 
 def reinstate_user(db: Session, user: User, *, admin: User) -> User:
     before = _suspension_state(user)
-    user.suspended_at = None
-    user.suspension_reason = None
-    user.suspended_by = None
-    _sync_better_auth_ban(db, user, banned=False)
+    better_auth_store.set_banned(db, user.external_auth_id, banned=False, reason=None)
     audit_log.record_admin_action(
         db,
         admin=admin,

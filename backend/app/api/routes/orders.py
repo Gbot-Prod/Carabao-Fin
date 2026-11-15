@@ -5,10 +5,9 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.dependencies import get_current_user, get_db
+from app.api.dependencies import get_current_user, get_db, require_verified_phone
 from app.models.merchant import Merchant
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.produce import Produce
 from app.models.review import Review
 from app.models.statuses import OrderStatus
@@ -53,11 +52,11 @@ from app.services.service_area import (
 from ._order_helpers import (
     _extract_item_int,
     _to_int,
-    get_history_orders,
+    get_buyer_orders,
     get_or_create_cart,
-    get_or_create_order_history,
-    get_order_history,
+    merchant_takes_orders,
     order_item_load,
+    order_line,
     to_current_order_item,
     to_order_history_item,
 )
@@ -71,7 +70,7 @@ _PH_TZ = timezone(timedelta(hours=8))
 def place_order_from_cart(
     payload: PlaceOrderRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_verified_phone),
 ):
     # Carabao delivers within Luzon only (B2).
     if payload.delivery_region is not None:
@@ -93,7 +92,6 @@ def place_order_from_cart(
         )
 
     today = ph_today()
-    history = get_or_create_order_history(db, current_user.id)
     # Lock stock rows in id order so two carts sharing items can't deadlock.
     locked_produce = {
         produce.id: produce
@@ -161,7 +159,7 @@ def place_order_from_cart(
 
         produce.stock_quantity -= quantity
         unit_price = unit_price_for(produce, quantity)
-        line = {**item, "price": unit_price}
+        line = order_line(produce, quantity, unit_price)
         items_by_merchant.setdefault(produce.merchant_id, []).append(line)
         subtotal_by_merchant[produce.merchant_id] = (
             subtotal_by_merchant.get(produce.merchant_id, 0) + unit_price * quantity
@@ -179,11 +177,7 @@ def place_order_from_cart(
             .populate_existing()
             .first()
         )
-        if (
-            merchant is None
-            or merchant.deleted_at is not None
-            or (merchant.user is not None and merchant.user.suspended_at is not None)
-        ):
+        if not merchant_takes_orders(merchant):
             name = merchant.merchant_name if merchant is not None else "A merchant"
             raise HTTPException(
                 status_code=400,
@@ -192,20 +186,19 @@ def place_order_from_cart(
             )
         service_fee = merchant.delivery_price or 0
         order = Order(
-            order_history_id=history.id,
             user_id=current_user.id,
             merchant_id=merchant.id,
             status=OrderStatus.PENDING,
             total_price=subtotal_by_merchant[merchant_id] + service_fee,
             items=items_by_merchant[merchant_id],
-            delivery_address=payload.delivery_address,
+            delivery_address=(payload.delivery_address or "").strip() or None,
             delivery_lat=delivery_pin[0] if delivery_pin else None,
             delivery_lng=delivery_pin[1] if delivery_pin else None,
             requested_delivery_date=payload.delivery_date,
             delivery_window=(payload.delivery_time or "").strip() or None,
             notes=(payload.notes or "").strip() or None,
             delivery_fee=service_fee,
-            image=payload.image,
+            image=items_by_merchant[merchant_id][0].get("image"),
         )
         db.add(order)
         orders.append((order, merchant))
@@ -252,12 +245,8 @@ def get_my_order_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    history = get_order_history(db, current_user.id)
-    if history is None:
-        return []
-
     orders = sorted(
-        get_history_orders(db, history),
+        get_buyer_orders(db, current_user.id),
         key=lambda order: order.ordered_at or datetime.min,
         reverse=True,
     )
@@ -270,13 +259,9 @@ def delete_order_from_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    history = get_order_history(db, current_user.id)
-    if history is None:
-        raise HTTPException(status_code=404, detail="Order not found")
-
     order = (
         db.query(Order)
-        .filter(Order.id == order_id, Order.order_history_id == history.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
         .first()
     )
     if order is None:
@@ -308,9 +293,8 @@ def get_my_current_orders(
     orders = (
         db.query(Order)
         .options(*order_item_load())
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
         .filter(
-            OrderHistory.user_id == current_user.id,
+            Order.user_id == current_user.id,
             Order.status.in_(ACTIVE_ORDER_STATUSES),
         )
         .order_by(Order.id.asc())
@@ -329,8 +313,7 @@ def get_my_order(
     order = (
         db.query(Order)
         .options(*order_item_load())
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
-        .filter(Order.id == order_id, OrderHistory.user_id == current_user.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
         .first()
     )
     if order is None:
@@ -364,8 +347,7 @@ def confirm_order_received(
     """Buyer confirms delivery, which makes the order's earnings payable."""
     order = (
         db.query(Order)
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
-        .filter(Order.id == order_id, OrderHistory.user_id == current_user.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
         .with_for_update(of=Order)
         .first()
     )

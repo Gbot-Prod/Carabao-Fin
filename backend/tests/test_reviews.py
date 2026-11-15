@@ -16,7 +16,6 @@ from app.core.database import Base
 from app.models.cart import Cart  # noqa: F401 - registers the table
 from app.models.merchant import Merchant
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.payout_batch import PayoutBatch  # noqa: F401 - registers the table
 from app.models.produce import Produce  # noqa: F401 - registers the table
 from app.models.review import Review
@@ -29,6 +28,7 @@ from app.services.review_service import (
     ensure_reviewable,
     reviewer_display_name,
 )
+from tests.better_auth import make_user
 
 
 @compiles(JSONB, "sqlite")
@@ -57,7 +57,7 @@ def db():
 
 @pytest.fixture
 def merchant(db):
-    owner = User(email="farmer@example.com")
+    owner = make_user(db, "farmer@example.com")
     db.add(owner)
     db.flush()
     merchant = Merchant(
@@ -70,8 +70,6 @@ def merchant(db):
         postal_code="3000",
         available_days=["mon"],
         operating_hours={},
-        price_range_min=10,
-        price_range_max=100,
         business_type="individual",
         rsbsa_document_path="rsbsa/1.pdf",
     )
@@ -80,14 +78,12 @@ def merchant(db):
     return merchant
 
 
-def _buyer(db, email="buyer@example.com", first="Juan", last="dela Cruz"):
-    user = User(email=email, first_name=first, last_name=last)
+def _buyer(db, email="buyer@example.com", name="Juan dela Cruz"):
+    user = make_user(db, email, name=name)
     db.add(user)
     db.flush()
-    history = OrderHistory(user_id=user.id)
-    db.add(history)
     db.commit()
-    return user, history
+    return user, None  # (user, _): kept for the many call sites
 
 
 @pytest.fixture
@@ -96,9 +92,8 @@ def buyer(db):
 
 
 def _order(db, merchant, buyer, status="delivered", delivered_days_ago=1.0):
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,
@@ -163,13 +158,10 @@ def test_orders_of_removed_merchants_are_not_reviewable():
 
 def test_reviewer_name_hides_surname():
     assert (
-        reviewer_display_name(SimpleNamespace(first_name="Juan", last_name="dela Cruz"))
-        == "Juan D."
+        reviewer_display_name(SimpleNamespace(name="Juan dela Cruz")) == "Juan D."
     )
-    assert (
-        reviewer_display_name(SimpleNamespace(first_name=None, last_name=None))
-        == "Carabao buyer"
-    )
+    assert reviewer_display_name(SimpleNamespace(name="Juan")) == "Juan"
+    assert reviewer_display_name(SimpleNamespace(name=None)) == "Carabao buyer"
     assert reviewer_display_name(None) == "Former buyer"
 
 
@@ -196,7 +188,7 @@ def test_buyer_reviews_delivered_order_and_rating_updates(db, merchant, buyer):
 
 
 def test_rating_is_average_across_buyers(db, merchant, buyer):
-    other = _buyer(db, email="maria@example.com", first="Maria", last="Santos")
+    other = _buyer(db, email="maria@example.com", name="Maria Santos")
     for who, stars in ((buyer, 5), (other, 2)):
         order = _order(db, merchant, who)
         resp = _client(db, who[0]).post(

@@ -4,6 +4,7 @@ from datetime import date
 
 from app.models.merchant_application import MerchantApplication
 from app.models.payout_batch import PayoutBatch
+from tests.better_auth import make_user
 from tests.test_admin_orders import _order, _txn
 from tests.test_audit_log import _client, _staff
 from tests.test_reviews import _buyer, db, merchant  # noqa: F401 - fixtures
@@ -38,10 +39,6 @@ def test_pending_work_counts(db, merchant):
                 city="Malolos",
                 address="Purok 4",
                 postal_code="3000",
-                delivery_time=2,
-                delivery_price=50,
-                price_range_min=10,
-                price_range_max=100,
                 available_days=["mon"],
             )
             for applicant, status in zip(
@@ -74,7 +71,6 @@ def test_weekly_signups_buckets_by_manila_week(db, merchant):
     from datetime import UTC, datetime
 
     from app.api.routes.admin import WEEKS_SHOWN, _weekly_signups
-    from app.models.user import User
 
     now = datetime(2026, 11, 12, 4, tzinfo=UTC)  # Thu 12 Nov, 12:00 in Manila
     # Sunday 8 Nov 17:00 UTC is Monday 9 Nov 01:00 in Manila: this week.
@@ -82,8 +78,8 @@ def test_weekly_signups_buckets_by_manila_week(db, merchant):
     last_week = datetime(2026, 11, 3, tzinfo=UTC)
     too_old = datetime(2026, 6, 1, tzinfo=UTC)
     for i, created in enumerate([this_week, this_week, last_week, too_old]):
-        db.add(User(email=f"new{i}@example.com", created_at=created))
-    db.add(User(email="staff@example.com", is_admin=True, created_at=this_week))
+        make_user(db, f"new{i}@example.com", created_at=created)
+    make_user(db, "staff@example.com", is_admin=True, created_at=this_week)
     merchant.created_at = this_week
     merchant.user.created_at = this_week  # has a merchant profile: not a buyer
     db.commit()
@@ -140,9 +136,46 @@ def test_top_categories_from_paid_orders(db, merchant):
         [{"produce_id": mango.id, "quantity": 9, "price": 999}], paid_days_ago=40
     )
 
-    result = _top_categories(db, now - timedelta(days=30))
-    assert result == [
+    rows, skipped = _top_categories(db, now - timedelta(days=30))
+    assert rows == [
         {"category": "Vegetables", "revenue": 230, "quantity": 5},
         {"category": "Fruits", "revenue": 200, "quantity": 1},
         {"category": "Uncategorized", "revenue": 12, "quantity": 6},
     ]
+    assert skipped == 0
+
+
+def test_top_categories_skips_an_order_with_a_bad_price(db, merchant):
+    """CF-0027: a fractional snapshot price skips that whole order, not the
+    dashboard, and is never counted as 0."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.api.routes.admin import _top_categories
+    from app.models.produce import Produce
+
+    talong = Produce(
+        merchant_id=merchant.id,
+        name="Talong",
+        price=10,
+        stock_quantity=100,
+        category="Vegetables",
+    )
+    db.add(talong)
+    db.commit()
+    buyer = _buyer(db)
+    now = datetime.now(UTC)
+    for items in (
+        [{"produce_id": talong.id, "quantity": 2, "price": 50}],
+        # The good line in a bad order is skipped too.
+        [
+            {"produce_id": talong.id, "quantity": 1, "price": 40},
+            {"produce_id": talong.id, "quantity": 1, "price": "12.50"},
+        ],
+    ):
+        txn = _txn(db, _order(db, merchant, buyer, items=items), "paid")
+        txn.paid_at = now - timedelta(days=1)
+        db.commit()
+
+    rows, skipped = _top_categories(db, now - timedelta(days=30))
+    assert rows == [{"category": "Vegetables", "revenue": 100, "quantity": 2}]
+    assert skipped == 1

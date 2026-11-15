@@ -117,9 +117,9 @@ def test_onboarding_outside_luzon_is_rejected(db, buyer):  # noqa: F811
     payload = {
         "merchant_name": "Cebu Farm",
         "legal_business_name": "Cebu Farm",
-        "business_type": "individual",
+        "business_type": "Farmer",
         "tin": "123456789",
-        "registration_type": "dti",
+        "registration_type": "DTI",
         "registration_number": "X1",
         "contact_email": "farm@example.com",
         "contact_number": "09171234567",
@@ -129,11 +129,7 @@ def test_onboarding_outside_luzon_is_rejected(db, buyer):  # noqa: F811
         "barangay": "Lahug",
         "address": "12 Rizal St",
         "postal_code": "6000",
-        "delivery_time": 2,
-        "delivery_price": 50,
-        "price_range_min": 10,
-        "price_range_max": 100,
-        "available_days": ["mon"],
+        "available_days": ["Mon"],
     }
     resp = _client(db, buyer[0]).post(
         "/merchant-onboarding/me",

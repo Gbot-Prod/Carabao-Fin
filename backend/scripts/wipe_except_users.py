@@ -13,24 +13,25 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.core.database_url import normalize_database_url  # noqa: E402
+from app.core.database_url import create_db_engine, normalize_database_url  # noqa: E402
 
 # Users and their login data (FastAPI + Better Auth). Everything else is wiped.
 KEEP_TABLES = {
     "backend_users",
-    "mobile_credentials",
+    "user_addresses",
     "user",
     "session",
     "account",
     "verification",
     "twoFactor",
+    "jwks",
     "alembic_version",
 }
 
@@ -55,7 +56,7 @@ def main() -> None:
     print(f"Target: {url.host}:{url.port or 5432}/{url.database}\n")
 
     keep = KEEP_TABLES | set(args.keep)
-    engine = create_engine(database_url)
+    engine = create_db_engine(database_url)
 
     with engine.begin() as conn:
         tables = conn.execute(

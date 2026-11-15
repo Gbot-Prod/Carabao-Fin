@@ -1,0 +1,83 @@
+"""Generic client errors tied to a request ID (CF-0013).
+
+Clients get a short, generic message that ends with a reference. The full
+upstream error (PayMongo, Semaphore, R2, Resend, ...) is logged on the server
+under the same ID, so support can find it from the reference alone.
+
+The ID comes from the request ID middleware in main.py, which also returns it
+in the ``X-Request-ID`` response header.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+import uuid
+from contextvars import ContextVar
+
+from fastapi import HTTPException
+
+logger = logging.getLogger("app.errors")
+
+REQUEST_ID_HEADER = "X-Request-ID"
+_request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
+# Accept a caller's ID only if it is short and plain, so it is safe in logs.
+_SAFE_ID = re.compile(r"^[A-Za-z0-9._-]{8,64}$")
+
+
+def new_request_id() -> str:
+    return uuid.uuid4().hex[:16]
+
+
+def request_id_from_header(value: str | None) -> str:
+    """The caller's ID if it is safe to use, else a new one."""
+    if value and _SAFE_ID.fullmatch(value):
+        return value
+    return new_request_id()
+
+
+def set_request_id(request_id: str):
+    return _request_id.set(request_id)
+
+
+def reset_request_id(token) -> None:
+    _request_id.reset(token)
+
+
+def current_request_id() -> str:
+    """The ID of the request in progress (a new one outside a request)."""
+    request_id = _request_id.get()
+    if request_id is None:
+        request_id = new_request_id()
+        _request_id.set(request_id)
+    return request_id
+
+
+def with_reference(message: str, request_id: str) -> str:
+    return f"{message} (reference: {request_id})"
+
+
+def upstream_error(
+    status_code: int,
+    message: str,
+    *,
+    log: str,
+    exc: BaseException | None = None,
+) -> HTTPException:
+    """Log ``log`` (and ``exc``) under the request ID; return a generic error.
+
+    Use as ``raise upstream_error(...) from exc``. ``message`` goes to the
+    client and must not contain upstream text.
+    """
+    request_id = current_request_id()
+    logger.error(
+        "[request_id=%s] %s",
+        request_id,
+        log,
+        exc_info=(type(exc), exc, exc.__traceback__) if exc is not None else None,
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail=with_reference(message, request_id),
+        headers={REQUEST_ID_HEADER: request_id},
+    )

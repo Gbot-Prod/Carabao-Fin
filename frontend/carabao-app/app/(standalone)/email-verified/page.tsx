@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiClient } from "@/util/api/client";
 import "./page.css";
 
 export default function EmailVerifiedPage() {
@@ -9,17 +10,11 @@ export default function EmailVerifiedPage() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    // An email added on the profile page: the link confirmed it.
     const syncAndRedirect = async () => {
       try {
-        const res = await fetch("/api/auth", {
-          method: "POST",
-          credentials: "include",
-        });
-        if (!res.ok) {
-          setError(true);
-          return;
-        }
-        router.replace("/onboarding");
+        await apiClient.get("/auth/me");
+        router.replace("/profile?email=verified");
       } catch {
         setError(true);
       }
@@ -32,7 +27,7 @@ export default function EmailVerifiedPage() {
     return (
       <div className="email-verified-error-page">
         <div className="email-verified-error-card">
-          <p className="email-verified-error-message">Something went wrong completing your signup.</p>
+          <p className="email-verified-error-message">Your email is verified, but we couldn&apos;t load your account.</p>
           <a href="/auth" className="email-verified-error-link">Return to sign in</a>
         </div>
       </div>
@@ -48,7 +43,7 @@ export default function EmailVerifiedPage() {
           </svg>
         </div>
         <p className="email-verified-title">Email verified!</p>
-        <p className="email-verified-subtitle">Setting up your account…</p>
+        <p className="email-verified-subtitle">Taking you back to your profile…</p>
       </div>
     </div>
   );

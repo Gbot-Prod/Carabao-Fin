@@ -1,82 +1,86 @@
 // src/components/PasswordResetSheet.tsx
-// Forgot password on mobile (E6): email a 6-digit code, then set a new password.
-// Same backend as the app's sign-in; it also updates the web password.
+// Forgot password on mobile (E6). With a mobile number we text a code and the
+// new password is set right here. With an email the account has verified,
+// BetterAuth emails the same reset link the website sends.
 import React, { useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { request } from '../lib/api';
+import { authClient } from '../lib/authClient';
+import { codeMessage, requirePhone } from '../lib/AuthContext';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 
 type Props = {
   visible: boolean;
-  initialEmail: string;
+  initialIdentifier: string;
   onClose: () => void;
-  /** Called after the password changed, with the email to sign in with. */
-  onDone: (email: string) => void;
+  /** Called once the password is reset (phone) or the link is on its way (email). */
+  onDone: (result: { identifier: string; byEmail: boolean }) => void;
 };
 
-const MIN_LENGTH = 8;
-
-export function PasswordResetSheet({ visible, initialEmail, onClose, onDone }: Props) {
-  const [step, setStep] = useState<'email' | 'code'>('email');
-  const [email, setEmail] = useState(initialEmail);
+export function PasswordResetSheet({ visible, initialIdentifier, onClose, onDone }: Props) {
+  const [identifier, setIdentifier] = useState(initialIdentifier);
+  const [codeSent, setCodeSent] = useState(false);
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const reset = () => {
-    setStep('email');
-    setCode('');
-    setPassword('');
-    setConfirm('');
-    setError('');
-  };
+  const byEmail = identifier.includes('@');
 
   const close = () => {
-    reset();
+    setError('');
+    setCodeSent(false);
+    setCode('');
+    setPassword('');
     onClose();
   };
 
-  const sendCode = async () => {
-    if (!email.trim()) return setError('Enter your account email.');
+  const run = async (action: () => Promise<void>) => {
     setBusy(true);
     setError('');
     try {
-      await request('/auth/mobile/password-reset/request', null, {
-        method: 'POST',
-        body: JSON.stringify({ email: email.trim() }),
-      });
-      setStep('code');
+      await action();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send the code. Try again.');
+      setError(err instanceof Error && err.message ? err.message : 'Could not reach Carabao. Check your connection.');
     } finally {
       setBusy(false);
     }
   };
 
-  const save = async () => {
-    if (!/^\d{6}$/.test(code.trim())) return setError('Enter the 6-digit code from the email.');
-    if (password.length < MIN_LENGTH) return setError(`Use at least ${MIN_LENGTH} characters.`);
-    if (password !== confirm) return setError('The passwords do not match.');
-    setBusy(true);
-    setError('');
-    try {
-      await request('/auth/mobile/password-reset/confirm', null, {
-        method: 'POST',
-        body: JSON.stringify({ email: email.trim(), otp: code.trim(), new_password: password }),
+  const submit = () => {
+    const value = identifier.trim();
+    if (!value) return setError('Enter your mobile number or email.');
+    if (byEmail) {
+      return void run(async () => {
+        // Relative: BetterAuth builds the link on the website's own address.
+        // It answers the same whether or not the email has an account.
+        const { error: err } = await authClient.requestPasswordReset({ email: value, redirectTo: '/reset-password' });
+        if (err) throw new Error(err.status === 429 ? 'Too many requests. Wait a few minutes and try again.' : err.message || 'Could not send the reset email.');
+        onDone({ identifier: value, byEmail: true });
       });
-      const done = email.trim();
-      reset();
-      onDone(done);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not reset the password.');
-    } finally {
-      setBusy(false);
     }
+    if (!codeSent) {
+      return void run(async () => {
+        const { error: err } = await authClient.phoneNumber.requestPasswordReset({ phoneNumber: requirePhone(value) });
+        if (err) throw new Error(err.message || "We couldn't send the code.");
+        setCodeSent(true);
+      });
+    }
+    if (password.length < 8) return setError('Use at least 8 characters.');
+    void run(async () => {
+      const { error: err } = await authClient.phoneNumber.resetPassword({
+        phoneNumber: requirePhone(value),
+        otp: code.trim(),
+        newPassword: password,
+      });
+      if (err) throw new Error(codeMessage(err));
+      setCodeSent(false);
+      setCode('');
+      setPassword('');
+      onDone({ identifier: value, byEmail: false });
+    });
   };
 
   return (
@@ -85,25 +89,24 @@ export function PasswordResetSheet({ visible, initialEmail, onClose, onDone }: P
         <View style={styles.sheet}>
           <Text style={styles.title}>Reset your password</Text>
           <Text style={styles.sub}>
-            {step === 'email'
-              ? "Enter your account's email and we'll send you a 6-digit code."
-              : `If ${email.trim()} has an account, a code is on its way. Enter it with your new password.`}
+            {codeSent
+              ? 'If an account uses that number, a code is on its way. Enter it with your new password.'
+              : "Enter your account's mobile number and we'll text you a code. Added an email? You can use that instead."}
           </Text>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {step === 'email' ? (
-            <TextInput
-              style={styles.input}
-              placeholder="Email address"
-              placeholderTextColor={Colors.textLight}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-            />
-          ) : (
+          <TextInput
+            style={styles.input}
+            placeholder="Mobile number or email"
+            placeholderTextColor={Colors.textLight}
+            value={identifier}
+            onChangeText={setIdentifier}
+            autoCapitalize="none"
+            autoComplete="username"
+            editable={!codeSent}
+          />
+          {codeSent && (
             <>
               <TextInput
                 style={styles.input}
@@ -122,37 +125,21 @@ export function PasswordResetSheet({ visible, initialEmail, onClose, onDone }: P
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                maxLength={72}
                 autoComplete="password-new"
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm new password"
-                placeholderTextColor={Colors.textLight}
-                value={confirm}
-                onChangeText={setConfirm}
-                secureTextEntry
-                maxLength={72}
+                maxLength={128}
               />
             </>
           )}
 
-          <TouchableOpacity
-            style={[styles.primary, busy && styles.disabled]}
-            onPress={step === 'email' ? sendCode : save}
-            disabled={busy}
-          >
+          <TouchableOpacity style={[styles.primary, busy && styles.disabled]} onPress={submit} disabled={busy}>
             {busy ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.primaryText}>{step === 'email' ? 'Send code' : 'Save new password'}</Text>
+              <Text style={styles.primaryText}>
+                {byEmail ? 'Send reset link' : codeSent ? 'Save new password' : 'Text me a code'}
+              </Text>
             )}
           </TouchableOpacity>
-          {step === 'code' && (
-            <TouchableOpacity onPress={sendCode} disabled={busy}>
-              <Text style={styles.link}>Send a new code</Text>
-            </TouchableOpacity>
-          )}
           <TouchableOpacity onPress={close}>
             <Text style={styles.link}>Cancel</Text>
           </TouchableOpacity>

@@ -1,6 +1,5 @@
 """U4: buyers follow farms."""
 
-from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -9,6 +8,7 @@ from app.api.dependencies import get_current_user, get_db
 from app.api.routes import follows
 from app.models.farm_follow import FarmFollow
 from app.models.user import User
+from tests.better_auth import make_user, set_identity
 from tests.test_merchant_listings import _other_merchant
 from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -45,14 +45,14 @@ def test_cannot_follow_missing_suspended_or_own_farm(db, merchant, buyer):  # no
     owner = db.get(User, merchant.user_id)
     assert _client(db, owner).put(f"/merchants/{merchant.id}/follow").status_code == 400
 
-    owner.suspended_at = datetime.now(UTC)
+    set_identity(db, owner, banned=True)
     db.commit()
     assert client.put(f"/merchants/{merchant.id}/follow").status_code == 404
 
 
 def test_follows_are_private_per_buyer(db, merchant, buyer):  # noqa: F811
     _client(db, buyer[0]).put(f"/merchants/{merchant.id}/follow")
-    other = User(email="other@example.com", notifications_preferences={})
+    other = make_user(db, "other@example.com", notifications_preferences={})
     db.add(other)
     db.commit()
     assert _client(db, other).get("/users/me/follows").json() == []

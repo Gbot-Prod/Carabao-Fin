@@ -23,9 +23,8 @@ def _client(db, user) -> TestClient:  # noqa: F811
 
 
 def _order(db, merchant, buyer, total, items, days_ago, status="delivered", paid=True):  # noqa: F811
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,

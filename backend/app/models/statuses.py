@@ -21,6 +21,9 @@ class OrderStatus(StrEnum):
     OUT_FOR_DELIVERY = "out_for_delivery"
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
+    # A payment landed whose amount or currency is not the order's (CF-0005).
+    # Not paid: its money is flagged refund_pending and an admin is alerted.
+    PAYMENT_MISMATCH = "payment_mismatch"
 
 
 class TransactionStatus(StrEnum):

@@ -98,10 +98,7 @@ def _filtered(db: Session, f: TransactionFilters) -> SAQuery:
 
 
 def _buyer_name(user: User | None) -> str | None:
-    if user is None:
-        return None
-    name = " ".join(p for p in (user.first_name, user.last_name) if p)
-    return name or None
+    return (user.name or None) if user is not None else None
 
 
 def _row(txn: Transaction, user: User | None, merchant: Merchant | None) -> AdminTransactionRow:

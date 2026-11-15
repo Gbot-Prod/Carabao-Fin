@@ -1,5 +1,6 @@
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -19,11 +20,12 @@ from app.models.statuses import OrderStatus, status_type
 
 class Order(Base):
     __tablename__ = "orders"
+    # CF-0009; the migration is c5e9a2d7f4b1.
+    __table_args__ = (
+        CheckConstraint("total_price >= 0", name="ck_orders_total_not_negative"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    order_history_id = Column(
-        Integer, ForeignKey("order_histories.id"), nullable=False, index=True
-    )
     user_id = Column(
         Integer,
         ForeignKey("backend_users.id", ondelete="SET NULL"),
@@ -61,7 +63,6 @@ class Order(Base):
     delivery_fee = Column(Integer, nullable=False, default=0, server_default="0")
     image = Column(String, nullable=True)
 
-    order_history = relationship("OrderHistory", back_populates="orders")
     user = relationship("User")
     merchant = relationship("Merchant", back_populates="orders")
     shipment = relationship("Shipment", back_populates="orders")

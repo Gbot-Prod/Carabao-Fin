@@ -43,15 +43,18 @@ def merchant_point(
 
 
 def delivery_point(
-    order, buyer, address: str | None, geocode: Callable[[str], Coords | None]
+    order,
+    saved_address,
+    address: str | None,
+    geocode: Callable[[str], Coords | None],
 ) -> Coords | None:
-    """The order's own pin; else the buyer's saved pin when the order fell back
-    to the profile address; else geocode the address text."""
+    """The order's own pin; else the pin of the buyer's default saved address
+    (a UserAddress) when the order fell back to it; else geocode the text."""
     pin = stored(order.delivery_lat, order.delivery_lng)
     if pin:
         return pin
-    if not order.delivery_address and buyer is not None:
-        pin = stored(buyer.lat, buyer.lng)
+    if not order.delivery_address and saved_address is not None:
+        pin = stored(saved_address.lat, saved_address.lng)
         if pin:
             return pin
     return geocode(address) if address else None

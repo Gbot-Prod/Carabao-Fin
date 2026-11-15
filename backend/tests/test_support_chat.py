@@ -7,7 +7,7 @@ from app.api.dependencies import get_current_user, get_db
 from app.api.routes import support_chat
 from app.models.chat import Conversation
 from app.models.notification import Notification
-from app.models.user import User
+from tests.better_auth import make_user
 from tests.test_reviews import _buyer, db  # noqa: F401 - fixtures
 
 
@@ -20,13 +20,8 @@ def _client(db, user) -> TestClient:  # noqa: F811
 
 
 def _admin(db, email="admin@example.com"):  # noqa: F811
-    admin = User(
-        email=email,
-        is_admin=True,
-        two_factor_enabled=True,
-        notifications_preferences={},
-    )
-    db.add(admin)
+    # Admins get support notifications only with 2FA on in BetterAuth (E8c).
+    admin = make_user(db, email, is_admin=True, two_factor=True)
     db.commit()
     return admin
 

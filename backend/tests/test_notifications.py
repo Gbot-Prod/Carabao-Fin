@@ -16,6 +16,8 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.services import notifications, order_status, refund_service
 from app.services.order_reservations import settle_checkout_payment
+from app.services.paymongo import PaidPayment
+from tests.better_auth import make_user, set_identity
 from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 
@@ -38,9 +40,8 @@ def _kinds(db, user_id):  # noqa: F811
 
 
 def _order(db, merchant, buyer, status="pending"):  # noqa: F811
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,
@@ -76,7 +77,8 @@ def test_order_lifecycle_notifies_buyer_and_farm(db, merchant, buyer):  # noqa: 
     )
     db.add(txn)
     db.commit()
-    assert settle_checkout_payment(txn, "pay_1", db) == "paid"
+    paid = PaidPayment(id="pay_1", amount=txn.amount * 100, currency="PHP")
+    assert settle_checkout_payment(txn, paid, db) == "paid"
     db.commit()
     order_status.apply_merchant_transition(order, "shipped", db)
     order_status.apply_merchant_transition(order, "out_for_delivery", db)
@@ -100,7 +102,7 @@ def test_bell_api_lists_counts_and_marks_read(db, merchant, buyer):  # noqa: F81
     user, _ = buyer
     for i in range(3):
         notifications.notify(db, user.id, "order_placed", f"Order {i}")
-    other = User(email="other@example.com", notifications_preferences={})
+    other = make_user(db, "other@example.com", notifications_preferences={})
     db.add(other)
     db.flush()
     notifications.notify(db, other.id, "order_placed", "Not yours")
@@ -124,13 +126,9 @@ def test_bell_api_lists_counts_and_marks_read(db, merchant, buyer):  # noqa: F81
 
 
 def test_preferences_gate_sms_and_email():
-    yes = User(email="a@example.com", notifications_preferences={})
-    no_sms = User(
-        email="b@example.com", notifications_preferences={"order_updates": False}
-    )
-    no_email = User(
-        email="c@example.com", notifications_preferences={"email_alerts": False}
-    )
+    yes = User(notifications_preferences={})
+    no_sms = User(notifications_preferences={"order_updates": False})
+    no_email = User(notifications_preferences={"email_alerts": False})
     assert notifications.wants(yes, "sms") and notifications.wants(yes, "email")
     assert not notifications.wants(no_sms, "sms") and notifications.wants(
         no_sms, "email"
@@ -148,7 +146,7 @@ def test_refund_respects_preferences_but_always_notifies_in_app(
     monkeypatch,  # noqa: F811
 ):
     user, _ = buyer
-    user.phone_number = "639171112222"
+    set_identity(db, user, phoneNumber="639171112222")
     user.notifications_preferences = {"order_updates": False, "email_alerts": False}
     db.commit()
     sent = []
@@ -166,7 +164,7 @@ def test_refund_respects_preferences_but_always_notifies_in_app(
         merchant_amount=490,
         status="refund_pending",
     )
-    admin = User(email="admin@example.com", is_admin=True, notifications_preferences={})
+    admin = make_user(db, "admin@example.com", is_admin=True, notifications_preferences={})
     db.add_all([txn, admin])
     db.commit()
 

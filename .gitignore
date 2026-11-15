@@ -31,6 +31,9 @@ Thumbs.db
 *.env
 
 revisions/
-ALIGNMENT_BACKLOG.md
 .claude/review-state.json
 .claude/
+
+CLAUDE.md
+
+documentation/

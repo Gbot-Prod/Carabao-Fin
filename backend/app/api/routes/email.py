@@ -1,18 +1,15 @@
+"""Emails BetterAuth asks for (lib/auth.ts hooks), sent through Resend."""
+
 from __future__ import annotations
 
-import hmac
-import os
-
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr
 
-from app.services.email import (
-    send_password_reset_email,
-    send_signup_otp_email,
-    send_verification_email,
-)
+from app.api.dependencies import require_internal_secret
+from app.core.errors import upstream_error
+from app.services.email import send_password_reset_email, send_verification_email
 
-router = APIRouter(tags=["email"])
+router = APIRouter(tags=["email"], dependencies=[Depends(require_internal_secret)])
 
 
 class VerificationEmailPayload(BaseModel):
@@ -20,62 +17,17 @@ class VerificationEmailPayload(BaseModel):
     verification_url: str
 
 
-class SignupOtpEmailPayload(BaseModel):
-    to: EmailStr
-    otp: str
-
-
-@router.post("/email/send-signup-otp")
-def send_signup_otp_email_route(
-    payload: SignupOtpEmailPayload,
-    x_internal_auth_sync_secret: str | None = Header(
-        default=None,
-        alias="X-Internal-Auth-Sync-Secret",
-    ),
-) -> dict:
-    expected_secret = os.getenv("AUTH_SYNC_SHARED_SECRET")
-    if not expected_secret:
-        raise HTTPException(
-            status_code=500, detail="AUTH_SYNC_SHARED_SECRET is not configured"
-        )
-    if x_internal_auth_sync_secret != expected_secret:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    try:
-        send_signup_otp_email(to=payload.to, otp=payload.otp)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Email delivery failed: {exc}"
-        ) from exc
-
-    return {"ok": True}
-
-
 @router.post("/email/send-verification")
-def send_verification_email_route(
-    payload: VerificationEmailPayload,
-    x_internal_auth_sync_secret: str | None = Header(
-        default=None,
-        alias="X-Internal-Auth-Sync-Secret",
-    ),
-) -> dict:
-    expected_secret = os.getenv("AUTH_SYNC_SHARED_SECRET")
-    if not expected_secret:
-        raise HTTPException(
-            status_code=500, detail="AUTH_SYNC_SHARED_SECRET is not configured"
-        )
-    if x_internal_auth_sync_secret != expected_secret:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
+def send_verification_email_route(payload: VerificationEmailPayload) -> dict:
+    """An email added on the profile page (BetterAuth changeEmail)."""
     try:
         send_verification_email(
             to=payload.to, verification_url=payload.verification_url
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Email delivery failed: {exc}"
+        raise upstream_error(
+            502, "The email could not be sent", log="Verification email failed", exc=exc
         ) from exc
-
     return {"ok": True}
 
 
@@ -85,27 +37,15 @@ class PasswordResetEmailPayload(BaseModel):
 
 
 @router.post("/email/send-password-reset")
-def send_password_reset_email_route(
-    payload: PasswordResetEmailPayload,
-    x_internal_auth_sync_secret: str | None = Header(
-        default=None,
-        alias="X-Internal-Auth-Sync-Secret",
-    ),
-) -> dict:
-    """Called by BetterAuth's sendResetPassword hook on the web (E6)."""
-    expected_secret = os.getenv("AUTH_SYNC_SHARED_SECRET")
-    if not expected_secret:
-        raise HTTPException(
-            status_code=500, detail="AUTH_SYNC_SHARED_SECRET is not configured"
-        )
-    if not hmac.compare_digest(x_internal_auth_sync_secret or "", expected_secret):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
+def send_password_reset_email_route(payload: PasswordResetEmailPayload) -> dict:
+    """Reset by email, for accounts with a verified email (E6)."""
     try:
         send_password_reset_email(to=payload.to, reset_url=payload.reset_url)
     except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Email delivery failed: {exc}"
+        raise upstream_error(
+            502,
+            "The email could not be sent",
+            log="Password reset email failed",
+            exc=exc,
         ) from exc
-
     return {"ok": True}

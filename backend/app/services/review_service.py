@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models.merchant import Merchant
 from app.models.review import Review
+from app.models.user import split_name
 from app.schemas.review import PublicReviewResponse, ReviewResponse
 
 
@@ -53,8 +54,7 @@ def reviewer_display_name(user) -> str:
     """First name plus last initial, so reviews don't expose full names."""
     if user is None:
         return "Former buyer"
-    first = (user.first_name or "").strip()
-    last = (user.last_name or "").strip()
+    first, last = split_name(user.name)
     if first and last:
         return f"{first} {last[0].upper()}."
     return first or "Carabao buyer"

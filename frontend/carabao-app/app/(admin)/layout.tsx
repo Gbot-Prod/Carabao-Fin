@@ -2,14 +2,15 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import AdminShell from "./AdminShell";
+import SignInAgainButton from "./SignInAgainButton";
 import Link from "next/link";
 import styles from "./layout.module.css";
-import { TWO_FACTOR_ENABLED } from "@/lib/features";
 
-// E8c: same switch as the backend's ADMIN_REQUIRE_2FA (default on).
-// Only while two-step verification is switched on (lib/features.ts).
-const requireTwoFactor =
-  TWO_FACTOR_ENABLED && (process.env.ADMIN_REQUIRE_2FA ?? "true").toLowerCase() !== "false";
+// E8c / CF-0003: admins always need two-step verification, as the backend's
+// admin API does. There is no switch for it.
+// CF-0017: this session must also have passed the code step. A Google sign-in
+// goes through it too (lib/auth.ts), but a session from before 2FA was on,
+// or from before this rule, did not.
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const reqHeaders = await headers();
@@ -21,16 +22,33 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   const twoFactorOn = Boolean((session.user as { twoFactorEnabled?: boolean | null }).twoFactorEnabled);
-  if (requireTwoFactor && !twoFactorOn) {
+  if (!twoFactorOn) {
     return (
       <div className={styles.gate}>
         <div className={styles.gateCard} role="alert">
           <h1>Two-step verification required</h1>
           <p>
-            Admin accounts must use two-step verification. Turn it on in the Security section of your profile
-            with an authenticator app, then come back here.
+            Admin accounts must use two-step verification with an authenticator app. Open the setup link that we sent
+            to your verified mobile number and email. If the link expired, ask another admin to send a new one.
           </p>
-          <Link href="/profile" className={styles.gateButton}>Go to my profile</Link>
+          {/* Not "/": that sends an admin back here. */}
+          <Link href="/order" className={styles.gateButton}>Back to Carabao</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const passedCodeStep = (session.session as { mfaVerified?: boolean | null }).mfaVerified === true;
+  if (!passedCodeStep) {
+    return (
+      <div className={styles.gate}>
+        <div className={styles.gateCard} role="alert">
+          <h1>Sign in again</h1>
+          <p>
+            This session did not ask for your authenticator code. Sign in again and enter the code to use the admin
+            area.
+          </p>
+          <SignInAgainButton className={styles.gateButton} />
         </div>
       </div>
     );

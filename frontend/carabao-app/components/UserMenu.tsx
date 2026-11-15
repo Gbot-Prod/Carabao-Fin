@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/hooks/useAuth";
 import Link from "next/link";
+import { formatPhMobile } from "@/lib/phone";
 import { LogoutButton } from "./LogoutButton";
 
 export function UserMenu() {
@@ -25,7 +26,7 @@ export function UserMenu() {
     <div className="flex items-center gap-4">
       <div className="text-sm">
         <p className="font-medium text-gray-900">{user.name}</p>
-        <p className="text-gray-600">{user.email}</p>
+        <p className="text-gray-600">{user.email ?? formatPhMobile(user.phoneNumber)}</p>
       </div>
       <LogoutButton />
     </div>

@@ -3,8 +3,11 @@ import hashlib
 import hmac
 import os
 import time
+from dataclasses import dataclass
 
 import requests
+
+from app.services import money
 
 PAYMONGO_BASE_URL = "https://api.paymongo.com/v1"
 
@@ -45,7 +48,7 @@ def create_checkout_session(
     reference_number: str | None = None,
 ) -> dict:
     """Returns the checkout session data object from PayMongo."""
-    amount_centavos = amount_pesos * 100
+    amount_centavos = money.to_centavos(amount_pesos)
 
     payload: dict = {
         "data": {
@@ -94,21 +97,56 @@ def retrieve_checkout_session(session_id: str) -> dict:
     return response.json()["data"]
 
 
-def paid_payment_from_session(session: dict) -> tuple[bool, str | None]:
-    """Whether a checkout session has been paid, and the paid payment's ID.
+@dataclass(frozen=True)
+class PaidPayment:
+    """A payment that landed on a checkout session, as PayMongo reports it."""
+
+    id: str | None
+    amount: int | None  # centavos
+    currency: str | None
+
+
+def _int_or_none(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def payment_from_object(payment: dict) -> PaidPayment:
+    """A PaidPayment from one entry of a session's ``payments`` list."""
+    attributes = payment.get("attributes") or {}
+    return PaidPayment(
+        id=payment.get("id"),
+        amount=_int_or_none(attributes.get("amount")),
+        currency=attributes.get("currency"),
+    )
+
+
+def paid_payment_from_session(session: dict) -> PaidPayment | None:
+    """The paid payment on a checkout session, or None while it is unpaid.
 
     A session's own ``status`` is only ever ``active`` or ``expired``; the paid
     state lives on its payments (``paid``) and payment intent (``succeeded``).
+    The amount and currency come from the payment (the intent's when the
+    session lists no payment), so the caller can check them (CF-0005).
     """
     attributes = session.get("attributes") or {}
-    for payment in attributes.get("payments") or []:
+    payments = attributes.get("payments") or []
+    for payment in payments:
         if (payment.get("attributes") or {}).get("status") == "paid":
-            return True, payment.get("id")
+            return payment_from_object(payment)
     intent = attributes.get("payment_intent") or {}
-    if (intent.get("attributes") or {}).get("status") == "succeeded":
-        payments = attributes.get("payments") or []
-        return True, payments[0].get("id") if payments else None
-    return False, None
+    intent_attributes = intent.get("attributes") or {}
+    if intent_attributes.get("status") == "succeeded":
+        if payments:
+            return payment_from_object(payments[0])
+        return PaidPayment(
+            id=None,
+            amount=_int_or_none(intent_attributes.get("amount")),
+            currency=intent_attributes.get("currency"),
+        )
+    return None
 
 
 def expire_checkout_session(session_id: str) -> bool:
@@ -130,67 +168,6 @@ def expire_checkout_session(session_id: str) -> bool:
         return session["attributes"].get("status") == "expired"
     response.raise_for_status()
     return True
-
-
-def get_or_create_paymongo_customer(db, user) -> str:
-    """Return the user's PayMongo customer ID, creating one if needed."""
-    if user.paymongo_customer_id:
-        return user.paymongo_customer_id
-
-    response = requests.post(
-        f"{PAYMONGO_BASE_URL}/customers",
-        json={
-            "data": {
-                "attributes": {
-                    "email": user.email,
-                    "first_name": user.first_name or "",
-                    "last_name": user.last_name or "",
-                    "phone": user.phone_number or "",
-                    "default_device": "phone",
-                }
-            }
-        },
-        headers=_auth_header(),
-        timeout=15,
-    )
-    response.raise_for_status()
-    customer_id: str = response.json()["data"]["id"]
-
-    user.paymongo_customer_id = customer_id
-    db.commit()
-    return customer_id
-
-
-def list_customer_payment_methods(customer_id: str) -> list:
-    response = requests.get(
-        f"{PAYMONGO_BASE_URL}/customers/{customer_id}/payment_methods",
-        headers=_auth_header(),
-        timeout=15,
-    )
-    if response.status_code == 404:
-        return []
-    response.raise_for_status()
-    return response.json().get("data", [])
-
-
-def attach_payment_method(customer_id: str, payment_method_id: str) -> dict:
-    response = requests.post(
-        f"{PAYMONGO_BASE_URL}/customers/{customer_id}/payment_methods",
-        json={"data": {"attributes": {"payment_method_id": payment_method_id}}},
-        headers=_auth_header(),
-        timeout=15,
-    )
-    response.raise_for_status()
-    return response.json()["data"]
-
-
-def detach_payment_method(customer_id: str, payment_method_id: str) -> None:
-    response = requests.delete(
-        f"{PAYMONGO_BASE_URL}/customers/{customer_id}/payment_methods/{payment_method_id}",
-        headers=_auth_header(),
-        timeout=15,
-    )
-    response.raise_for_status()
 
 
 # ---------------------------------------------------------------------------

@@ -13,6 +13,7 @@ from app.models.notification import Notification
 from app.models.order import Order
 from app.models.user import User
 from app.services import chat
+from tests.better_auth import make_user, set_identity
 from tests.test_merchant_listings import _other_merchant
 from tests.test_reviews import _buyer, buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -27,9 +28,8 @@ def _client(db, user) -> TestClient:  # noqa: F811
 
 @pytest.fixture
 def order(db, merchant, buyer):  # noqa: F811
-    user, history = buyer
+    user, _ = buyer
     row = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status="processing",
@@ -48,7 +48,7 @@ def _post(client, order_id, body):
 
 def test_buyer_and_farm_talk_and_admin_can_join(db, merchant, buyer, order):  # noqa: F811
     farmer = db.get(User, merchant.user_id)
-    admin = User(email="admin@example.com", is_admin=True, notifications_preferences={})
+    admin = make_user(db, "admin@example.com", is_admin=True, notifications_preferences={})
     db.add(admin)
     db.commit()
 
@@ -163,12 +163,13 @@ def test_read_messages_are_not_texted(db, merchant, buyer, order, monkeypatch): 
 
 def test_admin_without_two_factor_cannot_read_chat(db, buyer, order, monkeypatch):  # noqa: F811
     # E8c applies here too: admin access needs two-step verification.
-    monkeypatch.setenv("ADMIN_REQUIRE_2FA", "true")
     _post(_client(db, buyer[0]), order.id, "Private")
-    admin = User(email="admin2@example.com", is_admin=True, notifications_preferences={})
-    db.add(admin)
+    admin = make_user(db, "admin2@example.com", is_admin=True, two_factor=False)
     db.commit()
     assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 404
-    admin.two_factor_enabled = True
-    db.commit()
+    set_identity(db, admin, twoFactorEnabled=True)  # turned on in BetterAuth
+    # Still refused: this session did not pass the TOTP step (CF-0017).
+    assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 404
+    # Finishing setup gives a new session that did (mfa=true in the token).
+    admin.mfa_session = True
     assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 200

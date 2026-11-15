@@ -16,6 +16,7 @@ from app.models.admin_audit_log import AdminAuditLog
 from app.models.user import User
 
 ROLE_CHANGE = "user.role_change"
+TWO_FACTOR_RESET = "user.two_factor_reset"
 SUSPEND = "user.suspend"
 REINSTATE = "user.reinstate"
 APPLICATION_REVIEW = "merchant_application.review"
@@ -26,6 +27,7 @@ PRODUCE_UNHIDE = "produce.unhide"
 
 ACTIONS = (
     ROLE_CHANGE,
+    TWO_FACTOR_RESET,
     SUSPEND,
     REINSTATE,
     APPLICATION_REVIEW,
@@ -60,7 +62,8 @@ def record_admin_action(
 ) -> AdminAuditLog:
     entry = AdminAuditLog(
         admin_id=admin.id,
-        admin_email=admin.email,
+        # Who acted, as admins know them; phone-only accounts have no email.
+        admin_email=admin.email or admin.phone_number or admin.external_auth_id or "",
         action=action,
         target_type=target_type,
         target_id=target_id,

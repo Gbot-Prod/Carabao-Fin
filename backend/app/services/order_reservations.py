@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.models.cart import Cart
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.produce import Produce
 from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.services import notifications
 from app.services.paymongo import (
+    PaidPayment,
     expire_checkout_session,
     paid_payment_from_session,
     retrieve_checkout_session,
@@ -152,16 +152,69 @@ def cancel_order(order: Order, db: Session) -> bool:
     return True
 
 
+PAYMENT_CURRENCY = "PHP"
+
+
+def payment_mismatch(txn: Transaction, payment: PaidPayment) -> str | None:
+    """Why ``payment`` is not exactly ``txn``'s amount in PHP, or None (CF-0005).
+
+    A payment that doesn't say its amount or currency counts as a mismatch.
+    """
+    expected = int(txn.amount) * 100
+    problems = []
+    if payment.amount != expected:
+        problems.append(f"amount {payment.amount} centavos, expected {expected}")
+    if (payment.currency or "").upper() != PAYMENT_CURRENCY:
+        problems.append(f"currency {payment.currency!r}, expected {PAYMENT_CURRENCY}")
+    return "; ".join(problems) or None
+
+
+def _flag_payment_mismatch(
+    txn: Transaction, order: Order, payment: PaidPayment, reason: str, db: Session
+) -> None:
+    """Close the order as payment_mismatch, flag the money for refund, alert admins."""
+    txn.status = TransactionStatus.REFUND_PENDING
+    restore_order_stock(order, db)
+    order.status = OrderStatus.PAYMENT_MISMATCH
+    ref = notifications.order_ref(order)
+    logger.error(
+        "Payment mismatch on order %s (transaction %s, payment %s): %s",
+        order.id,
+        txn.id,
+        payment.id,
+        reason,
+    )
+    notifications.notify_admins(
+        db,
+        notifications.PAYMENT_MISMATCH,
+        f"Payment mismatch on {ref}",
+        f"PayMongo payment {payment.id or '(no id)'}: {reason}. The order was not "
+        "marked paid; the payment is flagged for refund.",
+        "/admin/orders",
+    )
+    notifications.notify(
+        db,
+        notifications.buyer_id(order),
+        notifications.PAYMENT_MISMATCH,
+        f"We couldn't confirm the payment for {ref}",
+        "The amount we received doesn't match your order. We will refund it; "
+        "contact support if you have questions.",
+        notifications.order_link(order),
+    )
+
+
 def settle_checkout_payment(
-    txn: Transaction, payment_id: str | None, db: Session
+    txn: Transaction, payment: PaidPayment, db: Session
 ) -> str:
     """Record a PayMongo payment for ``txn``; the caller commits.
 
-    Only a pending transaction on a still-pending order moves the order to
-    processing. Money that lands on a closed transaction or a cancelled order is
-    flagged ``refund_pending`` instead, so a cancelled order is never revived.
+    Only a pending transaction on a still-pending order, paid exactly
+    ``txn.amount`` in PHP, moves the order to processing. Money that lands on a
+    closed transaction or a cancelled order is flagged ``refund_pending``
+    instead, so a cancelled order is never revived. A payment of the wrong
+    amount or currency closes the order as ``payment_mismatch`` (CF-0005).
 
-    Returns "paid", "refund" or "duplicate".
+    Returns "paid", "refund", "mismatch" or "duplicate".
     """
     # Lock the order before the transaction, the same order cancel takes them.
     order = db.query(Order).filter(Order.id == txn.order_id).with_for_update().first()
@@ -174,7 +227,7 @@ def settle_checkout_payment(
     ):
         return "duplicate"
 
-    txn.paymongo_payment_id = payment_id
+    txn.paymongo_payment_id = payment.id
     txn.paid_at = datetime.now(UTC)
 
     if (
@@ -184,6 +237,11 @@ def settle_checkout_payment(
     ):
         txn.status = TransactionStatus.REFUND_PENDING
         return "refund"
+
+    mismatch = payment_mismatch(txn, payment)
+    if mismatch:
+        _flag_payment_mismatch(txn, order, payment, mismatch, db)
+        return "mismatch"
 
     txn.status = TransactionStatus.PAID
     order.status = OrderStatus.PROCESSING
@@ -204,15 +262,6 @@ def settle_checkout_payment(
         f"PHP {getattr(order, 'total_price', 0):,}. Open your dashboard to prepare it.",
         "/merchantDashboard",
     )
-    if order.order_history_id:
-        history = (
-            db.query(OrderHistory)
-            .filter(OrderHistory.id == order.order_history_id)
-            .first()
-        )
-        if history:
-            history.last_order_at = datetime.now(UTC)
-
     # Drop only what this order bought: a multi-merchant checkout (C1) leaves
     # the other merchants' items in the cart until their orders are paid.
     cart = db.query(Cart).filter(Cart.user_id == txn.user_id).first()
@@ -257,8 +306,13 @@ def settle_paid_sessions(order: Order, db: Session) -> bool:
                 "Could not check checkout session %s", txn.paymongo_session_id
             )
             continue
-        paid, payment_id = paid_payment_from_session(session)
-        if paid and settle_checkout_payment(txn, payment_id, db) == "paid":
+        payment = paid_payment_from_session(session)
+        if payment is None:
+            continue
+        outcome = settle_checkout_payment(txn, payment, db)
+        if outcome == "mismatch":
+            return False  # closed as payment_mismatch; nothing more to sweep
+        if outcome == "paid":
             logger.warning(
                 "Order %s was paid (session %s) but never settled; settled by sweep",
                 order.id,

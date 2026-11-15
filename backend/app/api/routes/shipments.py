@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session, joinedload
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes.tracking import with_current_order_statuses
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.shipment import Shipment
 from app.models.statuses import OrderStatus
 from app.models.user import User
+from app.models.user_address import UserAddress
 from app.routing.eta import _eta_from_waypoints
 from app.routing.service import compute_route
 from app.routing.state import Stop
@@ -39,15 +39,12 @@ SHIPPABLE_ORDER_STATUSES = frozenset({OrderStatus.PROCESSING})
 # A stop is finished once its order is in CLOSED_ORDER_STATUSES.
 
 
-def _resolve_delivery_address(order: Order, buyer: User | None) -> str | None:
+def _resolve_delivery_address(
+    order: Order, saved_address: UserAddress | None
+) -> str | None:
     if order.delivery_address:
         return order.delivery_address
-    parts = [
-        part
-        for part in [buyer.address if buyer else None, buyer.city if buyer else None]
-        if part
-    ]
-    return ", ".join(parts) if parts else None
+    return saved_address.short_line if saved_address is not None else None
 
 
 def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
@@ -184,7 +181,7 @@ def create_merchant_shipment(
 
     orders = (
         db.query(Order)
-        .options(joinedload(Order.order_history).joinedload(OrderHistory.user))
+        .options(joinedload(Order.user).selectinload(User.addresses))
         .filter(Order.id.in_(order_ids), Order.merchant_id == merchant.id)
         .order_by(Order.id.asc())
         .all()
@@ -235,8 +232,9 @@ def create_merchant_shipment(
 
     order_contexts: list[dict[str, object]] = []
     for order in orders:
-        buyer = order.order_history.user if order.order_history else None
-        delivery_address = _resolve_delivery_address(order, buyer)
+        buyer = order.user
+        saved_address = buyer.default_address if buyer else None
+        delivery_address = _resolve_delivery_address(order, saved_address)
         if not delivery_address and order.delivery_lat is None:
             raise HTTPException(
                 status_code=422, detail=f"Order {order.id} has no delivery address"
@@ -245,6 +243,7 @@ def create_merchant_shipment(
             {
                 "order": order,
                 "buyer": buyer,
+                "saved_address": saved_address,
                 "delivery_address": delivery_address,
             }
         )
@@ -254,7 +253,7 @@ def create_merchant_shipment(
         destination_results = list(
             pool.map(
                 lambda ctx: delivery_point(
-                    ctx["order"], ctx["buyer"], ctx["delivery_address"], _geocode
+                    ctx["order"], ctx["saved_address"], ctx["delivery_address"], _geocode
                 ),
                 order_contexts,
             )
@@ -348,11 +347,7 @@ def create_merchant_shipment(
         ctx = context_by_order_id[stop.order_id]
         buyer = ctx["buyer"]
         assert isinstance(ctx["order"], Order)
-        buyer_full_name = (
-            f"{buyer.first_name} {buyer.last_name}".strip()
-            if buyer and buyer.first_name and buyer.last_name
-            else None
-        )
+        buyer_full_name = (buyer.name or None) if buyer else None
         waypoints.append(
             {
                 "sequence": sequence,

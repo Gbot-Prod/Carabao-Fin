@@ -36,9 +36,13 @@ class PayoutBatch(Base):
     provider_reference = Column(String, nullable=True)  # trace number on the rail
     failure_reason = Column(Text, nullable=True)
     sent_at = Column(DateTime(timezone=True), nullable=True)
-    # Where the money went, copied at send time so later edits don't rewrite history.
+    # Where the money goes, saved when the merchant requests the payout
+    # (CF-0004): sending uses these, never the merchant's current payout
+    # method, so a later edit can't redirect a requested payout. Only a
+    # code-confirmed change of method moves a *failed* batch to the new one.
     destination_type = Column(String, nullable=True)
     destination_bic = Column(String, nullable=True)
+    destination_institution = Column(String, nullable=True)
     destination_name = Column(String, nullable=True)
     destination_number = Column(String, nullable=True)
     transfer_provider = Column(String, nullable=True)  # instapay | pesonet

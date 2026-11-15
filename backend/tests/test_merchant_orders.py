@@ -24,9 +24,8 @@ def _merchant_client(db, merchant) -> TestClient:
 
 def _scheduled_order(db, merchant, buyer, **schedule):
     """A paid order: the only kind the merchant's orders tab shows."""
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=OrderStatus.PROCESSING,

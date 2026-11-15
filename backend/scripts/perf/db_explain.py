@@ -26,7 +26,6 @@ from app.core.database import engine  # noqa: E402
 from app.models.merchant import Merchant  # noqa: E402
 from app.models.merchant_application import MerchantApplication  # noqa: E402
 from app.models.order import Order  # noqa: E402
-from app.models.order_history import OrderHistory  # noqa: E402
 from app.models.produce import Produce  # noqa: E402
 from app.models.statuses import OrderStatus  # noqa: E402
 from app.services.order_status import (  # noqa: E402
@@ -66,9 +65,8 @@ def key_queries(session: Session) -> dict[str, object]:
             Produce.merchant_id == merchant_id
         ),
         "buyer current orders (GET /orders/me/current)": select(Order)
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
         .where(
-            OrderHistory.user_id == busiest_buyer,
+            Order.user_id == busiest_buyer,
             Order.status.in_(ACTIVE_ORDER_STATUSES),
         )
         .order_by(Order.id.asc()),
@@ -88,8 +86,7 @@ def key_queries(session: Session) -> dict[str, object]:
             Order.status == "pending", Order.ordered_at < func.now()
         ),
         "order lookup (GET /tracking/{id})": select(Order)
-        .join(OrderHistory)
-        .where(Order.id == order_id, OrderHistory.user_id == busiest_buyer)
+        .where(Order.id == order_id, Order.user_id == busiest_buyer)
         .limit(1),
         "stock lock (POST /orders/me/place)": select(Produce)
         .where(Produce.id == produce_id)

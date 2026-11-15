@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { displayEmail } from "@/lib/phone";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -13,7 +14,6 @@ export async function GET(req: NextRequest) {
             email: "mock.user@carabao.local",
             name: "Mock User",
           },
-          backendAuthenticated: true,
         },
       });
     }
@@ -23,17 +23,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ session: null });
     }
 
-    const backendToken = req.cookies.get("backend_access_token")?.value;
-
     return NextResponse.json({
       session: {
         user: {
           id: session.user.id,
-          email: session.user.email,
+          // null for a phone signup that hasn't added an email
+          email: displayEmail(session.user.email),
           name: session.user.name,
+          phoneNumber: (session.user as { phoneNumber?: string | null }).phoneNumber ?? null,
           role: session.user.role ?? null,
         },
-        backendAuthenticated: !!backendToken,
       },
     });
   } catch {

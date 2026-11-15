@@ -16,6 +16,7 @@ import PageHeader from "../../PageHeader";
 
 const ACTION_LABELS: Record<string, string> = {
   "user.role_change": "Role change",
+  "user.two_factor_reset": "Two-step reset",
   "user.suspend": "Suspension",
   "user.reinstate": "Reinstatement",
   "merchant_application.review": "Application review",

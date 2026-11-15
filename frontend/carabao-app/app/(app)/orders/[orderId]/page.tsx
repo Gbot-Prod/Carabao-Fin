@@ -57,6 +57,7 @@ const stepIndex = (status: OrderStatus) => {
 function StatusBadge({ status }: { status: OrderStatus }) {
   const cls =
     status === "cancelled" ? styles.badgeCancelled
+    : status === "payment_mismatch" ? styles.badgeMismatch
     : status === "delivered" ? styles.badgeDelivered
     : isInTransit(status) ? styles.badgeShipped
     : styles.badgePending;
@@ -66,6 +67,14 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 function Progress({ order }: { order: OrderDetail }) {
   if (order.status === "cancelled") {
     return <p className={styles.cancelledNote}>This order was cancelled.</p>;
+  }
+  if (order.status === "payment_mismatch") {
+    // Closed, not a step (CF-0026): the amount paid did not match, so it was never processed.
+    return (
+      <p className={styles.cancelledNote}>
+        The amount paid did not match this order, so it was not processed. Your payment will be refunded.
+      </p>
+    );
   }
   const current = stepIndex(order.status);
   const timestamps: Partial<Record<(typeof STEPS)[number]["key"], string | null | undefined>> = {
@@ -213,7 +222,7 @@ function ReviewSection({
     );
   } else if (order.status === "delivered") {
     body = <p className={styles.muted}>The review window for this order has closed.</p>;
-  } else if (order.status === "cancelled") {
+  } else if (order.status === "cancelled" || order.status === "payment_mismatch") {
     body = <p className={styles.muted}>Cancelled orders can&apos;t be reviewed.</p>;
   } else {
     body = <p className={styles.muted}>You can rate this seller once your order is delivered.</p>;

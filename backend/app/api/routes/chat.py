@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_current_user, get_db
+from app.api.dependencies import ensure_phone_verified, get_current_user, get_db
 from app.models.chat import ChatMessage
 from app.models.order import Order
 from app.models.user import User
@@ -87,6 +87,8 @@ def send_message(
 ):
     order = db.get(Order, order_id)
     role = chat.require_role(order, current_user)
+    if role == "buyer":
+        ensure_phone_verified(current_user)
     message = chat.post_message(db, order, current_user, role, payload.body)
     db.commit()
     db.refresh(message)

@@ -9,6 +9,7 @@ export const ORDER_STATUSES = [
   'out_for_delivery',
   'delivered',
   'cancelled',
+  'payment_mismatch', // paid the wrong amount; refunded, never processed (CF-0005)
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
@@ -19,10 +20,14 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   out_for_delivery: 'Out for delivery',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
+  payment_mismatch: 'Payment problem',
 };
 
-// The buyer-facing progress timeline. `cancelled` is not a step.
-export const ORDER_TIMELINE_STEPS: { status: Exclude<OrderStatus, 'cancelled'>; label: string }[] = [
+// The buyer-facing progress timeline. `cancelled` and `payment_mismatch` are not steps.
+export const ORDER_TIMELINE_STEPS: {
+  status: Exclude<OrderStatus, 'cancelled' | 'payment_mismatch'>;
+  label: string;
+}[] = [
   { status: 'pending', label: 'Order Placed' },
   { status: 'processing', label: 'Processing' },
   { status: 'shipped', label: 'Shipped' },

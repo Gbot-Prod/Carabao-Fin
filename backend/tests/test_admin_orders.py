@@ -11,6 +11,7 @@ from app.models.order import Order
 from app.models.shipment import Shipment
 from app.models.transaction import Transaction
 from app.models.user import User
+from tests.better_auth import make_user
 from tests.test_merchant_listings import _other_merchant
 from tests.test_reviews import _buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -24,7 +25,7 @@ def _client(db, user) -> TestClient:
 
 
 def _admin(db) -> User:
-    admin = User(email="admin@example.com", is_admin=True)
+    admin = make_user(db, "admin@example.com", is_admin=True)
     db.add(admin)
     db.commit()
     return admin
@@ -33,9 +34,8 @@ def _admin(db) -> User:
 def _order(
     db, merchant, buyer, status="processing", ordered_at=None, items=None, **extra
 ):
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,

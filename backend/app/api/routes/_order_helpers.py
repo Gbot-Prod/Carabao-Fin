@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.cart import Cart
 from app.models.merchant import Merchant
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.produce import Produce
 from app.services.order_status import (
     SHIPPED_STATUSES,
@@ -24,6 +23,56 @@ def _to_int(value: Any, default: int = 0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def merchant_takes_orders(merchant: Merchant | None) -> bool:
+    """Not closed, not suspended by an admin, and the owner is not banned."""
+    return (
+        merchant is not None
+        and merchant.deleted_at is None
+        and merchant.suspended_at is None
+        and (merchant.user is None or not merchant.user.is_suspended)
+    )
+
+
+def cart_line(produce: Produce, quantity: int, unit_price: int) -> dict[str, Any]:
+    """One cart line, built only from the produce row (CF-0008).
+
+    The client sends produce_id and quantity; name, price, image and the
+    merchant fields always come from here, so a client cannot change them.
+    """
+    merchant = produce.merchant
+    return {
+        "id": str(produce.id),
+        "produce_id": produce.id,
+        "produce": produce.name,
+        "unit": produce.unit,
+        "image": produce.image_url,
+        "price": unit_price,
+        "quantity": quantity,
+        "min_order_qty": produce.min_order_qty,
+        "stock_quantity": produce.stock_quantity,
+        "merchant_id": merchant.id if merchant is not None else None,
+        "farm": merchant.merchant_name if merchant is not None else None,
+        "delivery_fee": (merchant.delivery_price or 0) if merchant is not None else 0,
+    }
+
+
+def order_line(produce: Produce, quantity: int, unit_price: int) -> dict[str, Any]:
+    """One orders.items entry: a snapshot of the listing at checkout."""
+    merchant = produce.merchant
+    return {
+        "id": str(produce.id),
+        "produce_id": produce.id,
+        "produce": produce.name,
+        "name": produce.name,
+        "unit": produce.unit,
+        "image": produce.image_url,
+        "price": unit_price,
+        "quantity": quantity,
+        "merchant_id": produce.merchant_id,
+        "farm": merchant.merchant_name if merchant is not None else None,
+    }
 
 
 def get_or_create_cart(db: Session, user_id: int) -> Cart:
@@ -43,31 +92,11 @@ def get_or_create_cart(db: Session, user_id: int) -> Cart:
     return cart
 
 
-def get_order_history(db: Session, user_id: int) -> OrderHistory | None:
-    return db.query(OrderHistory).filter(OrderHistory.user_id == user_id).first()
-
-
-def get_or_create_order_history(db: Session, user_id: int) -> OrderHistory:
-    history = get_order_history(db, user_id)
-    if history is not None:
-        return history
-
-    history = OrderHistory(user_id=user_id)
-    try:
-        with db.begin_nested():
-            db.add(history)
-            db.flush()
-    except IntegrityError:
-        # A concurrent request for this user created the history first.
-        return db.query(OrderHistory).filter(OrderHistory.user_id == user_id).one()
-    return history
-
-
-def get_history_orders(db: Session, history: OrderHistory) -> list[Order]:
+def get_buyer_orders(db: Session, user_id: int) -> list[Order]:
     return (
         db.query(Order)
         .options(*order_item_load())
-        .filter(Order.order_history_id == history.id)
+        .filter(Order.user_id == user_id)
         .all()
     )
 

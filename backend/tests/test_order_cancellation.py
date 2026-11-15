@@ -2,6 +2,12 @@ from types import SimpleNamespace
 
 from app.models.transaction import Transaction
 from app.services import order_reservations
+from app.services.paymongo import PaidPayment
+
+
+def _paid(payment_id="pay_1", amount=150_000, currency="PHP"):
+    """A PayMongo payment for the 1,500-peso _txn() below."""
+    return PaidPayment(id=payment_id, amount=amount, currency=currency)
 
 
 class FakeQuery:
@@ -118,7 +124,7 @@ def test_cancel_pending_order_refused_while_payment_in_progress(monkeypatch):
 
 class SettleDB:
     def __init__(self, order, cart):
-        self.rows = {"Order": order, "Cart": cart, "OrderHistory": None}
+        self.rows = {"Order": order, "Cart": cart}
         self.refreshed = []
 
     def query(self, model):
@@ -134,14 +140,13 @@ class SettleDB:
 
 def _txn(status="pending"):
     return SimpleNamespace(
-        id=3, order_id=7, user_id=5, status=status, paymongo_payment_id=None
+        id=3, order_id=7, user_id=5, amount=1500, status=status, paymongo_payment_id=None
     )
 
 
 def _settle_order(status, items=None):
     return SimpleNamespace(
         status=status,
-        order_history_id=None,
         items=items if items is not None else [{"produce_id": 1, "quantity": 2}],
     )
 
@@ -152,7 +157,7 @@ def test_payment_moves_pending_order_to_processing():
     txn = _txn()
     db = SettleDB(order, cart)
 
-    outcome = order_reservations.settle_checkout_payment(txn, "pay_1", db)
+    outcome = order_reservations.settle_checkout_payment(txn, _paid(), db)
 
     assert outcome == "paid"
     assert db.refreshed == [True]
@@ -171,7 +176,7 @@ def test_payment_keeps_other_merchants_items_in_cart():
     )
 
     outcome = order_reservations.settle_checkout_payment(
-        _txn(), "pay_1", SettleDB(order, cart)
+        _txn(), _paid("pay_1"), SettleDB(order, cart)
     )
 
     assert outcome == "paid"
@@ -184,7 +189,7 @@ def test_payment_on_cancelled_order_is_flagged_for_refund():
     txn = _txn()
 
     outcome = order_reservations.settle_checkout_payment(
-        txn, "pay_1", SettleDB(order, cart)
+        txn, _paid("pay_1"), SettleDB(order, cart)
     )
 
     assert outcome == "refund"
@@ -199,7 +204,7 @@ def test_payment_on_expired_transaction_is_flagged_for_refund():
     txn = _txn(status="expired")
 
     outcome = order_reservations.settle_checkout_payment(
-        txn, "pay_1", SettleDB(order, None)
+        txn, _paid("pay_1"), SettleDB(order, None)
     )
 
     assert outcome == "refund"
@@ -212,7 +217,7 @@ def test_duplicate_payment_event_is_ignored():
     txn.paymongo_payment_id = "pay_1"
 
     outcome = order_reservations.settle_checkout_payment(
-        txn, "pay_2", SettleDB(_settle_order("processing"), None)
+        txn, _paid("pay_2"), SettleDB(_settle_order("processing"), None)
     )
 
     assert outcome == "duplicate"

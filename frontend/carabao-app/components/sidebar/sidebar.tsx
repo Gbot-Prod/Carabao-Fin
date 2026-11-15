@@ -86,6 +86,16 @@ function DashboardIcon() {
   );
 }
 
+function HelpIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
@@ -102,7 +112,7 @@ export default function Sidebar() {
       .catch(() => setProfile(null));
   }, [isBackendAuthenticated]);
 
-  const profileName = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ");
+  const profileName = profile?.name ?? "";
   const displayName = profileName || user?.name || (isAuthenticated ? "Carabao User" : "Guest");
   const displayEmail = profile?.email ?? user?.email ?? null;
   const avatarUrl = profile?.profile_picture_url ?? null;
@@ -239,6 +249,15 @@ export default function Sidebar() {
             <LanguageToggle className="sidebar__language" />
             {isAuthenticated && <NotificationBell />}
           </div>
+          {/* Help is public: shown to guests and signed-in users alike */}
+          <Link
+            href="/help"
+            className={`sidebar__nav-link sidebar__help${pathname === "/help" ? " sidebar__nav-link--active" : ""}`}
+            onClick={() => setIsMobileOpen(false)}
+          >
+            <span className="sidebar__nav-icon"><HelpIcon /></span>
+            <span className="sidebar__nav-label">{t.nav.help}</span>
+          </Link>
           {!isLoading && (
             isAuthenticated ? (
               <LogoutButton className="sidebar__logout sidebar__logout-button">

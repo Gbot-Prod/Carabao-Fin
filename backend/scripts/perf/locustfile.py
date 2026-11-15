@@ -67,16 +67,11 @@ class CarabaoUser(HttpUser):
             return response if ok else None
 
     def sign_in(self) -> bool:
-        self.headers = {}
-        response = self.call(
-            "POST",
-            "/auth/mobile/sign-in",
-            json={"email": self.email, "password": common.PERF_PASSWORD},
-        )
-        if response is None:
-            return False
-        self.headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
-        return True
+        # Sign-in itself is BetterAuth's (not under test here). A fresh token per
+        # journey still makes the backend verify it and load the user each time.
+        self.headers = {"Authorization": f"Bearer {common.perf_token(self.email)}"}
+        response = self.call("GET", "/auth/me")
+        return response is not None
 
 
 class BuyerUser(CarabaoUser):

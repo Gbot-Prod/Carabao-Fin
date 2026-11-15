@@ -5,6 +5,7 @@ import {
   PAYOUT_PROVIDER_TIMING,
   fetchPayoutInstitutions,
   requestPayout,
+  sendPayoutInfoCode,
   updateMyPayoutInfo,
   type AvailablePayout,
   type MerchantPayoutBatch,
@@ -61,6 +62,9 @@ export default function CashOutPanel({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<PayoutDraft>(() => draftFrom(null));
   const [saving, setSaving] = useState(false);
+  // CF-0004: a new payout method is saved only with the SMS code sent for it.
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const [code, setCode] = useState("");
   const [requesting, setRequesting] = useState(false);
   const [banks, setBanks] = useState<PayoutInstitution[] | null>(null);
   const [banksError, setBanksError] = useState(false);
@@ -73,44 +77,80 @@ export default function CashOutPanel({
       .catch(() => setBanksError(true));
   }, [needsBanks]);
 
+  const resetCode = () => {
+    setCodeSentTo(null);
+    setCode("");
+  };
   const startEditing = () => {
     setDraft(draftFrom(payoutInfo));
     setBanksError(false);
+    resetCode();
     setEditing(true);
   };
+  const stopEditing = () => {
+    resetCode();
+    setEditing(false);
+  };
+  // The code confirms one exact method, so any edit asks for a new code.
   const field = (key: keyof PayoutDraft) => ({
     value: draft[key],
-    onChange: (e: { target: { value: string } }) => setDraft((d) => ({ ...d, [key]: e.target.value })),
+    onChange: (e: { target: { value: string } }) => {
+      setDraft((d) => ({ ...d, [key]: e.target.value }));
+      resetCode();
+    },
   });
+
+  const payload = () => ({
+    payout_type: draft.payout_type,
+    bank_code: draft.bank_code || null,
+    account_number: draft.account_number || null,
+    account_name: draft.account_name || null,
+    ewallet_number: draft.ewallet_number || null,
+  });
+
+  const saveError = (err: unknown) => {
+    // 422: the backend rejects incomplete payout details instead of saving them.
+    const status = getApiErrorStatus(err);
+    const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+    if (status === 422) {
+      return draft.payout_type === "bank"
+        ? "Pick your bank and enter the account number and account holder's name."
+        : "Enter the account holder's name and a mobile number like 09171234567.";
+    }
+    // 400 (wrong code, no verified number) and 429 carry a message for the merchant.
+    if ((status === 400 || status === 429) && typeof detail === "string") return detail;
+    if (status === 502) return "Could not reach PayMongo or send the code. Please try again.";
+    return "Could not save payout details. Please try again.";
+  };
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      const updated = await updateMyPayoutInfo({
-        payout_type: draft.payout_type,
-        bank_code: draft.bank_code || null,
-        account_number: draft.account_number || null,
-        account_name: draft.account_name || null,
-        ewallet_number: draft.ewallet_number || null,
-      });
+      if (codeSentTo === null) {
+        setCodeSentTo(await sendPayoutInfoCode(payload()));
+        onMessage(null);
+        return;
+      }
+      const updated = await updateMyPayoutInfo({ ...payload(), code: code.trim() });
       onPayoutInfoSaved(updated);
-      onMessage(null);
-      setEditing(false);
+      onMessage({ type: "success", text: "Payout method saved." });
+      stopEditing();
     } catch (err) {
-      // 422: the backend rejects incomplete payout details instead of saving them.
-      const status = getApiErrorStatus(err);
-      onMessage({
-        type: "error",
-        text:
-          status === 422
-            ? draft.payout_type === "bank"
-              ? "Pick your bank and enter the account number and account holder's name."
-              : "Enter the account holder's name and a mobile number like 09171234567."
-            : status === 502
-              ? "Could not reach PayMongo to check the bank. Please try again."
-              : "Could not save payout details. Please try again.",
-      });
+      onMessage({ type: "error", text: saveError(err) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setSaving(true);
+    try {
+      setCodeSentTo(await sendPayoutInfoCode(payload()));
+      setCode("");
+      onMessage(null);
+    } catch (err) {
+      onMessage({ type: "error", text: saveError(err) });
     } finally {
       setSaving(false);
     }
@@ -262,11 +302,33 @@ export default function CashOutPanel({
             GCash payouts go through PESONet, so they arrive on banking-day cycles instead of within minutes.
           </p>
         )}
+        {codeSentTo !== null && (
+          <label className={`${styles.formLabel} ${styles.spaceAboveLg}`}>
+            Code sent to your number ending {codeSentTo}
+            <input
+              className={styles.formInput}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="6-digit code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              required
+            />
+            <span className={styles.payoutFieldHint}>
+              For your security, a change of payout account must be confirmed by SMS.{" "}
+              <button type="button" className={styles.linkBtn} onClick={() => void handleResend()} disabled={saving}>
+                Send a new code
+              </button>
+            </span>
+          </label>
+        )}
         <div className={`${styles.formActions} ${styles.spaceAboveLg}`}>
           <button type="submit" className={styles.primaryBtn} disabled={saving}>
-            {saving ? "Saving…" : "Save Payout Method"}
+            {saving ? "Please wait…" : codeSentTo === null ? "Send Code to Save" : "Confirm and Save"}
           </button>
-          <button type="button" className={styles.secondaryBtn} onClick={() => setEditing(false)}>
+          <button type="button" className={styles.secondaryBtn} onClick={stopEditing}>
             Cancel
           </button>
         </div>
@@ -359,8 +421,8 @@ export default function CashOutPanel({
       {failedBatch && !editing && (
         <p className={`${styles.payoutNotice} ${styles.payoutNoticeError} ${styles.spaceBelow}`}>
           Your {formatPeso(failedBatch.net_amount ?? failedBatch.gross_amount)} payout could not be sent
-          {failedBatch.failure_reason ? ` (${failedBatch.failure_reason})` : ""}. Check your payout method below; the
-          admin will send it again.
+          {failedBatch.failure_reason ? ` (${failedBatch.failure_reason})` : ""}. Check your payout method below. If you
+          change it, the admin sends it to the new one.
         </p>
       )}
       {openBatch && !editing && <div className={styles.spaceBelow}>{renderOpenBatch(openBatch)}</div>}

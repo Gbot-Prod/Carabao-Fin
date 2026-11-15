@@ -1,50 +1,30 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict
+
+from app.schemas.user_address import UserAddressResponse
 
 
 class UserBase(BaseModel):
     external_auth_id: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    email: EmailStr
+    # Identity, read live from BetterAuth. email is None for a phone signup
+    # that hasn't added one.
+    name: str | None = None
+    email: str | None = None
+    email_verified: bool = False
     phone_number: str | None = None
-    region: str | None = None
-    province: str | None = None
-    city: str | None = None
-    barangay: str | None = None
-    address: str | None = None
-    postal_code: str | None = None
-    # Map pin for the address (U1).
-    lat: float | None = None
-    lng: float | None = None
+    phone_verified: bool = False
     created_at: datetime | None = None
     profile_picture_url: str | None = None
     notifications_preferences: dict | None = None
 
 
-class UserCreate(UserBase):
-    pass
-
-
 class UserUpdate(BaseModel):
-    # Identity fields (email, external_auth_id) are owned by Better Auth and
-    # only change through /auth/sync. Unknown fields are rejected so they
-    # can't be smuggled in.
+    # Name, email and phone belong to BetterAuth and change through its client.
+    # Addresses have their own endpoints (/users/me/addresses). Unknown fields
+    # are rejected so they can't be smuggled in.
     model_config = ConfigDict(extra="forbid")
 
-    first_name: str | None = None
-    last_name: str | None = None
-    phone_number: str | None = None
-    region: str | None = None
-    province: str | None = None
-    city: str | None = None
-    barangay: str | None = None
-    address: str | None = None
-    postal_code: str | None = None
-    # Map pin for the address (U1).
-    lat: float | None = None
-    lng: float | None = None
     notifications_preferences: dict | None = None
 
 
@@ -67,10 +47,12 @@ class UserResponse(UserBase):
     id: int
     is_admin: bool = False
     two_factor_enabled: bool = False
-    suspended_at: datetime | None = None
+    is_suspended: bool = False
     suspension_reason: str | None = None
     notifications_preferences: dict | None = None
     merchant: UserMerchantInfo | None = None
     cart: UserCartInfo | None = None
+    # Saved delivery addresses, default first.
+    addresses: list[UserAddressResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

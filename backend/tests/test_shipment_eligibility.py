@@ -21,9 +21,8 @@ def _client(db, merchant) -> TestClient:
 
 
 def _order(db, merchant, buyer, status, shipment_id=None):
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,

@@ -12,6 +12,7 @@ import { useAuth } from '../lib/AuthContext';
 import { api, type ApiChatMessage } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { isPhoneVerificationRequired, PhoneVerifySheet } from '../components/PhoneVerifySheet';
 
 const POLL_MS = 10_000;
 const ROLE_LABEL: Record<string, string> = { buyer: 'Buyer', merchant: 'Farm', admin: 'Carabao support', user: 'You' };
@@ -30,6 +31,9 @@ function OrderChatContent() {
   const [closed, setClosed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState('');
+  const [needsPhone, setNeedsPhone] = useState(false);
+  // After verifying, the unsent message is still in the box; say so.
+  const [verified, setVerified] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastId = useRef(0);
@@ -64,6 +68,7 @@ function OrderChatContent() {
     const body = draft.trim();
     if (!body || !token) return;
     setSending(true);
+    setVerified(false);
     try {
       const message = isSupport
         ? await api.support.send(token, body)
@@ -73,7 +78,9 @@ function OrderChatContent() {
       setDraft('');
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send');
+      // Buyers need a verified mobile number to message the farm.
+      if (isPhoneVerificationRequired(err)) setNeedsPhone(true);
+      else setError(err instanceof Error ? err.message : 'Could not send');
     } finally {
       setSending(false);
     }
@@ -113,6 +120,7 @@ function OrderChatContent() {
           />
         )}
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {verified && !error ? <Text style={styles.notice}>Number verified. Press Send to send your message.</Text> : null}
         {closed ? (
           <Text style={styles.closed}>This chat closed 7 days after delivery.</Text>
         ) : (
@@ -136,6 +144,15 @@ function OrderChatContent() {
           </View>
         )}
       </KeyboardAvoidingView>
+      <PhoneVerifySheet
+        visible={needsPhone}
+        reason="Verify your mobile number to message the farm."
+        onClose={() => setNeedsPhone(false)}
+        onVerified={() => {
+          setNeedsPhone(false);
+          setVerified(true);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -165,6 +182,7 @@ const styles = StyleSheet.create({
   body: { fontSize: FontSize.md, color: Colors.text },
   note: { textAlign: 'center', color: Colors.textMuted, marginTop: Spacing.xl },
   error: { color: Colors.error, fontSize: FontSize.sm, paddingHorizontal: Spacing.lg },
+  notice: { color: Colors.textMuted, fontSize: FontSize.sm, paddingHorizontal: Spacing.lg },
   closed: { textAlign: 'center', color: Colors.textMuted, padding: Spacing.lg },
   composer: {
     flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.sm,

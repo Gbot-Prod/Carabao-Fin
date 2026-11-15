@@ -14,6 +14,7 @@ import { cartTotals, groupCartByFarm, type PendingOrder } from '../lib/cartGroup
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Button, Divider, StatRow } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { isPhoneVerificationRequired, PhoneVerifySheet } from '../components/PhoneVerifySheet';
 
 // Matches the web checkout: every order is paid through PayMongo's hosted
 // checkout, where the buyer picks GCash, Maya, card, etc.
@@ -34,6 +35,8 @@ function CheckoutScreenContent() {
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  // No verified mobile number yet (e.g. a Google sign-in): verify, then retry.
+  const [needsPhone, setNeedsPhone] = useState(false);
 
   // One order per farm (C1), each with that farm's delivery fee.
   const groups = groupCartByFarm(items);
@@ -54,24 +57,12 @@ function CheckoutScreenContent() {
       // local cart first; otherwise it fails with "Cart is empty".
       await api.cart.replace(
         token,
-        items.map((i) => ({
-          id: i.id,
-          produce_id: i.produceId,
-          merchant_id: i.merchantId,
-          produce: i.produce,
-          farm: i.farm,
-          unit: i.unit,
-          price: i.price,
-          quantity: i.quantity,
-        })),
+        items.map((i) => ({ produce_id: i.produceId, quantity: i.quantity })),
       );
       const result = await api.orders.place(token, {
         delivery_address: address.trim() || null,
         delivery_time: timeWindow,
-        payment_method: payment,
         notes: notes.trim() || null,
-        // Ignored by the server, which charges each farm's own delivery fee.
-        service_fee: deliveryTotal,
       });
       // PayMongo takes one order per checkout: pay the first here, the
       // confirmation screen lists the other farms' orders to pay in turn.
@@ -104,6 +95,10 @@ function CheckoutScreenContent() {
         },
       });
     } catch (err) {
+      if (isPhoneVerificationRequired(err)) {
+        setNeedsPhone(true);
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Failed to place order';
       Alert.alert('Order Failed', message);
     } finally {
@@ -256,6 +251,15 @@ function CheckoutScreenContent() {
           style={styles.placeBtn}
         />
       </View>
+      <PhoneVerifySheet
+        visible={needsPhone}
+        reason="Before your first order, verify a mobile number so the farm and rider can reach you."
+        onClose={() => setNeedsPhone(false)}
+        onVerified={() => {
+          setNeedsPhone(false);
+          void handlePlaceOrder();
+        }}
+      />
     </SafeAreaView>
   );
 }

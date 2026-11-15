@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_current_user, get_db
-from app.api.routes import merchants, orders, users
+from app.api.routes import merchants, orders, user_addresses
 from app.models.cart import Cart
 from app.models.order import Order
 from app.models.produce import Produce
@@ -42,23 +42,23 @@ def test_routing_prefers_pins_and_falls_back_to_geocoding():
     unpinned = SimpleNamespace(lat=None, lng=None)
     assert merchant_point(unpinned, "Malolos", lambda a: MALOLOS) == MALOLOS
 
-    buyer_with_pin = SimpleNamespace(lat=14.7, lng=121.1)
+    saved_with_pin = SimpleNamespace(lat=14.7, lng=121.1)
     order_pin = SimpleNamespace(
         delivery_lat=14.5, delivery_lng=121.2, delivery_address="X"
     )
-    assert delivery_point(order_pin, buyer_with_pin, "X", _no_geocode) == (14.5, 121.2)
+    assert delivery_point(order_pin, saved_with_pin, "X", _no_geocode) == (14.5, 121.2)
     # Order used the profile address: the profile pin goes with it.
     from_profile = SimpleNamespace(
         delivery_lat=None, delivery_lng=None, delivery_address=None
     )
     assert delivery_point(
-        from_profile, buyer_with_pin, "Profile addr", _no_geocode
+        from_profile, saved_with_pin, "Profile addr", _no_geocode
     ) == (14.7, 121.1)
     # Order typed its own address: the profile pin is for somewhere else.
     typed = SimpleNamespace(
         delivery_lat=None, delivery_lng=None, delivery_address="Typed"
     )
-    assert delivery_point(typed, buyer_with_pin, "Typed", lambda a: MALOLOS) == MALOLOS
+    assert delivery_point(typed, saved_with_pin, "Typed", lambda a: MALOLOS) == MALOLOS
 
 
 def _client(db, user, *routers):  # noqa: F811
@@ -71,12 +71,16 @@ def _client(db, user, *routers):  # noqa: F811
 
 
 def test_profile_and_store_save_pins(db, merchant, buyer):  # noqa: F811
-    me = _client(db, buyer[0], users.router)
-    res = me.patch("/users/me", json={"lat": MALOLOS[0], "lng": MALOLOS[1]})
-    assert res.status_code == 200, res.text
+    me = _client(db, buyer[0], user_addresses.router)
+    res = me.post("/users/me/addresses", json={"lat": MALOLOS[0], "lng": MALOLOS[1]})
+    assert res.status_code == 201, res.text
     assert (res.json()["lat"], res.json()["lng"]) == MALOLOS
+    assert res.json()["is_default"] is True  # first address
+    address_id = res.json()["id"]
     assert (
-        me.patch("/users/me", json={"lat": DAVAO[0], "lng": DAVAO[1]}).status_code
+        me.patch(
+            f"/users/me/addresses/{address_id}", json={"lat": DAVAO[0], "lng": DAVAO[1]}
+        ).status_code
         == 400
     )
 

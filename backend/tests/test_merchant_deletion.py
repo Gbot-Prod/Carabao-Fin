@@ -17,14 +17,13 @@ from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.produce import Produce
 from app.models.shipment import Shipment  # noqa: F401 - registers the table
 from app.models.shopPage import ShopPage
 from app.models.transaction import Transaction
-from app.models.user import User
 from app.services.merchant_service import create_merchant_from_application
+from tests.better_auth import make_user
 
 
 @compiles(JSONB, "sqlite")
@@ -48,7 +47,7 @@ def db():
 
 @pytest.fixture
 def seller(db):
-    user = User(email="farmer@example.com")
+    user = make_user(db, "farmer@example.com")
     db.add(user)
     db.flush()
     merchant = Merchant(
@@ -61,8 +60,6 @@ def seller(db):
         postal_code="3000",
         available_days=["mon"],
         operating_hours={},
-        price_range_min=10,
-        price_range_max=100,
         business_type="individual",
         rsbsa_document_path="rsbsa/1.pdf",
     )
@@ -77,13 +74,11 @@ def seller(db):
 
 @pytest.fixture
 def buyer(db):
-    user = User(email="buyer@example.com")
+    user = make_user(db, "buyer@example.com")
     db.add(user)
     db.flush()
-    history = OrderHistory(user_id=user.id)
-    db.add(history)
     db.commit()
-    return user, history
+    return user, None  # (user, _): kept for the many call sites
 
 
 def _client(db, user) -> TestClient:
@@ -96,9 +91,8 @@ def _client(db, user) -> TestClient:
 
 
 def _order(db, merchant, buyer, status):
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,
@@ -237,10 +231,6 @@ def test_delete_soft_deletes_and_keeps_financial_records(db, seller, buyer):
             city="Malolos",
             address="Purok 1",
             postal_code="3000",
-            delivery_time=2,
-            delivery_price=40,
-            price_range_min=10,
-            price_range_max=100,
             available_days=["mon"],
         )
     )
@@ -275,6 +265,7 @@ def test_deleted_merchant_is_hidden_everywhere(db, seller, buyer):
     assert client.get("/merchants/me/performance").status_code == 404
     new_produce = {
         "name": "Onion",
+        "price": 30,
         "harvest_date": "2026-01-01",
         "best_before": "2026-01-10",
     }
@@ -325,10 +316,6 @@ def test_reapproved_application_reactivates_deleted_merchant(db, seller):
         city="Malolos",
         address="Purok 2",
         postal_code="3000",
-        delivery_time=2,
-        delivery_price=40,
-        price_range_min=10,
-        price_range_max=100,
         available_days=["tue"],
     )
     db.add(application)

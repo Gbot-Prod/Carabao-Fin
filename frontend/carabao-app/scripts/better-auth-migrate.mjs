@@ -3,8 +3,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { getMigrations } from "better-auth/db/migration";
-import { admin, twoFactor } from "better-auth/plugins";
+import { admin, jwt, phoneNumber, twoFactor } from "better-auth/plugins";
 import { Pool } from "pg";
+
+import { poolConfigFromUrl } from "../lib/db-ssl.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,25 +53,42 @@ const normalizedPostgresUrl = rawPostgresUrl
   ? rawPostgresUrl.trim().replace(/^"|"$/g, "")
   : "";
 
-const postgresUrl =
-  normalizedPostgresUrl.includes("render.com") &&
-    !normalizedPostgresUrl.includes("sslmode=")
-    ? `${normalizedPostgresUrl}${normalizedPostgresUrl.includes("?") ? "&" : "?"}sslmode=require`
-    : normalizedPostgresUrl;
-
-if (!postgresUrl) {
+if (!normalizedPostgresUrl) {
   throw new Error(
     "Better Auth Postgres URL is missing. Set one of: POSTGRES_URL, DATABASE_URL, POSTGRESQL_URL, or PGDATABASE_URL."
   );
 }
 
-const pool = new Pool({
-  connectionString: postgresUrl,
-  ssl: { rejectUnauthorized: false },
-});
+// Same TLS rules as lib/auth.ts (CF-0001): the server cert is always verified.
+const pool = new Pool(poolConfigFromUrl(normalizedPostgresUrl, env));
 
 const config = {
-  plugins: [admin(), twoFactor()],
+  // Keep in step with lib/auth.ts (schema-bearing plugins and fields only).
+  // phoneNumber adds "phoneNumber" (unique) and "phoneNumberVerified"; the
+  // backend migration c3e8a1f5d7b9 adds the unique index on an existing column.
+  plugins: [
+    admin(),
+    twoFactor(),
+    jwt(),
+    phoneNumber({ sendOTP: () => {} }),
+    // lib/auth.ts adminTwoFactor(): the session passed the code step (CF-0017).
+    {
+      id: "carabao-admin-two-factor",
+      schema: { session: { fields: { mfaVerified: { type: "boolean", required: false, input: false } } } },
+    },
+    // lib/auth.ts phoneChangeHistory(): the number before the last change (CF-0019).
+    {
+      id: "carabao-phone-change-history",
+      schema: {
+        user: {
+          fields: {
+            previousPhoneNumber: { type: "string", required: false, input: false },
+            phoneNumberChangedAt: { type: "date", required: false, input: false },
+          },
+        },
+      },
+    },
+  ],
   database: pool,
   baseURL:
     env.NEXT_PUBLIC_APP_URL || env.BETTER_AUTH_URL || "http://localhost:3000",

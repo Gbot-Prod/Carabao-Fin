@@ -2,17 +2,18 @@ import os
 from datetime import UTC, datetime, timedelta
 
 import requests as _requests
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db
+from app.core.errors import upstream_error
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
-from app.models.merchant_payout import MerchantPayoutInfo
+from app.models.merchant_payout import MerchantPayoutInfo, PayoutDestinationChange
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.produce import Produce
 from app.models.shopPage import ShopPage
@@ -35,6 +36,8 @@ from app.schemas.payout import (
     AvailablePayout,
     MerchantOrderResponse,
     PayoutBatchResponse,
+    PayoutCodeSent,
+    PayoutInfoChange,
     PayoutInfoResponse,
     PayoutInfoUpdate,
     ReceivingInstitution,
@@ -42,7 +45,14 @@ from app.schemas.payout import (
 )
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
-from app.services import notifications, paymongo, r2_service
+from app.services import (
+    notifications,
+    paymongo,
+    payout_otp,
+    r2_service,
+    rate_limit,
+    upload_validation,
+)
 from app.services.account_suspension import merchant_is_public
 from app.services.merchant_service import (
     find_deletion_blockers,
@@ -62,8 +72,16 @@ from app.services.order_status import (
 from app.services.payout_service import (
     claimable_transactions,
     get_payout_info,
+    move_failed_batches,
     payout_info_problem,
+    resolve_destination,
+    save_destination,
     transfer_fee,
+)
+from app.services.phone_verification import (
+    changed_recently,
+    normalize_ph_mobile,
+    read_token,
 )
 from app.services.pinned_location import delivery_point, merchant_point, validate_pin
 from app.services.produce_freshness import freshness_error, is_listed, ph_today
@@ -130,18 +148,10 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
     merchant_address = ", ".join(part for part in whole_address if part)
     delivery_address = order.delivery_address
 
-    if not delivery_address:
-        # Try to get from order history user
-        order_history = (
-            db.query(OrderHistory)
-            .filter(OrderHistory.id == order.order_history_id)
-            .first()
-        )
-        if order_history:
-            user = db.query(User).filter(User.id == order_history.user_id).first()
-            if user:
-                parts = [p for p in [user.address, user.city] if p]
-                delivery_address = ", ".join(parts) if parts else None
+    # Fall back to the buyer's default saved address.
+    saved_address = order.user.default_address if order.user else None
+    if not delivery_address and saved_address is not None:
+        delivery_address = saved_address.short_line
 
     if not delivery_address and order.delivery_lat is None:
         print(
@@ -153,8 +163,7 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
 
     # Saved map pins first (U1); geocode the address text only without one.
     origin_coords = merchant_point(order.merchant, merchant_address, _geocode)
-    buyer = order.order_history.user if order.order_history else None
-    dest_coords = delivery_point(order, buyer, delivery_address, _geocode)
+    dest_coords = delivery_point(order, saved_address, delivery_address, _geocode)
 
     if not origin_coords:
         print(
@@ -279,10 +288,7 @@ def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
     response = MerchantDetailResponse.model_validate(merchant)
     owner = merchant.user
     if owner is not None:
-        full_name = " ".join(
-            part.strip() for part in (owner.first_name, owner.last_name) if part and part.strip()
-        )
-        response.owner_name = full_name or None
+        response.owner_name = (owner.name or "").strip() or None
     return response
 
 
@@ -297,16 +303,64 @@ def update_my_merchant(
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
     updates = merchant_update.model_dump(exclude_unset=True)
+    token = updates.pop("phone_verification_token", None)
     if "region" in updates and not is_luzon_region(updates["region"]):
         raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
     if "lat" in updates or "lng" in updates:
         validate_pin(updates.get("lat", merchant.lat), updates.get("lng", merchant.lng))
+    if "contact_number" in updates:
+        number = updates.pop("contact_number")
+        _set_contact_number(merchant, current_user, number, token)
     for field, value in updates.items():
         setattr(merchant, field, value)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="Another shop already uses that contact number"
+        ) from exc
     db.refresh(merchant)
     return merchant
+
+
+def _set_contact_number(
+    merchant: Merchant, user: User, value: str | None, token: str | None
+) -> None:
+    """CF-0030: store the +639XXXXXXXXX form, and only with a code sent to it.
+
+    The token comes from /sms/otp/verify, as in onboarding. Sending the
+    number already on file changes nothing and needs no code. The old number
+    is kept for the payout-change alert (CF-0019).
+    """
+    number = normalize_ph_mobile(value or "")
+    if number is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Enter a Philippine mobile number, e.g. 0912 345 6789",
+        )
+    current = normalize_ph_mobile(merchant.contact_number or "")
+    if number == current:
+        return
+    verified = read_token(token)
+    if not (
+        verified is not None
+        and verified.get("purpose") == "merchant_phone"
+        and verified.get("user_id") == user.id
+        and verified.get("number") == number
+    ):
+        raise HTTPException(
+            status_code=400, detail="Please verify your contact number first"
+        )
+    # CF-0032: a second change inside the alert window keeps the number from
+    # before the first one, so a hijacked session cannot push the owner's
+    # number out by verifying two numbers in a row.
+    now = datetime.now(UTC)
+    if not changed_recently(merchant.contact_number_changed_at, now):
+        merchant.previous_contact_number = merchant.contact_number
+    merchant.contact_number_changed_at = now
+    merchant.contact_number = f"+{number}"
 
 
 @router.get("/merchants/me/performance", response_model=MerchantPerformanceResponse)
@@ -626,18 +680,13 @@ def upload_my_shoppage_logo(
             status_code=404, detail="Shop page not found — create one first"
         )
 
-    if logo.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
-        raise HTTPException(status_code=400, detail="Logo must be PNG, JPEG, or WebP")
-
-    data = logo.file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Logo must be under 5 MB")
+    checked = upload_validation.check_image_upload(logo, "Logo")
     try:
-        url = r2_service.upload_shop_logo(
-            merchant.id, data, logo.content_type or "image/jpeg", logo.filename or ""
-        )
+        url = r2_service.upload_shop_logo(merchant.id, checked)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Image upload failed") from exc
+        raise upstream_error(
+            502, "Image upload failed", log="R2 image upload failed", exc=exc
+        ) from exc
 
     shop_page.logo_url = url
     db.commit()
@@ -661,26 +710,13 @@ def upload_my_shoppage_banner(
             status_code=404, detail="Shop page not found — create one first"
         )
 
-    if banner.content_type not in {
-        "image/png",
-        "image/jpeg",
-        "image/jpg",
-        "image/webp",
-    }:
-        raise HTTPException(status_code=400, detail="Banner must be PNG, JPEG, or WebP")
-
-    data = banner.file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Banner must be under 5 MB")
+    checked = upload_validation.check_image_upload(banner, "Banner")
     try:
-        url = r2_service.upload_banner(
-            merchant.id,
-            data,
-            banner.content_type or "image/jpeg",
-            banner.filename or "",
-        )
+        url = r2_service.upload_banner(merchant.id, checked)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Image upload failed") from exc
+        raise upstream_error(
+            502, "Image upload failed", log="R2 image upload failed", exc=exc
+        ) from exc
 
     shop_page.banner_image_url = url
     db.commit()
@@ -707,22 +743,13 @@ def upload_produce_image(
     if not produce:
         raise HTTPException(status_code=404, detail="Produce item not found")
 
-    if image.content_type not in {"image/png", "image/jpeg", "image/jpg", "image/webp"}:
-        raise HTTPException(status_code=400, detail="Image must be PNG, JPEG, or WebP")
-
-    data = image.file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Image must be under 5 MB")
+    checked = upload_validation.check_image_upload(image, "Image")
     try:
-        url = r2_service.upload_produce_image(
-            merchant.id,
-            produce_id,
-            data,
-            image.content_type or "image/jpeg",
-            image.filename or "",
-        )
+        url = r2_service.upload_produce_image(merchant.id, produce_id, checked)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Image upload failed") from exc
+        raise upstream_error(
+            502, "Image upload failed", log="R2 image upload failed", exc=exc
+        ) from exc
 
     produce.image_url = url
     db.commit()
@@ -754,29 +781,27 @@ def list_payout_institutions(current_user: User = Depends(get_current_user)):
     try:
         return paymongo.list_receiving_institutions("instapay")
     except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail="Could not load the bank list. Try again."
+        raise upstream_error(
+            502,
+            "Could not load the bank list. Try again.",
+            log="PayMongo receiving institutions failed",
+            exc=exc,
         ) from exc
 
 
-@router.put("/merchants/me/payout-info", response_model=PayoutInfoResponse)
-def update_my_payout_info(
-    payload: PayoutInfoUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    merchant = get_active_merchant(db, current_user.id)
-    if not merchant:
-        raise HTTPException(status_code=404, detail="Merchant profile not found")
-
-    values = payload.model_dump()
+def _payout_values(payload: PayoutInfoUpdate) -> dict:
+    """The validated payout method to save, with the bank's name looked up."""
+    values = payload.model_dump(include=set(PayoutInfoUpdate.model_fields))
     values["bank_name"] = None
     if payload.payout_type == "bank":
         try:
             institutions = paymongo.list_receiving_institutions("instapay")
         except Exception as exc:
-            raise HTTPException(
-                status_code=502, detail="Could not verify the bank. Try again."
+            raise upstream_error(
+                502,
+                "Could not verify the bank. Try again.",
+                log="PayMongo receiving institutions failed",
+                exc=exc,
             ) from exc
         match = next((i for i in institutions if i["code"] == payload.bank_code), None)
         if match is None:
@@ -784,8 +809,65 @@ def update_my_payout_info(
                 status_code=422, detail="That bank can't receive InstaPay transfers"
             )
         values["bank_name"] = match["name"]
+    return values
+
+
+_PAYOUT_FIELDS = (
+    "payout_type",
+    "bank_code",
+    "bank_name",
+    "account_number",
+    "account_name",
+    "ewallet_number",
+)
+
+
+def _payout_snapshot(info: MerchantPayoutInfo | None) -> dict | None:
+    if info is None:
+        return None
+    return {field: getattr(info, field) for field in _PAYOUT_FIELDS}
+
+
+@router.post("/merchants/me/payout-info/code", response_model=PayoutCodeSent)
+def send_payout_info_code(
+    payload: PayoutInfoUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """CF-0004: text a code that confirms exactly this payout method."""
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    values = _payout_values(payload)
+    sent_to = payout_otp.send_code(db, request, current_user, values)
+    return PayoutCodeSent(sent_to=sent_to)
+
+
+@router.put("/merchants/me/payout-info", response_model=PayoutInfoResponse)
+def update_my_payout_info(
+    payload: PayoutInfoChange,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save a payout method confirmed with its SMS code (CF-0004).
+
+    Writes an audit row, moves failed payouts to the new method (requested
+    ones keep theirs) and alerts the merchant's contacts on file.
+    """
+    # CF-0024: the PayMongo call and the code check (which commits) come
+    # first. The row lock is then held only for the write, until one commit.
+    if not get_active_merchant(db, current_user.id):
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    values = _payout_values(payload)
+    payout_otp.check_code(db, request, current_user, values, payload.code)
+    merchant = get_active_merchant(db, current_user.id, for_update=True)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
 
     info = get_payout_info(db, merchant.id)
+    before = _payout_snapshot(info)
     if not info:
         info = MerchantPayoutInfo(merchant_id=merchant.id, **values)
         db.add(info)
@@ -793,8 +875,32 @@ def update_my_payout_info(
         for field, value in values.items():
             setattr(info, field, value)
 
+    moved = move_failed_batches(db, merchant.id, resolve_destination(info))
+    db.add(
+        PayoutDestinationChange(
+            merchant_id=merchant.id,
+            user_id=current_user.id,
+            before=before,
+            after={**_payout_snapshot(info), "failed_batches_moved": moved},
+            confirmed_via=payout_otp.account_number(current_user)[-4:],
+            ip_address=rate_limit.client_ip(request),
+        )
+    )
+    label = payout_otp.describe(values)
+    notifications.notify(
+        db,
+        current_user.id,
+        notifications.PAYOUT_DESTINATION_CHANGED,
+        "Payout account changed",
+        f"Payouts now go to {label}. If this was not you, contact support now.",
+        "/merchantDashboard",
+    )
     db.commit()
     db.refresh(info)
+    if before is not None:
+        payout_otp.alert_contacts(
+            current_user, merchant, old=payout_otp.describe(before), new=label
+        )
     return info
 
 
@@ -868,7 +974,8 @@ def request_my_payout(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    problem = payout_info_problem(get_payout_info(db, merchant.id))
+    info = get_payout_info(db, merchant.id)
+    problem = payout_info_problem(info)
     if problem:
         raise HTTPException(status_code=400, detail=problem)
 
@@ -909,6 +1016,8 @@ def request_my_payout(
         net_amount=total - fee,
         status=PayoutStatus.PENDING,
     )
+    # CF-0004: fixed now; sending never reads the payout method again.
+    save_destination(batch, resolve_destination(info))
     db.add(batch)
     db.flush()
 
@@ -935,7 +1044,7 @@ def _to_merchant_order_response(
     """One order as the merchant's orders tab shows it."""
     buyer_name = None
     if user:
-        buyer_name = " ".join(filter(None, [user.first_name, user.last_name])) or None
+        buyer_name = user.name or None
     return MerchantOrderResponse(
         id=order.id,
         status=order.status,
@@ -1020,14 +1129,7 @@ def update_my_merchant_order_status(
 
     db.commit()
 
-    order_history = (
-        db.query(OrderHistory).filter(OrderHistory.id == order.order_history_id).first()
-    )
-    user = (
-        db.query(User).filter(User.id == order_history.user_id).first()
-        if order_history
-        else None
-    )
+    user = order.user
 
     notify_order_shipped(
         # U5: only when the buyer accepts SMS updates.

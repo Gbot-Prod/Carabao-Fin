@@ -1,39 +1,47 @@
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, get_db
 from app.api.routes import sms
+from app.models.otp import OtpCode
+from app.services import otp as otp_service
 from app.services.phone_verification import read_token
 
 NUMBER = "+63 912 345 6789"
 NORMALIZED = "639123456789"
 
 
+_db = None
+
+
 @pytest.fixture(autouse=True)
-def _env(monkeypatch):
+def _env(monkeypatch, otp_db):
+    global _db
     monkeypatch.setenv("AUTH_SYNC_SHARED_SECRET", "test-secret")
-    sms._otp_store.clear()
-    sms._user_send_log.clear()
+    _db = otp_db
 
 
 @pytest.fixture
 def sent(monkeypatch):
     messages = []
 
-    def fake_send(*, number, message, **_):
-        messages.append((number, message))
-        return [{"status": "Queued"}]
+    def fake_send(*, number, message, code, **_):
+        assert "{otp}" in message  # Semaphore fills the placeholder, not us
+        messages.append((number, message.replace("{otp}", code)))
+        return code
 
-    monkeypatch.setattr(sms, "semaphore_send_sms", fake_send)
+    monkeypatch.setattr(sms, "semaphore_send_otp", fake_send)
     return messages
 
 
 def _client(user_id: int | None = 1) -> TestClient:
     app = FastAPI()
     app.include_router(sms.router)
+    app.dependency_overrides[get_db] = lambda: _db
     if user_id is not None:
         app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=user_id)
     return TestClient(app)
@@ -82,7 +90,9 @@ def test_otp_send_hourly_cap_per_user(sent):
 def test_otp_verify_returns_token_bound_to_user_and_number(sent):
     client = _client(user_id=7)
     client.post("/sms/otp/send", json={"number": NUMBER})
-    resp = client.post("/sms/otp/verify", json={"number": NUMBER, "otp": _last_otp(sent)})
+    resp = client.post(
+        "/sms/otp/verify", json={"number": NUMBER, "otp": _last_otp(sent)}
+    )
     assert resp.status_code == 200
     data = read_token(resp.json()["verification_token"])
     assert data["purpose"] == "merchant_phone"
@@ -103,7 +113,7 @@ def test_otp_verify_attempt_limit(sent):
     client.post("/sms/otp/send", json={"number": NUMBER})
     otp = _last_otp(sent)
     wrong = "000000" if otp != "000000" else "111111"
-    for _ in range(sms._OTP_MAX_ATTEMPTS):
+    for _ in range(otp_service.OTP_MAX_ATTEMPTS):
         resp = client.post("/sms/otp/verify", json={"number": NUMBER, "otp": wrong})
         assert resp.status_code == 400
     # Even the correct code is refused once attempts are exhausted
@@ -116,21 +126,153 @@ def test_semaphore_error_details_not_leaked(monkeypatch):
     def failing_send(**_):
         raise sms.SemaphoreError("Semaphore error: {'apikey': 'secret-ish'}")
 
-    monkeypatch.setattr(sms, "semaphore_send_sms", failing_send)
+    monkeypatch.setattr(sms, "semaphore_send_otp", failing_send)
     resp = _client().post("/sms/otp/send", json={"number": NUMBER})
     assert resp.status_code == 502
     assert "apikey" not in resp.text
 
 
-def test_signup_token_still_readable_by_auth_route(sent):
-    from app.api.routes.auth import _verified_signup_identifier
-
-    client = _client(user_id=None)
-    body = {"channel": "phone", "identifier": NUMBER}
-    assert client.post("/auth/signup-verification/request", json=body).status_code == 200
-    resp = client.post(
-        "/auth/signup-verification/verify", json={**body, "otp": _last_otp(sent)}
-    )
+def test_stores_code_semaphore_reports_delivered(monkeypatch):
+    monkeypatch.setattr(sms, "semaphore_send_otp", lambda **_: "424242")
+    client = _client()
+    client.post("/sms/otp/send", json={"number": NUMBER})
+    resp = client.post("/sms/otp/verify", json={"number": NUMBER, "otp": "424242"})
     assert resp.status_code == 200
-    token = resp.json()["verification_token"]
-    assert _verified_signup_identifier(token) == ("phone", NORMALIZED)
+
+
+def test_signup_verification_routes_removed():
+    # Signup OTPs are BetterAuth's phoneNumber plugin now (lib/auth.ts).
+    paths = {route.path for route in sms.router.routes}
+    assert "/auth/signup-verification/request" not in paths
+    assert "/auth/signup-verification/verify" not in paths
+
+
+def _account_otp(body, secret="test-secret"):
+    return _client(user_id=None).post(
+        "/internal/sms/account-otp",
+        json=body,
+        headers={"X-Internal-Auth-Sync-Secret": secret} if secret else {},
+    )
+
+
+def test_account_otp_needs_the_internal_secret(sent):
+    body = {"phone_number": NUMBER, "code": "123456"}
+    assert _account_otp(body, secret=None).status_code == 401
+    assert _account_otp(body, secret="wrong").status_code == 401
+    assert sent == []
+
+
+def test_account_otp_sends_betterauths_code_to_normalized_number(sent):
+    resp = _account_otp({"phone_number": NUMBER, "code": "123456"})
+    assert resp.status_code == 200
+    assert resp.json()["code"] == "123456"
+    number, message = sent[-1]
+    assert number == NORMALIZED and "verification code is 123456" in message
+
+    _account_otp(
+        {"phone_number": NUMBER, "code": "654321", "purpose": "password_reset"}
+    )
+    assert "password reset code is 654321" in sent[-1][1]
+
+
+def test_account_otp_reports_the_code_semaphore_used(monkeypatch):
+    # lib/auth.ts stores this one so the user's code still works.
+    monkeypatch.setattr(sms, "semaphore_send_otp", lambda **_: "424242")
+    resp = _account_otp({"phone_number": NUMBER, "code": "123456"})
+    assert resp.json()["code"] == "424242"
+
+
+def test_account_otp_rejects_bad_input(sent):
+    assert (
+        _account_otp({"phone_number": "+1 555 123 4567", "code": "1"}).status_code
+        == 400
+    )
+    assert _account_otp({"phone_number": NUMBER, "code": "abc"}).status_code == 400
+    assert (
+        _account_otp({"phone_number": NUMBER, "code": "1", "purpose": "x"}).status_code
+        == 422
+    )
+    assert sent == []
+
+
+def test_code_is_stored_hashed_in_the_database(sent, otp_db):
+    _client(user_id=3).post("/sms/otp/send", json={"number": NUMBER})
+    row = otp_db.query(OtpCode).one()
+    assert row.key == f"merchant:3:{NORMALIZED}"
+    assert _last_otp(sent) not in row.code_hash
+    assert row.code_hash == otp_service.hash_code(row.key, _last_otp(sent))
+    assert row.attempts == 0
+
+
+def test_wrong_codes_are_counted_in_the_database(sent, otp_db):
+    client = _client()
+    client.post("/sms/otp/send", json={"number": NUMBER})
+    wrong = "000000" if _last_otp(sent) != "000000" else "111111"
+    client.post("/sms/otp/verify", json={"number": NUMBER, "otp": wrong})
+    client.post("/sms/otp/verify", json={"number": NUMBER, "otp": wrong})
+    otp_db.expire_all()
+    assert otp_db.query(OtpCode).one().attempts == 2
+
+
+def test_used_code_is_deleted(sent, otp_db):
+    client = _client()
+    client.post("/sms/otp/send", json={"number": NUMBER})
+    code = _last_otp(sent)
+    assert client.post(
+        "/sms/otp/verify", json={"number": NUMBER, "otp": code}
+    ).status_code == 200
+    assert otp_db.query(OtpCode).count() == 0
+    assert client.post(
+        "/sms/otp/verify", json={"number": NUMBER, "otp": code}
+    ).status_code == 400
+
+
+def test_expired_code_is_refused(sent, otp_db, monkeypatch):
+    client = _client()
+    client.post("/sms/otp/send", json={"number": NUMBER})
+    later = otp_service._now() + timedelta(seconds=otp_service.OTP_TTL_SECONDS + 1)
+    monkeypatch.setattr(otp_service, "_now", lambda: later)
+    resp = client.post(
+        "/sms/otp/verify", json={"number": NUMBER, "otp": _last_otp(sent)}
+    )
+    assert resp.status_code == 400
+    assert otp_db.query(OtpCode).count() == 0
+    assert otp_service.purge_expired(otp_db) == 0
+
+
+def test_missing_secret_sends_no_sms(sent, otp_db, monkeypatch):
+    monkeypatch.delenv("AUTH_SYNC_SHARED_SECRET")
+    resp = _client().post("/sms/otp/send", json={"number": NUMBER})
+    assert resp.status_code == 500
+    assert sent == []
+    assert otp_db.query(OtpCode).count() == 0
+
+
+def test_failed_send_can_be_retried_at_once(monkeypatch, otp_db):
+    def failing_send(**_):
+        raise sms.SemaphoreError("Semaphore request failed")
+
+    monkeypatch.setattr(sms, "semaphore_send_otp", failing_send)
+    client = _client()
+    assert client.post("/sms/otp/send", json={"number": NUMBER}).status_code == 502
+    assert otp_db.query(OtpCode).count() == 0
+    monkeypatch.setattr(sms, "semaphore_send_otp", lambda **_: "424242")
+    assert client.post("/sms/otp/send", json={"number": NUMBER}).status_code == 200
+
+
+def test_send_in_progress_blocks_a_second_send(otp_db):
+    key = f"merchant:1:{NORMALIZED}"
+    otp_service.reserve_send(otp_db, key)
+    with pytest.raises(otp_service.HTTPException) as exc:
+        otp_service.reserve_send(otp_db, key)
+    assert exc.value.status_code == 429
+    # The claim matches no code, not even an empty one.
+    with pytest.raises(otp_service.HTTPException):
+        otp_service.check_code(otp_db, key, "")
+    otp_service.store_code(otp_db, key, "123456")
+    otp_service.check_code(otp_db, key, "123456")
+
+
+def test_account_otp_messages_say_ten_minutes():
+    for message in sms._ACCOUNT_OTP_MESSAGES.values():
+        assert "10 minutes" in message

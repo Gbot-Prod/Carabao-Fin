@@ -85,7 +85,8 @@
   color: var(--success-text);
 }
 
-.badge_rejected {
+.badge_rejected,
+.badge_suspended {
   background: #fee2e2;
   color: #991b1b;
 }

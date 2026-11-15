@@ -1,6 +1,6 @@
 """Pydantic schema package."""
 
-from app.schemas.cart import CartCreate, CartItem, CartResponse, CartUpdate
+from app.schemas.cart import CartItem, CartItemIn, CartResponse, CartUpdate
 from app.schemas.merchant import MerchantResponse, MerchantUpdate
 from app.schemas.order import (
     CurrentOrderResponse,
@@ -10,11 +10,11 @@ from app.schemas.order import (
 )
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
-from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.schemas.user import UserResponse, UserUpdate
 
 __all__ = [
-    "CartCreate",
     "CartItem",
+    "CartItemIn",
     "CartResponse",
     "CartUpdate",
     "CurrentOrderResponse",
@@ -29,7 +29,6 @@ __all__ = [
     "ShopPageCreate",
     "ShopPageResponse",
     "ShopPageUpdate",
-    "UserCreate",
     "UserResponse",
     "UserUpdate",
 ]

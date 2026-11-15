@@ -71,6 +71,7 @@
 .badgeShipped { background: #dbeafe; color: #1d4ed8; }
 .badgeDelivered { background: #dcfce7; color: #15803d; }
 .badgeCancelled { background: #fee2e2; color: #b91c1c; }
+.badgeMismatch { background: #fef3c7; color: #b45309; }
 
 /* ── Cards ────────────────────────────────────────────────────────────────── */
 

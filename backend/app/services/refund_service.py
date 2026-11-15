@@ -110,10 +110,10 @@ def notify_buyer_refunded(txn: Transaction) -> None:
     ref = order_ref(txn)
     method = REFUND_METHODS.get(txn.refund_method or "", txn.refund_method or "")
 
-    if buyer.email and notifications.wants(buyer, "email"):
+    if buyer.verified_email and notifications.wants(buyer, "email"):
         try:
             email.send_refund_email(
-                buyer.email,
+                buyer.verified_email,
                 order_ref=ref,
                 amount=txn.amount,
                 method=method,

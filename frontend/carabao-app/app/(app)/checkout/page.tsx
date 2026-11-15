@@ -4,7 +4,7 @@ import axios from "axios";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
-import { cancelPaymentCheckout, createPaymentCheckout, fetchMyCart, fetchMyProfile, placeOrderFromCart, type CartItem } from "@/util/api";
+import { cancelPaymentCheckout, createPaymentCheckout, defaultAddress, fetchMyAddresses, fetchMyCart, placeOrderFromCart, type CartItem, type UserAddress } from "@/util/api";
 import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { clearPendingPayments, loadPendingPayments, savePendingPayments } from "@/util/pendingPayments";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
@@ -13,7 +13,8 @@ import type { Pin } from "@/util/reverseGeocode";
 import { isLuzonRegion } from "@/util/serviceArea";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt } from "@/lib/i18n/format";
-import { getApiErrorStatus } from "@/util/errorHelper";
+import { getApiErrorStatus, isPhoneVerificationRequired } from "@/util/errorHelper";
+import PhoneVerifyDialog from "@/components/PhoneVerifyDialog/PhoneVerifyDialog";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
 // Same windows the mobile app offers, so both clients store comparable values.
@@ -32,23 +33,41 @@ export default function CheckoutPage() {
   const [isLoadingCart, setIsLoadingCart] = useState(true);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The account has no verified mobile number yet (e.g. a Google sign-in):
+  // verify one, then place the order again.
+  const [needsPhone, setNeedsPhone] = useState(false);
   // Set by the mount-only payment-return effect; translated at render time so it
   // follows the language toggle without re-running that effect.
   const [returnNotice, setReturnNotice] = useState<"errPaymentProcessing" | "errPaymentCancelled" | null>(null);
   const [street, setStreet] = useState("");
   const [postal, setPostal] = useState("");
-  const [paymentMethod] = useState("online");
   const [notes, setNotes] = useState("");
   const [deliveryDate, setDeliveryDate] = useState(() => localIsoDate(1));
   const [deliveryWindow, setDeliveryWindow] = useState(TIME_WINDOWS[0]);
-  // Delivery pin (U1b): starts at the profile's saved pin, if any.
+  // Delivery pin (U1b): starts at the saved address's pin, if any.
   const [pin, setPin] = useState<Pin | null>(null);
+  // Saved addresses; the default one pre-fills the form.
+  const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
+  const [savedAddressId, setSavedAddressId] = useState<number | null>(null);
   const [addressForm, setAddressForm] = useState<LocationSelectsValue>({
     region: "",
     province: "",
     city: "",
     barangay: "",
   });
+
+  const applySavedAddress = (a: UserAddress | null) => {
+    setSavedAddressId(a?.id ?? null);
+    setStreet(a?.address ?? "");
+    setPostal(a?.postal_code ?? "");
+    setPin(a?.lat != null && a?.lng != null ? { lat: a.lat, lng: a.lng } : null);
+    setAddressForm({
+      region: a?.region ?? "",
+      province: a?.province ?? "",
+      city: a?.city ?? "",
+      barangay: a?.barangay ?? "",
+    });
+  };
 
   useEffect(() => {
     const loadCart = async () => {
@@ -62,25 +81,19 @@ export default function CheckoutPage() {
       }
     };
 
-    const loadProfile = async () => {
+    const loadAddresses = async () => {
       try {
-        const profile = await fetchMyProfile();
-        if (profile.address) setStreet(profile.address);
-        if (profile.postal_code) setPostal(profile.postal_code);
-        if (profile.lat != null && profile.lng != null) setPin({ lat: profile.lat, lng: profile.lng });
-        setAddressForm({
-          region: profile.region ?? "",
-          province: profile.province ?? "",
-          city: profile.city ?? "",
-          barangay: profile.barangay ?? "",
-        });
+        const addresses = await fetchMyAddresses();
+        setSavedAddresses(addresses);
+        const initial = defaultAddress(addresses);
+        if (initial) applySavedAddress(initial);
       } catch {
-        // leave address blank if profile fetch fails
+        // leave address blank if the fetch fails
       }
     };
 
     void loadCart();
-    void loadProfile();
+    void loadAddresses();
   }, []);
 
   useEffect(() => {
@@ -146,10 +159,7 @@ export default function CheckoutPage() {
         delivery_region: addressForm.region,
         delivery_lat: pin?.lat ?? null,
         delivery_lng: pin?.lng ?? null,
-        payment_method: paymentMethod,
         notes: notes || null,
-        // Ignored by the server, which charges each merchant's own delivery fee.
-        service_fee: deliveryTotal,
       });
 
       // PayMongo takes one order per checkout, so a multi-farm cart is paid in
@@ -160,6 +170,10 @@ export default function CheckoutPage() {
       const checkout = await createPaymentCheckout(placed ? placed[0].order_id : result.order_id);
       window.location.href = checkout.checkout_url;
     } catch (err) {
+      if (isPhoneVerificationRequired(err)) {
+        setNeedsPhone(true);
+        return;
+      }
       let message = t.checkout.errGeneric;
 
       if (axios.isAxiosError(err)) {
@@ -189,6 +203,25 @@ export default function CheckoutPage() {
         <section className={styles.formCard}>
           <div className={styles.block}>
             <h2>{t.checkout.deliveryInfo}</h2>
+            {savedAddresses.length > 1 && (
+              <label>
+                {t.checkout.savedAddress}
+                <select
+                  value={savedAddressId ?? ""}
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    applySavedAddress(savedAddresses.find((a) => a.id === id) ?? null);
+                  }}
+                >
+                  {savedAddresses.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {[a.label, a.address, a.city].filter(Boolean).join(" · ") || `#${a.id}`}
+                    </option>
+                  ))}
+                  <option value="">{t.checkout.newAddress}</option>
+                </select>
+              </label>
+            )}
             <label>
               {t.checkout.street}
               <input
@@ -332,6 +365,17 @@ export default function CheckoutPage() {
           </Link>
         </aside>
       </div>
+
+      {needsPhone && (
+        <PhoneVerifyDialog
+          reason="Before your first order, verify a mobile number so the farm and rider can reach you."
+          onClose={() => setNeedsPhone(false)}
+          onVerified={() => {
+            setNeedsPhone(false);
+            void handlePlaceOrder();
+          }}
+        />
+      )}
     </div>
   );
 }

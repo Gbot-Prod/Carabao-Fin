@@ -1,10 +1,9 @@
 import type { ApiReferencePrice } from './referencePrices';
 
-// FastAPI backend. Not the Next.js site — that serves HTML 404s for API paths.
-// On a physical device "localhost" is the phone itself, so set EXPO_PUBLIC_API_URL
-// (e.g. your PC's LAN IP for local dev) rather than relying on this fallback.
-export const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000').replace(/\/$/, '');
-export const WEB_BASE = (process.env.EXPO_PUBLIC_WEB_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+import { getAccessToken } from './authClient';
+import { API_BASE } from './config';
+
+export { API_BASE, WEB_BASE } from './config';
 
 const REQUEST_TIMEOUT_MS = 20000;
 
@@ -30,7 +29,26 @@ function extractDetail(body: unknown): string | null {
   return null;
 }
 
+// `token` says whether the call is signed in (screens pass the one from useAuth).
+// The header always carries a current token: they last 15 minutes, so an older
+// one is swapped for a fresh one, and a 401 gets one retry with a new token.
 export async function request<T>(
+  path: string,
+  token: string | null,
+  options?: RequestInit,
+): Promise<T> {
+  if (!token) return send<T>(path, null, options);
+  try {
+    return await send<T>(path, (await getAccessToken()) ?? token, options);
+  } catch (err) {
+    if (!(err instanceof ApiError && err.status === 401)) throw err;
+    const fresh = await getAccessToken({ forceRefresh: true });
+    if (!fresh) throw err;
+    return send<T>(path, fresh, options);
+  }
+}
+
+async function send<T>(
   path: string,
   token: string | null,
   options?: RequestInit,
@@ -180,18 +198,39 @@ export type ApiCartItem = {
 
 export type ApiUserProfile = {
   id: number;
-  first_name: string | null;
-  last_name: string | null;
-  email: string;
+  // Identity, read live from BetterAuth. email is null for a phone signup
+  // that hasn't added one; phone_number is "+639XXXXXXXXX".
+  name: string | null;
+  email: string | null;
+  email_verified: boolean;
   phone_number: string | null;
-  address: string | null;
-  city: string | null;
-  country: string | null;
-  postal_code: string | null;
+  // Checkout, merchant applications and order chat need this.
+  phone_verified: boolean;
   created_at: string | null;
   merchant: { id: number; merchant_name: string } | null;
   cart: { id: number; total_items: number; total_price: number } | null;
+  // Saved delivery addresses, default first.
+  addresses: ApiUserAddress[];
 };
+
+export type ApiUserAddress = {
+  id: number;
+  label: string | null;
+  region: string | null;
+  province: string | null;
+  city: string | null;
+  barangay: string | null;
+  address: string | null;
+  postal_code: string | null;
+  lat: number | null;
+  lng: number | null;
+  is_default: boolean;
+};
+
+/** The default saved address, else the first, else null. */
+export function defaultAddress(addresses: ApiUserAddress[] | null | undefined): ApiUserAddress | null {
+  return addresses?.find((a) => a.is_default) ?? addresses?.[0] ?? null;
+}
 
 // Shape stored in the server-side cart (PUT /carts/me). /orders/me/place
 // reads this cart, not the request body, and needs produce_id on each item.
@@ -221,9 +260,7 @@ export function merchantLocation(m: Pick<ApiMerchant, 'city' | 'province'>): str
 export type PlaceOrderPayload = {
   delivery_address?: string | null;
   delivery_time?: string | null;
-  payment_method?: string | null;
   notes?: string | null;
-  service_fee?: number;
 };
 
 export type PlacedOrder = {
@@ -387,7 +424,8 @@ export const api = {
   cart: {
     get: (token: string | null) =>
       request<ApiCart>('/carts/me', token),
-    replace: (token: string | null, items: ServerCartItem[]) =>
+    // The server builds each line from the listing; send only these two.
+    replace: (token: string | null, items: { produce_id: number; quantity: number }[]) =>
       request<ApiCart>('/carts/me', token, {
         method: 'PUT',
         body: JSON.stringify({ items }),

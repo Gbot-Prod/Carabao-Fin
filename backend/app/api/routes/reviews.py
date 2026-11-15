@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.dependencies import get_current_user, get_db
 from app.models.merchant import Merchant
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.review import Review
 from app.models.user import User
 from app.schemas.review import (
@@ -34,8 +33,7 @@ router = APIRouter()
 def _get_my_order(db: Session, order_id: int, user: User) -> Order:
     order = (
         db.query(Order)
-        .join(OrderHistory, OrderHistory.id == Order.order_history_id)
-        .filter(Order.id == order_id, OrderHistory.user_id == user.id)
+        .filter(Order.id == order_id, Order.user_id == user.id)
         .first()
     )
     if order is None:

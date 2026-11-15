@@ -15,13 +15,13 @@ from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
-from app.models.order_history import OrderHistory
 from app.models.payout_batch import PayoutBatch  # noqa: F401 - registers the table
 from app.models.produce import Produce  # noqa: F401 - registers the table
 from app.models.shipment import Shipment
 from app.models.shopPage import ShopPage  # noqa: F401 - registers the table
 from app.models.transaction import Transaction
 from app.models.user import User
+from tests.better_auth import make_user
 
 
 @compiles(JSONB, "sqlite")
@@ -60,8 +60,6 @@ def _merchant(db, user):
         postal_code="3000",
         available_days=["mon"],
         operating_hours={},
-        price_range_min=10,
-        price_range_max=100,
         business_type="individual",
         rsbsa_document_path="rsbsa/1.pdf",
     )
@@ -72,7 +70,7 @@ def _merchant(db, user):
 
 @pytest.fixture
 def seller(db):
-    user = User(email="farmer@example.com")
+    user = make_user(db, "farmer@example.com")
     db.add(user)
     db.flush()
     merchant = _merchant(db, user)
@@ -82,13 +80,11 @@ def seller(db):
 
 @pytest.fixture
 def buyer(db):
-    user = User(email="buyer@example.com")
+    user = make_user(db, "buyer@example.com")
     db.add(user)
     db.flush()
-    history = OrderHistory(user_id=user.id)
-    db.add(history)
     db.commit()
-    return user, history
+    return user, None  # (user, _): kept for the many call sites
 
 
 def _client(db, user) -> TestClient:
@@ -101,9 +97,8 @@ def _client(db, user) -> TestClient:
 
 
 def _order(db, merchant, buyer, status):
-    user, history = buyer
+    user, _ = buyer
     order = Order(
-        order_history_id=history.id,
         user_id=user.id,
         merchant_id=merchant.id,
         status=status,
@@ -208,10 +203,6 @@ def test_account_delete_succeeds_for_merchant_without_sales(db, seller):
             city="Malolos",
             address="Purok 1",
             postal_code="3000",
-            delivery_time=2,
-            delivery_price=40,
-            price_range_min=10,
-            price_range_max=100,
             available_days=["mon"],
         )
     )

@@ -4,6 +4,7 @@ Counts the same orders as ``/merchants/me/performance``: orders a payment has
 landed on, cancelled ones left out of revenue. Days are Philippine calendar days.
 """
 
+import logging
 from datetime import UTC, date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,11 +16,13 @@ from app.models.order import Order
 from app.models.produce import Produce
 from app.models.statuses import OrderStatus
 from app.models.user import User
+from app.services import money
 from app.services.merchant_service import get_active_merchant
 from app.services.order_status import money_received_clause
 from app.services.produce_freshness import PH_TZ
 
 router = APIRouter(tags=["merchants"])
+logger = logging.getLogger(__name__)
 
 ALLOWED_DAYS = (30, 90)
 
@@ -43,6 +46,8 @@ class MerchantSales(BaseModel):
     total_orders: int
     daily: list[SalesDay]
     top_products: list[TopProduct]
+    # Orders left out because an item price was bad (CF-0027).
+    skipped_rows: int = 0
 
 
 def _int(item: dict, *keys: str) -> int | None:
@@ -76,6 +81,7 @@ def merchant_sales(
         first_day + timedelta(days=i): {"revenue": 0, "orders": 0} for i in range(days)
     }
     products: dict[object, dict] = {}
+    skipped_rows = 0
     for order in orders:
         moment = order.ordered_at
         if moment.tzinfo is None:  # sqlite in tests
@@ -83,14 +89,32 @@ def merchant_sales(
         bucket = buckets.get(moment.astimezone(PH_TZ).date())
         if bucket is None:
             continue
+        # Read all lines first: a bad snapshot price is never counted as 0
+        # (CF-0014). The order is logged and skipped as a whole, so the totals
+        # stay consistent and one bad row does not cause a 500 (CF-0027).
+        lines = []
+        try:
+            for item in order.items or []:
+                if not isinstance(item, dict):
+                    continue
+                quantity = _int(item, "quantity") or 0
+                if quantity <= 0:
+                    continue
+                lines.append(
+                    (item, quantity, money.line_total(item.get("price"), quantity))
+                )
+        except money.InvalidAmount as exc:
+            logger.warning(
+                "Merchant sales: skipped order %s with a bad item price: %s",
+                order.id,
+                exc,
+            )
+            skipped_rows += 1
+            continue
+
         bucket["revenue"] += order.total_price or 0
         bucket["orders"] += 1
-        for item in order.items or []:
-            if not isinstance(item, dict):
-                continue
-            quantity = _int(item, "quantity") or 0
-            if quantity <= 0:
-                continue
+        for item, quantity, line_total in lines:
             pid = _int(item, "produce_id", "produceId")
             key = pid if pid is not None else f"name:{item.get('name')}"
             row = products.setdefault(
@@ -103,7 +127,7 @@ def merchant_sales(
                 },
             )
             row["quantity"] += quantity
-            row["revenue"] += (_int(item, "price") or 0) * quantity
+            row["revenue"] += line_total
 
     # Fill names from the listing when the order snapshot has none.
     missing = [
@@ -134,6 +158,7 @@ def merchant_sales(
         total_orders=sum(d.orders for d in daily),
         daily=daily,
         top_products=top,
+        skipped_rows=skipped_rows,
     )
 
 

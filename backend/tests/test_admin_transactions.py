@@ -87,7 +87,7 @@ def test_filters_status_merchant_and_dates(db, merchant):
 
 def test_search_by_paymongo_id_order_id_and_email(db, merchant):
     buyer = _buyer(db)
-    other_buyer = _buyer(db, email="maria@example.com", first="Maria", last="Santos")
+    other_buyer = _buyer(db, email="maria@example.com", name="Maria Santos")
     o1 = _order(db, merchant, buyer)
     o2 = _order(db, merchant, other_buyer)
     a = _txn(db, o1, "paid", paymongo_payment_id="pay_XYZ789")
@@ -118,7 +118,7 @@ def test_totals_cover_all_matches_not_just_the_page(db, merchant):
 
 
 def test_csv_export_respects_filters_and_escapes_formulas(db, merchant):
-    buyer = _buyer(db, email="evil@example.com", first="=HYPERLINK(1)", last="")
+    buyer = _buyer(db, email="evil@example.com", name="=HYPERLINK(1)")
     order = _order(db, merchant, buyer)
     paid = _txn(db, order, "paid", paymongo_payment_id="pay_1")
     _txn(db, order, "expired")

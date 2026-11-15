@@ -31,7 +31,9 @@ ACTIVE_ORDER_STATUSES = frozenset(
         OrderStatus.OUT_FOR_DELIVERY,
     }
 )
-CLOSED_ORDER_STATUSES = frozenset({OrderStatus.DELIVERED, OrderStatus.CANCELLED})
+CLOSED_ORDER_STATUSES = frozenset(
+    {OrderStatus.DELIVERED, OrderStatus.CANCELLED, OrderStatus.PAYMENT_MISMATCH}
+)
 
 # Transaction states meaning money reached us for the order.
 MONEY_RECEIVED_STATUSES = frozenset(
@@ -53,6 +55,7 @@ MERCHANT_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
     OrderStatus.OUT_FOR_DELIVERY: frozenset({OrderStatus.CANCELLED}),
     OrderStatus.DELIVERED: frozenset(),
     OrderStatus.CANCELLED: frozenset(),
+    OrderStatus.PAYMENT_MISMATCH: frozenset(),
 }
 
 

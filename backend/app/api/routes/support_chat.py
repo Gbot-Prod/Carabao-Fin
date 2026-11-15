@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
-from app.api.routes.admin import _require_admin, admin_requires_two_factor
+from app.api.routes.admin import _require_admin
 from app.api.routes.chat import ChatMessageOut, _out
 from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.user import User
@@ -83,10 +83,8 @@ def _post(
 
 
 def _admins(db: Session) -> list[User]:
-    q = db.query(User).filter(User.is_admin.is_(True), User.suspended_at.is_(None))
-    if admin_requires_two_factor():
-        q = q.filter(User.two_factor_enabled.is_(True))
-    return q.all()
+    admins = db.query(User).filter(User.is_admin, ~User.is_suspended).all()
+    return [a for a in admins if a.two_factor_enabled]
 
 
 # ── The user's side ─────────────────────────────────────────────────────────
@@ -122,14 +120,14 @@ def write_to_support(
         db.add(conv)
         db.flush()
     message = _post(db, conv, current_user, "user", payload.body)
-    name = " ".join(p for p in (current_user.first_name, current_user.last_name) if p)
+    name = current_user.name
     for admin in _admins(db):
         if admin.id != current_user.id:
             notifications.notify(
                 db,
                 admin.id,
                 "support_message",
-                f"Support message from {name or current_user.email}",
+                f"Support message from {name or current_user.email or current_user.phone_number}",
                 payload.body.strip()[:120],
                 "/admin/support",
             )
@@ -189,10 +187,7 @@ def list_support_conversations(
             SupportConversationSummary(
                 conversation_id=conv.id,
                 user_id=conv.user_id,
-                user_name=" ".join(p for p in (user.first_name, user.last_name) if p)
-                or None
-                if user
-                else None,
+                user_name=(user.name or None) if user else None,
                 user_email=user.email if user else None,
                 last_message=last.body[:120] if last else None,
                 last_at=last.created_at if last else None,
