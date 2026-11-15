@@ -6,7 +6,21 @@ import hmac
 import json
 import os
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Any
+
+# How long a replaced account or contact number still gets payout alerts.
+# lib/auth.ts keeps the same 3 days for the account number.
+OLD_NUMBER_ALERT_WINDOW = timedelta(days=3)
+
+
+def changed_recently(changed_at: datetime | None, now: datetime) -> bool:
+    """True when a number changed less than OLD_NUMBER_ALERT_WINDOW ago."""
+    if changed_at is None:
+        return False
+    if changed_at.tzinfo is None:  # BetterAuth / SQLite store naive UTC
+        changed_at = changed_at.replace(tzinfo=UTC)
+    return now - changed_at <= OLD_NUMBER_ALERT_WINDOW
 
 
 def normalize_ph_mobile(value: str) -> str | None:

@@ -1,6 +1,8 @@
 """PATCH /merchants/me: input limits and the contact-number code (CF-0030),
 and the merchant's own delivery fee (CF-0020)."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from app.services.phone_verification import sign_token
@@ -105,6 +107,36 @@ def test_new_contact_number_with_its_code_is_normalized_and_kept(db, merchant): 
     assert merchant.contact_number == NEW_NUMBER
     assert merchant.previous_contact_number == "639171234567"
     assert merchant.contact_number_changed_at is not None
+
+
+def _change_contact_number(db, merchant, number):  # noqa: F811
+    resp = _merchant_client(db, merchant).patch(
+        "/merchants/me",
+        json={
+            "contact_number": number,
+            "phone_verification_token": _token(merchant.user_id, number=number),
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    db.refresh(merchant)
+
+
+def test_second_change_in_the_window_keeps_the_owners_number(db, merchant):  # noqa: F811
+    # CF-0032: O -> A -> B inside 3 days. The previous number stays O.
+    _change_contact_number(db, merchant, "639185550000")
+    first_change = merchant.contact_number_changed_at
+    _change_contact_number(db, merchant, "639186660000")
+    assert merchant.contact_number == "+639186660000"
+    assert merchant.previous_contact_number == "639171234567"
+    assert merchant.contact_number_changed_at >= first_change
+
+
+def test_change_after_the_window_replaces_the_previous_number(db, merchant):  # noqa: F811
+    _change_contact_number(db, merchant, "639185550000")
+    merchant.contact_number_changed_at = datetime.now(UTC) - timedelta(days=4)
+    db.commit()
+    _change_contact_number(db, merchant, "639186660000")
+    assert merchant.previous_contact_number == "+639185550000"
 
 
 def test_contact_number_must_be_a_ph_mobile(db, merchant):  # noqa: F811

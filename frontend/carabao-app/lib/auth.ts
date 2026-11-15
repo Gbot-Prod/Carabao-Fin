@@ -110,6 +110,10 @@ const trustedOrigins = [
 // BETTER_AUTH_JWT_AUDIENCE in step on the backend if this ever changes.
 const JWT_AUDIENCE = "carabao-api";
 
+// How long a replaced phone number still gets payout alerts. Keep equal to
+// OLD_NUMBER_ALERT_WINDOW in backend/app/services/phone_verification.py.
+const OLD_NUMBER_ALERT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+
 // Closes the admin plugin's HTTP endpoints (see lib/blocked-auth-paths.ts). Ban
 // enforcement at sign-in runs in the plugin's session hook, so it keeps working;
 // server-side auth.api.* calls don't go through onRequest and are unaffected.
@@ -368,11 +372,25 @@ const phoneChangeHistory = (): BetterAuthPlugin => ({
               const session = await getSessionFromCtx(ctx);
               if (!session) return;
               const current = (await ctx.context.internalAdapter.findUserById(session.user.id)) as
-                | { phoneNumber?: string | null }
+                | {
+                    phoneNumber?: string | null;
+                    previousPhoneNumber?: string | null;
+                    phoneNumberChangedAt?: Date | string | null;
+                  }
                 | null;
               const old = current?.phoneNumber;
               if (!old || old === next) return;
-              return { data: { ...data, previousPhoneNumber: old, phoneNumberChangedAt: new Date() } };
+              // CF-0032: a second change inside the alert window keeps the number
+              // from before the first one, so a hijacked session cannot push the
+              // owner's number out by verifying two numbers in a row.
+              const lastChange = current?.phoneNumberChangedAt
+                ? new Date(current.phoneNumberChangedAt).getTime()
+                : 0;
+              const inWindow = Date.now() - lastChange <= OLD_NUMBER_ALERT_WINDOW_MS;
+              const previous = inWindow ? (current?.previousPhoneNumber ?? old) : old;
+              return {
+                data: { ...data, previousPhoneNumber: previous, phoneNumberChangedAt: new Date() },
+              };
             },
           },
         },

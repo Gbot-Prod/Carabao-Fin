@@ -78,7 +78,11 @@ from app.services.payout_service import (
     save_destination,
     transfer_fee,
 )
-from app.services.phone_verification import normalize_ph_mobile, read_token
+from app.services.phone_verification import (
+    changed_recently,
+    normalize_ph_mobile,
+    read_token,
+)
 from app.services.pinned_location import delivery_point, merchant_point, validate_pin
 from app.services.produce_freshness import freshness_error, is_listed, ph_today
 from app.services.produce_pricing import parse_tiers, pricing_error, serialize_tiers
@@ -349,8 +353,13 @@ def _set_contact_number(
         raise HTTPException(
             status_code=400, detail="Please verify your contact number first"
         )
-    merchant.previous_contact_number = merchant.contact_number
-    merchant.contact_number_changed_at = datetime.now(UTC)
+    # CF-0032: a second change inside the alert window keeps the number from
+    # before the first one, so a hijacked session cannot push the owner's
+    # number out by verifying two numbers in a row.
+    now = datetime.now(UTC)
+    if not changed_recently(merchant.contact_number_changed_at, now):
+        merchant.previous_contact_number = merchant.contact_number
+    merchant.contact_number_changed_at = now
     merchant.contact_number = f"+{number}"
 
 

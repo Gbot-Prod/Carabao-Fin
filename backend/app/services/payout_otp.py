@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
@@ -19,12 +19,9 @@ from app.integrations.sms.semaphore import SemaphoreError, send_otp, send_sms
 from app.models.user import User
 from app.services import otp, rate_limit
 from app.services.email import send_payout_change_email
-from app.services.phone_verification import normalize_ph_mobile
+from app.services.phone_verification import changed_recently, normalize_ph_mobile
 
 logger = logging.getLogger(__name__)
-
-# How long a replaced account or contact number still gets payout alerts.
-OLD_NUMBER_ALERT_WINDOW = timedelta(days=3)
 
 _FIELDS = (
     "payout_type",
@@ -109,14 +106,6 @@ def check_code(
     otp.check_code(db, _key(user, values), code)
 
 
-def _changed_recently(changed_at: datetime | None, now: datetime) -> bool:
-    if changed_at is None:
-        return False
-    if changed_at.tzinfo is None:  # BetterAuth / SQLite store naive UTC
-        changed_at = changed_at.replace(tzinfo=UTC)
-    return now - changed_at <= OLD_NUMBER_ALERT_WINDOW
-
-
 def alert_numbers(user: User, merchant, now: datetime | None = None) -> list[str]:
     """Where the SMS alert goes: the account number and the shop's contact
     number, plus each one's number before a change in the last 3 days (a
@@ -124,11 +113,11 @@ def alert_numbers(user: User, merchant, now: datetime | None = None) -> list[str
     now = now or datetime.now(UTC)
     candidates = [user.phone_number, getattr(merchant, "contact_number", None)]
     identity = user.identity
-    if identity is not None and _changed_recently(
+    if identity is not None and changed_recently(
         identity.phone_number_changed_at, now
     ):
         candidates.append(identity.previous_phone_number)
-    if merchant is not None and _changed_recently(
+    if merchant is not None and changed_recently(
         merchant.contact_number_changed_at, now
     ):
         candidates.append(merchant.previous_contact_number)
