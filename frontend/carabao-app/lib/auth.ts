@@ -8,12 +8,22 @@ import {
   sensitiveSessionMiddleware,
 } from "better-auth/api";
 import { admin, jwt, phoneNumber, twoFactor } from "better-auth/plugins";
+import { deleteSessionCookie } from "better-auth/cookies";
+import { generateRandomString } from "better-auth/crypto";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { Pool } from "pg";
 import * as z from "zod";
+import { poolConfigFromUrl } from "@/lib/db-ssl.mjs";
 import { AUTH_BASE_PATH, isBlockedAuthPath } from "@/lib/blocked-auth-paths";
-import { TWO_FACTOR_ENABLED } from "@/lib/features";
 import { PH_MOBILE_PATTERN, PHONE_PLACEHOLDER_EMAIL_DOMAIN, isPlaceholderEmail } from "@/lib/phone";
+import {
+  ENROLMENT_TOKEN_HEADER,
+  TOTP_SECRET_PATHS,
+  enrolmentIdentifier,
+  enrolmentTokenMatches,
+  isMobileRequest,
+  sessionPassedTotp,
+} from "@/lib/admin-two-factor";
 
 const rawPostgresUrl =
   process.env.POSTGRES_URL ||
@@ -43,25 +53,8 @@ if (process.env.NODE_ENV !== "production") {
   }
 }
 
-const pool = (() => {
-  try {
-    const u = new URL(normalizedPostgresUrl);
-    return new Pool({
-      host: u.hostname,
-      port: Number(u.port) || 5432,
-      database: u.pathname.replace(/^\//, ""),
-      user: decodeURIComponent(u.username),
-      password: decodeURIComponent(u.password),
-      ssl: { rejectUnauthorized: false },
-    });
-  } catch {
-    return new Pool({ 
-      connectionString: 
-      normalizedPostgresUrl, 
-      ssl: { rejectUnauthorized: true}
-    });
-  }
-})();
+// CF-0001: the server cert is always verified; see lib/db-ssl.mjs for the env vars.
+const pool = new Pool(poolConfigFromUrl(normalizedPostgresUrl));
 
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || "";
 const normalizedApiUrl = rawApiUrl.trim().replace(/^"|"$/g, "");
@@ -129,19 +122,129 @@ const blockAdminEndpoints = (): BetterAuthPlugin => ({
   },
 });
 
-// Two-step verification is for admins only: nobody else can turn it on.
-// Turning it off stays open to everyone (e.g. a demoted admin).
-const adminOnlyTwoFactor = (): BetterAuthPlugin => ({
-  id: "carabao-admin-only-two-factor",
+// ── Admin two-step verification (CF-0003, CF-0017, CF-0018) ───────────────
+//
+// Only admins use 2FA, and the admin area and API require it.
+//   - Setup (/two-factor/enable) needs the one-time token from the link that
+//     the backend sends when an admin promotes a user or resets an admin's 2FA.
+//     A password or a session alone is not enough, so a person who has only
+//     those cannot enrol their own authenticator. No password is asked
+//     (allowPasswordless), so a Google-only admin can enrol too.
+//   - Admins cannot turn 2FA off. Another admin resets it (backend).
+//   - Every way to sign in asks for the code, not only password sign-in: a
+//     Google or Facebook sign-in for a 2FA account goes to /two-factor first.
+//   - A session that passed the code step has mfaVerified = true. It goes to
+//     the backend as the "mfa" claim, and the admin API requires it.
+//   - Admins sign in on the website only, not in the mobile app.
+
+const TWO_FACTOR_COOKIE = "two_factor"; // the twoFactor plugin's cookie name
+const TWO_FACTOR_COOKIE_MAX_AGE = 600; // the plugin's default (10 minutes)
+
+type SessionUser = { id: string; role?: string | null; twoFactorEnabled?: boolean | null };
+type SessionRow = { token: string; mfaVerified?: boolean | null };
+
+const isAdmin = (user: SessionUser | undefined) => user?.role === "admin";
+
+const adminTwoFactor = (): BetterAuthPlugin => ({
+  id: "carabao-admin-two-factor",
+  schema: {
+    session: {
+      fields: {
+        mfaVerified: { type: "boolean", required: false, input: false },
+      },
+    },
+  },
   hooks: {
     before: [
       {
         matcher: (ctx) => ctx.path === "/two-factor/enable",
         handler: createAuthMiddleware(async (ctx) => {
           const session = await getSessionFromCtx(ctx);
-          if (session?.user.role !== "admin") {
+          const user = session?.user as SessionUser | undefined;
+          if (!user || !isAdmin(user)) {
             throw new APIError("FORBIDDEN", { message: "Two-step verification is only available for admin accounts." });
           }
+          const token = ctx.headers?.get(ENROLMENT_TOKEN_HEADER);
+          const stored = await ctx.context.internalAdapter.findVerificationValue(enrolmentIdentifier(user.id));
+          if (!enrolmentTokenMatches(token, stored)) {
+            throw new APIError("FORBIDDEN", {
+              code: "ENROLMENT_LINK_INVALID",
+              message: "This setup link is not valid or has expired. Ask another admin to send a new one.",
+            });
+          }
+        }),
+      },
+      {
+        matcher: (ctx) => ctx.path === "/two-factor/disable",
+        handler: createAuthMiddleware(async (ctx) => {
+          const session = await getSessionFromCtx(ctx);
+          if (isAdmin(session?.user as SessionUser | undefined)) {
+            throw new APIError("FORBIDDEN", {
+              message: "Admins cannot turn off two-step verification. Ask another admin to reset it.",
+            });
+          }
+        }),
+      },
+      {
+        matcher: (ctx) => TOTP_SECRET_PATHS.includes(ctx.path ?? ""),
+        handler: createAuthMiddleware(async (ctx) => {
+          const session = await getSessionFromCtx(ctx);
+          if ((session?.session as SessionRow | undefined)?.mfaVerified !== true) {
+            throw new APIError("FORBIDDEN", { message: "Sign in again with your authenticator code first." });
+          }
+        }),
+      },
+    ],
+    after: [
+      {
+        // Every endpoint that makes a session. Must come after twoFactor() in
+        // the plugin list: a later after-hook can replace the response.
+        matcher: () => true,
+        handler: createAuthMiddleware(async (ctx) => {
+          const created = ctx.context.newSession as { session: SessionRow; user: SessionUser } | null;
+          if (!created) return;
+          // The same session written again (refresh, profile update): not a sign-in.
+          const current = await ctx.getSignedCookie(ctx.context.authCookies.sessionToken.name, ctx.context.secret);
+          if (current && current === created.session.token) return;
+
+          const dropSession = async () => {
+            deleteSessionCookie(ctx, true);
+            await ctx.context.internalAdapter.deleteSession(created.session.token).catch(() => {});
+          };
+
+          if (isAdmin(created.user) && isMobileRequest(ctx.headers ?? ctx.request?.headers)) {
+            await dropSession();
+            throw new APIError("FORBIDDEN", {
+              code: "ADMIN_WEB_ONLY",
+              message: "Admin accounts sign in on the Carabao website, not in the app.",
+            });
+          }
+
+          if (ctx.path.startsWith("/two-factor/")) {
+            // Setup finished: the link is used up.
+            if (ctx.path === "/two-factor/verify-totp" && created.user.twoFactorEnabled) {
+              await ctx.context.internalAdapter.deleteVerificationByIdentifier(enrolmentIdentifier(created.user.id));
+            }
+            return;
+          }
+
+          // CF-0017: a sign-in that skipped the code step (Google, Facebook,
+          // email link). Do what the twoFactor plugin does for a password
+          // sign-in: no session, a short-lived two_factor cookie, then the code page.
+          if (!created.user.twoFactorEnabled || created.session.mfaVerified === true) return;
+          await dropSession();
+          const cookie = ctx.context.createAuthCookie(TWO_FACTOR_COOKIE, { maxAge: TWO_FACTOR_COOKIE_MAX_AGE });
+          const identifier = `2fa-${generateRandomString(20)}`;
+          await ctx.context.internalAdapter.createVerificationValue({
+            value: created.user.id,
+            identifier,
+            expiresAt: new Date(Date.now() + TWO_FACTOR_COOKIE_MAX_AGE * 1000),
+          });
+          await ctx.setSignedCookie(cookie.name, identifier, ctx.context.secret, cookie.attributes);
+          // An OAuth callback is a browser redirect; other endpoints answer JSON,
+          // which the client's onTwoFactorRedirect handles.
+          if (ctx.request?.method === "GET") throw ctx.redirect(`${appBaseUrl}/two-factor`);
+          return ctx.json({ twoFactorRedirect: true, twoFactorMethods: ["totp"] });
         }),
       },
     ],
@@ -239,6 +342,45 @@ const phoneVerifyGuard = (): BetterAuthPlugin => ({
   },
 });
 
+// CF-0019: when /phone-number/verify (updatePhoneNumber) replaces a number,
+// keep the old one and the time. For 3 days the backend also sends payout-change
+// alerts to the old number (backend/app/services/payout_otp.py alert_numbers),
+// because a hijacked session can verify a number of its own.
+const phoneChangeHistory = (): BetterAuthPlugin => ({
+  id: "carabao-phone-change-history",
+  schema: {
+    user: {
+      fields: {
+        previousPhoneNumber: { type: "string", required: false, input: false },
+        phoneNumberChangedAt: { type: "date", required: false, input: false },
+      },
+    },
+  },
+  init: () => ({
+    options: {
+      databaseHooks: {
+        user: {
+          update: {
+            before: async (data, ctx) => {
+              const next = (data as { phoneNumber?: string | null }).phoneNumber;
+              if (!ctx || next === undefined) return;
+              // The phone route has already read the session (getSessionFromCtx caches it).
+              const session = await getSessionFromCtx(ctx);
+              if (!session) return;
+              const current = (await ctx.context.internalAdapter.findUserById(session.user.id)) as
+                | { phoneNumber?: string | null }
+                | null;
+              const old = current?.phoneNumber;
+              if (!old || old === next) return;
+              return { data: { ...data, previousPhoneNumber: old, phoneNumberChangedAt: new Date() } };
+            },
+          },
+        },
+      },
+    },
+  }),
+});
+
 // After a phone signup's code is verified the account has no password yet;
 // BetterAuth only exposes setPassword to the server, so this adds the step.
 // Only for an account with no sign-in method at all (a phone signup that just
@@ -297,21 +439,22 @@ const sendEmailThroughBackend = async (path: string, payload: Record<string, str
 };
 
 export const auth = betterAuth({
-  // E8: TOTP two-step verification ("Carabao" is the name shown in authenticator apps),
-  // admins only (adminOnlyTwoFactor above).
-  // Switched off for now (lib/features.ts): without the plugin, sign-in never asks
-  // for a code, even for accounts that turned it on earlier.
+  // E8: TOTP two-step verification ("Carabao" is the name shown in authenticator apps).
+  // Always loaded, because admins always need it (CF-0003); who may turn it on,
+  // and the other admin rules, are in adminTwoFactor above.
   plugins: [
     blockAdminEndpoints(),
     admin(),
-    ...(TWO_FACTOR_ENABLED ? [adminOnlyTwoFactor(), twoFactor({ issuer: "Carabao" })] : []),
+    // No password for setup: the one-time link replaces it (CF-0018).
+    twoFactor({ issuer: "Carabao", allowPasswordless: true }),
     phoneNumber({
       // One stored form, so a number can't sign up twice written differently.
       // Clients normalize first (lib/phone.ts normalizePhMobile).
       phoneNumberValidator: (value) => PH_MOBILE_PATTERN.test(value),
       otpLength: 6,
-      expiresIn: 300,
-      allowedAttempts: 3,
+      // Same as the backend's own codes (backend/app/services/otp.py).
+      expiresIn: 600,
+      allowedAttempts: 5,
       sendOTP: ({ phoneNumber, code }, ctx) => sendAccountOtp(phoneNumber, code, "verify", ctx),
       sendPasswordResetOTP: ({ phoneNumber, code }, ctx) =>
         sendAccountOtp(phoneNumber, code, "password_reset", ctx),
@@ -322,16 +465,22 @@ export const auth = betterAuth({
       },
     }),
     phoneVerifyGuard(),
+    phoneChangeHistory(),
     phoneSignupPassword(),
+    // After twoFactor(), so that its after-hook has the last word on the response.
+    adminTwoFactor(),
     expo(),
     jwt({
       jwt: {
         issuer: appBaseUrl,
         audience: JWT_AUDIENCE,
         expirationTime: "15m",
-        // The backend needs only the subject: it reads name, email, phone, role,
-        // ban and 2FA live from the "user" table (backend/app/models/auth_identity.py).
-        definePayload: () => ({}),
+        // The backend reads name, email, phone, role, ban and 2FA live from the
+        // "user" table (backend/app/models/auth_identity.py). The token adds only
+        // whether this session passed the code step (CF-0017).
+        definePayload: ({ session }) => ({
+          mfa: (session as unknown as SessionRow).mfaVerified === true,
+        }),
       },
     }),
   ],
@@ -342,6 +491,27 @@ export const auth = betterAuth({
     changeEmail: { enabled: true },
   },
   database: pool,
+  databaseHooks: {
+    session: {
+      create: {
+        // CF-0017: mark the sessions that passed the code step. Set when the
+        // session is made, so that the session cookie cache has it too.
+        before: async (session, ctx) => {
+          if (!ctx) return;
+          const user = (await ctx.context.internalAdapter.findUserById(session.userId)) as SessionUser | null;
+          // The caller's own session, when this one replaces it (e.g. change
+          // password with "sign out other devices").
+          const caller = ctx.context.session as { session: SessionRow; user: SessionUser } | null | undefined;
+          const passed =
+            // A session that the twoFactor plugin makes again copies the old one.
+            (session as { mfaVerified?: boolean | null }).mfaVerified === true ||
+            (caller?.user.id === session.userId && caller.session.mfaVerified === true) ||
+            sessionPassedTotp(ctx.path, Boolean(user?.twoFactorEnabled));
+          return { data: { ...session, mfaVerified: passed } };
+        },
+      },
+    },
+  },
   // E7: BetterAuth limits by client IP. Defaults to production only; stricter
   // rules for the credential and SMS endpoints. (The per-number SMS limit lives
   // in the FastAPI backend, app/services/rate_limit.py.)

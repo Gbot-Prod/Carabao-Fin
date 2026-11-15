@@ -129,8 +129,6 @@ def create_merchant_from_application(
         "lat": application.lat,
         "lng": application.lng,
         "available_days": application.available_days,
-        "delivery_time": application.delivery_time,
-        "delivery_price": application.delivery_price,
         "rsbsa_number": application.rsbsa_number,
         "rsbsa_document_path": application.rsbsa_document_path,
         "rsbsa_document_original_name": application.rsbsa_document_original_name,

@@ -7,18 +7,19 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
-from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.produce import Produce
 from app.models.user import User
-from app.schemas.cart import CartResponse
+from app.schemas.cart import MAX_CART_ITEMS, MAX_ITEM_QUANTITY, CartResponse
 from app.services.produce_freshness import is_expired, ph_today
 from app.services.produce_pricing import unit_price_for
 
 from ._order_helpers import (
     _extract_item_int,
     _to_int,
+    cart_line,
     get_or_create_cart,
+    merchant_takes_orders,
 )
 
 router = APIRouter(tags=["orders"])
@@ -42,14 +43,6 @@ class ReorderResponse(BaseModel):
     added: list[ReorderLine]
     unavailable: list[ReorderSkip]
     cart: CartResponse
-
-
-def _merchant_open(merchant: Merchant | None) -> bool:
-    return (
-        merchant is not None
-        and merchant.deleted_at is None
-        and (merchant.user is None or not merchant.user.is_suspended)
-    )
 
 
 @router.post("/orders/me/{order_id}/reorder", response_model=ReorderResponse)
@@ -90,12 +83,16 @@ def reorder(
             skipped.append(ReorderSkip(name=name, reason="no longer available"))
             continue
         name = produce.name or name
-        if not _merchant_open(produce.merchant):
+        if not merchant_takes_orders(produce.merchant):
             skipped.append(
                 ReorderSkip(name=name, reason="the farm isn't taking orders")
             )
             continue
-        quantity = max(wanted, produce.min_order_qty or 1)
+        existing = by_id.get(produce.id)
+        if existing is None and len(lines) >= MAX_CART_ITEMS:
+            skipped.append(ReorderSkip(name=name, reason="your cart is full"))
+            continue
+        quantity = min(max(wanted, produce.min_order_qty or 1), MAX_ITEM_QUANTITY)
         if produce.stock_quantity < (produce.min_order_qty or 1):
             skipped.append(ReorderSkip(name=name, reason="out of stock"))
             continue
@@ -103,28 +100,13 @@ def reorder(
         if quantity > produce.stock_quantity:
             reduced_from, quantity = quantity, produce.stock_quantity
 
-        existing = by_id.get(produce.id)
         if existing is not None:
             quantity = min(
                 max(quantity, _to_int(existing.get("quantity"), 0)),
                 produce.stock_quantity,
             )
         price = unit_price_for(produce, quantity)
-        merchant = produce.merchant
-        line = {
-            **(existing or {}),
-            "id": str(produce.id),
-            "produce_id": produce.id,
-            "produce": name,
-            "unit": produce.unit,
-            "quantity": quantity,
-            "price": price,
-            "stock_quantity": produce.stock_quantity,
-            "min_order_qty": produce.min_order_qty,
-            "merchant_id": merchant.id,
-            "farm": merchant.merchant_name,
-            "delivery_fee": merchant.delivery_price or 0,
-        }
+        line = cart_line(produce, quantity, price)
         if existing is None:
             lines.append(line)
             by_id[produce.id] = line

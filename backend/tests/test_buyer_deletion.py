@@ -203,8 +203,6 @@ def test_account_delete_succeeds_for_merchant_without_sales(db, seller):
             city="Malolos",
             address="Purok 1",
             postal_code="3000",
-            delivery_time=2,
-            delivery_price=40,
             available_days=["mon"],
         )
     )

@@ -30,6 +30,7 @@ from app.models import (  # noqa: F401  (registers User's related mappers)
 )
 from app.models.user import User
 from tests import better_auth
+from tests.files import png_bytes
 from tests.tokens import (
     ISSUER,
     KEY,
@@ -346,7 +347,7 @@ def test_avatar_upload_is_written_back_to_better_auth(client, db, monkeypatch):
     )
     res = client.post(
         "/users/me/avatar",
-        files={"avatar": ("a.png", b"png", "image/png")},
+        files={"avatar": ("a.png", png_bytes(), "image/png")},
         headers=bearer(),
     )
 

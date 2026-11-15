@@ -23,8 +23,6 @@ export type MerchantApplication = {
   barangay: string | null;
   address: string | null;
   postal_code: string | null;
-  delivery_time: number;
-  delivery_price: number;
   available_days: string[];
   rsbsa_number: string | null;
   rsbsa_document_original_name: string | null;
@@ -165,9 +163,16 @@ export const setUserAdminRole = async (userId: number, isAdmin: boolean): Promis
   return res.data;
 };
 
+/** CF-0018: turn off an admin's 2FA, end their sessions, and send a new setup
+ * link by SMS and email. Returns the channels that worked. */
+export const resetAdminTwoFactor = async (userId: number): Promise<{ sent_to: string[] }> => {
+  const res = await apiClient.post<{ sent_to: string[] }>(`/admin/users/${userId}/two-factor/reset`);
+  return res.data;
+};
+
 export const reviewMerchantApplication = async (
   id: number,
-  status: "approved" | "rejected" | "clarification",
+  status: "approved" | "rejected" | "clarification" | "suspended",
   admin_note?: string,
 ): Promise<MerchantApplication> => {
   const res = await apiClient.patch<MerchantApplication>(`/admin/merchant-applications/${id}`, {
@@ -202,7 +207,14 @@ export const fetchWalletBalance = async (): Promise<WalletBalance> => {
 
 // ── Orders (A1) ──────────────────────────────────────────────────────────────
 
-export type AdminOrderStatus = 'pending' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
+export type AdminOrderStatus =
+  | 'pending'
+  | 'processing'
+  | 'shipped'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'cancelled'
+  | 'payment_mismatch';
 export type AdminPaymentStatus = 'awaiting_payment' | 'paid' | 'refund_pending' | 'refunded' | 'unpaid';
 
 export type AdminOrderSummary = {

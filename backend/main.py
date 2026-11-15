@@ -7,15 +7,27 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.routes.router import router
+from app.core import field_crypto
+from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.database import SessionLocal
+from app.core.errors import (
+    REQUEST_ID_HEADER,
+    request_id_from_header,
+    reset_request_id,
+    set_request_id,
+    with_reference,
+)
 from app.models import (  # noqa: F401
     cart,
     merchant,
     merchant_application,
     merchant_payout,
     order,
+    otp,
     payout_batch,
     produce,
     review,
@@ -25,6 +37,8 @@ from app.models import (  # noqa: F401
     user,
     user_address,
 )
+from app.services import otp as otp_service
+from app.services import rate_limit
 from app.services.chat import send_unread_merchant_sms
 from app.services.order_reservations import (
     expire_stale_reservations,
@@ -36,8 +50,37 @@ from app.services.sms_service import notify_merchant_new_order
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def _check_field_encryption_keys() -> None:
+    """CF-0021: stop the app at startup if the field encryption keys are bad."""
+    sample: str | None = None
+    db = SessionLocal()
+    try:
+        # Raw SQL, so the ORM does not decrypt (and fail) before we can report it.
+        sample = db.execute(
+            text(
+                "SELECT tin FROM merchant_applications WHERE tin IS NOT NULL "
+                "UNION ALL SELECT tin FROM merchants WHERE tin IS NOT NULL LIMIT 1"
+            )
+        ).scalar()
+    except SQLAlchemyError:
+        logger.warning(
+            "Could not read a stored TIN; only the key format and round trip "
+            "were checked",
+            exc_info=True,
+        )
+    finally:
+        db.close()
+    field_crypto.check_keys(stored_sample=sample, purpose="tin")
+    logger.info(
+        "Field encryption keys OK%s", " (stored TIN decrypted)" if sample else ""
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # Raises FieldCryptoError, so uvicorn does not start with bad keys.
+    await asyncio.to_thread(_check_field_encryption_keys)
+
     def release_expired_reservations() -> None:
         # Each API worker runs this sweep. Row locks prevent double releases.
         db = SessionLocal()
@@ -84,12 +127,28 @@ async def lifespan(_: FastAPI):
         finally:
             db.close()
 
+    def purge_expired_codes_and_limits() -> None:
+        # CF-0016: OTPs past expiry and rate-limit hits older than every window.
+        db = SessionLocal()
+        try:
+            codes = otp_service.purge_expired(db)
+            hits = rate_limit.purge_expired(db)
+            db.commit()
+            if codes or hits:
+                logger.info("Purged %s OTP code(s), %s rate-limit hit(s)", codes, hits)
+        except Exception:
+            db.rollback()
+            logger.exception("Could not purge OTP codes and rate-limit hits")
+        finally:
+            db.close()
+
     async def reservation_cleanup_loop() -> None:
         while True:
             # DB and PayMongo calls block, so keep them off the event loop.
             await asyncio.to_thread(release_expired_reservations)
             await asyncio.to_thread(confirm_unconfirmed_deliveries)
             await asyncio.to_thread(text_merchants_about_unread_chat)
+            await asyncio.to_thread(purge_expired_codes_and_limits)
             await asyncio.sleep(60)
 
     cleanup_task = asyncio.create_task(reservation_cleanup_loop())
@@ -99,32 +158,66 @@ async def lifespan(_: FastAPI):
         await cleanup_task
 
 
-app = FastAPI(lifespan=lifespan)
+# CF-0023: fail closed. Only an explicit dev value enables dev behavior; a
+# missing, misspelled or unknown APP_ENV gives production behavior.
+_DEV_ENVS = {"development", "local"}
+_app_env = os.getenv("APP_ENV", "").strip().lower()
+if not _app_env:
+    logger.warning(
+        "APP_ENV is not set: using production behavior (no API docs, no dev "
+        "CORS origins). Set APP_ENV=development for local work."
+    )
+_is_dev = _app_env in _DEV_ENVS
+
+# CF-0015: no interactive docs or schema in production (APP_ENV=production).
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url="/docs" if _is_dev else None,
+    redoc_url="/redoc" if _is_dev else None,
+    openapi_url="/openapi.json" if _is_dev else None,
+)
 
 
 # Registered as middleware (before CORSMiddleware, so it sits inside it) rather
 # than an Exception handler: Starlette runs those outside CORS, which strips the
 # CORS headers and makes every 500 look like a CORS error in the browser.
+# CF-0013: every response carries X-Request-ID; server logs use the same ID.
 @app.middleware("http")
-async def unhandled_exception_middleware(request: Request, call_next):
+async def request_id_and_errors_middleware(request: Request, call_next):
+    request_id = request_id_from_header(request.headers.get(REQUEST_ID_HEADER))
+    token = set_request_id(request_id)
     try:
-        return await call_next(request)
-    except Exception as exc:
-        logger.error(
-            "Unhandled exception on %s %s: %s\n%s",
-            request.method,
-            request.url.path,
-            exc,
-            traceback.format_exc(),
-        )
-        return JSONResponse(
-            status_code=500, content={"detail": "Internal server error"}
-        )
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            logger.error(
+                "[request_id=%s] Unhandled exception on %s %s: %s\n%s",
+                request_id,
+                request.method,
+                request.url.path,
+                exc,
+                traceback.format_exc(),
+            )
+            response = JSONResponse(
+                status_code=500,
+                content={
+                    "detail": with_reference("Internal server error", request_id),
+                    "request_id": request_id,
+                },
+            )
+        response.headers[REQUEST_ID_HEADER] = request_id
+        return response
+    finally:
+        reset_request_id(token)
+
+
+# CF-0022: added after the request-ID middleware and before CORS, so it sits
+# outside the app but inside CORS (a 413 keeps its CORS headers).
+app.add_middleware(BodySizeLimitMiddleware)
 
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
 _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
-_is_dev = os.getenv("APP_ENV", "development").lower() != "production"
 if _is_dev:
     for dev_origin in (
         "http://localhost:8081",
@@ -141,8 +234,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    # Lets the browser read the CSV export filename.
-    expose_headers=["Content-Disposition"],
+    # Lets the browser read the CSV export filename and the request ID (CF-0013).
+    expose_headers=["Content-Disposition", REQUEST_ID_HEADER],
 )
 
 app.include_router(router)

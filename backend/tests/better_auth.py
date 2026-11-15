@@ -22,7 +22,8 @@ _AUTO = object()
 
 
 def create_tables(db: Session) -> None:
-    """The "user" table (from the model) and a minimal "session" table."""
+    """The "user" table (from the model) and minimal "session", "twoFactor"
+    and "verification" tables."""
     AuthIdentity.__table__.create(db.get_bind(), checkfirst=True)
     db.execute(
         text(
@@ -30,6 +31,32 @@ def create_tables(db: Session) -> None:
             CREATE TABLE IF NOT EXISTS "session" (
                 id TEXT PRIMARY KEY,
                 "userId" TEXT NOT NULL REFERENCES "user" (id) ON DELETE CASCADE
+            )
+            """
+        )
+    )
+    db.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS "twoFactor" (
+                id TEXT PRIMARY KEY,
+                secret TEXT NOT NULL,
+                "backupCodes" TEXT NOT NULL,
+                "userId" TEXT NOT NULL REFERENCES "user" (id) ON DELETE CASCADE
+            )
+            """
+        )
+    )
+    db.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS "verification" (
+                id TEXT PRIMARY KEY,
+                identifier TEXT NOT NULL,
+                value TEXT NOT NULL,
+                "expiresAt" TIMESTAMP NOT NULL,
+                "createdAt" TIMESTAMP,
+                "updatedAt" TIMESTAMP
             )
             """
         )
@@ -76,7 +103,7 @@ def make_user(
     is_admin: bool = False,
     banned: bool = False,
     ban_reason: str | None = None,
-    two_factor: bool = False,
+    two_factor: bool | None = None,
     identity_id: str | None = None,
     **user_fields: Any,
 ) -> User:
@@ -85,7 +112,13 @@ def make_user(
     Like a phone signup, it gets a verified number unless ``phone_number`` is
     given (None: none, as for a Google sign-in). No email means a phone signup's
     placeholder address. Commit is left to the caller, as with ``db.add``.
+    Admins get two-step verification on unless ``two_factor`` says otherwise,
+    since the admin API always requires it (CF-0003). With 2FA on, the user
+    acts as if signed in with the TOTP step (``mfa_session``, CF-0017), as for
+    a token with mfa=true; tests that send real tokens get it from the claim.
     """
+    if two_factor is None:
+        two_factor = is_admin
     create_tables(db)
     n = next(_ids)
     identity_id = identity_id or f"ba_test_{n}"
@@ -106,6 +139,7 @@ def make_user(
     )
     user_fields.setdefault("notifications_preferences", {})
     user = User(external_auth_id=identity_id, **user_fields)
+    user.mfa_session = bool(two_factor)
     db.add(user)
     db.flush()
     return user

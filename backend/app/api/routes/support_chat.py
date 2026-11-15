@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
-from app.api.routes.admin import _require_admin, admin_requires_two_factor
+from app.api.routes.admin import _require_admin
 from app.api.routes.chat import ChatMessageOut, _out
 from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.user import User
@@ -84,8 +84,6 @@ def _post(
 
 def _admins(db: Session) -> list[User]:
     admins = db.query(User).filter(User.is_admin, ~User.is_suspended).all()
-    if not admin_requires_two_factor():
-        return admins
     return [a for a in admins if a.two_factor_enabled]
 
 

@@ -2,6 +2,7 @@ from sqlalchemy import (
     JSON,
     Column,
     DateTime,
+    ForeignKey,
     Integer,
     String,
     and_,
@@ -60,7 +61,15 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     # BetterAuth "user".id. Set when the row is created on the first request.
-    external_auth_id = Column(String, unique=True, index=True, nullable=True)
+    # Deleting the BetterAuth user deletes this row too (and its cart and
+    # application); a shop or payment records block that delete.
+    external_auth_id = Column(
+        String,
+        ForeignKey("user.id", ondelete="CASCADE"),
+        unique=True,
+        index=True,
+        nullable=True,
+    )
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -202,3 +211,8 @@ class User(Base):
     @property
     def two_factor_enabled(self) -> bool:
         return bool(self.identity and self.identity.two_factor_enabled)
+
+    # Not a column: true when this request's access token comes from a session
+    # that passed the TOTP step (the "mfa" claim, CF-0017). get_current_user
+    # sets it; the admin API and admin chat require it.
+    mfa_session: bool = False

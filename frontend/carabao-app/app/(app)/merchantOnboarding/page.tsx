@@ -99,8 +99,6 @@ export default function MerchantOnboardingPage() {
     barangay: '',
     address: "",
     postal_code: "",
-    delivery_time: 0,
-    delivery_price: 0,
     available_days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
     rsbsa_number: "",
   });

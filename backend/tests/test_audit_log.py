@@ -85,8 +85,6 @@ def test_application_review_is_logged(db, merchant):
         city="Malolos",
         address="Purok 4",
         postal_code="3000",
-        delivery_time=2,
-        delivery_price=50,
         available_days=["mon"],
     )
     db.add(application)

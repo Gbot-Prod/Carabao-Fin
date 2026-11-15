@@ -1,26 +1,54 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.schemas.merchant_application import Weekday
 from app.schemas.produce import ProduceResponse
+
+# Columns that must keep a value once the shop exists.
+_REQUIRED = ("merchant_name", "region", "province", "address", "postal_code")
 
 
 class MerchantUpdate(BaseModel):
-    merchant_name: str | None = None
+    """PATCH /merchants/me. Same limits as onboarding (CF-0030)."""
+
+    merchant_name: str | None = Field(default=None, min_length=3, max_length=100)
     contact_email: EmailStr | None = None
-    contact_number: str | None = None
-    region: str | None = None
-    province: str | None = None
-    city: str | None = None
-    barangay: str | None = None
-    address: str | None = None
-    postal_code: str | None = None
+    # Normalized to +639XXXXXXXXX; a change needs phone_verification_token.
+    contact_number: str | None = Field(default=None, min_length=6, max_length=20)
+    # From /sms/otp/verify for the new contact_number.
+    phone_verification_token: str | None = Field(default=None, max_length=2000)
+    region: str | None = Field(default=None, min_length=1, max_length=100)
+    province: str | None = Field(default=None, min_length=1, max_length=100)
+    city: str | None = Field(default=None, max_length=100)
+    barangay: str | None = Field(default=None, max_length=100)
+    address: str | None = Field(default=None, min_length=1, max_length=500)
+    postal_code: str | None = Field(default=None, min_length=1, max_length=10)
     lat: float | None = None
     lng: float | None = None
-    operating_hours: Any | None = None
-    delivery_price: int | None = None
-    delivery_time: int | None = None
+    available_days: list[Weekday] | None = Field(
+        default=None, min_length=1, max_length=7
+    )
+    # Flat fee per order, in pesos (CF-0020).
+    delivery_price: int | None = Field(default=None, ge=0, le=100_000)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator(*_REQUIRED, "available_days")
+    @classmethod
+    def not_null(cls, value: object) -> object:
+        # Runs only for a field the client sent; null would break a NOT NULL column.
+        if value is None:
+            raise ValueError("This field cannot be empty")
+        return value
+
+    @field_validator("available_days")
+    @classmethod
+    def unique_days(cls, days: list[str]) -> list[str]:
+        if len(days) != len(set(days)):
+            raise ValueError("Each day may appear only once")
+        return days
 
 
 class MerchantShopResponse(BaseModel):

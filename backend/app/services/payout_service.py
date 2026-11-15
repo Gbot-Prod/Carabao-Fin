@@ -24,7 +24,7 @@ from app.models.order import Order
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
-from app.services import notifications, paymongo
+from app.services import money, notifications, paymongo
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +133,56 @@ def resolve_destination(info) -> Destination:
     )
 
 
+def save_destination(batch: PayoutBatch, destination: Destination) -> None:
+    """Fix where ``batch`` will be sent (CF-0004). Called when it is requested."""
+    batch.destination_type = destination.type
+    batch.destination_bic = destination.bic
+    batch.destination_institution = destination.institution
+    batch.destination_name = destination.name
+    batch.destination_number = destination.number
+    batch.transfer_provider = destination.provider
+
+
+def saved_destination(batch: PayoutBatch) -> Destination | None:
+    """The destination saved on ``batch``, or None if it has none."""
+    if not (
+        batch.destination_type
+        and batch.destination_bic
+        and batch.destination_name
+        and batch.destination_number
+    ):
+        return None
+    return Destination(
+        type=batch.destination_type,
+        bic=batch.destination_bic,
+        institution=batch.destination_institution or batch.destination_bic,
+        name=batch.destination_name,
+        number=batch.destination_number,
+    )
+
+
+def move_failed_batches(
+    db: Session, merchant_id: int, destination: Destination
+) -> list[int]:
+    """Point the merchant's failed batches at a new, code-confirmed destination.
+
+    Only failed ones: a pending or processing batch keeps the destination it
+    was requested with. Returns the ids moved; the caller commits.
+    """
+    batches = (
+        db.query(PayoutBatch)
+        .filter(
+            PayoutBatch.merchant_id == merchant_id,
+            PayoutBatch.status == PayoutStatus.FAILED,
+        )
+        .with_for_update()
+        .all()
+    )
+    for batch in batches:
+        save_destination(batch, destination)
+    return [batch.id for batch in batches]
+
+
 def get_payout_info(db: Session, merchant_id: int) -> MerchantPayoutInfo | None:
     return (
         db.query(MerchantPayoutInfo)
@@ -184,7 +234,15 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
             409, "This payout is already being sent. Refresh its status instead."
         )
 
-    destination = resolve_destination(get_payout_info(db, batch.merchant_id))
+    # CF-0004: the destination saved when the payout was requested, never the
+    # merchant's current payout method.
+    destination = saved_destination(batch)
+    if destination is None:
+        raise PayoutError(
+            409,
+            "This payout has no saved destination. The merchant must request "
+            "it again.",
+        )
     fee = transfer_fee()
     net = batch.gross_amount - fee
     if net <= 0:
@@ -208,10 +266,6 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
     batch.failure_reason = None
     batch.transfer_fee = fee
     batch.net_amount = net
-    batch.destination_type = destination.type
-    batch.destination_bic = destination.bic
-    batch.destination_name = destination.name
-    batch.destination_number = destination.number
     batch.transfer_provider = provider
     batch.sent_at = datetime.now(UTC)
     batch.status = PayoutStatus.PROCESSING
@@ -221,7 +275,7 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
 
     try:
         transfer = paymongo.create_transfer(
-            amount_centavos=net * 100,
+            amount_centavos=money.to_centavos(net),
             destination=destination.as_paymongo(),
             provider=provider,
             reference_number=batch.paymongo_reference,

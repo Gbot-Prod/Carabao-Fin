@@ -19,7 +19,6 @@ import MapPinPicker from '@/components/MapPinPicker/MapPinPicker';
 import type { Pin } from '@/util/reverseGeocode';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import TwoFactorSettings from '@/components/TwoFactorSettings/TwoFactorSettings';
-import { TWO_FACTOR_ENABLED } from '@/lib/features';
 import { addEmail, signOut, updateName } from '@/lib/auth-client';
 import { formatPhMobile } from '@/lib/phone';
 import PhoneVerifyDialog from '@/components/PhoneVerifyDialog/PhoneVerifyDialog';
@@ -400,8 +399,9 @@ export default function Profile() {
             </section>
           )}
 
-          {/* Two-step verification (E8a): admins only */}
-          {TWO_FACTOR_ENABLED && profile?.is_admin && <TwoFactorSettings />}
+          {/* Two-step verification (E8a): admins only, and required for them (CF-0003).
+              Status only: setup is on /two-factor/enrol with the link's token (CF-0018). */}
+          {profile?.is_admin && <TwoFactorSettings />}
 
           {/* Help & Support: FAQ, contact, Terms, Privacy (app/(app)/help) */}
           <section className={styles.merchantSection}>

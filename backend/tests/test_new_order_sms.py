@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import get_db
 from app.api.routes import payments
 from app.api.webhooks import paymongo as paymongo_webhook
-from app.services import sms_service
+from app.services import notifications, sms_service
 
 WEBHOOK_SECRET = "whsk_test_secret"
 SESSION_ID = "cs_test_123"
@@ -24,12 +24,13 @@ class FakeDB:
     """Just enough Session for the webhook and settle_checkout_payment."""
 
     def __init__(self, txn, order):
-        self.rows = {"Transaction": txn, "Order": order, "Cart": None}
+        self.rows = {"Transaction": txn, "Order": order, "Cart": None, "Produce": None}
+        self.admins = []
         self.commits = 0
 
     def query(self, model):
-        row = self.rows[model.__name__]
-        query = SimpleNamespace(first=lambda: row)
+        row = self.rows.get(model.__name__)
+        query = SimpleNamespace(first=lambda: row, all=lambda: self.admins)
         query.filter = lambda *_: query
         query.with_for_update = lambda: query
         return query
@@ -39,6 +40,9 @@ class FakeDB:
 
     def commit(self):
         self.commits += 1
+
+    def add(self, row):
+        pass
 
 
 def _order(status="pending", phone="09171234567"):
@@ -59,6 +63,7 @@ def _txn(order, status="pending"):
         id=3,
         order_id=order.id,
         user_id=5,
+        amount=order.total_price,
         status=status,
         paymongo_payment_id=None,
         paymongo_session_id=SESSION_ID,
@@ -66,7 +71,11 @@ def _txn(order, status="pending"):
     )
 
 
-def _paid_event() -> bytes:
+def _paid_event(amount: int = 154_000, currency: str = "PHP") -> bytes:
+    payment = {
+        "id": "pay_test_1",
+        "attributes": {"status": "paid", "amount": amount, "currency": currency},
+    }
     return json.dumps(
         {
             "data": {
@@ -75,7 +84,7 @@ def _paid_event() -> bytes:
                     "livemode": False,
                     "data": {
                         "id": SESSION_ID,
-                        "attributes": {"payments": [{"id": "pay_test_1"}], "status": "paid"},
+                        "attributes": {"payments": [payment], "status": "paid"},
                     },
                 }
             }
@@ -208,7 +217,16 @@ def test_missed_webhook_reconcile_also_notifies(sent, monkeypatch):
         lambda _sid: {
             "attributes": {
                 "status": "active",
-                "payments": [{"id": "pay_test_1", "attributes": {"status": "paid"}}],
+                "payments": [
+                    {
+                        "id": "pay_test_1",
+                        "attributes": {
+                            "status": "paid",
+                            "amount": 154_000,
+                            "currency": "PHP",
+                        },
+                    }
+                ],
             }
         },
     )
@@ -217,3 +235,50 @@ def test_missed_webhook_reconcile_also_notifies(sent, monkeypatch):
 
     assert txn.status == "paid"
     assert len(sent) == 1
+
+
+@pytest.mark.parametrize(
+    ("amount", "currency"),
+    [(100, "PHP"), (154_001, "PHP"), (154_000, "USD"), (None, "PHP"), (154_000, None)],
+)
+def test_wrong_amount_or_currency_is_a_mismatch(
+    test_mode, sent, monkeypatch, amount, currency
+):
+    # CF-0005: a signed "paid" event for the wrong amount must not mark it paid.
+    order = _order()
+    txn = _txn(order)
+    db = FakeDB(txn, order)
+    db.admins = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
+    added = []
+    monkeypatch.setattr(
+        notifications,
+        "notify",
+        lambda _db, user_id, kind, *_a, **_k: added.append(
+            SimpleNamespace(user_id=user_id, kind=kind)
+        ),
+    )
+
+    response = _post(_client(db), _paid_event(amount, currency))
+
+    assert response.status_code == 200
+    assert order.status == "payment_mismatch"
+    assert txn.status == "refund_pending"
+    assert db.commits == 1
+    assert sent == []  # the farmer is not told about a new order
+    alerted = [n.user_id for n in added if n.kind == "payment_mismatch"]
+    assert alerted[:2] == [1, 2]  # both admins
+    assert len(alerted) == 3  # and the buyer
+
+
+def test_mismatch_replay_is_ignored(test_mode, sent):
+    order = _order()
+    txn = _txn(order)
+    db = FakeDB(txn, order)
+    client = _client(db)
+    body = _paid_event(amount=1)
+
+    _post(client, body)
+    _post(client, body)
+
+    assert order.status == "payment_mismatch"
+    assert db.commits == 1

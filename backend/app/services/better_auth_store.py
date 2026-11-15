@@ -8,6 +8,8 @@ actions and its own profile data, in the same transaction as the backend change:
 - suspending / reinstating (admin plugin's ``banned`` / ``banReason``; a ban
   also ends the user's sessions so no new access token can be fetched),
 - changing the admin role (admin plugin's ``role``),
+- admin 2FA enrolment: the one-time setup token (a "verification" row that
+  lib/auth.ts checks on /two-factor/enable) and an admin's 2FA reset,
 - the uploaded avatar (``image``), so the BetterAuth session shows it too,
 - deleting an account (its sessions, logins and 2FA rows cascade).
 
@@ -18,6 +20,8 @@ write raises (503) so the whole request rolls back.
 from __future__ import annotations
 
 import logging
+import secrets
+from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy import text
@@ -87,6 +91,78 @@ def set_role(db: Session, identity_id: str | None, *, is_admin: bool) -> None:
                 'UPDATE "user" SET role = :role WHERE id = :id',
                 {"role": "admin" if is_admin else "user", "id": identity_id},
             )
+        ],
+    )
+
+
+ENROLMENT_IDENTIFIER_PREFIX = "admin-2fa-enrol-"
+
+
+def enrolment_identifier(identity_id: str) -> str:
+    """Keep in step with lib/admin-two-factor.ts enrolmentIdentifier()."""
+    return f"{ENROLMENT_IDENTIFIER_PREFIX}{identity_id}"
+
+
+def set_enrolment_token(
+    db: Session, identity_id: str, *, token_hash: str, expires_at: datetime
+) -> None:
+    """Replace the user's admin 2FA setup token (CF-0018). Only its SHA-256
+    is stored; BetterAuth deletes the row when setup finishes."""
+    identifier = enrolment_identifier(identity_id)
+    now = datetime.now(UTC)
+    _run(
+        db,
+        "save the two-step setup link",
+        identity_id,
+        [
+            (
+                'DELETE FROM "verification" WHERE identifier = :identifier',
+                {"identifier": identifier},
+            ),
+            (
+                'INSERT INTO "verification" (id, identifier, value, "expiresAt", '
+                '"createdAt", "updatedAt") VALUES (:vid, :identifier, :value, '
+                ":expires, :now, :now)",
+                {
+                    "vid": secrets.token_urlsafe(24),
+                    "identifier": identifier,
+                    "value": token_hash,
+                    "expires": expires_at,
+                    "now": now,
+                },
+            ),
+        ],
+    )
+
+
+def clear_two_factor(db: Session, identity_id: str | None) -> None:
+    """Turn 2FA off for an account: its TOTP secret and backup codes, its
+    trusted devices, any open setup token and all its sessions go. Used for a
+    demoted admin and for an admin's 2FA reset by another admin."""
+    if not identity_id:
+        return
+    params = {"id": identity_id}
+    _run(
+        db,
+        "reset two-step verification",
+        identity_id,
+        [
+            ('DELETE FROM "twoFactor" WHERE "userId" = :id', params),
+            (
+                'UPDATE "user" SET "twoFactorEnabled" = false, '
+                '"updatedAt" = CURRENT_TIMESTAMP WHERE id = :id',
+                params,
+            ),
+            (
+                'DELETE FROM "verification" WHERE value = :id '
+                "AND identifier LIKE 'trust-device-%'",
+                params,
+            ),
+            (
+                'DELETE FROM "verification" WHERE identifier = :identifier',
+                {"identifier": enrolment_identifier(identity_id)},
+            ),
+            ('DELETE FROM "session" WHERE "userId" = :id', params),
         ],
     )
 

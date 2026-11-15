@@ -12,14 +12,15 @@ from app.api.routes import merchant_onboarding
 from app.services import r2_service
 from app.services.phone_verification import sign_token
 from tests.better_auth import make_user
+from tests.files import pdf_bytes
 from tests.test_reviews import db  # noqa: F401 - fixture
 
 PAYLOAD = {
     "merchant_name": "Bulacan Farm",
     "legal_business_name": "Bulacan Farm",
-    "business_type": "individual",
+    "business_type": "Farmer",
     "tin": "123456789",
-    "registration_type": "dti",
+    "registration_type": "DTI",
     "registration_number": "X1",
     "contact_email": "farm@example.com",
     "contact_number": "09171234567",
@@ -29,9 +30,7 @@ PAYLOAD = {
     "barangay": "Poblacion",
     "address": "12 Rizal St",
     "postal_code": "3000",
-    "delivery_time": 2,
-    "delivery_price": 50,
-    "available_days": ["mon"],
+    "available_days": ["Mon"],
 }
 
 
@@ -49,7 +48,7 @@ def _apply(db, user, **overrides):  # noqa: F811
     return TestClient(app).post(
         "/merchant-onboarding/me",
         data={"payload": json.dumps({**PAYLOAD, **overrides})},
-        files={"rsbsa_file": ("rsbsa.pdf", b"%PDF-1.4", "application/pdf")},
+        files={"rsbsa_file": ("rsbsa.pdf", pdf_bytes(), "application/pdf")},
     )
 
 

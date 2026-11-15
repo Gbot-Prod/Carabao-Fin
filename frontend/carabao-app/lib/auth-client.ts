@@ -128,12 +128,13 @@ export const signIn = {
     return finishSignIn(data, error, "Wrong email or password.");
   },
   // Google or Facebook: leaves the page and comes back signed in, creating the
-  // account on first use. Failures return to /auth?error=<code>.
-  social: async (provider: "google" | "facebook") => {
+  // account on first use. Failures return to /auth?error=<code>. `next` is a
+  // path on this site (lib/next-path.ts), e.g. the admin setup link.
+  social: async (provider: "google" | "facebook", next = "/") => {
     const { error } = await authClient.signIn.social({
       provider,
-      callbackURL: "/",
-      errorCallbackURL: "/auth",
+      callbackURL: next,
+      errorCallbackURL: next === "/" ? "/auth" : `/auth?next=${encodeURIComponent(next)}`,
     });
     if (error) throw new Error(getErrorMessage(error, "We couldn't reach that sign-in service."));
   },
@@ -313,8 +314,18 @@ export const getTwoFactorEnabled = async (): Promise<boolean> => {
   return Boolean((data?.user as { twoFactorEnabled?: boolean | null } | undefined)?.twoFactorEnabled);
 };
 
-export const enableTwoFactor = async (password: string) => {
-  const { data, error } = await authClient.twoFactor.enable({ password });
+// CF-0018: setup needs the one-time token from the link that the backend sends
+// when an admin is promoted or reset. Keep the header name in step with
+// ENROLMENT_TOKEN_HEADER in lib/admin-two-factor.ts (server only).
+const ENROLMENT_TOKEN_HEADER = "x-admin-enrol-token";
+
+// An account with a password (phone signup) must also give it: BetterAuth
+// skips the password only for accounts without one (Google-only).
+export const enableTwoFactor = async (enrolmentToken: string, password?: string) => {
+  const { data, error } = await authClient.twoFactor.enable({
+    ...(password ? { password } : {}),
+    fetchOptions: { headers: { [ENROLMENT_TOKEN_HEADER]: enrolmentToken } },
+  });
   if (error || !data) throw new Error(getErrorMessage(error, "Could not start two-step verification"));
   return data;
 };
@@ -323,12 +334,6 @@ export const verifyTwoFactorSetup = async (code: string) => {
   const { error } = await authClient.twoFactor.verifyTotp({ code });
   if (error) throw new Error(getErrorMessage(error, "That code didn't match. Try the newest code."));
   // The backend reads the flag from the token (admin access depends on it, E8c).
-  await refreshSession();
-};
-
-export const disableTwoFactor = async (password: string) => {
-  const { error } = await authClient.twoFactor.disable({ password });
-  if (error) throw new Error(getErrorMessage(error, "Could not turn off two-step verification"));
   await refreshSession();
 };
 

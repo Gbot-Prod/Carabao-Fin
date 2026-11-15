@@ -84,6 +84,15 @@
   letter-spacing: 0.04em;
 }
 
+/* White in both themes: scanners need dark modules on a light background. */
+.qr {
+  align-self: center;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  line-height: 0;
+}
+
 .key {
   padding: 8px 10px;
   border-radius: var(--radius-sm);

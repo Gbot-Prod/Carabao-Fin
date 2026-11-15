@@ -57,24 +57,12 @@ function CheckoutScreenContent() {
       // local cart first; otherwise it fails with "Cart is empty".
       await api.cart.replace(
         token,
-        items.map((i) => ({
-          id: i.id,
-          produce_id: i.produceId,
-          merchant_id: i.merchantId,
-          produce: i.produce,
-          farm: i.farm,
-          unit: i.unit,
-          price: i.price,
-          quantity: i.quantity,
-        })),
+        items.map((i) => ({ produce_id: i.produceId, quantity: i.quantity })),
       );
       const result = await api.orders.place(token, {
         delivery_address: address.trim() || null,
         delivery_time: timeWindow,
-        payment_method: payment,
         notes: notes.trim() || null,
-        // Ignored by the server, which charges each farm's own delivery fee.
-        service_fee: deliveryTotal,
       });
       // PayMongo takes one order per checkout: pay the first here, the
       // confirmation screen lists the other farms' orders to pay in turn.

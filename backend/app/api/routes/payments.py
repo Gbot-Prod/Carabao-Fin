@@ -8,12 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db, require_verified_phone
+from app.core.errors import upstream_error
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.payment import CheckoutResponse, TransactionResponse
+from app.services import money
 from app.services.order_reservations import (
     close_checkout_sessions,
     expire_stale_reservations,
@@ -32,7 +34,6 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 
 _raw_frontend = os.getenv("FRONTEND_URL", "http://localhost:3000")
 FRONTEND_URL = _raw_frontend.split(",")[0].strip()
-PLATFORM_FEE_RATE = 0.02
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +54,11 @@ def _reconcile_transaction_from_paymongo(txn: Transaction, db: Session) -> None:
         logger.error("Payment configuration error during reconciliation: %s", exc)
         return
 
-    paid, payment_id = paid_payment_from_session(session)
-    if not paid:
+    payment = paid_payment_from_session(session)
+    if payment is None:
         return
 
-    outcome = settle_checkout_payment(txn, payment_id, db)
+    outcome = settle_checkout_payment(txn, payment, db)
     if outcome == "duplicate":
         return
     db.commit()
@@ -163,8 +164,9 @@ def create_payment_checkout(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
 
-    amount = order.total_price  # stored in pesos
-    platform_fee = round(amount * PLATFORM_FEE_RATE)
+    # Whole pesos; a bad stored total raises instead of charging 0 (CF-0014).
+    amount = money.whole_pesos(order.total_price)
+    platform_fee = money.platform_fee(amount)
     merchant_amount = amount - platform_fee
 
     _validate_frontend_url(FRONTEND_URL)
@@ -181,26 +183,33 @@ def create_payment_checkout(
     except requests.HTTPError as e:
         release_order_reservation(order, db, transaction_status=TransactionStatus.FAILED)
         db.commit()
-        response_text = ""
-        if e.response is not None:
-            response_text = e.response.text or ""
-        logger.warning(
-            "PayMongo HTTPError while creating checkout session: %s", response_text
-        )
-        raise HTTPException(
-            status_code=502, detail=f"PayMongo error: {response_text[:2000]}"
+        response_text = e.response.text if e.response is not None else ""
+        raise upstream_error(
+            502,
+            "The payment could not be started. Try again.",
+            log=(
+                f"PayMongo rejected checkout for order {order_id}: "
+                f"{response_text[:2000]}"
+            ),
+            exc=e,
         ) from e
     except RuntimeError as e:
         release_order_reservation(order, db, transaction_status=TransactionStatus.FAILED)
         db.commit()
-        logger.error("Payment configuration error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise upstream_error(
+            500,
+            "Payments are not available right now",
+            log=f"Payment configuration error for order {order_id}",
+            exc=e,
+        ) from e
     except Exception as e:
         release_order_reservation(order, db, transaction_status=TransactionStatus.FAILED)
         db.commit()
-        logger.exception("Unexpected error while creating checkout session")
-        raise HTTPException(
-            status_code=500, detail="Unexpected error creating checkout session"
+        raise upstream_error(
+            500,
+            "The payment could not be started. Try again.",
+            log=f"Unexpected error creating checkout for order {order_id}",
+            exc=e,
         ) from e
 
     txn = Transaction(

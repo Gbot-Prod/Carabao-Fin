@@ -54,10 +54,9 @@ export type PlaceOrderPayload = {
   // Map pin for the delivery address (U1).
   delivery_lat?: number | null;
   delivery_lng?: number | null;
-  payment_method?: string | null;
+  // The server refuses unknown fields; items, prices and fees come from the
+  // server-side cart and listings.
   notes?: string | null;
-  service_fee?: number;
-  image?: string | null;
 };
 
 export type PlacedOrder = {

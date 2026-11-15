@@ -39,6 +39,10 @@ class AuthIdentity(Base):
     # phoneNumber plugin. Stored as +639XXXXXXXXX (lib/auth.ts validator).
     phone_number = Column("phoneNumber", String, nullable=True, unique=True)
     phone_number_verified = Column("phoneNumberVerified", Boolean, nullable=True)
+    # The number before the last change, and when it changed (lib/auth.ts
+    # recordPhoneChange). Payout alerts also go to it for a few days (CF-0019).
+    previous_phone_number = Column("previousPhoneNumber", String, nullable=True)
+    phone_number_changed_at = Column("phoneNumberChangedAt", DateTime, nullable=True)
     # admin plugin
     role = Column(Text, nullable=True)
     banned = Column(Boolean, nullable=True)

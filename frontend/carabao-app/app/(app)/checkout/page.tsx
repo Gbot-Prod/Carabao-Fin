@@ -41,7 +41,6 @@ export default function CheckoutPage() {
   const [returnNotice, setReturnNotice] = useState<"errPaymentProcessing" | "errPaymentCancelled" | null>(null);
   const [street, setStreet] = useState("");
   const [postal, setPostal] = useState("");
-  const [paymentMethod] = useState("online");
   const [notes, setNotes] = useState("");
   const [deliveryDate, setDeliveryDate] = useState(() => localIsoDate(1));
   const [deliveryWindow, setDeliveryWindow] = useState(TIME_WINDOWS[0]);
@@ -160,10 +159,7 @@ export default function CheckoutPage() {
         delivery_region: addressForm.region,
         delivery_lat: pin?.lat ?? null,
         delivery_lng: pin?.lng ?? null,
-        payment_method: paymentMethod,
         notes: notes || null,
-        // Ignored by the server, which charges each merchant's own delivery fee.
-        service_fee: deliveryTotal,
       });
 
       // PayMongo takes one order per checkout, so a multi-farm cart is paid in

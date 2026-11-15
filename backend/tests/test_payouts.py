@@ -24,6 +24,7 @@ from app.models.payout_batch import PayoutBatch
 from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.services import paymongo, payout_service
+from tests.payout_codes import save_payout_info
 from tests.better_auth import make_user
 from tests.test_merchant_orders import _merchant_client
 from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
@@ -103,7 +104,7 @@ def _admin_client(db) -> TestClient:  # noqa: F811
 
 def _requested_batch(db, merchant, buyer, **sale) -> dict:  # noqa: F811
     client = _merchant_client(db, merchant)
-    assert client.put("/merchants/me/payout-info", json=GCASH).status_code == 200
+    assert save_payout_info(client, GCASH).status_code == 200
     _delivered_sale(db, merchant, buyer, **sale)
     resp = client.post("/merchants/me/payouts/request")
     assert resp.status_code == 200, resp.text
@@ -137,22 +138,19 @@ def test_bank_payout_info_stores_paymongo_bank(db, merchant, monkeypatch):  # no
         "account_name": "Juan dela Cruz",
     }
 
-    resp = client.put("/merchants/me/payout-info", json=bank)
+    resp = save_payout_info(client, bank)
     assert resp.status_code == 200
     assert resp.json()["bank_name"] == "BDO Unibank, Inc."
     assert resp.json()["problem"] is None
 
-    spaced = client.put(
-        "/merchants/me/payout-info", json={**bank, "account_number": "0012-3456 7890"}
+    spaced = save_payout_info(client, {**bank, "account_number": "0012-3456 7890"}
     )
     assert spaced.json()["account_number"] == "001234567890"
-    card_like = client.put(
-        "/merchants/me/payout-info", json={**bank, "account_number": "12AB"}
+    card_like = save_payout_info(client, {**bank, "account_number": "12AB"}
     )
     assert card_like.status_code == 422
 
-    unknown = client.put(
-        "/merchants/me/payout-info", json={**bank, "bank_code": "ZZZZPHMMXXX"}
+    unknown = save_payout_info(client, {**bank, "bank_code": "ZZZZPHMMXXX"}
     )
     assert unknown.status_code == 422
 
@@ -179,7 +177,7 @@ def test_legacy_free_text_bank_cannot_cash_out(db, merchant, buyer):  # noqa: F8
 
 def test_cash_out_shows_and_records_the_transfer_fee(db, merchant, buyer):  # noqa: F811
     client = _merchant_client(db, merchant)
-    client.put("/merchants/me/payout-info", json=GCASH)
+    save_payout_info(client, GCASH)
     _delivered_sale(db, merchant, buyer, merchant_amount=490)
 
     available = client.get("/merchants/me/payouts/available").json()
@@ -200,7 +198,7 @@ def test_cash_out_shows_and_records_the_transfer_fee(db, merchant, buyer):  # no
 
 def test_cash_out_must_cover_the_fee(db, merchant, buyer):  # noqa: F811
     client = _merchant_client(db, merchant)
-    client.put("/merchants/me/payout-info", json=GCASH)
+    save_payout_info(client, GCASH)
     _delivered_sale(db, merchant, buyer, merchant_amount=10)
 
     resp = client.post("/merchants/me/payouts/request")
@@ -420,7 +418,7 @@ def test_maya_and_banks_go_by_instapay(db, merchant, buyer, transfers, monkeypat
         lambda _p="instapay": [{"code": "BNORPHMMXXX", "name": "BDO Unibank, Inc."}],
     )
     client = _merchant_client(db, merchant)
-    client.put("/merchants/me/payout-info", json={**GCASH, "payout_type": "maya"})
+    save_payout_info(client, {**GCASH, "payout_type": "maya"})
     _delivered_sale(db, merchant, buyer)
     maya = client.post("/merchants/me/payouts/request").json()
     admin_client = _admin_client(db)
@@ -429,18 +427,19 @@ def test_maya_and_banks_go_by_instapay(db, merchant, buyer, transfers, monkeypat
     assert transfers.calls[-1]["provider"] == "instapay"
     assert transfers.calls[-1]["destination"]["bic"] == "PAPHPHM1XXX"
 
-    client.put(
-        "/merchants/me/payout-info",
-        json={
+    # Failed, then the merchant confirms a bank account: the resend goes there.
+    batch = db.get(PayoutBatch, maya["id"])
+    batch.status = PayoutStatus.FAILED
+    db.commit()
+    save_payout_info(
+        client,
+        {
             "payout_type": "bank",
             "bank_code": "BNORPHMMXXX",
             "account_number": "001234567890",
             "account_name": "Juan dela Cruz",
         },
     )
-    batch = db.get(PayoutBatch, maya["id"])
-    batch.status = PayoutStatus.FAILED
-    db.commit()
     admin_client.patch(f"/admin/batches/{maya['id']}/release")
 
     assert transfers.calls[-1]["provider"] == "instapay"
@@ -449,7 +448,7 @@ def test_maya_and_banks_go_by_instapay(db, merchant, buyer, transfers, monkeypat
 
 def test_instapay_cap_blocks_large_bank_payouts(db, merchant, buyer, transfers):  # noqa: F811
     client = _merchant_client(db, merchant)
-    client.put("/merchants/me/payout-info", json={**GCASH, "payout_type": "maya"})
+    save_payout_info(client, {**GCASH, "payout_type": "maya"})
     _delivered_sale(db, merchant, buyer, merchant_amount=60_000)
     batch = client.post("/merchants/me/payouts/request").json()
 

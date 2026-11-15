@@ -66,20 +66,22 @@ class OrderDetailResponse(CurrentOrderResponse):
 
 
 class PlaceOrderRequest(BaseModel):
+    """Checkout options. Items, prices and fees come from the cart and the
+    produce rows on the server, never from this body (CF-0012)."""
+
     delivery_date: date | None = None
     # A time window such as "08:00 – 10:00"; stored as Order.delivery_window.
     delivery_time: str | None = Field(default=None, max_length=50)
-    delivery_address: str | None = None
+    delivery_address: str | None = Field(default=None, max_length=500)
     # The region picked at checkout (web). When absent, delivery_address is checked
     # for a Luzon province or Metro Manila city instead (B2).
     delivery_region: str | None = Field(default=None, max_length=100)
     # Map pin for the delivery address (U1), optional.
     delivery_lat: float | None = None
     delivery_lng: float | None = None
-    payment_method: str | None = None
     notes: str | None = Field(default=None, max_length=500)
-    service_fee: int = 40
-    image: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class PlacedOrder(BaseModel):

@@ -16,9 +16,17 @@ const STATUS_LABELS: Record<string, string> = {
   approved: "Approved",
   rejected: "Rejected",
   clarification: "Needs Clarification",
+  suspended: "Suspended",
 };
 
-type ReviewAction = "approved" | "rejected" | "clarification";
+type ReviewAction = "approved" | "rejected" | "clarification" | "suspended";
+
+// The moves the server allows (backend/app/services/application_review.py).
+// Rejected and clarification wait for the applicant to send the form again.
+const ALLOWED_ACTIONS: Record<string, ReviewAction[]> = {
+  submitted: ["approved", "rejected", "clarification"],
+  approved: ["suspended"],
+};
 
 function ApplicationCard({
   app,
@@ -34,6 +42,7 @@ function ApplicationCard({
   const [error, setError] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const allowed = ALLOWED_ACTIONS[app.status] ?? [];
 
   const selectAction = (a: ReviewAction) => {
     setAction((prev) => (prev === a ? null : a));
@@ -48,7 +57,7 @@ function ApplicationCard({
       const updated = await reviewMerchantApplication(
         app.id,
         action,
-        action === "clarification" ? note.trim() : undefined,
+        action === "clarification" || action === "suspended" ? note.trim() || undefined : undefined,
       );
       onUpdate(updated);
       setAction(null);
@@ -65,6 +74,8 @@ function ApplicationCard({
       ? "Confirm Approval"
       : action === "rejected"
       ? "Confirm Rejection"
+      : action === "suspended"
+      ? "Confirm Suspension"
       : "Send Clarification Request";
 
   const handleViewDocument = async () => {
@@ -162,36 +173,58 @@ function ApplicationCard({
             </div>
           )}
 
+          {allowed.length === 0 ? (
+            <p className={styles.adminNoteText}>
+              {app.status === "suspended"
+                ? "This merchant is suspended."
+                : "Waiting for the applicant to send the form again."}
+            </p>
+          ) : (
           <div className={styles.actionPanel}>
             <span className={styles.actionLabel}>Review Decision</span>
             <div className={styles.actionButtons}>
+              {allowed.includes("approved") && (
               <button
                 className={`${styles.actionBtn} ${styles.actionBtnApprove} ${action === "approved" ? styles.actionBtnSelected : ""}`}
                 onClick={() => selectAction("approved")}
               >
                 Accept
               </button>
+              )}
+              {allowed.includes("rejected") && (
               <button
                 className={`${styles.actionBtn} ${styles.actionBtnReject} ${action === "rejected" ? styles.actionBtnSelected : ""}`}
                 onClick={() => selectAction("rejected")}
               >
                 Reject
               </button>
+              )}
+              {allowed.includes("clarification") && (
               <button
                 className={`${styles.actionBtn} ${styles.actionBtnClarify} ${action === "clarification" ? styles.actionBtnSelected : ""}`}
                 onClick={() => selectAction("clarification")}
               >
                 Request Clarification
               </button>
+              )}
+              {allowed.includes("suspended") && (
+              <button
+                className={`${styles.actionBtn} ${styles.actionBtnReject} ${action === "suspended" ? styles.actionBtnSelected : ""}`}
+                onClick={() => selectAction("suspended")}
+              >
+                Suspend Merchant
+              </button>
+              )}
             </div>
 
-            {action === "clarification" && (
+            {(action === "clarification" || action === "suspended") && (
               <textarea
                 className={styles.noteInput}
-                aria-label="Clarification request for the applicant"
-                placeholder="Describe what additional information or corrections are needed from the applicant…"
+                aria-label={action === "suspended" ? "Reason for the suspension" : "Clarification request for the applicant"}
+                placeholder={action === "suspended" ? "Reason for the suspension (optional)…" : "Describe what additional information or corrections are needed from the applicant…"}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
+                maxLength={2000}
                 rows={3}
               />
             )}
@@ -212,6 +245,7 @@ function ApplicationCard({
               </div>
             )}
           </div>
+          )}
         </div>
       )}
     </div>
@@ -260,7 +294,7 @@ export default function AdminReviewPage() {
     (a) => a.status === "submitted" || a.status === "clarification",
   );
   const reviewed = applications.filter(
-    (a) => a.status === "approved" || a.status === "rejected",
+    (a) => a.status === "approved" || a.status === "rejected" || a.status === "suspended",
   );
 
   return (

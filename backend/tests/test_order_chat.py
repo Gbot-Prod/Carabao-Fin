@@ -163,10 +163,13 @@ def test_read_messages_are_not_texted(db, merchant, buyer, order, monkeypatch): 
 
 def test_admin_without_two_factor_cannot_read_chat(db, buyer, order, monkeypatch):  # noqa: F811
     # E8c applies here too: admin access needs two-step verification.
-    monkeypatch.setenv("ADMIN_REQUIRE_2FA", "true")
     _post(_client(db, buyer[0]), order.id, "Private")
-    admin = make_user(db, "admin2@example.com", is_admin=True)
+    admin = make_user(db, "admin2@example.com", is_admin=True, two_factor=False)
     db.commit()
     assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 404
     set_identity(db, admin, twoFactorEnabled=True)  # turned on in BetterAuth
+    # Still refused: this session did not pass the TOTP step (CF-0017).
+    assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 404
+    # Finishing setup gives a new session that did (mfa=true in the token).
+    admin.mfa_session = True
     assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 200

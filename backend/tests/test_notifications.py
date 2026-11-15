@@ -16,6 +16,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.services import notifications, order_status, refund_service
 from app.services.order_reservations import settle_checkout_payment
+from app.services.paymongo import PaidPayment
 from tests.better_auth import make_user, set_identity
 from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -76,7 +77,8 @@ def test_order_lifecycle_notifies_buyer_and_farm(db, merchant, buyer):  # noqa: 
     )
     db.add(txn)
     db.commit()
-    assert settle_checkout_payment(txn, "pay_1", db) == "paid"
+    paid = PaidPayment(id="pay_1", amount=txn.amount * 100, currency="PHP")
+    assert settle_checkout_payment(txn, paid, db) == "paid"
     db.commit()
     order_status.apply_merchant_transition(order, "shipped", db)
     order_status.apply_merchant_transition(order, "out_for_delivery", db)

@@ -231,8 +231,6 @@ def test_delete_soft_deletes_and_keeps_financial_records(db, seller, buyer):
             city="Malolos",
             address="Purok 1",
             postal_code="3000",
-            delivery_time=2,
-            delivery_price=40,
             available_days=["mon"],
         )
     )
@@ -267,6 +265,7 @@ def test_deleted_merchant_is_hidden_everywhere(db, seller, buyer):
     assert client.get("/merchants/me/performance").status_code == 404
     new_produce = {
         "name": "Onion",
+        "price": 30,
         "harvest_date": "2026-01-01",
         "best_before": "2026-01-10",
     }
@@ -317,8 +316,6 @@ def test_reapproved_application_reactivates_deleted_merchant(db, seller):
         city="Malolos",
         address="Purok 2",
         postal_code="3000",
-        delivery_time=2,
-        delivery_price=40,
         available_days=["tue"],
     )
     db.add(application)

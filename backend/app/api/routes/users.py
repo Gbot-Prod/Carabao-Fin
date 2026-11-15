@@ -5,6 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
+from app.core.errors import upstream_error
 from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
@@ -13,7 +14,7 @@ from app.models.shipment import Shipment
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate
-from app.services import better_auth_store, r2_service
+from app.services import better_auth_store, r2_service, upload_validation
 from app.services.order_status import ACTIVE_ORDER_STATUSES
 
 router = APIRouter(tags=["users"])
@@ -47,28 +48,12 @@ def upload_my_avatar(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if avatar.content_type not in {
-        "image/png",
-        "image/jpeg",
-        "image/jpg",
-        "image/webp",
-    }:
-        raise HTTPException(status_code=400, detail="Avatar must be PNG, JPEG, or WebP")
-
-    data = avatar.file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Avatar must be under 5 MB")
+    checked = upload_validation.check_image_upload(avatar, "Avatar")
     try:
-        url = r2_service.upload_avatar(
-            current_user.id,
-            data,
-            avatar.content_type or "image/jpeg",
-            avatar.filename or "",
-        )
+        url = r2_service.upload_avatar(current_user.id, checked)
     except Exception as exc:
-        logger.error("R2 avatar upload failed: %s", exc, exc_info=True)
-        raise HTTPException(
-            status_code=502, detail=f"Image upload failed: {exc}"
+        raise upstream_error(
+            502, "Image upload failed", log="R2 avatar upload failed", exc=exc
         ) from exc
 
     current_user.profile_picture_url = url
@@ -166,7 +151,11 @@ def delete_my_account(
         synchronize_session=False
     )
 
-    # The login goes too, or the next sign-in would bring back an empty account.
-    better_auth_store.delete_identity(db, current_user.external_auth_id)
+    # The backend row first (with the ORM cascades), then the login, or the next
+    # sign-in would bring back an empty account. In this order the database
+    # cascade from "user" finds nothing left to delete.
+    identity_id = current_user.external_auth_id
     db.delete(current_user)
+    db.flush()
+    better_auth_store.delete_identity(db, identity_id)
     db.commit()

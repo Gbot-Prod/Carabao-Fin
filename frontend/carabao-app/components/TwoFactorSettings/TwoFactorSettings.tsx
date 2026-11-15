@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { disableTwoFactor, enableTwoFactor, getTwoFactorEnabled, verifyTwoFactorSetup } from "@/lib/auth-client";
+import { QRCodeSVG } from "qrcode.react";
+import { enableTwoFactor, getTwoFactorEnabled, verifyTwoFactorSetup } from "@/lib/auth-client";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import styles from "./TwoFactorSettings.module.css";
 
-type Step = "idle" | "password" | "setup" | "codes" | "disable";
+type Step = "idle" | "setup" | "codes";
 
 /** The secret from an otpauth:// URI, for typing into an authenticator app. */
 function secretFrom(uri: string): string {
@@ -16,14 +17,31 @@ function secretFrom(uri: string): string {
   }
 }
 
-/** Two-step verification (TOTP) for merchants and admins (E8a). */
-export default function TwoFactorSettings() {
+/**
+ * Two-step verification (TOTP) for admins (E8a).
+ *
+ * Setup needs the one-time token from the link that an admin action sends
+ * (CF-0018), so this only offers "Turn on" when `enrolmentToken` is given
+ * (the /two-factor/enrol page). Admins cannot turn it off; another admin
+ * resets it.
+ */
+export default function TwoFactorSettings({
+  enrolmentToken,
+  needsPassword = false,
+  onDone,
+}: {
+  enrolmentToken?: string;
+  /** The account has a password, so setup asks for it too. */
+  needsPassword?: boolean;
+  /** Called when the admin has saved the backup codes after setup. */
+  onDone?: () => void;
+}) {
   const { t } = useLanguage();
   const s = t.twoFactor;
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [step, setStep] = useState<Step>("idle");
-  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [totpUri, setTotpUri] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -47,8 +65,9 @@ export default function TwoFactorSettings() {
 
   const startEnable = (e: FormEvent) => {
     e.preventDefault();
+    if (!enrolmentToken) return;
     void run(async () => {
-      const result = await enableTwoFactor(password);
+      const result = await enableTwoFactor(enrolmentToken, needsPassword ? password : undefined);
       setPassword("");
       setTotpUri(result.totpURI);
       setBackupCodes(result.backupCodes);
@@ -66,19 +85,8 @@ export default function TwoFactorSettings() {
     });
   };
 
-  const confirmDisable = (e: FormEvent) => {
-    e.preventDefault();
-    void run(async () => {
-      await disableTwoFactor(password);
-      setPassword("");
-      setEnabled(false);
-      setStep("idle");
-    });
-  };
-
   const cancel = () => {
     setStep("idle");
-    setPassword("");
     setCode("");
     setError("");
   };
@@ -95,40 +103,37 @@ export default function TwoFactorSettings() {
       <p className={styles.body}>{s.intro}</p>
       {error && <p className={styles.error} role="alert">{error}</p>}
 
-      {step === "idle" && (
-        <button
-          type="button"
-          className={enabled ? styles.secondary : styles.primary}
-          onClick={() => setStep(enabled ? "disable" : "password")}
-        >
-          {enabled ? s.turnOff : s.turnOn}
-        </button>
-      )}
+      {step === "idle" && enabled && <p className={styles.body}>{s.onHelp}</p>}
 
-      {(step === "password" || step === "disable") && (
-        <form className={styles.form} onSubmit={step === "password" ? startEnable : confirmDisable}>
-          <label className={styles.label}>
-            {s.passwordLabel}
-            <input
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-          <div className={styles.actions}>
-            <button type="submit" className={styles.primary} disabled={busy}>
-              {step === "password" ? s.continue : s.turnOff}
-            </button>
-            <button type="button" className={styles.secondary} onClick={cancel}>{s.cancel}</button>
-          </div>
+      {step === "idle" && !enabled && !enrolmentToken && <p className={styles.body}>{s.needLink}</p>}
+
+      {step === "idle" && !enabled && enrolmentToken && (
+        <form className={styles.form} onSubmit={startEnable}>
+          {needsPassword && (
+            <label className={styles.label}>
+              {s.passwordLabel}
+              <input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </label>
+          )}
+          <button type="submit" className={styles.primary} disabled={busy}>
+            {s.turnOn}
+          </button>
         </form>
       )}
 
       {step === "setup" && (
         <form className={styles.form} onSubmit={confirmSetup}>
           <p className={styles.body}>{s.setupHelp}</p>
+          {/* Drawn here in the browser: the secret is never sent to a QR service. */}
+          <div className={styles.qr}>
+            <QRCodeSVG value={totpUri} size={176} marginSize={2} title={s.qrLabel} />
+          </div>
           <p className={styles.keyLabel}>{s.setupKey}</p>
           <code className={styles.key}>{secret.replace(/(.{4})/g, "$1 ").trim()}</code>
           <a className={styles.link} href={totpUri}>{s.openApp}</a>
@@ -157,7 +162,7 @@ export default function TwoFactorSettings() {
           <ul className={styles.codes}>
             {backupCodes.map((c) => <li key={c}><code>{c}</code></li>)}
           </ul>
-          <button type="button" className={styles.primary} onClick={() => { setBackupCodes([]); setStep("idle"); }}>
+          <button type="button" className={styles.primary} onClick={() => { setBackupCodes([]); setStep("idle"); onDone?.(); }}>
             {s.savedCodes}
           </button>
         </div>

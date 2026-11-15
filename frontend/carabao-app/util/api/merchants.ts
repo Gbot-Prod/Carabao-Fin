@@ -21,7 +21,9 @@ export type Merchant = {
   contact_email?: string | null;
   /** Owning user's full name. Only returned by the single-merchant endpoint. */
   owner_name?: string | null;
+  available_days: string[];
   operating_hours: string | Record<string, string> | null;
+  /** Flat delivery fee per order, in pesos; the merchant sets it (CF-0020). */
   delivery_price: number | null;
   delivery_time: number | null;
   rating: number | null;
@@ -46,8 +48,6 @@ export type MerchantOnboardingPayload = {
   // Farm map pin (U1c), optional.
   lat?: number | null;
   lng?: number | null;
-  delivery_time: number;
-  delivery_price: number;
   available_days: string[];
   rsbsa_number?: string;
   phone_verification_token?: string;
@@ -100,10 +100,11 @@ export type MerchantUpdatePayload = {
   lat?: number | null;
   lng?: number | null;
   contact_email?: string | null;
+  // A new number needs phone_verification_token from verifyOtp (CF-0030).
   contact_number?: string | null;
-  operating_hours?: string | null;
+  phone_verification_token?: string | null;
+  available_days?: string[];
   delivery_price?: number | null;
-  delivery_time?: number | null;
 };
 
 export const updateMyMerchant = async (payload: MerchantUpdatePayload): Promise<Merchant> => {
@@ -308,7 +309,14 @@ export const fetchMyPayoutInfo = async (): Promise<PayoutInfo | null> => {
   return response.data;
 };
 
-export const updateMyPayoutInfo = async (payload: PayoutInfoPayload): Promise<PayoutInfo> => {
+/** CF-0004: text a code that confirms exactly this payout method. Returns the last 4 digits it went to. */
+export const sendPayoutInfoCode = async (payload: PayoutInfoPayload): Promise<string> => {
+  const response = await apiClient.post<{ sent_to: string }>('/merchants/me/payout-info/code', payload);
+  return response.data.sent_to;
+};
+
+/** Saves the payout method; `code` is the SMS code sendPayoutInfoCode sent for it. */
+export const updateMyPayoutInfo = async (payload: PayoutInfoPayload & { code: string }): Promise<PayoutInfo> => {
   const response = await apiClient.put<PayoutInfo>('/merchants/me/payout-info', payload);
   return response.data;
 };

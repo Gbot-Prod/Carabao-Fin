@@ -1,17 +1,44 @@
-from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String
-from sqlalchemy.orm import relationship
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    text,
+)
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.field_crypto import EncryptedString, blind_index
 
 
 class Merchant(Base):
     __tablename__ = "merchants"
+    # One live merchant per TIN / RSBSA number (CF-0028). A closed merchant
+    # (deleted_at set) does not hold the number.
+    __table_args__ = tuple(
+        Index(
+            f"uq_merchants_{column}_live",
+            column,
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+            sqlite_where=text("deleted_at IS NULL"),
+        )
+        for column in ("tin_hmac", "rsbsa_number_hmac")
+    )
 
     # Basic information
     id = Column(Integer, primary_key=True, index=True)
     merchant_name = Column(String, nullable=False, index=True)
     contact_number = Column(String, unique=True, index=True)
+    # The number before the last change, and when it changed. Payout alerts
+    # also go to it for a few days (CF-0019).
+    previous_contact_number = Column(String, nullable=True)
+    contact_number_changed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Cached average of reviews.rating; recomputed by review_service.
     rating = Column(Float, nullable=True, index=True)
@@ -28,6 +55,9 @@ class Merchant(Base):
     # Set when the merchant closes their account. The row is kept so its
     # orders, transactions and payouts stay attributable.
     deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    # Set when an admin suspends the approved application (CF-0010). Buyers no
+    # longer see the shop and it takes no new orders.
+    suspended_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     # Location / availability
     region = Column(String, nullable=False, index=True)
@@ -53,11 +83,14 @@ class Merchant(Base):
     # Legal details
     legal_business_name = Column(String, nullable=True)
     business_type = Column(String, nullable=False)
-    tin = Column(String, nullable=True)
+    # Encrypted at rest (CF-0007); tin_hmac is for lookups and duplicates.
+    tin = Column(EncryptedString("tin"), nullable=True)
+    tin_hmac = Column(String(64), nullable=True, index=True)
     registration_type = Column(String, nullable=True)
     registration_number = Column(String, nullable=True)
     contact_email = Column(String, nullable=True, index=True)
-    rsbsa_number = Column(String, nullable=True)
+    rsbsa_number = Column(EncryptedString("rsbsa_number"), nullable=True)
+    rsbsa_number_hmac = Column(String(64), nullable=True, index=True)
     rsbsa_document_path = Column(String, nullable=False)
     rsbsa_document_original_name = Column(String, nullable=True)
     rsbsa_document_content_type = Column(String, nullable=True)
@@ -79,3 +112,15 @@ class Merchant(Base):
     )
     orders = relationship("Order", back_populates="merchant")
     reviews = relationship("Review", back_populates="merchant", passive_deletes=True)
+
+    @validates("tin")
+    def _set_tin_hmac(self, _key: str, value: str | None) -> str | None:
+        value = value or None
+        self.tin_hmac = blind_index(value)
+        return value
+
+    @validates("rsbsa_number")
+    def _set_rsbsa_number_hmac(self, _key: str, value: str | None) -> str | None:
+        value = value or None
+        self.rsbsa_number_hmac = blind_index(value)
+        return value

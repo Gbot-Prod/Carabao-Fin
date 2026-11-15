@@ -8,6 +8,7 @@ export const ORDER_STATUSES = [
   'out_for_delivery',
   'delivered',
   'cancelled',
+  'payment_mismatch', // paid the wrong amount; refunded, never processed (CF-0005)
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
@@ -31,7 +32,7 @@ export type PaymentStatus =
 export type PayoutStatus = 'pending' | 'approved' | 'processing' | 'released' | 'failed';
 
 export const IN_TRANSIT_ORDER_STATUSES: readonly OrderStatus[] = ['shipped', 'out_for_delivery'];
-export const CLOSED_ORDER_STATUSES: readonly OrderStatus[] = ['delivered', 'cancelled'];
+export const CLOSED_ORDER_STATUSES: readonly OrderStatus[] = ['delivered', 'cancelled', 'payment_mismatch'];
 
 export const isInTransit = (status: OrderStatus) => IN_TRANSIT_ORDER_STATUSES.includes(status);
 export const isClosed = (status: OrderStatus) => CLOSED_ORDER_STATUSES.includes(status);
@@ -43,6 +44,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   out_for_delivery: 'Out for delivery',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
+  payment_mismatch: 'Payment problem',
 };
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {

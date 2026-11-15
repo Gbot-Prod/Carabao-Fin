@@ -39,8 +39,6 @@ def test_pending_work_counts(db, merchant):
                 city="Malolos",
                 address="Purok 4",
                 postal_code="3000",
-                delivery_time=2,
-                delivery_price=50,
                 available_days=["mon"],
             )
             for applicant, status in zip(
@@ -138,9 +136,46 @@ def test_top_categories_from_paid_orders(db, merchant):
         [{"produce_id": mango.id, "quantity": 9, "price": 999}], paid_days_ago=40
     )
 
-    result = _top_categories(db, now - timedelta(days=30))
-    assert result == [
+    rows, skipped = _top_categories(db, now - timedelta(days=30))
+    assert rows == [
         {"category": "Vegetables", "revenue": 230, "quantity": 5},
         {"category": "Fruits", "revenue": 200, "quantity": 1},
         {"category": "Uncategorized", "revenue": 12, "quantity": 6},
     ]
+    assert skipped == 0
+
+
+def test_top_categories_skips_an_order_with_a_bad_price(db, merchant):
+    """CF-0027: a fractional snapshot price skips that whole order, not the
+    dashboard, and is never counted as 0."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.api.routes.admin import _top_categories
+    from app.models.produce import Produce
+
+    talong = Produce(
+        merchant_id=merchant.id,
+        name="Talong",
+        price=10,
+        stock_quantity=100,
+        category="Vegetables",
+    )
+    db.add(talong)
+    db.commit()
+    buyer = _buyer(db)
+    now = datetime.now(UTC)
+    for items in (
+        [{"produce_id": talong.id, "quantity": 2, "price": 50}],
+        # The good line in a bad order is skipped too.
+        [
+            {"produce_id": talong.id, "quantity": 1, "price": 40},
+            {"produce_id": talong.id, "quantity": 1, "price": "12.50"},
+        ],
+    ):
+        txn = _txn(db, _order(db, merchant, buyer, items=items), "paid")
+        txn.paid_at = now - timedelta(days=1)
+        db.commit()
+
+    rows, skipped = _top_categories(db, now - timedelta(days=30))
+    assert rows == [{"category": "Vegetables", "revenue": 100, "quantity": 2}]
+    assert skipped == 1

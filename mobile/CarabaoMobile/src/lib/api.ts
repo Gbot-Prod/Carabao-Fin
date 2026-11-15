@@ -260,9 +260,7 @@ export function merchantLocation(m: Pick<ApiMerchant, 'city' | 'province'>): str
 export type PlaceOrderPayload = {
   delivery_address?: string | null;
   delivery_time?: string | null;
-  payment_method?: string | null;
   notes?: string | null;
-  service_fee?: number;
 };
 
 export type PlacedOrder = {
@@ -426,7 +424,8 @@ export const api = {
   cart: {
     get: (token: string | null) =>
       request<ApiCart>('/carts/me', token),
-    replace: (token: string | null, items: ServerCartItem[]) =>
+    // The server builds each line from the listing; send only these two.
+    replace: (token: string | null, items: { produce_id: number; quantity: number }[]) =>
       request<ApiCart>('/carts/me', token, {
         method: 'PUT',
         body: JSON.stringify({ items }),

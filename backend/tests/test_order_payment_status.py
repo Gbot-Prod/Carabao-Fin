@@ -11,6 +11,7 @@ from app.models.order import Order
 from app.models.statuses import OrderStatus, PaymentStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.services.order_status import payment_status
+from tests.payout_codes import save_payout_info
 from tests.test_merchant_orders import _merchant_client
 from tests.test_reviews import _client, buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -191,5 +192,5 @@ def test_status_columns_reject_unknown_values(db, merchant, buyer):  # noqa: F81
     ],
 )
 def test_payout_info_is_validated(db, merchant, payload, expected):  # noqa: F811
-    resp = _merchant_client(db, merchant).put("/merchants/me/payout-info", json=payload)
+    resp = save_payout_info(_merchant_client(db, merchant), payload)
     assert resp.status_code == expected

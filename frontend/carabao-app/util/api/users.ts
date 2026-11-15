@@ -10,6 +10,8 @@ export type UserProfile = {
   id: number;
   external_auth_id: string | null;
   is_admin: boolean;
+  // Two-step verification (admins only, E8).
+  two_factor_enabled?: boolean;
   // An admin suspended the account (A3).
   is_suspended?: boolean;
   suspension_reason?: string | null;

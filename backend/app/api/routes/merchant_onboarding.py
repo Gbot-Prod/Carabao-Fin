@@ -9,20 +9,77 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db, require_verified_phone
+from app.core.errors import upstream_error
+from app.core.field_crypto import blind_index
+from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.user import User
 from app.schemas.merchant_application import (
     MerchantApplicationResponse,
     MerchantOnboardingPayload,
 )
-from app.services import r2_service
+from app.services import r2_service, upload_validation
+from app.services.application_review import check_can_resubmit
 from app.services.merchant_service import get_active_merchant
 from app.services.phone_verification import normalize_ph_mobile, read_token
 from app.services.pinned_location import validate_pin
+from app.services.rate_limit import lock_keys
 from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
 
 router = APIRouter(tags=["merchant-onboarding"])
 logger = logging.getLogger(__name__)
+
+
+def _reject_duplicate_identifiers(
+    db: Session, user_id: int, tin: str | None, rsbsa_number: str | None
+) -> None:
+    """A TIN or RSBSA number can belong to only one account (CF-0007).
+
+    The values are encrypted with a random nonce, so the lookup uses the
+    keyed hash (blind index) columns.
+
+    Two requests with the same TIN could both pass the check before either
+    commits (CF-0028). An advisory lock on each hash makes them wait for each
+    other until the transaction ends; the partial unique indexes are the last
+    guard.
+    """
+    checks = (
+        ("TIN", blind_index(tin), "tin_hmac"),
+        ("RSBSA number", blind_index(rsbsa_number), "rsbsa_number_hmac"),
+    )
+    lock_keys(
+        db,
+        *(
+            f"merchant-identifier:{column}:{digest}"
+            for _, digest, column in checks
+            if digest
+        ),
+    )
+    for label, digest, column in checks:
+        if digest is None:
+            continue
+        used_by_application = (
+            db.query(MerchantApplication.id)
+            .filter(
+                getattr(MerchantApplication, column) == digest,
+                MerchantApplication.user_id != user_id,
+            )
+            .first()
+        )
+        used_by_merchant = (
+            db.query(Merchant.id)
+            .filter(
+                getattr(Merchant, column) == digest,
+                Merchant.user_id != user_id,
+                Merchant.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if used_by_application or used_by_merchant:
+            raise HTTPException(
+                status_code=409,
+                detail=f"This {label} is already used by another account",
+            )
 
 
 @router.get("/merchant-applications/me", response_model=MerchantApplicationResponse)
@@ -76,45 +133,31 @@ def submit_my_merchant_onboarding_route(
             status_code=400, detail="Please verify your contact number first"
         )
 
-    if get_active_merchant(db, current_user.id) is not None:
+    has_active_merchant = get_active_merchant(db, current_user.id) is not None
+    if has_active_merchant:
         raise HTTPException(
             status_code=409, detail="User already has a merchant profile"
         )
-
-    if rsbsa_file.content_type not in {
-        "application/pdf",
-        "image/png",
-        "image/jpeg",
-        "image/jpg",
-        "image/webp",
-    }:
-        raise HTTPException(
-            status_code=400, detail="RSBSA file must be an image or PDF"
-        )
-
-    content = rsbsa_file.file.read()
-    if len(content) > 20 * 1024 * 1024:
-        raise HTTPException(
-            status_code=413, detail="RSBSA document must be under 20 MB"
-        )
-    try:
-        saved_path = r2_service.upload_rsbsa_document(
-            current_user.id,
-            content,
-            rsbsa_file.content_type or "application/octet-stream",
-            rsbsa_file.filename or "",
-        )
-    except Exception as exc:
-        logger.error("R2 RSBSA upload failed: %s", exc, exc_info=True)
-        raise HTTPException(
-            status_code=502, detail=f"Document upload failed: {exc}"
-        ) from exc
-
     application = (
         db.query(MerchantApplication)
         .filter(MerchantApplication.user_id == current_user.id)
+        .with_for_update()
         .first()
     )
+    # Only a new, rejected or clarification application goes (back) to
+    # submitted (CF-0010); checked before the document is uploaded.
+    check_can_resubmit(application, has_active_merchant)
+
+    _reject_duplicate_identifiers(db, current_user.id, data.tin, data.rsbsa_number)
+
+    checked = upload_validation.check_document_upload(rsbsa_file, "RSBSA document")
+    try:
+        saved_path = r2_service.upload_rsbsa_document(current_user.id, checked)
+    except Exception as exc:
+        raise upstream_error(
+            502, "Document upload failed", log="R2 RSBSA upload failed", exc=exc
+        ) from exc
+
     if application is None:
         application = MerchantApplication(user_id=current_user.id)
         db.add(application)
@@ -127,9 +170,10 @@ def submit_my_merchant_onboarding_route(
     application.business_type = data.business_type
     application.tin = data.tin
     application.registration_type = data.registration_type
-    application.registration_number = data.registration_number
-    application.contact_email = str(data.contact_email)
-    application.contact_number = data.contact_number
+    application.registration_number = data.registration_number or None
+    application.contact_email = str(data.contact_email).lower()
+    # The +639XXXXXXXXX form that was verified above (CF-0011).
+    application.contact_number = f"+{contact}"
 
     application.region = data.region
     application.province = data.province
@@ -140,13 +184,14 @@ def submit_my_merchant_onboarding_route(
     application.lat = data.lat
     application.lng = data.lng
     application.available_days = data.available_days
-    application.delivery_time = int(data.delivery_time)
-    application.delivery_price = int(data.delivery_price)
 
     application.rsbsa_number = data.rsbsa_number
     application.rsbsa_document_path = saved_path
-    application.rsbsa_document_original_name = rsbsa_file.filename
-    application.rsbsa_document_content_type = rsbsa_file.content_type
+    application.rsbsa_document_original_name = upload_validation.safe_filename(
+        rsbsa_file.filename
+    )
+    # The type the server found, not the type the client declared.
+    application.rsbsa_document_content_type = checked.content_type
 
     try:
         db.commit()
@@ -154,6 +199,12 @@ def submit_my_merchant_onboarding_route(
         return application
     except IntegrityError as exc:
         db.rollback()
+        constraint = str(getattr(exc, "orig", exc))
+        if "uq_merchant_applications_" in constraint and "_hmac" in constraint:
+            raise HTTPException(
+                status_code=409,
+                detail="This TIN or RSBSA number is already used by another account",
+            ) from exc
         raise HTTPException(
             status_code=400, detail="Merchant application could not be saved"
         ) from exc

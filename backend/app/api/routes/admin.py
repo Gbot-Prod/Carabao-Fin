@@ -1,4 +1,4 @@
-import os
+import logging
 from datetime import UTC, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,9 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db
+from app.core.errors import upstream_error
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
-from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
 from app.models.payout_batch import PayoutBatch
 from app.models.produce import Produce
@@ -19,8 +19,8 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.merchant import AdminMerchantResponse
 from app.schemas.merchant_application import (
+    AdminMerchantApplicationResponse,
     ApplicationReviewPayload,
-    MerchantApplicationResponse,
 )
 from app.schemas.pagination import Page
 from app.schemas.payout import (
@@ -29,43 +29,49 @@ from app.schemas.payout import (
     WalletBalance,
 )
 from app.schemas.user import UserResponse
-from app.services import audit_log, better_auth_store, paymongo, r2_service
+from app.services import (
+    admin_enrolment,
+    audit_log,
+    better_auth_store,
+    money,
+    paymongo,
+    r2_service,
+)
 from app.services.account_suspension import reinstate_user, suspend_user
-from app.services.features import two_factor_enabled
-from app.services.merchant_service import create_merchant_from_application
+from app.services.application_review import apply_admin_decision
 from app.services.payout_service import (
     PayoutError,
-    get_payout_info,
-    payout_info_problem,
     refresh_payout,
-    resolve_destination,
+    saved_destination,
     send_payout,
     transfer_fee,
 )
 from app.services.produce_freshness import PH_TZ
 
 router = APIRouter(tags=["admin"])
+logger = logging.getLogger(__name__)
 
 
 ADMIN_2FA_DETAIL = (
-    "Two-step verification is required for admin accounts. Turn it on in your "
-    "profile, then reload this page."
+    "Two-step verification is required for admin accounts. Open the setup link "
+    "we sent you by SMS or email, or ask another admin for a new one."
+)
+ADMIN_MFA_SESSION_DETAIL = (
+    "Sign in again and enter the code from your authenticator app to use the "
+    "admin area."
 )
 
 
-def admin_requires_two_factor() -> bool:
-    """E8c: only while two-step verification is turned on (TWO_FACTOR_ENABLED),
-    and then unless ADMIN_REQUIRE_2FA=false (e.g. for a local demo)."""
-    if not two_factor_enabled():
-        return False
-    return os.getenv("ADMIN_REQUIRE_2FA", "true").lower() not in {"0", "false", "no"}
-
-
 def _require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Admins always need two-step verification (E8c, CF-0003), and this
+    session must have passed the TOTP step (CF-0017): a Google sign-in or a
+    session from before 2FA was on does not count."""
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
-    if admin_requires_two_factor() and not current_user.two_factor_enabled:
+    if not current_user.two_factor_enabled:
         raise HTTPException(status_code=403, detail=ADMIN_2FA_DETAIL)
+    if not current_user.mfa_session:
+        raise HTTPException(status_code=403, detail=ADMIN_MFA_SESSION_DETAIL)
     return current_user
 
 
@@ -87,7 +93,16 @@ def set_user_admin_role(
         raise HTTPException(status_code=404, detail="User not found")
 
     before = {"is_admin": user.is_admin}
+    promoted = payload.is_admin and not user.is_admin
+    demoted = user.is_admin and not payload.is_admin
+    if promoted:
+        # CF-0018: the new admin sets up 2FA only with the link sent here.
+        admin_enrolment.require_contact(user)
     better_auth_store.set_role(db, user.external_auth_id, is_admin=payload.is_admin)
+    token = admin_enrolment.issue(db, user) if promoted else None
+    if demoted:
+        # 2FA is for admins only; this also ends the old admin sessions.
+        better_auth_store.clear_two_factor(db, user.external_auth_id)
     audit_log.record_admin_action(
         db,
         admin=current_admin,
@@ -99,7 +114,55 @@ def set_user_admin_role(
     )
     db.commit()
     db.refresh(user)
+    if token:
+        admin_enrolment.deliver(user, token)
     return user
+
+
+class TwoFactorResetResponse(BaseModel):
+    sent_to: list[str]
+
+
+@router.post(
+    "/admin/users/{user_id}/two-factor/reset", response_model=TwoFactorResetResponse
+)
+def reset_admin_two_factor(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(_require_admin),
+):
+    """Another admin's lost authenticator, or a setup link that expired or was
+    not received. Sends a new setup link; the older link stops working. If 2FA
+    is on, it is turned off and the admin's sessions end first. If it is not
+    set up yet, nothing else changes (the admin stays signed in)."""
+    if current_admin.id == user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Ask another admin to reset your two-step verification",
+        )
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=400, detail="Only admin accounts use two-step verification"
+        )
+    admin_enrolment.require_contact(user)
+    before = {"two_factor_enabled": user.two_factor_enabled}
+    if user.two_factor_enabled:
+        better_auth_store.clear_two_factor(db, user.external_auth_id)
+    token = admin_enrolment.issue(db, user)
+    audit_log.record_admin_action(
+        db,
+        admin=current_admin,
+        action=audit_log.TWO_FACTOR_RESET,
+        target_type="user",
+        target_id=user.id,
+        before=before,
+        after={"two_factor_enabled": False, "setup_link_sent": True},
+    )
+    db.commit()
+    return {"sent_to": admin_enrolment.deliver(user, token)}
 
 
 @router.get("/admin/users", response_model=Page[UserResponse])
@@ -201,7 +264,8 @@ def reinstate_account(
 
 
 @router.get(
-    "/admin/merchant-applications", response_model=list[MerchantApplicationResponse]
+    "/admin/merchant-applications",
+    response_model=list[AdminMerchantApplicationResponse],
 )
 def list_all_merchant_applications(
     db: Session = Depends(get_db),
@@ -271,14 +335,20 @@ def _item_int(item: dict, *keys: str) -> int | None:
     return None
 
 
-def _top_categories(db: Session, since: datetime, limit: int = 8) -> list[dict]:
+def _top_categories(
+    db: Session, since: datetime, limit: int = 8
+) -> tuple[list[dict], int]:
     """Item revenue and quantity by produce category, from orders paid since ``since``.
 
     Item revenue is unit price x quantity (delivery fee excluded). Categories come
     from the produce row as it is now; deleted produce counts as Uncategorized.
+
+    Returns the ranked rows and the number of orders skipped. An order with a
+    bad snapshot price is logged and skipped as a whole, so one bad row does
+    not make the dashboard fail (CF-0027) and is never counted as 0 (CF-0014).
     """
     paid_orders = (
-        db.query(Order.items)
+        db.query(Order.id, Order.items)
         .filter(
             Order.id.in_(
                 db.query(Transaction.order_id).filter(
@@ -290,17 +360,29 @@ def _top_categories(db: Session, since: datetime, limit: int = 8) -> list[dict]:
         .all()
     )
     lines = []
-    for (items,) in paid_orders:
-        for item in items or []:
-            if not isinstance(item, dict):
-                continue
-            quantity = _item_int(item, "quantity") or 0
-            price = _item_int(item, "price") or 0
-            if quantity <= 0:
-                continue
-            lines.append(
-                (_item_int(item, "produce_id", "produceId", "id"), quantity, price)
+    skipped_rows = 0
+    for order_id, items in paid_orders:
+        order_lines = []
+        try:
+            for item in items or []:
+                if not isinstance(item, dict):
+                    continue
+                quantity = _item_int(item, "quantity") or 0
+                price = money.whole_pesos(item.get("price"))
+                if quantity <= 0:
+                    continue
+                order_lines.append(
+                    (_item_int(item, "produce_id", "produceId", "id"), quantity, price)
+                )
+        except money.InvalidAmount as exc:
+            logger.warning(
+                "Top categories: skipped order %s with a bad item price: %s",
+                order_id,
+                exc,
             )
+            skipped_rows += 1
+            continue
+        lines.extend(order_lines)
 
     produce_ids = {pid for pid, _, _ in lines if pid is not None}
     categories = dict(
@@ -315,7 +397,8 @@ def _top_categories(db: Session, since: datetime, limit: int = 8) -> list[dict]:
         bucket["revenue"] += price * quantity
         bucket["quantity"] += quantity
     ranked = sorted(totals.items(), key=lambda kv: (-kv[1]["revenue"], kv[0]))
-    return [{"category": name, **values} for name, values in ranked[:limit]]
+    rows = [{"category": name, **values} for name, values in ranked[:limit]]
+    return rows, skipped_rows
 
 
 @router.get("/admin/stats")
@@ -387,6 +470,8 @@ def get_admin_stats(
         .all()
     )
 
+    top_categories, top_categories_skipped = _top_categories(db, since)
+
     payout_rows = (
         db.query(
             PayoutBatch.status,
@@ -410,7 +495,8 @@ def get_admin_stats(
             "refunds_pending": int(refunds_pending),
         },
         "weekly_signups": _weekly_signups(db),
-        "top_categories": _top_categories(db, since),
+        "top_categories": top_categories,
+        "top_categories_skipped_rows": top_categories_skipped,
         "daily_revenue": [
             {
                 "date": str(r.date),
@@ -434,27 +520,24 @@ def get_admin_stats(
 
 
 def _admin_batch_view(
-    batch: PayoutBatch, merchant_name: str | None, info
+    batch: PayoutBatch, merchant_name: str | None
 ) -> AdminPayoutBatchResponse:
-    destination = None
-    if info is not None:
-        try:
-            dest = resolve_destination(info)
-            destination = PayoutDestinationPreview(
-                type=dest.type,
-                institution=dest.institution,
-                name=dest.name,
-                number=dest.number,
-                provider=dest.provider,
-            )
-        except PayoutError:
-            destination = PayoutDestinationPreview(
-                type=info.payout_type,
-                institution=info.bank_name,
-                name=info.account_name,
-                number=info.account_number or info.ewallet_number,
-                problem=payout_info_problem(info),
-            )
+    # CF-0004: where sending will go is the destination saved on the batch.
+    dest = saved_destination(batch)
+    destination = (
+        PayoutDestinationPreview(
+            type=dest.type,
+            institution=dest.institution,
+            name=dest.name,
+            number=dest.number,
+            provider=dest.provider,
+        )
+        if dest is not None
+        else PayoutDestinationPreview(
+            type="unknown",
+            problem="No saved destination; the merchant must request it again.",
+        )
+    )
     update = {"merchant_name": merchant_name, "destination": destination}
     if batch.transfer_fee is None:
         # Requested before fees were recorded: preview what sending would take.
@@ -465,11 +548,7 @@ def _admin_batch_view(
 
 def _admin_batch_response(db: Session, batch: PayoutBatch) -> AdminPayoutBatchResponse:
     merchant = db.get(Merchant, batch.merchant_id)
-    return _admin_batch_view(
-        batch,
-        merchant.merchant_name if merchant else None,
-        get_payout_info(db, batch.merchant_id),
-    )
+    return _admin_batch_view(batch, merchant.merchant_name if merchant else None)
 
 
 @router.get("/admin/wallet", response_model=WalletBalance)
@@ -478,11 +557,15 @@ def get_wallet_balance(admin: User = Depends(_require_admin)):
     try:
         balance = paymongo.get_wallet_balance()
     except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail="Could not read the PayMongo wallet"
+        raise upstream_error(
+            502,
+            "Could not read the PayMongo wallet",
+            log="PayMongo wallet balance failed",
+            exc=exc,
         ) from exc
     return WalletBalance(
-        available=balance["available"] / 100, pending=balance["pending"] / 100
+        available=float(money.from_centavos(balance["available"])),
+        pending=float(money.from_centavos(balance["pending"])),
     )
 
 
@@ -493,17 +576,13 @@ def list_payout_batches(
     admin: User = Depends(_require_admin),
 ):
     q = (
-        db.query(PayoutBatch, Merchant.merchant_name, MerchantPayoutInfo)
+        db.query(PayoutBatch, Merchant.merchant_name)
         .outerjoin(Merchant, Merchant.id == PayoutBatch.merchant_id)
-        .outerjoin(
-            MerchantPayoutInfo,
-            MerchantPayoutInfo.merchant_id == PayoutBatch.merchant_id,
-        )
     )
     if status:
         q = q.filter(PayoutBatch.status == status)
     rows = q.order_by(PayoutBatch.created_at.desc()).all()
-    return [_admin_batch_view(batch, name, info) for batch, name, info in rows]
+    return [_admin_batch_view(batch, name) for batch, name in rows]
 
 
 @router.patch(
@@ -568,14 +647,18 @@ def refresh_payout_batch(
     except PayoutError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail="Could not reach PayMongo. Try again."
+        raise upstream_error(
+            502,
+            "Could not reach PayMongo. Try again.",
+            log=f"PayMongo payout refresh failed for batch {batch_id}",
+            exc=exc,
         ) from exc
     return _admin_batch_response(db, batch)
 
 
 @router.patch(
-    "/admin/merchant-applications/{app_id}", response_model=MerchantApplicationResponse
+    "/admin/merchant-applications/{app_id}",
+    response_model=AdminMerchantApplicationResponse,
 )
 def review_merchant_application(
     app_id: int,
@@ -584,7 +667,11 @@ def review_merchant_application(
     admin: User = Depends(_require_admin),
 ):
     application = (
-        db.query(MerchantApplication).filter(MerchantApplication.id == app_id).first()
+        db.query(MerchantApplication)
+        .filter(MerchantApplication.id == app_id)
+        # Two admins deciding at once must not both pass the transition check.
+        .with_for_update()
+        .first()
     )
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -594,18 +681,14 @@ def review_merchant_application(
         "admin_note": application.admin_note,
         "merchant_id": application.merchant_id,
     }
-    application.status = payload.status
-    application.admin_note = payload.admin_note
-
-    if payload.status == "approved" and application.merchant_id is None:
-        try:
-            merchant = create_merchant_from_application(db, application)
-            application.merchant_id = merchant.id
-        except (ValueError, IntegrityError) as exc:
-            db.rollback()
-            raise HTTPException(
-                status_code=400, detail="Failed to create merchant profile"
-            ) from exc
+    try:
+        apply_admin_decision(db, application, payload.status)
+    except (ValueError, IntegrityError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400, detail="Failed to create merchant profile"
+        ) from exc
+    application.admin_note = payload.admin_note or None
 
     audit_log.record_admin_action(
         db,
@@ -647,9 +730,11 @@ def get_rsbsa_document_url(
             application.rsbsa_document_content_type,
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="Unable to prepare RSBSA document",
+        raise upstream_error(
+            502,
+            "Unable to prepare RSBSA document",
+            log="R2 RSBSA signed URL failed",
+            exc=exc,
         ) from exc
     if not url:
         raise HTTPException(

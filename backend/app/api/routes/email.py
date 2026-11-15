@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr
 
 from app.api.dependencies import require_internal_secret
+from app.core.errors import upstream_error
 from app.services.email import send_password_reset_email, send_verification_email
 
 router = APIRouter(tags=["email"], dependencies=[Depends(require_internal_secret)])
@@ -24,8 +25,8 @@ def send_verification_email_route(payload: VerificationEmailPayload) -> dict:
             to=payload.to, verification_url=payload.verification_url
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Email delivery failed: {exc}"
+        raise upstream_error(
+            502, "The email could not be sent", log="Verification email failed", exc=exc
         ) from exc
     return {"ok": True}
 
@@ -41,7 +42,10 @@ def send_password_reset_email_route(payload: PasswordResetEmailPayload) -> dict:
     try:
         send_password_reset_email(to=payload.to, reset_url=payload.reset_url)
     except Exception as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Email delivery failed: {exc}"
+        raise upstream_error(
+            502,
+            "The email could not be sent",
+            log="Password reset email failed",
+            exc=exc,
         ) from exc
     return {"ok": True}

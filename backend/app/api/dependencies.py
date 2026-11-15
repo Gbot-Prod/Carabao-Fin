@@ -58,6 +58,9 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail=suspended_detail(user)
         )
+    # CF-0017: only a session that passed the TOTP step carries mfa=true
+    # (lib/auth.ts). A Google session or an older session does not.
+    user.mfa_session = claims.get("mfa") is True
     return user
 
 

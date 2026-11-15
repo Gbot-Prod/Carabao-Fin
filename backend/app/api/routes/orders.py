@@ -54,7 +54,9 @@ from ._order_helpers import (
     _to_int,
     get_buyer_orders,
     get_or_create_cart,
+    merchant_takes_orders,
     order_item_load,
+    order_line,
     to_current_order_item,
     to_order_history_item,
 )
@@ -157,7 +159,7 @@ def place_order_from_cart(
 
         produce.stock_quantity -= quantity
         unit_price = unit_price_for(produce, quantity)
-        line = {**item, "price": unit_price}
+        line = order_line(produce, quantity, unit_price)
         items_by_merchant.setdefault(produce.merchant_id, []).append(line)
         subtotal_by_merchant[produce.merchant_id] = (
             subtotal_by_merchant.get(produce.merchant_id, 0) + unit_price * quantity
@@ -175,11 +177,7 @@ def place_order_from_cart(
             .populate_existing()
             .first()
         )
-        if (
-            merchant is None
-            or merchant.deleted_at is not None
-            or (merchant.user is not None and merchant.user.is_suspended)
-        ):
+        if not merchant_takes_orders(merchant):
             name = merchant.merchant_name if merchant is not None else "A merchant"
             raise HTTPException(
                 status_code=400,
@@ -193,14 +191,14 @@ def place_order_from_cart(
             status=OrderStatus.PENDING,
             total_price=subtotal_by_merchant[merchant_id] + service_fee,
             items=items_by_merchant[merchant_id],
-            delivery_address=payload.delivery_address,
+            delivery_address=(payload.delivery_address or "").strip() or None,
             delivery_lat=delivery_pin[0] if delivery_pin else None,
             delivery_lng=delivery_pin[1] if delivery_pin else None,
             requested_delivery_date=payload.delivery_date,
             delivery_window=(payload.delivery_time or "").strip() or None,
             notes=(payload.notes or "").strip() or None,
             delivery_fee=service_fee,
-            image=payload.image,
+            image=items_by_merchant[merchant_id][0].get("image"),
         )
         db.add(order)
         orders.append((order, merchant))

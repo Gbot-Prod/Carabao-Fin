@@ -29,8 +29,8 @@ def test_saved_cart_lines_carry_merchant_and_delivery_fee(db, merchant, buyer): 
         "/carts/me",
         json={
             "items": [
-                {"id": str(talong.id), "farm": "stale name", "quantity": 2},
-                {"id": str(mangga.id), "quantity": 1},
+                {"produce_id": talong.id, "quantity": 2},
+                {"produce_id": mangga.id, "quantity": 1},
             ]
         },
     )

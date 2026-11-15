@@ -4,14 +4,14 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.core.database import Base
-from app.core.database_url import normalize_database_url
+from app.core.database_url import create_db_engine
 from app.models import (  # noqa: F401
     cart,
     merchant,
@@ -48,8 +48,8 @@ def get_database_url() -> str:
 
 
 def reset_public_schema(database_url: str) -> None:
-    admin_engine = create_engine(
-        normalize_database_url(database_url),
+    admin_engine = create_db_engine(
+        database_url,
         isolation_level="AUTOCOMMIT",
     )
     with admin_engine.connect() as conn:
@@ -60,7 +60,7 @@ def reset_public_schema(database_url: str) -> None:
 
 
 def create_fastapi_tables(database_url: str) -> None:
-    app_engine = create_engine(database_url)
+    app_engine = create_db_engine(database_url)
     Base.metadata.create_all(bind=app_engine)
     app_engine.dispose()
 

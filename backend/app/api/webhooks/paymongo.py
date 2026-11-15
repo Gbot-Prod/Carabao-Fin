@@ -8,8 +8,11 @@ from app.api.dependencies import get_db
 from app.models.transaction import Transaction
 from app.services.order_reservations import settle_checkout_payment
 from app.services.paymongo import (
+    PaidPayment,
     get_webhook_secret,
     is_test_mode,
+    paid_payment_from_session,
+    payment_from_object,
     verify_webhook_signature,
 )
 from app.services.payout_service import handle_transfer_event
@@ -97,11 +100,18 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
     try:
         session_obj = payload["data"]["attributes"]["data"]
         session_id = session_obj["id"]
-        payments = session_obj["attributes"].get("payments", [])
-        payment_id = payments[0]["id"] if payments else None
+        payments = session_obj["attributes"].get("payments") or []
     except (KeyError, IndexError, TypeError) as e:
         logger.error("Malformed checkout_session.payment.paid payload: %s", e)
         return
+    # The event says the session is paid; take its paid payment (or the first
+    # one) with the amount and currency settle_checkout_payment checks (CF-0005).
+    # No payment at all leaves amount and currency unknown, which is a mismatch.
+    payment = paid_payment_from_session(session_obj) or (
+        payment_from_object(payments[0])
+        if payments and isinstance(payments[0], dict)
+        else PaidPayment(id=None, amount=None, currency=None)
+    )
 
     txn = (
         db.query(Transaction)
@@ -113,15 +123,17 @@ def _handle_checkout_paid(payload: dict, db: Session) -> None:
         logger.warning("No transaction found for session %s", session_id)
         return
 
-    outcome = settle_checkout_payment(txn, payment_id, db)
+    outcome = settle_checkout_payment(txn, payment, db)
     if outcome == "duplicate":
         return
     db.commit()
 
+    if outcome == "mismatch":
+        return  # settle_checkout_payment logged it and alerted the admins
     if outcome == "refund":
         logger.warning(
             "Payment %s for closed transaction %s / order %s flagged for refund",
-            payment_id,
+            payment.id,
             txn.id,
             txn.order_id,
         )

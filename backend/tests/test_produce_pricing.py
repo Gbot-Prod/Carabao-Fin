@@ -232,7 +232,7 @@ def test_order_is_priced_by_the_server(db, buyer, tomatoes, quantity, unit_price
 def test_cart_shows_tier_price_and_minimum(db, buyer, tomatoes):  # noqa: F811
     resp = _client(db, buyer[0]).put(
         "/carts/me",
-        json={"items": [{"produce_id": tomatoes.id, "quantity": 12, "price": 1}]},
+        json={"items": [{"produce_id": tomatoes.id, "quantity": 12}]},
     )
 
     assert resp.status_code == 200

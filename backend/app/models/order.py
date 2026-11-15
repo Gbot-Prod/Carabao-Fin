@@ -1,5 +1,6 @@
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -19,6 +20,10 @@ from app.models.statuses import OrderStatus, status_type
 
 class Order(Base):
     __tablename__ = "orders"
+    # CF-0009; the migration is c5e9a2d7f4b1.
+    __table_args__ = (
+        CheckConstraint("total_price >= 0", name="ck_orders_total_not_negative"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(

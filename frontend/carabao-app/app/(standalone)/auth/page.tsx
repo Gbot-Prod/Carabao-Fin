@@ -1,6 +1,7 @@
 "use client";
 
 import { isValidPhone, sendPhoneCode, signIn, signUpWithPhone, socialErrorMessage } from "@/lib/auth-client";
+import { safeNextPath } from "@/lib/next-path";
 import { formatPhMobile, normalizePhMobile } from "@/lib/phone";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -62,12 +63,15 @@ export default function AuthPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [socialLoading, setSocialLoading] = useState<Provider | null>(null);
   const [idleNotice, setIdleNotice] = useState(false);
+  // ?next= is where to go after sign-in, e.g. the admin setup link (CF-0018).
+  const [nextPath, setNextPath] = useState("/");
 
   // "Create an account" links (E4) open the page on sign-up; ?reason=idle (E5)
   // explains an automatic sign-out; ?error= is a failed Google/Facebook sign-in.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     queueMicrotask(() => {
+      setNextPath(safeNextPath(params.get("next")));
       if (params.get("mode") === "signup") setMode("signup");
       if (params.get("reason") === "idle") setIdleNotice(true);
       const socialError = params.get("error");
@@ -106,7 +110,7 @@ export default function AuthPage() {
     setError("");
     setSocialLoading(provider);
     try {
-      await signIn.social(provider);
+      await signIn.social(provider, nextPath);
       // The browser is on its way to the provider; leave the buttons disabled.
     } catch (err) {
       setError(err instanceof Error ? err.message : t.auth.genericError);
@@ -147,7 +151,7 @@ export default function AuthPage() {
           password: form.password,
         });
       }
-      router.push("/");
+      router.push(nextPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.auth.genericError);
     } finally {

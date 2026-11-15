@@ -1,5 +1,6 @@
 from sqlalchemy import (
     JSON,
+    CheckConstraint,
     Column,
     Date,
     DateTime,
@@ -16,6 +17,13 @@ from app.core.database import Base
 
 class Produce(Base):
     __tablename__ = "produces"
+    # CF-0009; the migration is c5e9a2d7f4b1.
+    __table_args__ = (
+        CheckConstraint("price > 0", name="ck_produces_price_positive"),
+        CheckConstraint(
+            "stock_quantity >= 0", name="ck_produces_stock_not_negative"
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     merchant_id = Column(

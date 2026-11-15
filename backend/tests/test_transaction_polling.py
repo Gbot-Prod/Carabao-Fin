@@ -25,8 +25,8 @@ class FakeDB:
 def settled(monkeypatch):
     calls = []
 
-    def fake_settle(txn, payment_id, _db):
-        calls.append((txn.id, payment_id))
+    def fake_settle(txn, payment, _db):
+        calls.append((txn.id, payment.id))
         txn.status = TransactionStatus.PAID
         return "paid"
 

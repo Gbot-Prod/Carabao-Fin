@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import UTC, datetime
-from pathlib import Path
 from urllib.parse import urlparse
 
 import boto3
 from botocore.config import Config
+
+from app.services.upload_validation import CheckedFile
 
 _ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "2c447e91e4400db3e917bfd7a89328a2")
 _BUCKET = os.getenv("CLOUDFLARE_R2_BUCKET_NAME", "carabao-bucket")
@@ -15,20 +15,10 @@ _ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID")
 _SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY")
 _PUBLIC_URL = os.getenv("CLOUDFLARE_R2_PUBLIC_URL", "").rstrip("/")
 
-_EXT_MAP = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/jpg": ".jpg",
-    "image/webp": ".webp",
-}
-
-_DOC_EXT_MAP = {
-    "application/pdf": ".pdf",
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/jpg": ".jpg",
-    "image/webp": ".webp",
-}
+# Identity documents go to a separate bucket that has no public URL. They are
+# shown only through short-lived signed URLs (CF-0006).
+_PRIVATE_BUCKET = os.getenv("CLOUDFLARE_R2_PRIVATE_BUCKET_NAME", "")
+_SIGNED_URL_SECONDS = 60
 
 
 def _client():
@@ -42,17 +32,14 @@ def _client():
     )
 
 
-def _ext(filename: str | None, content_type: str | None) -> str:
-    if filename:
-        s = Path(filename).suffix.lower()
-        if s in {".png", ".jpg", ".jpeg", ".webp"}:
-            return s
-    return _EXT_MAP.get(content_type or "", ".bin")
+def _new_key(prefix: str, extension: str) -> str:
+    # The key is chosen by the server only; no part of it comes from the client.
+    return f"{prefix}/{uuid.uuid4().hex}{extension}"
 
 
-def _put_object(key: str, data: bytes, content_type: str) -> str:
+def _put_object(bucket: str, key: str, data: bytes, content_type: str) -> str:
     _client().put_object(
-        Bucket=_BUCKET,
+        Bucket=bucket,
         Key=key,
         Body=data,
         ContentType=content_type,
@@ -60,66 +47,41 @@ def _put_object(key: str, data: bytes, content_type: str) -> str:
     return key
 
 
-def _put(key: str, data: bytes, content_type: str) -> str:
-    _put_object(key, data, content_type)
+def _put_public(prefix: str, file: CheckedFile) -> str:
+    key = _new_key(prefix, file.extension)
+    _put_object(_BUCKET, key, file.data, file.content_type)
     return f"{_PUBLIC_URL}/{key}"
 
 
-def upload_shop_logo(
-    merchant_id: int, data: bytes, content_type: str, filename: str
-) -> str:
-    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    key = (
-        f"merchants/{merchant_id}/logo/{ts}_{uuid.uuid4().hex}"
-        f"{_ext(filename, content_type)}"
-    )
-    return _put(key, data, content_type)
+def upload_shop_logo(merchant_id: int, file: CheckedFile) -> str:
+    return _put_public(f"merchants/{merchant_id}/logo", file)
 
 
-def upload_banner(
-    merchant_id: int, data: bytes, content_type: str, filename: str
-) -> str:
-    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    key = (
-        f"merchants/{merchant_id}/banner/{ts}_{uuid.uuid4().hex}"
-        f"{_ext(filename, content_type)}"
-    )
-    return _put(key, data, content_type)
+def upload_banner(merchant_id: int, file: CheckedFile) -> str:
+    return _put_public(f"merchants/{merchant_id}/banner", file)
 
 
-def upload_avatar(user_id: int, data: bytes, content_type: str, filename: str) -> str:
-    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    key = (
-        f"users/{user_id}/avatar/{ts}_{uuid.uuid4().hex}{_ext(filename, content_type)}"
-    )
-    return _put(key, data, content_type)
+def upload_avatar(user_id: int, file: CheckedFile) -> str:
+    return _put_public(f"users/{user_id}/avatar", file)
 
 
-def upload_produce_image(
-    merchant_id: int, produce_id: int, data: bytes, content_type: str, filename: str
-) -> str:
-    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    key = (
-        f"merchants/{merchant_id}/produce/{produce_id}/{ts}_{uuid.uuid4().hex}"
-        f"{_ext(filename, content_type)}"
-    )
-    return _put(key, data, content_type)
+def upload_produce_image(merchant_id: int, produce_id: int, file: CheckedFile) -> str:
+    return _put_public(f"merchants/{merchant_id}/produce/{produce_id}", file)
 
 
-def _doc_ext(filename: str | None, content_type: str | None) -> str:
-    if filename:
-        s = Path(filename).suffix.lower()
-        if s in {".pdf", ".png", ".jpg", ".jpeg", ".webp"}:
-            return s
-    return _DOC_EXT_MAP.get(content_type or "", ".bin")
+def _private_bucket() -> str:
+    if not _PRIVATE_BUCKET or _PRIVATE_BUCKET == _BUCKET:
+        # Fail closed: never put identity documents in the public bucket.
+        raise RuntimeError(
+            "CLOUDFLARE_R2_PRIVATE_BUCKET_NAME must name a private bucket"
+        )
+    return _PRIVATE_BUCKET
 
 
-def upload_rsbsa_document(
-    user_id: int, data: bytes, content_type: str, filename: str
-) -> str:
-    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    key = f"rsbsa/{user_id}/{ts}_{uuid.uuid4().hex}{_doc_ext(filename, content_type)}"
-    return _put_object(key, data, content_type)
+def upload_rsbsa_document(user_id: int, file: CheckedFile) -> str:
+    """Store the document privately and return its object key (not a URL)."""
+    key = _new_key(f"rsbsa/{user_id}", file.extension)
+    return _put_object(_private_bucket(), key, file.data, file.content_type)
 
 
 def _object_key(stored_path: str) -> str:
@@ -138,10 +100,10 @@ def create_rsbsa_document_url(
     return _client().generate_presigned_url(
         "get_object",
         Params={
-            "Bucket": _BUCKET,
+            "Bucket": _private_bucket(),
             "Key": _object_key(stored_path),
             "ResponseContentDisposition": "inline",
             "ResponseContentType": content_type or "application/octet-stream",
         },
-        ExpiresIn=300,
+        ExpiresIn=_SIGNED_URL_SECONDS,
     )

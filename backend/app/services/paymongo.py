@@ -3,8 +3,11 @@ import hashlib
 import hmac
 import os
 import time
+from dataclasses import dataclass
 
 import requests
+
+from app.services import money
 
 PAYMONGO_BASE_URL = "https://api.paymongo.com/v1"
 
@@ -45,7 +48,7 @@ def create_checkout_session(
     reference_number: str | None = None,
 ) -> dict:
     """Returns the checkout session data object from PayMongo."""
-    amount_centavos = amount_pesos * 100
+    amount_centavos = money.to_centavos(amount_pesos)
 
     payload: dict = {
         "data": {
@@ -94,21 +97,56 @@ def retrieve_checkout_session(session_id: str) -> dict:
     return response.json()["data"]
 
 
-def paid_payment_from_session(session: dict) -> tuple[bool, str | None]:
-    """Whether a checkout session has been paid, and the paid payment's ID.
+@dataclass(frozen=True)
+class PaidPayment:
+    """A payment that landed on a checkout session, as PayMongo reports it."""
+
+    id: str | None
+    amount: int | None  # centavos
+    currency: str | None
+
+
+def _int_or_none(value) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def payment_from_object(payment: dict) -> PaidPayment:
+    """A PaidPayment from one entry of a session's ``payments`` list."""
+    attributes = payment.get("attributes") or {}
+    return PaidPayment(
+        id=payment.get("id"),
+        amount=_int_or_none(attributes.get("amount")),
+        currency=attributes.get("currency"),
+    )
+
+
+def paid_payment_from_session(session: dict) -> PaidPayment | None:
+    """The paid payment on a checkout session, or None while it is unpaid.
 
     A session's own ``status`` is only ever ``active`` or ``expired``; the paid
     state lives on its payments (``paid``) and payment intent (``succeeded``).
+    The amount and currency come from the payment (the intent's when the
+    session lists no payment), so the caller can check them (CF-0005).
     """
     attributes = session.get("attributes") or {}
-    for payment in attributes.get("payments") or []:
+    payments = attributes.get("payments") or []
+    for payment in payments:
         if (payment.get("attributes") or {}).get("status") == "paid":
-            return True, payment.get("id")
+            return payment_from_object(payment)
     intent = attributes.get("payment_intent") or {}
-    if (intent.get("attributes") or {}).get("status") == "succeeded":
-        payments = attributes.get("payments") or []
-        return True, payments[0].get("id") if payments else None
-    return False, None
+    intent_attributes = intent.get("attributes") or {}
+    if intent_attributes.get("status") == "succeeded":
+        if payments:
+            return payment_from_object(payments[0])
+        return PaidPayment(
+            id=None,
+            amount=_int_or_none(intent_attributes.get("amount")),
+            currency=intent_attributes.get("currency"),
+        )
+    return None
 
 
 def expire_checkout_session(session_id: str) -> bool:
