@@ -90,7 +90,7 @@ export default function AdminShell({
     setSigningOut(true);
     try {
       await signOut();
-      router.push("/auth");
+      router.push("/admin/login");
     } catch {
       setSigningOut(false);
     }

@@ -14,7 +14,8 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { Pool } from "pg";
 import * as z from "zod";
 import { poolConfigFromUrl } from "@/lib/db-ssl.mjs";
-import { AUTH_BASE_PATH, isBlockedAuthPath } from "@/lib/blocked-auth-paths";
+import { AUTH_BASE_PATH, isBlockedAuthPath, isBlockedOnAdminSurface } from "@/lib/blocked-auth-paths";
+import { appSurface, merchantUrl, rootDomain, subdomainMode } from "@/lib/urls";
 import { PH_MOBILE_PATTERN, PHONE_PLACEHOLDER_EMAIL_DOMAIN, isPlaceholderEmail } from "@/lib/phone";
 import {
   ENROLMENT_TOKEN_HEADER,
@@ -81,6 +82,18 @@ const appBaseUrl =
   toOrigin(process.env.NEXT_PUBLIC_APP_URL) ||
   "http://localhost:3000";
 
+// ── Surfaces (documentation/manuals/SUBDOMAINS.md) ────────────────────────
+//
+// One code base, two deploys on the same database:
+//   public (APP_SURFACE=public): carabao.<root> and merchant.<root>. Cookies
+//     "carabao.*" on the root domain, so one sign-in works on both hosts.
+//   admin (APP_SURFACE=admin): admin.<root>. Cookies "carabao-admin.*" on the
+//     admin host only, so it never reads the shared cookie. Its own
+//     BETTER_AUTH_SECRET (session signing, TOTP secrets, JWT private keys) and
+//     its own JWT keys in "jwks_admin". The API knows an admin-deploy token by
+//     the key that signed it (backend/app/core/security.py).
+const isAdminSurface = appSurface === "admin";
+
 // The mobile app (Expo) signs in here too. Its requests carry the app scheme as
 // their origin; custom schemes have no URL origin, so they're listed as-is.
 const MOBILE_APP_SCHEME = "carabaomobile";
@@ -90,20 +103,39 @@ const mobileOrigins = [
   ...(process.env.NODE_ENV !== "production" ? ["exp://", "exp://**"] : []),
 ];
 
-const trustedOrigins = [
-  ...new Set(
-    [
-      appBaseUrl,
-      process.env.NEXT_PUBLIC_APP_URL,
-      process.env.FRONTEND_URL,
-      process.env.RAILWAY_PUBLIC_DOMAIN,
-      ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS || "").split(","),
-    ]
-      .map(toOrigin)
-      .filter((origin): origin is string => Boolean(origin))
-  ),
-  ...mobileOrigins,
+const uniqueOrigins = (values: (string | undefined)[]) => [
+  ...new Set(values.map(toOrigin).filter((origin): origin is string => Boolean(origin))),
 ];
+
+// Admin deploy: its own origin only (no merchant host, no mobile app).
+const trustedOrigins = isAdminSurface
+  ? uniqueOrigins([appBaseUrl])
+  : [
+      ...uniqueOrigins([
+        appBaseUrl,
+        process.env.NEXT_PUBLIC_APP_URL,
+        // merchant.<root>; on one host this is a path and adds nothing.
+        merchantUrl("/"),
+        process.env.FRONTEND_URL,
+        process.env.RAILWAY_PUBLIC_DOMAIN,
+        ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS || "").split(","),
+      ]),
+      ...mobileOrigins,
+    ];
+
+// R1: one issuer for every API token. The admin deploy has another baseURL,
+// so it must set AUTH_JWT_ISSUER to the public origin.
+const jwtIssuer = toOrigin(process.env.AUTH_JWT_ISSUER) || appBaseUrl;
+if (isAdminSurface && process.env.NODE_ENV === "production") {
+  if (!process.env.AUTH_JWT_ISSUER) throw new Error("APP_SURFACE=admin needs AUTH_JWT_ISSUER (the public web origin).");
+  if (!process.env.BETTER_AUTH_SECRET) throw new Error("APP_SURFACE=admin needs its own BETTER_AUTH_SECRET.");
+}
+
+// Shared cookies only when the app is really on the root domain: a browser
+// drops a cookie for "carabao.online" set from localhost.
+const crossSubDomainCookies =
+  !isAdminSurface && subdomainMode ? { enabled: true, domain: rootDomain } : { enabled: false };
+
 
 // Access tokens for the FastAPI backend (jwt plugin). FastAPI verifies them with
 // the public keys at /api/auth/jwks and checks this issuer and audience; keep
@@ -123,6 +155,34 @@ const blockAdminEndpoints = (): BetterAuthPlugin => ({
     if (isBlockedAuthPath(new URL(request.url).pathname)) {
       return { response: new Response("Not Found", { status: 404 }) };
     }
+  },
+});
+
+// Admin deploy: closes every Better Auth endpoint its pages do not use, and
+// gives a session only to admins.
+const adminSurfaceOnly = (): BetterAuthPlugin => ({
+  id: "carabao-admin-surface-only",
+  onRequest: async (request) => {
+    if (isBlockedOnAdminSurface(new URL(request.url).pathname)) {
+      return { response: new Response("Not Found", { status: 404 }) };
+    }
+  },
+  hooks: {
+    after: [
+      {
+        matcher: () => true,
+        handler: createAuthMiddleware(async (ctx) => {
+          const created = ctx.context.newSession as { session: SessionRow; user: SessionUser } | null;
+          if (!created || isAdmin(created.user)) return;
+          deleteSessionCookie(ctx, true);
+          await ctx.context.internalAdapter.deleteSession(created.session.token).catch(() => {});
+          throw new APIError("FORBIDDEN", {
+            code: "NOT_AN_ADMIN",
+            message: "This account is not an admin account.",
+          });
+        }),
+      },
+    ],
   },
 });
 
@@ -487,17 +547,23 @@ export const auth = betterAuth({
     phoneSignupPassword(),
     // After twoFactor(), so that its after-hook has the last word on the response.
     adminTwoFactor(),
-    expo(),
+    // Last: it has the final word on whether a session stays.
+    ...(isAdminSurface ? [adminSurfaceOnly()] : [expo()]),
     jwt({
+      // Admin deploy: own key table, so the API can tell its tokens apart.
+      // The private keys stay encrypted with this deploy's BETTER_AUTH_SECRET.
+      ...(isAdminSurface ? { schema: { jwks: { modelName: "jwks_admin" } } } : {}),
       jwt: {
-        issuer: appBaseUrl,
+        issuer: jwtIssuer,
         audience: JWT_AUDIENCE,
         expirationTime: "15m",
         // The backend reads name, email, phone, role, ban and 2FA live from the
         // "user" table (backend/app/models/auth_identity.py). The token adds only
-        // whether this session passed the code step (CF-0017).
+        // whether this session passed the code step (CF-0017), and the deploy
+        // (the API checks it against the key that signed the token).
         definePayload: ({ session }) => ({
           mfa: (session as unknown as SessionRow).mfaVerified === true,
+          surface: appSurface,
         }),
       },
     }),
@@ -556,6 +622,10 @@ export const auth = betterAuth({
       maxAge: 5 * 60,
     },
   },
+  advanced: {
+    cookiePrefix: isAdminSurface ? "carabao-admin" : "carabao",
+    crossSubDomainCookies,
+  },
   baseURL: appBaseUrl,
   trustedOrigins,
   basePath: AUTH_BASE_PATH,
@@ -587,7 +657,8 @@ export const auth = betterAuth({
   // Google and Facebook accounts can be created without a phone; checkout,
   // merchant applications and order chat ask them to add one (backend
   // require_verified_phone). Keys live in the frontend env (.env.local).
-  socialProviders: {
+  // Not on the admin deploy: admins sign in with email + password, then TOTP.
+  socialProviders: isAdminSurface ? {} : {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID || "your-google-client-id",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "your-google-client-secret",

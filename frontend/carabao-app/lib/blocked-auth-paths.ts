@@ -8,8 +8,7 @@
 
 export const AUTH_BASE_PATH = "/api/auth";
 
-/** True for any request path under the admin plugin's endpoints. */
-export function isBlockedAuthPath(pathname: string, basePath = AUTH_BASE_PATH): boolean {
+function normalize(pathname: string): string {
   let path = pathname;
   try {
     path = decodeURIComponent(path);
@@ -17,7 +16,42 @@ export function isBlockedAuthPath(pathname: string, basePath = AUTH_BASE_PATH): 
     // Malformed escapes: check the raw path.
   }
   // Collapse "//" and drop a trailing slash so spelling tricks can't slip past.
-  path = path.toLowerCase().replace(/\/{2,}/g, "/").replace(/\/+$/, "");
-  const admin = `${basePath.toLowerCase()}/admin`;
-  return path === admin || path.startsWith(`${admin}/`);
+  return path.toLowerCase().replace(/\/{2,}/g, "/").replace(/\/+$/, "");
+}
+
+const under = (path: string, prefix: string) => path === prefix || path.startsWith(`${prefix}/`);
+
+/** True for any request path under the admin plugin's endpoints. */
+export function isBlockedAuthPath(pathname: string, basePath = AUTH_BASE_PATH): boolean {
+  return under(normalize(pathname), `${basePath.toLowerCase()}/admin`);
+}
+
+// The admin deploy (APP_SURFACE=admin) opens only what its pages use: email +
+// password sign-in, the TOTP steps, password reset by email, sessions and
+// tokens. No sign-up, no phone, no Google/Facebook, no mobile.
+const ADMIN_SURFACE_ENDPOINTS = [
+  "/sign-in/email",
+  "/sign-out",
+  "/get-session",
+  "/token",
+  "/jwks",
+  "/two-factor",
+  "/request-password-reset",
+  "/reset-password",
+  "/change-password",
+  "/list-sessions",
+  "/revoke-session",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
+  "/ok",
+  "/error",
+];
+
+/** True for a Better Auth path that the admin deploy does not serve. */
+export function isBlockedOnAdminSurface(pathname: string, basePath = AUTH_BASE_PATH): boolean {
+  const path = normalize(pathname);
+  const base = basePath.toLowerCase();
+  if (!under(path, base)) return false;
+  if (isBlockedAuthPath(path, basePath)) return true;
+  return !ADMIN_SURFACE_ENDPOINTS.some((endpoint) => under(path, `${base}${endpoint}`));
 }

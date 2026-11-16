@@ -157,3 +157,10 @@ test('stored notification links (R3)', () => {
     assert.equal(local.resolveStoredLink(bad), null, String(bad));
   }
 });
+
+test('sign-in page per deploy', () => {
+  assert.equal(local.signInPath(), '/auth');
+  assert.equal(local.signInPath('/orders/3'), '/auth?next=%2Forders%2F3');
+  assert.equal(admin.signInPath(), '/admin/login');
+  assert.equal(admin.signInPath('/admin/users'), '/admin/login?next=%2Fadmin%2Fusers');
+});

@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import AdminShell from "./AdminShell";
 import SignInAgainButton from "./SignInAgainButton";
-import Link from "next/link";
 import styles from "./layout.module.css";
 
 // E8c / CF-0003: admins always need two-step verification, as the backend's
@@ -17,8 +16,23 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Uncached, so turning on two-step verification takes effect at once (E8c).
   const session = await auth.api.getSession({ headers: reqHeaders, query: { disableCookieCache: true } });
 
-  if (!session || session.user.role !== "admin") {
-    redirect("/auth");
+  // admin.<root> has its own sign-in page and cookies (lib/auth.ts): a session
+  // from the public site is not seen here at all.
+  if (!session) {
+    redirect("/admin/login");
+  }
+
+  // The admin deploy gives sessions only to admins; this is a second check.
+  if (session.user.role !== "admin") {
+    return (
+      <div className={styles.gate}>
+        <div className={styles.gateCard} role="alert">
+          <h1>Not an admin account</h1>
+          <p>This account cannot use the admin area. Sign in with an admin account.</p>
+          <SignInAgainButton className={styles.gateButton} label="Sign out" />
+        </div>
+      </div>
+    );
   }
 
   const twoFactorOn = Boolean((session.user as { twoFactorEnabled?: boolean | null }).twoFactorEnabled);
@@ -31,8 +45,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             Admin accounts must use two-step verification with an authenticator app. Open the setup link that we sent
             to your verified mobile number and email. If the link expired, ask another admin to send a new one.
           </p>
-          {/* Not "/": that sends an admin back here. */}
-          <Link href="/order" className={styles.gateButton}>Back to Carabao</Link>
+          <SignInAgainButton className={styles.gateButton} label="Sign out" />
         </div>
       </div>
     );

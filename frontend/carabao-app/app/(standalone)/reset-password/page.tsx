@@ -6,6 +6,7 @@ import { resetPassword } from "@/lib/auth-client";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import "../auth/page.css";
+import { signInPath } from "@/lib/urls";
 
 const MIN_LENGTH = 8;
 
@@ -61,7 +62,7 @@ export default function ResetPasswordPage() {
           {done ? (
             <>
               <div className="auth-notice" role="status">{t.reset.done}</div>
-              <Link href="/auth" className="auth-submit auth-submit--link">{t.auth.signIn}</Link>
+              <Link href={signInPath()} className="auth-submit auth-submit--link">{t.auth.signIn}</Link>
             </>
           ) : invalid ? (
             <>
@@ -99,7 +100,7 @@ export default function ResetPasswordPage() {
               </button>
             </form>
           )}
-          {!done && <Link href="/auth" className="auth-link">{t.reset.backToSignIn}</Link>}
+          {!done && <Link href={signInPath()} className="auth-link">{t.reset.backToSignIn}</Link>}
         </div>
       </section>
     </div>

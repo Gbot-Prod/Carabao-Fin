@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { enrolmentLinkState, hashEnrolmentToken } from "@/lib/admin-two-factor";
 import SignInAgainButton from "@/app/(admin)/SignInAgainButton";
 import EnrolCard from "./EnrolCard";
+import { signInPath } from "@/lib/urls";
 import "../../auth/page.css";
 
 // The link carries a one-time token: do not send it to other sites.
@@ -39,7 +40,7 @@ export default async function TwoFactorEnrolPage({
         <p className="auth-help">
           Sign in with the account that got this link. After you sign in, you come back to this page.
         </p>
-        <Link href={`/auth?next=${encodeURIComponent(linkPath)}`} className="auth-link">
+        <Link href={signInPath(linkPath)} className="auth-link">
           Sign in
         </Link>
       </>

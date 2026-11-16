@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { signOut } from "@/lib/auth-client";
+import { signInPath } from "@/lib/urls";
 
 /**
  * Sign out, then open the sign-in page. Used for a session that did not pass
@@ -21,7 +22,7 @@ export default function SignInAgainButton({
   const run = async () => {
     setBusy(true);
     await signOut().catch(() => {});
-    window.location.assign(next ? `/auth?next=${encodeURIComponent(next)}` : "/auth");
+    window.location.assign(signInPath(next));
   };
   return (
     <button type="button" className={className} disabled={busy} onClick={() => void run()}>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { completeTwoFactorSignIn } from "@/lib/auth-client";
+import { signInPath } from "@/lib/urls";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import "../auth/page.css";
@@ -82,7 +83,7 @@ export default function TwoFactorPage() {
               </button>
             </form>
           )}
-          <Link href="/auth" className="auth-link">{s.backToSignIn}</Link>
+          <Link href={signInPath()} className="auth-link">{s.backToSignIn}</Link>
         </div>
       </section>
     </div>

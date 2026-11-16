@@ -6,6 +6,7 @@ import { requestPasswordReset, requestPhonePasswordReset, resetPasswordWithPhone
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import "../auth/page.css";
+import { signInPath } from "@/lib/urls";
 
 const MIN_PASSWORD = 8;
 
@@ -170,7 +171,7 @@ export default function ForgotPasswordPage() {
               )}
             </form>
           )}
-          <Link href="/auth" className="auth-link">{t.reset.backToSignIn}</Link>
+          <Link href={signInPath()} className="auth-link">{t.reset.backToSignIn}</Link>
         </div>
       </section>
     </div>

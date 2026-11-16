@@ -218,7 +218,25 @@ export function makeSurfaces(config: SurfaceConfig) {
     return config.appSurface === "admin" ? link : appUrl(link);
   };
 
-  return { subdomainMode, appUrl, merchantUrl, helpUrl, adminUrl, hostKind, route, resolveStoredLink };
+  /** The sign-in page of this deploy. The admin deploy has its own (email + password only). */
+  const signInPath = (next?: string | null): string => {
+    const base = config.appSurface === "admin" ? "/admin/login" : "/auth";
+    return next && next !== "/" ? `${base}?next=${encodeURIComponent(next)}` : base;
+  };
+
+  return {
+    rootDomain: root,
+    appSurface: config.appSurface,
+    subdomainMode,
+    appUrl,
+    merchantUrl,
+    helpUrl,
+    adminUrl,
+    hostKind,
+    route,
+    resolveStoredLink,
+    signInPath,
+  };
 }
 
 // Literal process.env reads, so that Next.js puts the values in client code
@@ -232,6 +250,7 @@ const surfaces = makeSurfaces({
   adminUrl: process.env.NEXT_PUBLIC_ADMIN_URL,
 });
 
-export const { appUrl, merchantUrl, helpUrl, adminUrl, resolveStoredLink } = surfaces;
+export const { appUrl, merchantUrl, helpUrl, adminUrl, resolveStoredLink, signInPath } = surfaces;
+export const { rootDomain, appSurface, subdomainMode } = surfaces;
 export const routeRequest = surfaces.route;
 export const hostKind = surfaces.hostKind;
