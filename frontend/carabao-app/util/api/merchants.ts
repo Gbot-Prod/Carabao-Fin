@@ -123,6 +123,17 @@ export const submitMyMerchantOnboarding = async (
   return response.data;
 };
 
+/** The user's own merchant application, or null when there is none (404). */
+export const fetchMyMerchantApplication = async (): Promise<MerchantApplication | null> => {
+  try {
+    const response = await apiClient.get<MerchantApplication>('/merchant-applications/me');
+    return response.data;
+  } catch (e: unknown) {
+    if ((e as { response?: { status?: number } })?.response?.status === 404) return null;
+    throw e;
+  }
+};
+
 export const fetchMyMerchantPerformance = async (): Promise<MerchantPerformance> => {
   const response = await apiClient.get<MerchantPerformance>('/merchants/me/performance');
   return response.data;

@@ -21,3 +21,22 @@ export function merchantPageForNotification(link: string | null | undefined, kin
   if (path !== "/merchantDashboard" && path !== "/merchantDashboard/") return null;
   return PAGE_BY_KIND[kind] ?? "/";
 }
+
+/**
+ * The clean paths of the merchant site pages (app/(site)/(merchant)/merchant).
+ * None may be a buyer path: merchant.<root> sends those to the apex
+ * (lib/urls.ts BUYER_PREFIXES). merchant-links.test.ts checks this.
+ */
+export const MERCHANT_PAGES = {
+  dashboard: "/",
+  sales: "/sales",
+  shipments: "/shipments",
+  routing: "/routing",
+  earnings: "/earnings",
+  reviews: "/reviews",
+  produce: "/produce",
+  inventory: "/inventory",
+  shop: "/shop",
+  settings: "/settings",
+  onboarding: "/onboarding",
+} as const;

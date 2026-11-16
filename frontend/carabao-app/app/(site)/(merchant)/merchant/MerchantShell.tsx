@@ -23,6 +23,7 @@ import {
 import NotificationBell from "@/components/NotificationBell/NotificationBell";
 import SkeletonList, { LoadError } from "@/components/Skeleton/Skeleton";
 import { signOut } from "@/lib/auth-client";
+import { MERCHANT_PAGES as P } from "@/lib/merchant-links";
 import { appUrl, helpUrl, merchantUrl, signInPath } from "@/lib/urls";
 import { useMerchant } from "./MerchantContext";
 import styles from "./shell.module.css";
@@ -63,9 +64,62 @@ function Gate({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** No merchant profile: the text depends on the application (backend application_review.py). */
+function NoMerchantGate({ applicationStatus }: { applicationStatus: string | null | undefined }) {
+  const back = (
+    <a className={styles.gateButtonSecondary} href={appUrl("/profile")}>Back to profile</a>
+  );
+  const apply = (label: string) => (
+    <Link className={styles.gateButton} href={merchantUrl(P.onboarding)}>{label}</Link>
+  );
+
+  switch (applicationStatus) {
+    case "submitted":
+      return (
+        <Gate title="Application under review">
+          <p>We are checking your merchant application. We will tell you by email and in your notifications when we approve it.</p>
+          <div className={styles.gateActions}>{back}</div>
+        </Gate>
+      );
+    case "clarification":
+      return (
+        <Gate title="More information needed">
+          <p>We need more information about your application. Open the application, change the details and send it again.</p>
+          <div className={styles.gateActions}>{apply("Update application")}{back}</div>
+        </Gate>
+      );
+    case "rejected":
+      return (
+        <Gate title="Application not approved">
+          <p>We did not approve your merchant application. You can correct it and send it again.</p>
+          <div className={styles.gateActions}>{apply("Apply again")}{back}</div>
+        </Gate>
+      );
+    case "suspended":
+      return (
+        <Gate title="Merchant account suspended">
+          <p>This merchant account is suspended. Contact Carabao support for help.</p>
+          <div className={styles.gateActions}>
+            <a className={styles.gateButton} href={helpUrl("/contact")}>Contact support</a>
+            {back}
+          </div>
+        </Gate>
+      );
+    default:
+      // No application, a closed merchant ("approved" with no profile), or not known.
+      return (
+        <Gate title="No merchant profile">
+          <p>This account does not have a merchant profile. Apply to become a merchant and start to sell your produce.</p>
+          <div className={styles.gateActions}>{apply("Apply as merchant")}{back}</div>
+        </Gate>
+      );
+  }
+}
+
 export default function MerchantShell({ children }: { children: ReactNode }) {
   const pathname = cleanPath(usePathname() ?? "/");
-  const { status, performance, ordersState, produces, shopPage, userName, userEmail, reloadPerformance } = useMerchant();
+  const { status, applicationStatus, performance, ordersState, produces, shopPage, userName, userEmail, reloadPerformance } =
+    useMerchant();
   const [signingOut, setSigningOut] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -93,15 +147,7 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
   }
 
   if (status === "not-merchant") {
-    return (
-      <Gate title="No merchant profile">
-        <p>This account does not have a merchant profile. Apply to become a merchant and start to sell your produce.</p>
-        <div className={styles.gateActions}>
-          <Link className={styles.gateButton} href={merchantUrl("/onboarding")}>Apply as merchant</Link>
-          <a className={styles.gateButtonSecondary} href={appUrl("/profile")}>Back to profile</a>
-        </div>
-      </Gate>
-    );
+    return <NoMerchantGate applicationStatus={applicationStatus} />;
   }
 
   const handleSignOut = async () => {
@@ -119,24 +165,24 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
   const groups: { title: string; items: NavItem[] }[] = [
     {
       title: "General",
-      items: [{ path: "/", label: "Dashboard", icon: LayoutDashboard }],
+      items: [{ path: P.dashboard, label: "Dashboard", icon: LayoutDashboard }],
     },
     {
       title: "Sales",
       items: [
-        { path: "/sales", label: "Orders", icon: ShoppingBag, count: activeOrders || undefined },
-        { path: "/shipments", label: "Shipments", icon: Truck, count: readyCount || undefined, countTone: "alert", also: ["/routing"] },
-        { path: "/earnings", label: "Earnings", icon: Banknote },
-        { path: "/reviews", label: "Reviews", icon: Star },
+        { path: P.sales, label: "Orders", icon: ShoppingBag, count: activeOrders || undefined },
+        { path: P.shipments, label: "Shipments", icon: Truck, count: readyCount || undefined, countTone: "alert", also: [P.routing] },
+        { path: P.earnings, label: "Earnings", icon: Banknote },
+        { path: P.reviews, label: "Reviews", icon: Star },
       ],
     },
     {
       title: "Store",
       items: [
-        { path: "/produce", label: "Produce", icon: Package, count: produces.length || undefined },
-        { path: "/inventory", label: "Inventory", icon: Boxes },
-        { path: "/shop", label: "Shop page", icon: Store },
-        { path: "/settings", label: "Settings", icon: Settings },
+        { path: P.produce, label: "Produce", icon: Package, count: produces.length || undefined },
+        { path: P.inventory, label: "Inventory", icon: Boxes },
+        { path: P.shop, label: "Shop page", icon: Store },
+        { path: P.settings, label: "Settings", icon: Settings },
       ],
     },
   ];

@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   fetchMerchantById,
   fetchMerchantShopPage,
+  fetchMyMerchantApplication,
   fetchMyMerchantPerformance,
   fetchMyProduce,
   type Merchant,
@@ -24,6 +25,12 @@ export type MerchantStatus = "loading" | "signed-out" | "not-merchant" | "error"
 
 type MerchantContextValue = {
   status: MerchantStatus;
+  /**
+   * For status "not-merchant": the application status ("submitted",
+   * "clarification", "rejected", "suspended", "approved"), null when there is
+   * no application, undefined while it loads or when it could not load.
+   */
+  applicationStatus: string | null | undefined;
   userName: string;
   userEmail: string;
   performance: MerchantPerformance | null;
@@ -107,6 +114,18 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
     void load();
   }, [merchantId]);
 
+  const [applicationStatus, setApplicationStatus] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (isMerchant !== false) return;
+    let live = true;
+    fetchMyMerchantApplication()
+      .then((a) => live && setApplicationStatus(a ? a.status : null))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [isMerchant]);
+
   const reloadPerformance = useCallback(() => setAttempt((n) => n + 1), []);
 
   let status: MerchantStatus;
@@ -120,6 +139,7 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
   const value = useMemo<MerchantContextValue>(
     () => ({
       status,
+      applicationStatus,
       userName: user?.name ?? "",
       userEmail: user?.email ?? "",
       performance,
@@ -134,7 +154,7 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
       ordersState,
       shipmentSelection,
     }),
-    [status, user, performance, reloadPerformance, merchant, shopPage, produces, produceLoading, ordersState, shipmentSelection],
+    [status, applicationStatus, user, performance, reloadPerformance, merchant, shopPage, produces, produceLoading, ordersState, shipmentSelection],
   );
 
   return <MerchantContext.Provider value={value}>{children}</MerchantContext.Provider>;
