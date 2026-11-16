@@ -161,7 +161,7 @@ function AttentionRow({ icon: Icon, tone, label, count, href, action }: Omit<Att
 const IN_DELIVERY: OrderStatus[] = ["shipped", "out_for_delivery"];
 
 export default function MerchantDashboardPage() {
-  const { performance, produces, ordersState, shopPage, merchant, userName } = useReadyMerchant();
+  const { performance, produces, ordersState, shopPage, merchant, userName, activeOrderCount, productCount } = useReadyMerchant();
 
   const [sales, setSales] = useState<MerchantSales | null>(null);
   const [alerts, setAlerts] = useState<StockAlerts | null>(null);
@@ -307,7 +307,7 @@ export default function MerchantDashboardPage() {
           icon={Truck}
           tone={readyToShip > 0 ? "amber" : "teal"}
           label="Active orders"
-          value={performance.active_orders.toLocaleString()}
+          value={activeOrderCount.toLocaleString()}
           sub={`${performance.delivered_orders.toLocaleString()} delivered (${Math.round(deliveredPct)}%)`}
           progress={deliveredPct}
           href={merchantUrl(readyToShip > 0 ? "/shipments" : "/sales")}
@@ -329,7 +329,7 @@ export default function MerchantDashboardPage() {
           icon={Package}
           tone={outOfStock > 0 ? "red" : "teal"}
           label="Produce listed"
-          value={performance.total_products.toLocaleString()}
+          value={productCount.toLocaleString()}
           sub={`${lowStock} low stock · ${outOfStock} out of stock`}
           href={merchantUrl("/inventory")}
           alert={outOfStock > 0}

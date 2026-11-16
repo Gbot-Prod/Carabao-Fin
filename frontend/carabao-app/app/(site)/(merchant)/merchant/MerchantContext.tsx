@@ -15,6 +15,10 @@ import {
 } from "@/util/api";
 import { useMerchantOrders, type MerchantOrdersState } from "./hooks/useMerchantOrders";
 import { useShipmentSelection } from "./hooks/useShipmentSelection";
+import type { OrderStatus } from "@/util/api";
+
+// Same statuses as ACTIVE_ORDER_STATUSES in backend/app/services/order_status.py.
+const ACTIVE_STATUSES: ReadonlySet<OrderStatus> = new Set<OrderStatus>(["pending", "processing", "shipped", "out_for_delivery"]);
 
 /**
  * Data that more than one merchant page reads (the sidebar counts, the
@@ -42,6 +46,13 @@ type MerchantContextValue = {
   produces: Produce[];
   setProduces: React.Dispatch<React.SetStateAction<Produce[]>>;
   produceLoading: boolean;
+  /**
+   * Counts that change while the merchant works (an order delivered, a listing
+   * added). From the loaded lists when they are there, else from performance,
+   * which loads one time only.
+   */
+  activeOrderCount: number;
+  productCount: number;
   ordersState: MerchantOrdersState;
   shipmentSelection: ReturnType<typeof useShipmentSelection>;
 };
@@ -136,6 +147,11 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
   else if (perfFailed) status = "error";
   else status = perfLoading ? "loading" : "error";
 
+  const activeOrderCount = ordersState.loaded
+    ? ordersState.orders.filter((o) => ACTIVE_STATUSES.has(o.status)).length
+    : performance?.active_orders ?? 0;
+  const productCount = produceLoading ? performance?.total_products ?? produces.length : produces.length;
+
   const value = useMemo<MerchantContextValue>(
     () => ({
       status,
@@ -151,10 +167,12 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
       produces,
       setProduces,
       produceLoading,
+      activeOrderCount,
+      productCount,
       ordersState,
       shipmentSelection,
     }),
-    [status, applicationStatus, user, performance, reloadPerformance, merchant, shopPage, produces, produceLoading, ordersState, shipmentSelection],
+    [status, applicationStatus, user, performance, reloadPerformance, merchant, shopPage, produces, produceLoading, activeOrderCount, productCount, ordersState, shipmentSelection],
   );
 
   return <MerchantContext.Provider value={value}>{children}</MerchantContext.Provider>;

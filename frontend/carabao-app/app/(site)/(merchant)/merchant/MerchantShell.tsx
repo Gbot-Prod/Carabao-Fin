@@ -118,8 +118,18 @@ function NoMerchantGate({ applicationStatus }: { applicationStatus: string | nul
 
 export default function MerchantShell({ children }: { children: ReactNode }) {
   const pathname = cleanPath(usePathname() ?? "/");
-  const { status, applicationStatus, performance, ordersState, produces, shopPage, userName, userEmail, reloadPerformance } =
-    useMerchant();
+  const {
+    status,
+    applicationStatus,
+    performance,
+    ordersState,
+    productCount,
+    activeOrderCount,
+    shopPage,
+    userName,
+    userEmail,
+    reloadPerformance,
+  } = useMerchant();
   const [signingOut, setSigningOut] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -161,7 +171,6 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
   };
 
   const readyCount = ordersState.readyToShip.length;
-  const activeOrders = performance?.active_orders ?? 0;
   const groups: { title: string; items: NavItem[] }[] = [
     {
       title: "General",
@@ -170,7 +179,7 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
     {
       title: "Sales",
       items: [
-        { path: P.sales, label: "Orders", icon: ShoppingBag, count: activeOrders || undefined },
+        { path: P.sales, label: "Orders", icon: ShoppingBag, count: activeOrderCount || undefined },
         { path: P.shipments, label: "Shipments", icon: Truck, count: readyCount || undefined, countTone: "alert", also: [P.routing] },
         { path: P.earnings, label: "Earnings", icon: Banknote },
         { path: P.reviews, label: "Reviews", icon: Star },
@@ -179,7 +188,7 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
     {
       title: "Store",
       items: [
-        { path: P.produce, label: "Produce", icon: Package, count: produces.length || undefined },
+        { path: P.produce, label: "Produce", icon: Package, count: productCount || undefined },
         { path: P.inventory, label: "Inventory", icon: Boxes },
         { path: P.shop, label: "Shop page", icon: Store },
         { path: P.settings, label: "Settings", icon: Settings },
