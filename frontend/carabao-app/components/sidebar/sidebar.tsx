@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
 import { SidebarFilterChips } from "./SidebarFilterChips";
 import { fetchMyProfile, type UserProfile } from "@/util/api/users";
+import { appUrl, helpUrl, hostKind, merchantUrl } from "@/lib/urls";
 
 function ShopIcon() {
   return (
@@ -96,6 +97,9 @@ function HelpIcon() {
   );
 }
 
+// The host does not change while the page is open.
+const noSubscribe = () => () => {};
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
@@ -103,6 +107,13 @@ export default function Sidebar() {
   const { t } = useLanguage();
 
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  // The sidebar also shows on merchant.<root>, so buyer links go to the apex.
+  // The server does not know the browser's host, so it renders false.
+  const onMerchantHost = useSyncExternalStore(
+    noSubscribe,
+    () => hostKind(window.location.host) === "merchant",
+    () => false
+  );
   const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -137,14 +148,19 @@ export default function Sidebar() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
 
+  // href may be on another host; activePath is the path that marks it active
+  // on this host, and forceActive marks it active anyway.
   const renderNavLink = (
     href: string,
     label: string,
     icon: React.ReactNode,
-    isProtected = false
+    isProtected = false,
+    activePath: string = href,
+    forceActive = false
   ) => {
     const blocked = isProtected && !isLoading && !isAuthenticated;
-    const isActive = pathname === href || pathname.startsWith(`${href}/`);
+    const isActive =
+      forceActive || (!onMerchantHost && (pathname === activePath || pathname.startsWith(`${activePath}/`)));
     return (
       <li key={href}>
         <Link
@@ -197,7 +213,7 @@ export default function Sidebar() {
 
         
         <Link
-          href={profileBlocked ? "#" : "/profile"}
+          href={profileBlocked ? "#" : appUrl("/profile")}
           className={`sidebar__account${pathname === "/profile" ? " sidebar__account--active" : ""}`}
           onClick={profileBlocked ? (e) => { e.preventDefault(); showPrompt(); } : () => setIsMobileOpen(false)}
           aria-label={t.nav.openProfile}
@@ -220,10 +236,10 @@ export default function Sidebar() {
         <nav className="sidebar__nav">
           <div className="sidebar__section">
             <ul className="sidebar__nav-list">
-              {renderNavLink("/order", t.nav.shops, <ShopIcon />)}
-              {renderNavLink("/cart", t.nav.cart, <CartIcon />)}
-              {renderNavLink("/track", t.nav.track, <TrackIcon />, true)}
-              {renderNavLink("/orders", t.nav.orders, <ReceiptIcon />, true)}
+              {renderNavLink(appUrl("/order"), t.nav.shops, <ShopIcon />, false, "/order")}
+              {renderNavLink(appUrl("/cart"), t.nav.cart, <CartIcon />, false, "/cart")}
+              {renderNavLink(appUrl("/track"), t.nav.track, <TrackIcon />, true, "/track")}
+              {renderNavLink(appUrl("/orders"), t.nav.orders, <ReceiptIcon />, true, "/orders")}
             </ul>
           </div>
 
@@ -232,8 +248,9 @@ export default function Sidebar() {
               <div className="sidebar__merchant">
                 <span className="sidebar__merchant-label">{t.nav.merchant}</span>
                 <ul className="sidebar__nav-list">
-                  {renderNavLink(`/merchant/${merchantId}`, t.nav.myShopPage, <StoreIcon />, true)}
-                  {renderNavLink("/merchantDashboard", t.nav.dashboard, <DashboardIcon />, true)}
+                  {renderNavLink(appUrl(`/farms/${merchantId}`), t.nav.myShopPage, <StoreIcon />, true, `/farms/${merchantId}`)}
+                  {/* Active on merchant.<root>, or on /merchant when the site runs on one host. */}
+                  {renderNavLink(merchantUrl("/"), t.nav.dashboard, <DashboardIcon />, true, "/merchant", onMerchantHost)}
                 </ul>
               </div>
             </div>
@@ -251,8 +268,8 @@ export default function Sidebar() {
           </div>
           {/* Help is public: shown to guests and signed-in users alike */}
           <Link
-            href="/help"
-            className={`sidebar__nav-link sidebar__help${pathname === "/help" ? " sidebar__nav-link--active" : ""}`}
+            href={helpUrl("/")}
+            className="sidebar__nav-link sidebar__help"
             onClick={() => setIsMobileOpen(false)}
           >
             <span className="sidebar__nav-icon"><HelpIcon /></span>

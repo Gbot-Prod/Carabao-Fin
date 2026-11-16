@@ -105,21 +105,35 @@ const config = {
   },
 };
 
+// The admin deploy (APP_SURFACE=admin) keeps its JWT keys in "jwks_admin"
+// (lib/auth.ts). One config has one "jwks" model, so this is a second pass
+// with only that plugin. Migrations only add tables and columns, so it adds
+// "jwks_admin" and nothing else.
+const adminJwksConfig = {
+  ...config,
+  plugins: [jwt({ schema: { jwks: { modelName: "jwks_admin" } } })],
+};
+
 const shouldApply = process.argv.includes("--apply");
 
 try {
-  const migrations = await getMigrations(config);
+  for (const [name, cfg] of [
+    ["public", config],
+    ["admin JWT keys (jwks_admin)", adminJwksConfig],
+  ]) {
+    const migrations = await getMigrations(cfg);
 
-  if (migrations.toBeCreated.length === 0 && migrations.toBeAdded.length === 0) {
-    console.log("Better Auth schema is already up to date.");
-  } else if (shouldApply) {
-    await migrations.runMigrations();
-    console.log("Better Auth migrations applied successfully.");
-  } else {
-    const sql = await migrations.compileMigrations();
-    console.log("Pending Better Auth SQL:\n");
-    console.log(sql);
-    console.log("\nRun with --apply to execute these migrations.");
+    if (migrations.toBeCreated.length === 0 && migrations.toBeAdded.length === 0) {
+      console.log(`[${name}] Better Auth schema is already up to date.`);
+    } else if (shouldApply) {
+      await migrations.runMigrations();
+      console.log(`[${name}] Better Auth migrations applied successfully.`);
+    } else {
+      const sql = await migrations.compileMigrations();
+      console.log(`[${name}] Pending Better Auth SQL:\n`);
+      console.log(sql);
+      console.log("\nRun with --apply to execute these migrations.");
+    }
   }
 } finally {
   await pool.end();

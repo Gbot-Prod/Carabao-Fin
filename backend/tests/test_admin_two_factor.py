@@ -16,7 +16,7 @@ from app.services import admin_enrolment
 from app.services.better_auth_store import enrolment_identifier
 from tests.better_auth import get_identity, make_user
 from tests.test_reviews import db  # noqa: F401 - fixture
-from tests.tokens import bearer, trust_test_key
+from tests.tokens import ADMIN_KEY, bearer, make_token, trust_test_key
 
 
 def _admin_client(db, user) -> TestClient:  # noqa: F811
@@ -55,6 +55,7 @@ def test_no_switch_turns_the_requirement_off(db, monkeypatch):  # noqa: F811
 
 def test_non_admin_still_gets_admin_only(db, monkeypatch):  # noqa: F811
     buyer = make_user(db, "b@example.com", two_factor=True)
+    buyer.token_surface = "admin"  # signed in on the admin site
     db.commit()
     res = _admin_client(db, buyer).get("/admin/stats")
     assert res.status_code == 403 and res.json()["detail"] == "Admin only"
@@ -79,7 +80,11 @@ def test_two_factor_is_read_live_from_better_auth(db, monkeypatch):  # noqa: F81
         return client.get(
             "/admin/stats",
             headers=bearer(
-                sub="ba_admin", email="admin@example.com", mfa=True, **claims
+                sub="ba_admin",
+                email="admin@example.com",
+                mfa=True,
+                key=ADMIN_KEY,
+                **claims,
             ),
         ).status_code
 
@@ -101,7 +106,7 @@ def test_admin_token_without_the_totp_step_is_refused(db, monkeypatch, mfa):  # 
     make_user(db, "admin@example.com", identity_id="ba_admin", is_admin=True)
     db.commit()
     res = _token_client(db, monkeypatch).get(
-        "/admin/stats", headers=bearer(sub="ba_admin", mfa=mfa)
+        "/admin/stats", headers=bearer(sub="ba_admin", mfa=mfa, key=ADMIN_KEY)
     )
     assert res.status_code == 403
     assert res.json()["detail"] == admin.ADMIN_MFA_SESSION_DETAIL
@@ -111,8 +116,59 @@ def test_admin_token_after_the_totp_step_gets_in(db, monkeypatch):  # noqa: F811
     make_user(db, "admin@example.com", identity_id="ba_admin", is_admin=True)
     db.commit()
     res = _token_client(db, monkeypatch).get(
+        "/admin/stats", headers=bearer(sub="ba_admin", mfa=True, key=ADMIN_KEY)
+    )
+    assert res.status_code == 200, res.text
+
+
+# ── Subdomains: the admin API needs a token from the admin web deploy ───────
+# The surface comes only from the key set that verified the token
+# (app/core/security.py, documentation/manuals/SUBDOMAINS.md).
+
+
+def test_public_site_token_gets_nothing_from_the_admin_api(db, monkeypatch):  # noqa: F811
+    # A real admin, 2FA on, TOTP step passed, but signed in on the public site.
+    make_user(db, "admin@example.com", identity_id="ba_admin", is_admin=True)
+    db.commit()
+    res = _token_client(db, monkeypatch).get(
         "/admin/stats", headers=bearer(sub="ba_admin", mfa=True)
     )
+    assert res.status_code == 403
+    assert res.json()["detail"] == admin.ADMIN_SURFACE_DETAIL
+
+
+def test_admin_site_token_for_a_non_admin_is_refused(db, monkeypatch):  # noqa: F811
+    make_user(db, "b@example.com", identity_id="ba_buyer", two_factor=True)
+    db.commit()
+    res = _token_client(db, monkeypatch).get(
+        "/admin/stats", headers=bearer(sub="ba_buyer", mfa=True, key=ADMIN_KEY)
+    )
+    assert res.status_code == 403
+    assert res.json()["detail"] == "Admin only"
+
+
+@pytest.mark.parametrize("path", ["/admin/stats", "/admin/users"])
+def test_public_key_with_an_admin_surface_claim_is_401(db, monkeypatch, path):  # noqa: F811
+    make_user(db, "admin@example.com", identity_id="ba_admin", is_admin=True)
+    db.commit()
+    forged = make_token(sub="ba_admin", mfa=True, surface="admin")  # public key set
+    res = _token_client(db, monkeypatch).get(path, headers=bearer(forged))
+    assert res.status_code == 401
+
+
+def test_admin_key_with_a_public_surface_claim_is_401(db, monkeypatch):  # noqa: F811
+    make_user(db, "admin@example.com", identity_id="ba_admin", is_admin=True)
+    db.commit()
+    token = make_token(sub="ba_admin", mfa=True, surface="public", key=ADMIN_KEY)
+    res = _token_client(db, monkeypatch).get("/admin/stats", headers=bearer(token))
+    assert res.status_code == 401
+
+
+def test_admin_key_with_the_admin_claim_gets_in(db, monkeypatch):  # noqa: F811
+    make_user(db, "admin@example.com", identity_id="ba_admin", is_admin=True)
+    db.commit()
+    token = make_token(sub="ba_admin", mfa=True, surface="admin", key=ADMIN_KEY)
+    res = _token_client(db, monkeypatch).get("/admin/stats", headers=bearer(token))
     assert res.status_code == 200, res.text
 
 
@@ -124,6 +180,8 @@ def sent(monkeypatch):
     """Setup links are captured, not sent."""
     out: list[tuple[str, str, str]] = []
     monkeypatch.setenv("BETTER_AUTH_URL", "https://web.test")
+    # The enrol page is on the admin site.
+    monkeypatch.setenv("ADMIN_URL", "https://admin.web.test")
     monkeypatch.setattr(
         admin_enrolment,
         "send_sms",
@@ -168,7 +226,7 @@ def test_promotion_sends_a_one_time_setup_link_by_sms_and_email(db, sent):  # no
     assert [s[0] for s in sent] == ["sms", "email"]
     assert sent[0][1] == user.phone_number and sent[1][1] == "new@example.com"
     url = sent[1][2]
-    assert url.startswith("https://web.test/two-factor/enrol?token=")
+    assert url.startswith("https://admin.web.test/two-factor/enrol?token=")
     token = _token_from(url)
     assert _token_from(sent[0][2]) == token
     # Only the hash is kept, for BetterAuth to check on /two-factor/enable.

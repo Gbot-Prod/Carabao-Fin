@@ -22,8 +22,8 @@ _AUTO = object()
 
 
 def create_tables(db: Session) -> None:
-    """The "user" table (from the model) and minimal "session", "twoFactor"
-    and "verification" tables."""
+    """The "user" table (from the model) and minimal "session", "twoFactor",
+    "account" and "verification" tables."""
     AuthIdentity.__table__.create(db.get_bind(), checkfirst=True)
     db.execute(
         text(
@@ -43,6 +43,21 @@ def create_tables(db: Session) -> None:
                 secret TEXT NOT NULL,
                 "backupCodes" TEXT NOT NULL,
                 "userId" TEXT NOT NULL REFERENCES "user" (id) ON DELETE CASCADE
+            )
+            """
+        )
+    )
+    db.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS "account" (
+                id TEXT PRIMARY KEY,
+                "accountId" TEXT NOT NULL,
+                "providerId" TEXT NOT NULL,
+                "userId" TEXT NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
+                password TEXT,
+                "createdAt" TIMESTAMP,
+                "updatedAt" TIMESTAMP
             )
             """
         )
@@ -140,6 +155,8 @@ def make_user(
     user_fields.setdefault("notifications_preferences", {})
     user = User(external_auth_id=identity_id, **user_fields)
     user.mfa_session = bool(two_factor)
+    # Admins act as if signed in on the admin site (token from jwks_admin).
+    user.token_surface = "admin" if is_admin else "public"
     db.add(user)
     db.flush()
     return user

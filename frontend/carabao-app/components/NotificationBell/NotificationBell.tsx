@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/util/api/client";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import styles from "./NotificationBell.module.css";
+import { resolveStoredLink } from "@/lib/urls";
 
 type Item = {
   id: number;
@@ -69,7 +70,15 @@ export default function NotificationBell() {
       void apiClient.post(`/users/me/notifications/${item.id}/read`).catch(() => {});
     }
     setOpen(false);
-    if (item.link) router.push(item.link);
+    // R3: stored links are paths ("/merchantDashboard", "/admin/orders"); the
+    // mobile app reads them too. Map to the right host here, do not change them.
+    const target = resolveStoredLink(item.link);
+    if (!target) return;
+    if (/^https?:\/\//.test(target) && new URL(target).origin !== window.location.origin) {
+      window.location.assign(target);
+    } else {
+      router.push(target);
+    }
   };
 
   const markAll = async () => {

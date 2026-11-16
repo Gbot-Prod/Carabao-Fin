@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "@/lib/auth-client";
+import { signInPath } from "@/lib/urls";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -12,7 +13,7 @@ export function LogoutButton({ className, children }: { className?: string; chil
     setIsLoading(true);
     try {
       await signOut();
-      router.push("/auth");
+      router.push(signInPath());
     } catch (error) {
       console.error("Logout failed:", error);
     } finally {

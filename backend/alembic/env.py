@@ -12,7 +12,8 @@ from app.core.database import Base
 from app.core.database_url import normalize_database_url
 
 # Exclude BetterAuth-managed tables from FastAPI/Alembic migrations.
-EXCLUDED_TABLES = {"user", "session", "account", "verification"}
+# jwks_admin: JWT keys of the admin web deploy (documentation/manuals/SUBDOMAINS.md).
+EXCLUDED_TABLES = {"user", "session", "account", "verification", "twoFactor", "jwks", "jwks_admin"}
 
 
 def include_object(object_, name, type_, reflected, compare_to):

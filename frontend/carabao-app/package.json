@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3000",
+    "dev:admin": "node scripts/dev-admin.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test util/navigation.test.ts lib/blocked-auth-paths.test.ts lib/phone.test.ts lib/admin-two-factor.test.ts lib/next-path.test.ts",
+    "test": "node --test util/navigation.test.ts lib/blocked-auth-paths.test.ts lib/phone.test.ts lib/admin-two-factor.test.ts lib/next-path.test.ts lib/urls.test.ts",
     "auth:migrate": "node scripts/better-auth-migrate.mjs",
     "auth:migrate:apply": "node scripts/better-auth-migrate.mjs --apply"
   },

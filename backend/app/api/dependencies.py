@@ -5,7 +5,7 @@ from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.database import SessionLocal
-from app.core.security import decode_access_token
+from app.core.security import verify_access_token
 from app.models.user import User
 from app.services.account_suspension import suspended_detail
 from app.services.auth_identity import Identity, resolve_user
@@ -50,7 +50,8 @@ def get_current_user(
             detail="Missing access token",
         )
 
-    claims = decode_access_token(credentials.credentials)
+    verified = verify_access_token(credentials.credentials)
+    claims = verified.claims
     user = resolve_user(db, Identity.from_claims(claims))
 
     # Read live from BetterAuth: a ban takes effect before the token expires.
@@ -61,6 +62,9 @@ def get_current_user(
     # CF-0017: only a session that passed the TOTP step carries mfa=true
     # (lib/auth.ts). A Google session or an older session does not.
     user.mfa_session = claims.get("mfa") is True
+    # Which web deploy made the token: from the key set that verified it,
+    # never from the request (app/core/security.py).
+    user.token_surface = verified.surface
     return user
 
 

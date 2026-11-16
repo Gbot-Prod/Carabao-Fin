@@ -1,0 +1,676 @@
+"use client";
+
+import errorHelper, { isPhoneVerificationRequired } from "@/util/errorHelper";
+import PhoneVerifyDialog from "@/components/PhoneVerifyDialog/PhoneVerifyDialog";
+import { normalizePhMobile } from "@/lib/phone";
+import { sendPhoneCode, verifyMyPhone } from "@/lib/auth-client";
+
+import { useEffect, useMemo, useState } from "react";
+import { appUrl } from "@/lib/urls";
+import styles from "./page.module.css";
+import LocationSelects from "@/components/LocationSelects/LocationSelects";
+import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
+import {
+  defaultAddress,
+  fetchMyProfile,
+  submitMyMerchantOnboarding,
+  sendOtp,
+  verifyOtp,
+  MerchantOnboardingPayload,
+  MerchantApplication,
+} from "@/util/api";
+
+type StepId = "legal" | "ops" | "docs" | "verify";
+
+const STEPS: { id: StepId; title: string; subtitle: string }[] = [
+  { id: "legal", title: "Legal Details", subtitle: "Tell us who you are as a business." },
+  { id: "ops", title: "Operations", subtitle: "Where you operate and your availability." },
+  { id: "docs", title: "RSBSA Upload", subtitle: "Upload a photo or PDF of your Philippine RSBSA." },
+  { id: "verify", title: "Contact Number", subtitle: "Enter and confirm your contact number via SMS." },
+];
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+function formatTIN(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 12);
+  const parts: string[] = [];
+  for (let i = 0; i < digits.length; i += 3) parts.push(digits.slice(i, i + 3));
+  return parts.join("-");
+}
+
+function formatLocalPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  const a = digits.slice(0, 3);
+  const b = digits.slice(3, 6);
+  const c = digits.slice(6, 10);
+  return [a, b, c].filter(Boolean).join(" ");
+}
+
+function formatRegNum(raw: string): string {
+  return raw.replace(/[^A-Za-z0-9-]/g, "").toUpperCase().slice(0, 30);
+}
+
+function formatRSBSA(raw: string): string {
+  if (!raw) return "";
+  const stripped = raw.toUpperCase().replace(/^RSBSA-?/, "").replace(/[^A-Z0-9]/g, "").slice(0, 16);
+  if (!stripped) return "";
+  const parts: string[] = [];
+  for (let i = 0; i < stripped.length; i += 4) parts.push(stripped.slice(i, i + 4));
+  return `RSBSA-${parts.join("-")}`;
+}
+
+export default function MerchantOnboardingPage() {
+  const [stepIndex, setStepIndex] = useState(0);
+  const step = STEPS[stepIndex] ?? STEPS[0]!;
+
+  const [rsbsaFile, setRsbsaFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successApplication, setSuccessApplication] = useState<MerchantApplication | null>(null);
+
+  // OTP state
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpValue, setOtpValue] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  // Kept so a failed submit can be retried without re-entering a consumed code
+  const [phoneVerificationToken, setPhoneVerificationToken] = useState<string | null>(null);
+  // The account's own verified number: used as the contact number, it needs no
+  // second code. Applying needs one at all (backend require_verified_phone).
+  const [accountPhone, setAccountPhone] = useState<string | null>(null);
+  const [needsAccountPhone, setNeedsAccountPhone] = useState(false);
+
+  const [form, setForm] = useState<MerchantOnboardingPayload>({
+    merchant_name: "",
+    legal_business_name: "",
+    business_type: "Sole Proprietor",
+    tin: "",
+    registration_type: "DTI",
+    registration_number: "",
+    contact_email: "",
+    contact_number: "",
+    region: '',
+    province: "",
+    city: '',
+    barangay: '',
+    address: "",
+    postal_code: "",
+    available_days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+    rsbsa_number: "",
+  });
+
+  useEffect(() => {
+    const prefill = async () => {
+      try {
+        const p = await fetchMyProfile();
+        const a = defaultAddress(p.addresses);
+        setAccountPhone(p.phone_verified ? p.phone_number : null);
+        setForm((prev) => ({
+          ...prev,
+          contact_email: prev.contact_email || p.email || "",
+          contact_number: prev.contact_number || (p.phone_number?.replace(/^\+63\s?/, "") ?? ""),
+          address: prev.address || (a?.address ?? ""),
+          city: prev.city || (a?.city ?? ""),
+          province: prev.province || (a?.province ?? ""),
+          postal_code: prev.postal_code || (a?.postal_code ?? ""),
+        }));
+      } catch {
+        // No prefill on error.
+      }
+    };
+    void prefill();
+  }, []);
+
+  // Resend cooldown countdown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
+  const progressLabel = useMemo(() => `${stepIndex + 1} / ${STEPS.length}`, [stepIndex]);
+
+  const fullPhoneNumber = `+63${form.contact_number.replace(/\s/g, "")}`;
+  const isAccountPhone = accountPhone !== null && normalizePhMobile(fullPhoneNumber) === accountPhone;
+
+  const setField =
+    <K extends keyof MerchantOnboardingPayload>(key: K) =>
+      (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const value = e.target.value;
+        setForm((prev) => ({ ...prev, [key]: value }) as MerchantOnboardingPayload);
+      };
+
+  const handleTIN = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, tin: formatTIN(e.target.value) }));
+
+  // A new number makes a sent code and its token not applicable.
+  const handlePhone = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = formatLocalPhone(e.target.value);
+    if (next === form.contact_number) return;
+    setForm((prev) => ({ ...prev, contact_number: next }));
+    setOtpSent(false);
+    setOtpValue("");
+    setOtpError(null);
+    setPhoneVerificationToken(null);
+  };
+
+  const handleRegNum = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, registration_number: formatRegNum(e.target.value) }));
+
+  const handleRSBSA = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, rsbsa_number: formatRSBSA(e.target.value) }));
+
+  const toggleDay = (day: (typeof DAYS)[number]) => {
+    setForm((prev) => {
+      const set = new Set(prev.available_days);
+      if (set.has(day)) set.delete(day);
+      else set.add(day);
+      return { ...prev, available_days: Array.from(set) };
+    });
+  };
+
+  const validateStep = (index: number): string | null => {
+    if (index === 0) {
+      if (!form.merchant_name.trim()) return "Merchant name is required.";
+      if (!form.legal_business_name.trim()) return "Legal business name is required.";
+      if (!form.business_type.trim()) return "Business type is required.";
+      if (!form.contact_email.trim()) return "Email is required.";
+      return null;
+    }
+    if (index === 1) {
+      if (!form.address.trim()) return "Address is required.";
+      if (!Array.isArray(form.available_days) || form.available_days.length === 0) return "Select at least one available day.";      return null;
+    }
+    if (index === 2) {
+      if (!rsbsaFile) return "Please upload your RSBSA document (photo or PDF).";
+      const okType = ["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(rsbsaFile.type);
+      if (!okType) return "RSBSA file must be a PDF or an image (PNG/JPG/WEBP).";
+      if (rsbsaFile.size > 10 * 1024 * 1024) return "RSBSA file must be 10MB or smaller.";
+      return null;
+    }
+    return null;
+  };
+
+  const goNext = () => {
+    setError(null);
+    const validationError = validateStep(stepIndex);
+    if (validationError) return setError(validationError);
+    setStepIndex((s) => Math.min(s + 1, STEPS.length - 1));
+  };
+
+  const goBack = () => {
+    setError(null);
+    setOtpError(null);
+    if (stepIndex === STEPS.length - 1) {
+      setOtpSent(false);
+      setOtpValue("");
+      setPhoneVerificationToken(null);
+    }
+    setStepIndex((s) => Math.max(s - 1, 0));
+  };
+
+  const handleSendOtp = async () => {
+    setOtpError(null);
+    if (!normalizePhMobile(fullPhoneNumber)) {
+      setOtpError("Enter a Philippine mobile number, e.g. 912 345 6789.");
+      return;
+    }
+    setIsSendingOtp(true);
+    try {
+      // No verified account number yet: the code verifies this number on the
+      // account (BetterAuth), and that also proves the contact number. One
+      // code then satisfies both backend checks.
+      if (accountPhone === null) await sendPhoneCode(fullPhoneNumber);
+      else await sendOtp(fullPhoneNumber);
+      setPhoneVerificationToken(null);
+      setOtpSent(true);
+      setResendCooldown(60);
+    } catch (error: unknown) {
+      setOtpError(
+        errorHelper(error) || "Failed to send verification code. Please try again.",
+      );
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  const submit = async (phoneVerificationToken: string) => {
+    setError(null);
+    if (!rsbsaFile) return;
+    setIsSubmitting(true);
+    try {
+      const dayOrder = (d: string) => {
+        const idx = DAYS.indexOf(d as (typeof DAYS)[number]);
+        return idx === -1 ? 999 : idx;
+      };
+      const merchantApplication = await submitMyMerchantOnboarding(
+        {
+          ...form,
+          contact_number: form.contact_number.trim() ? `+63 ${form.contact_number.trim()}` : "",
+          available_days: [...form.available_days].sort((a, b) => dayOrder(a) - dayOrder(b)),
+          phone_verification_token: phoneVerificationToken,
+        },
+        rsbsaFile,
+      );
+      setSuccessApplication(merchantApplication);
+    } catch (error: unknown) {
+      if (isPhoneVerificationRequired(error)) {
+        setNeedsAccountPhone(true);
+        return;
+      }
+      const message = errorHelper(error) ?? "Unable to submit your merchant application right now. Please try again.";
+      setError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyAndSubmit = async () => {
+    setOtpError(null);
+    if (isAccountPhone) return submit("");
+    if (accountPhone === null) {
+      setIsVerifyingOtp(true);
+      try {
+        await verifyMyPhone(fullPhoneNumber, otpValue);
+      } catch (error: unknown) {
+        setOtpError(errorHelper(error) || "Incorrect code. Please try again.");
+        return;
+      } finally {
+        setIsVerifyingOtp(false);
+      }
+      // Now the account's number: a retry after a failed submit needs no code.
+      setAccountPhone(normalizePhMobile(fullPhoneNumber));
+      return submit("");
+    }
+    let token = phoneVerificationToken;
+    if (!token) {
+      setIsVerifyingOtp(true);
+      try {
+        token = await verifyOtp(fullPhoneNumber, otpValue);
+        setPhoneVerificationToken(token);
+      } catch (error: unknown) {
+        setOtpError(errorHelper(error) || "Incorrect code. Please try again.");
+        setIsVerifyingOtp(false);
+        return;
+      }
+      setIsVerifyingOtp(false);
+    }
+    await submit(token);
+  };
+
+  if (successApplication) {
+    return (
+      <div className={styles.page}>
+        <section className={styles.card}>
+          <h1 className={styles.title}>Application submitted</h1>
+          <p className={styles.subtitle}>
+            Your application is now set for review. We will notify you via email once your application has been approved or rejected.
+          </p>
+          <div className={styles.successBox}>
+            <div>
+              <div className={styles.successLabel}>Merchant</div>
+              <div className={styles.successValue}>{successApplication.merchant_name}</div>
+            </div>
+            <div className={styles.successActions}>
+              <button className={styles.secondaryBtn} type="button" onClick={() => window.location.assign(appUrl("/profile"))}>Back to profile</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.page}>
+      <section className={styles.card}>
+        <header className={styles.header}>
+          <div>
+            <h1 className={styles.title}>Apply as a Merchant</h1>
+            <p className={styles.subtitle}>A short onboarding to verify your details and RSBSA document.</p>
+          </div>
+          <div className={styles.progress}>
+            <span className={styles.progressPill}>{progressLabel}</span>
+          </div>
+        </header>
+
+        <nav className={styles.stepper} aria-label="Onboarding steps">
+          {STEPS.map((s, idx) => {
+            const state = idx === stepIndex ? "active" : idx < stepIndex ? "done" : "todo";
+            return (
+              <div key={s.id} className={`${styles.step} ${styles[`step_${state}`]}`}>
+                <div className={styles.stepDot} aria-hidden="true" />
+                <div className={styles.stepText}>
+                  <div className={styles.stepTitle}>{s.title}</div>
+                  <div className={styles.stepSubtitle}>{s.subtitle}</div>
+                </div>
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className={styles.body}>
+          {step.id === "legal" && (
+            <div className={styles.grid}>
+              <div className={styles.field}>
+                <label htmlFor="merchantonboarding-merchant-name" className={styles.label}>Merchant name</label>
+                <input id="merchantonboarding-merchant-name" className={styles.input} value={form.merchant_name} onChange={setField("merchant_name")} placeholder="Carabao Fresh Farm" />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="merchantonboarding-legal-business-name" className={styles.label}>Legal business name</label>
+                <input id="merchantonboarding-legal-business-name" className={styles.input} value={form.legal_business_name} onChange={setField("legal_business_name")} placeholder="Carabao Fresh Farm Trading" />
+              </div>
+
+              <div className={styles.field}>
+                <label htmlFor="merchantonboarding-business-type" className={styles.label}>Business type</label>
+                <select id="merchantonboarding-business-type" className={styles.select} value={form.business_type} onChange={setField("business_type")}>
+                  <option value="Sole Proprietor">Sole Proprietor</option>
+                  <option value="Partnership">Partnership</option>
+                  <option value="Corporation">Corporation</option>
+                  <option value="Cooperative">Cooperative</option>
+                  <option value="Farmer">Farmer</option>
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="merchantonboarding-tin" className={styles.label}>TIN (optional)</label>
+                <input id="merchantonboarding-tin"
+                  className={styles.input}
+                  value={form.tin ?? ""}
+                  onChange={handleTIN}
+                  placeholder="123-456-789-000"
+                  inputMode="numeric"
+                  maxLength={15}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label htmlFor="merchantonboarding-registration-type" className={styles.label}>Registration type</label>
+                <select id="merchantonboarding-registration-type" className={styles.select} value={form.registration_type ?? ""} onChange={setField("registration_type")}>
+                  <option value="DTI">DTI</option>
+                  <option value="SEC">SEC</option>
+                  <option value="CDA">CDA</option>
+                  <option value="LGU">LGU / Permit</option>
+                  <option value="">None</option>
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="merchantonboarding-registration-number" className={styles.label}>Registration number (optional)</label>
+                <input id="merchantonboarding-registration-number"
+                  className={styles.input}
+                  value={form.registration_number ?? ""}
+                  onChange={handleRegNum}
+                  placeholder="DTI-00000-000000"
+                  maxLength={30}
+                />
+              </div>
+
+              <div className={`${styles.field} ${styles.fieldFull}`}>
+                <label htmlFor="merchantonboarding-contact-email" className={styles.label}>Contact email</label>
+                <input id="merchantonboarding-contact-email" className={styles.input} type="email" value={form.contact_email} onChange={setField("contact_email")} placeholder="you@farm.com" />
+              </div>
+            </div>
+          )}
+
+          {step.id === "ops" && (
+            <div className={styles.grid}>
+              <div className={`${styles.field} ${styles.fieldFull}`}>
+                <label htmlFor="merchantonboarding-address" className={styles.label}>Address</label>
+                <input id="merchantonboarding-address" className={styles.input} value={form.address} onChange={setField("address")} placeholder="Street, Barangay" />
+              </div>
+
+              <LocationSelects
+                value={{
+                  region: form.region,
+                  province: form.province,
+                  city: form.city,
+                  barangay: form.barangay,
+                }}
+                onChange={(location) => setForm((previous) => ({ ...previous, ...location }))}
+                selectClassName={styles.select}
+                labelClassName={styles.label}
+                wrapClassName={styles.field}
+              />
+
+              <div className={styles.field}>
+                <label htmlFor="merchantonboarding-postal-code" className={styles.label}>Postal code (optional)</label>
+                <input id="merchantonboarding-postal-code" className={styles.input} value={form.postal_code ?? ""} onChange={setField("postal_code")} placeholder="1634" />
+              </div>
+
+              {/* Farm pickup point (U1c): deliveries start from this pin. */}
+              <div className={`${styles.field} ${styles.fieldFull}`}>
+                <MapPinPicker
+                  value={form.lat != null && form.lng != null ? { lat: form.lat, lng: form.lng } : null}
+                  onChange={(pin, found) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      lat: pin.lat,
+                      lng: pin.lng,
+                      address: prev.address || found?.street || prev.address,
+                      postal_code: prev.postal_code || found?.postcode || prev.postal_code,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className={`${styles.field} ${styles.fieldFull}`}>
+                <label className={styles.label}>Available days</label>
+                <div className={styles.days}>
+                  {DAYS.map((d) => {
+                    const checked = form.available_days.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        className={`${styles.dayChip} ${checked ? styles.dayChipActive : ""}`}
+                        onClick={() => toggleDay(d)}
+                        aria-pressed={checked}
+                      >
+                        {d}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step.id === "docs" && (
+            <div className={styles.docs}>
+              <div className={styles.docsIntro}>
+                <p className={styles.docsText}>
+                  Upload either a clear photo or a PDF scan of your Philippine RSBSA document.
+                </p>
+              </div>
+
+              <div className={styles.grid}>
+                <div className={styles.field}>
+                  <label htmlFor="merchantonboarding-rsbsa-number" className={styles.label}>RSBSA number (optional)</label>
+                  <input id="merchantonboarding-rsbsa-number"
+                    className={styles.input}
+                    value={form.rsbsa_number ?? ""}
+                    onChange={handleRSBSA}
+                    placeholder="RSBSA-XXXX-XXXX"
+                    maxLength={24}
+                  />
+                </div>
+
+                <div className={`${styles.field} ${styles.fieldFull}`}>
+                  <label className={styles.label}>RSBSA document (photo or PDF)</label>
+                  <div
+                    className={`${styles.dropzone} ${dragOver ? styles.dropzoneDragOver : ""} ${rsbsaFile ? styles.dropzoneWithFile : ""}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOver(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) setRsbsaFile(file);
+                    }}
+                  >
+                    {rsbsaFile ? (
+                      <div className={styles.fileCard}>
+                        <span className={styles.fileCardIcon}>
+                          {rsbsaFile.type === "application/pdf" ? (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                              <polyline points="14 2 14 8 20 8" />
+                              <line x1="9" y1="13" x2="15" y2="13" />
+                              <line x1="9" y1="17" x2="15" y2="17" />
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                              <circle cx="8.5" cy="8.5" r="1.5" />
+                              <polyline points="21 15 16 10 5 21" />
+                            </svg>
+                          )}
+                        </span>
+                        <div className={styles.fileCardInfo}>
+                          <span className={styles.fileCardName}>{rsbsaFile.name}</span>
+                          <span className={styles.fileCardMeta}>
+                            {rsbsaFile.type === "application/pdf" ? "PDF" : rsbsaFile.type.split("/")[1]?.toUpperCase()} · {(rsbsaFile.size / 1024).toFixed(0)} KB
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.fileCardRemove}
+                          onClick={() => setRsbsaFile(null)}
+                          aria-label="Remove file"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <label className={styles.dropzoneLabel}>
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          hidden
+                          onChange={(e) => setRsbsaFile(e.target.files?.[0] ?? null)}
+                        />
+                        <svg className={styles.dropzoneIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="16 16 12 12 8 16" />
+                          <line x1="12" y1="12" x2="12" y2="21" />
+                          <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+                        </svg>
+                        <span className={styles.dropzoneTitle}>Drop your file here</span>
+                        <span className={styles.dropzoneSubtitle}>or click to browse</span>
+                        <span className={styles.dropzoneMeta}>PDF · PNG · JPG · WEBP · max 10 MB</span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step.id === "verify" && (
+            <div className={styles.verifyStep}>
+              <div className={styles.field}>
+                <label htmlFor="merchantonboarding-contact-number" className={styles.label}>Contact number</label>
+                <div className={styles.phoneRow}>
+                  <span className={styles.phonePrefix}>+63</span>
+                  <input id="merchantonboarding-contact-number"
+                    className={styles.phoneInput}
+                    value={form.contact_number}
+                    onChange={handlePhone}
+                    placeholder="912 345 6789"
+                    inputMode="numeric"
+                    maxLength={12}
+                    disabled={isVerifyingOtp || isSubmitting}
+                  />
+                </div>
+              </div>
+
+              {isAccountPhone ? (
+                <p className={styles.otpHint}>
+                  This is your account&apos;s verified number, so there&apos;s no code to enter.
+                </p>
+              ) : !otpSent ? (
+                <button
+                  type="button"
+                  className={styles.sendOtpBtn}
+                  onClick={handleSendOtp}
+                  disabled={isSendingOtp}
+                >
+                  {isSendingOtp ? "Sending…" : "Send verification code"}
+                </button>
+              ) : (
+                <div className={styles.otpGroup}>
+                  <p className={styles.otpHint}>
+                    Enter the 6-digit code sent to your number.
+                  </p>
+                  <input
+                    className={styles.otpInput}
+                    aria-label="6-digit verification code"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="––––––"
+                    value={otpValue}
+                    onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    autoComplete="one-time-code"
+                  />
+                  <button
+                    type="button"
+                    className={styles.resendBtn}
+                    disabled={resendCooldown > 0 || isSendingOtp}
+                    onClick={handleSendOtp}
+                  >
+                    {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"}
+                  </button>
+                </div>
+              )}
+
+              {otpError && <div className={styles.errorBox}>{otpError}</div>}
+            </div>
+          )}
+
+          {step.id !== "verify" && error && <div className={styles.errorBox}>{error}</div>}
+          {step.id === "verify" && error && <div className={styles.errorBox}>{error}</div>}
+        </div>
+
+        <footer className={styles.footer}>
+          <button
+            className={styles.secondaryBtn}
+            type="button"
+            onClick={goBack}
+            disabled={stepIndex === 0 || isSubmitting || isVerifyingOtp}
+          >
+            Back
+          </button>
+          {stepIndex < STEPS.length - 1 ? (
+            <button className={styles.primaryBtn} type="button" onClick={goNext} disabled={isSubmitting}>
+              Continue
+            </button>
+          ) : (
+            <button
+              className={styles.primaryBtn}
+              type="button"
+              onClick={handleVerifyAndSubmit}
+              disabled={(!isAccountPhone && (!otpSent || otpValue.length < 6)) || isVerifyingOtp || isSubmitting}
+            >
+              {isVerifyingOtp || isSubmitting ? "Submitting…" : isAccountPhone ? "Submit" : "Verify & Submit"}
+            </button>
+          )}
+        </footer>
+      </section>
+
+      {needsAccountPhone && (
+        <PhoneVerifyDialog
+          reason="Merchant accounts need a verified mobile number."
+          initialNumber={normalizePhMobile(fullPhoneNumber)}
+          onClose={() => setNeedsAccountPhone(false)}
+          onVerified={(phone) => {
+            setNeedsAccountPhone(false);
+            setAccountPhone(phone);
+            // The token (if any) proves the contact number; the dialog the account's.
+            void submit(phoneVerificationToken ?? "");
+          }}
+        />
+      )}
+    </div>
+  );
+}

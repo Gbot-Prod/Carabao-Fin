@@ -29,6 +29,8 @@ Thumbs.db
 
 #secrets, kys if this gets out
 *.env
+*.env.example
+
 
 revisions/
 .claude/review-state.json
@@ -36,4 +38,7 @@ revisions/
 
 CLAUDE.md
 
-documentation/
+documentation/*
+!documentation/manuals/
+documentation/manuals/*
+!documentation/manuals/SUBDOMAINS.md
