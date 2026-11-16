@@ -12,16 +12,23 @@ If you change a fact here in the code, update this file in the same change.
 |---|---|---|---|
 | `carabao.online` | web | `public` | Buyer app |
 | `merchant.carabao.online` | web (same deploy) | `public` | `/merchant/*` as clean URLs (`/`, `/routing/<id>`, `/onboarding`) |
-| `help.carabao.online` | web (same deploy) | `public` | `/help/*` as clean URLs (`/`, `/contact`). No sign-in. |
+| `help.carabao.online` | web-help (same repo, own deploy) | `help` | `/help/*` only, as clean URLs (`/`, `/contact`). Static. No sign-in, no API, no database. |
 | `admin.carabao.online` | web-admin (same repo, own deploy) | `admin` | `/admin/*` only |
 | `api.carabao.online` | backend | — | FastAPI |
 
-One code base (`frontend/carabao-app`) makes two deploys:
+One code base (`frontend/carabao-app`) makes three deploys:
 
-- **web** (`APP_SURFACE=public`): the apex, `merchant.` and `help.` hosts.
+- **web** (`APP_SURFACE=public`): the apex and `merchant.` hosts. It can also serve `help.` (the public deploy keeps the help rules in 1.1).
 - **web-admin** (`APP_SURFACE=admin`): the `admin.` host.
+- **web-help** (`APP_SURFACE=help`): the `help.` host. It builds and runs with four variables only (2.4).
 
-Both deploys use the same Postgres database as the API.
+web and web-admin use the same Postgres database as the API. web-help uses no database.
+
+Two root layouts:
+- `app/(site)/layout.tsx`: all pages except help. It has the providers and `connection()` (CSP nonce), so these pages render per request.
+- `app/(help)/layout.tsx`: help only. It is static and imports no auth, API or database code.
+
+Unknown URLs use `app/global-not-found.tsx` (`experimental.globalNotFound`).
 
 ### 1.1 Host routing (`proxy.ts`, rules in `lib/urls.ts`)
 
@@ -53,12 +60,23 @@ Admin deploy:
 | `/` | rewrite to `/admin/dashboard` |
 | any other path `/x` | rewrite to `/admin/x` (404 if no such admin page) |
 
-Rules that apply to both deploys:
+Help deploy:
+
+| Request | Result |
+|---|---|
+| `/help/*` | redirect to the clean URL |
+| `/api`, `/api/*` | 404 |
+| `/_next/*`, files with a dot in the last segment | served as they are |
+| any other path `/x` | rewrite to `/help/x` (404 if no such help page) |
+
+Rules that apply to all deploys:
 
 - Files with a dot in the last path segment (images, `robots.txt`) and `/_next/*` are not routed.
 - **The host rules apply only in subdomain mode.** Subdomain mode means that `NEXT_PUBLIC_APP_URL` is on `ROOT_DOMAIN`. If it is not (for example `localhost` or a `*.up.railway.app` domain), one host serves all paths, and the links are `/merchant/...` and `/help/...`. This prevents redirect loops when the config and the host do not agree.
 - All redirects are 307. Change them to 308 only after the hosts are stable, because browsers keep 308.
 - Prefetch requests also go through the proxy, so that a prefetch on `merchant.` is rewritten like the page itself.
+- `/api/*` also goes through the proxy (so that the help deploy can refuse it). On web and web-admin, the proxy passes it on at once, with no CSP work.
+- **CSP on help pages:** they are static, so they have no nonce, and Next.js puts inline scripts in them. For `/help/*` pages (on any deploy) the proxy sends `script-src 'self' 'unsafe-inline'`. The help deploy sends no CSP reports (it has no `/api/csp-report`). Help pages have no sign-in and no user data. All other pages keep the nonce policy.
 
 ### 1.2 Links between hosts
 
@@ -183,7 +201,22 @@ Same repo root (`frontend/carabao-app`), same build and start commands. Set:
 
 There is no `MERCHANT_URL`: the API makes no links to the merchant site.
 
-### 2.4 Values that must stay in step
+### 2.4 web-help (help deploy)
+
+Same repo root and build/start commands. **Only these four variables** (the build was checked with no other app variable and no `.env` file):
+
+| Name | Production value | Notes |
+|---|---|---|
+| `APP_SURFACE` | `help` | |
+| `ROOT_DOMAIN` | `carabao.online` | |
+| `NEXT_PUBLIC_APP_URL` | `https://help.carabao.online` | this deploy's own URL |
+| `NEXT_PUBLIC_MAIN_URL` | `https://carabao.online` | links back to the apex, `/terms`, `/privacy`, merchant onboarding |
+
+Do not give web-help `DATABASE_URL`, `BETTER_AUTH_SECRET` or OAuth keys. It does not need them.
+
+`lib/auth.ts` makes Better Auth (and its database pool) on first use, not at import. This is why the full app builds without a database URL. On web-help, that code never runs.
+
+### 2.5 Values that must stay in step
 
 | Value | Place A | Place B |
 |---|---|---|
@@ -192,6 +225,7 @@ There is no `MERCHANT_URL`: the API makes no links to the merchant site.
 | Admin JWKS | web-admin `/api/auth/jwks` | API `ADMIN_JWKS_URL` |
 | Origins | web hosts | API `ALLOWED_ORIGINS` |
 | Admin site URL | web `NEXT_PUBLIC_ADMIN_URL` | API `ADMIN_URL` |
+| Main site URL | web `NEXT_PUBLIC_APP_URL` | web-help `NEXT_PUBLIC_MAIN_URL` |
 
 ---
 
@@ -275,6 +309,18 @@ Notes:
 - While `dev:admin` runs, Next.js changes the import line in `next-env.d.ts` to `.next-admin`. Do not commit that change.
 - Without the hosts file, use `NEXT_PUBLIC_APP_URL=http://localhost:3000`. The site then runs on one host, and the subdomain checks below do not apply.
 
+### 5.4 Help deploy (optional)
+
+```
+cd frontend/carabao-app
+APP_SURFACE=help ROOT_DOMAIN=carabao.test NEXT_PUBLIC_APP_URL=http://help.carabao.test:3002   NEXT_PUBLIC_MAIN_URL=http://carabao.test:3000 npx next build
+APP_SURFACE=help ROOT_DOMAIN=carabao.test NEXT_PUBLIC_APP_URL=http://help.carabao.test:3002   NEXT_PUBLIC_MAIN_URL=http://carabao.test:3000 npx next start -p 3002
+```
+
+Next.js also reads `.env.local`, if it exists. To check that the build needs nothing else, build a copy of the folder without `.env*` files (the check on 2026-11-16 did this).
+
+This build uses `.next`, as `npm run build` does. Run `npm run build` again before you start the public site from it.
+
 ---
 
 ## 6. Manual test checklist
@@ -292,6 +338,8 @@ Automatic checks: `npm test`, `npm run lint` and `npm run build` in `frontend/ca
 | 7 | Open `carabao.test:3000/merchantOnboarding` (mobile link) | redirect to `merchant.carabao.test:3000/onboarding` |
 | 8 | Open `carabao.test:3000/help?section=terms` | redirect to `/terms` |
 | 9 | Open `help.carabao.test:3000/` signed out | FAQ, no sign-in asked |
+| 9a | Help deploy (5.4): open `help.carabao.test:3002/`, `/contact`, `/help/contact`, `/order`, `/api/auth/get-session` | 200, 200, redirect to `/contact`, 404, 404 |
+| 9b | Help deploy: Terms and Privacy links | go to `carabao.test:3000/terms` and `/privacy` |
 | 10 | On the admin site, sign in with a non-admin email account | "This account is not an admin account." and no session |
 | 11 | On the admin site, call `POST /api/auth/sign-in/social` or `/api/auth/sign-up/email` | 404 |
 | 12 | Admin: sign in on the admin site with password, then TOTP | dashboard. API calls work (token from `jwks_admin`). |
@@ -316,8 +364,10 @@ Expected: only the dev fallbacks (`localhost`) and the `carabao.online` default 
 1. Back up the DB. Run `npm run auth:migrate:apply` against it (adds `jwks_admin`).
 2. Make a new secret for web-admin (`BETTER_AUTH_SECRET`). Do not copy the web value.
 3. Make the web-admin service: same repo, root `frontend/carabao-app`, `npm ci && npm run build`, `npm run start`, with the vars in 2.2.
+3a. Make the web-help service the same way, with only the four vars in 2.4.
 4. Custom domains:
-   - web: `carabao.online`, `merchant.carabao.online`, `help.carabao.online`
+   - web: `carabao.online`, `merchant.carabao.online`
+   - web-help: `help.carabao.online`
    - web-admin: `admin.carabao.online`
    - API: `api.carabao.online`
 5. Put Cloudflare Access in front of `admin.carabao.online` only.

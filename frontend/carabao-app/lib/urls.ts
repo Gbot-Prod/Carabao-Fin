@@ -4,6 +4,8 @@
 //   merchant.<root>   /merchant/* as clean URLs (same deploy)
 //   help.<root>       /help/* as clean URLs     (same deploy)
 //   admin.<root>      /admin/* only        (APP_SURFACE=admin, own deploy)
+//   help.<root>       /help/* only         (APP_SURFACE=help, own static deploy;
+//                     the public deploy can serve it too)
 //
 // Hosts come from env only. When NEXT_PUBLIC_APP_URL is not on ROOT_DOMAIN
 // (localhost, a Railway domain), the site runs on one host: links stay
@@ -11,13 +13,15 @@
 //
 // No imports: proxy.ts, client components and node --test all load this file.
 
-export type AppSurface = "public" | "admin";
+export type AppSurface = "public" | "admin" | "help";
 export type HostKind = "apex" | "merchant" | "help" | "other";
 
 export type SurfaceConfig = {
   rootDomain: string;
   appSurface: AppSurface;
   appUrl?: string;
+  /** The main (buyer) site, when this deploy is on another host (help deploy). */
+  mainUrl?: string;
   merchantUrl?: string;
   helpUrl?: string;
   adminUrl?: string;
@@ -83,7 +87,9 @@ function isAsset(pathname: string): boolean {
 
 export function makeSurfaces(config: SurfaceConfig) {
   const root = config.rootDomain.trim().toLowerCase();
-  const appOrigin = origin(config.appUrl);
+  // Links to buyer pages go to the main site. On the public deploy that is its
+  // own URL; the help deploy sets NEXT_PUBLIC_MAIN_URL.
+  const appOrigin = origin(config.mainUrl) || origin(config.appUrl);
   const appBase = appOrigin ? new URL(appOrigin) : null;
   // Subdomain links only when the app URL itself is on the root domain.
   const subdomainMode = Boolean(appBase && root && appBase.hostname === root);
@@ -104,7 +110,11 @@ export function makeSurfaces(config: SurfaceConfig) {
   const merchantUrl = (path = "/"): string =>
     merchantOrigin ? `${merchantOrigin}${path}` : join("/merchant", path);
   /** A help page, by its clean path ("/", "/contact"). */
-  const helpUrl = (path = "/"): string => (helpOrigin ? `${helpOrigin}${path}` : join("/help", path));
+  const helpUrl = (path = "/"): string => {
+    // On the help deploy a help page is on this host, by its clean path.
+    if (config.appSurface === "help") return path;
+    return helpOrigin ? `${helpOrigin}${path}` : join("/help", path);
+  };
   /** An admin page, by its full path ("/admin/orders"). The admin deploy serves /admin/* as it is. */
   const adminUrl = (path = "/admin/dashboard"): string => (adminOrigin ? `${adminOrigin}${path}` : path);
 
@@ -139,7 +149,18 @@ export function makeSurfaces(config: SurfaceConfig) {
 
   const route = (req: { host: string | null; pathname: string; search: string }): RouteDecision => {
     const { pathname, search } = req;
-    if (isAsset(pathname)) return { kind: "next" };
+    if (isAsset(pathname) || pathname.startsWith("/_next/")) return { kind: "next" };
+
+    if (config.appSurface === "help") {
+      // Static help only: no API (no sign-in, no database on this deploy).
+      if (stripPrefix(pathname, "/api") !== null) return { kind: "notFound" };
+      const h = stripPrefix(pathname, "/help");
+      if (h !== null) return { kind: "redirect", location: h + search };
+      return { kind: "rewrite", path: join("/help", pathname) };
+    }
+
+    // The API routes are not page routes; the deploy's own code handles them.
+    if (stripPrefix(pathname, "/api") !== null) return { kind: "next" };
 
     if (config.appSurface === "admin") {
       if (stripPrefix(pathname, "/admin") !== null) return { kind: "next" };
@@ -243,8 +264,9 @@ export function makeSurfaces(config: SurfaceConfig) {
 // (ROOT_DOMAIN and APP_SURFACE are passed through next.config.ts `env`).
 const surfaces = makeSurfaces({
   rootDomain: process.env.ROOT_DOMAIN || "carabao.online",
-  appSurface: process.env.APP_SURFACE === "admin" ? "admin" : "public",
+  appSurface: process.env.APP_SURFACE === "admin" ? "admin" : process.env.APP_SURFACE === "help" ? "help" : "public",
   appUrl: process.env.NEXT_PUBLIC_APP_URL,
+  mainUrl: process.env.NEXT_PUBLIC_MAIN_URL,
   merchantUrl: process.env.NEXT_PUBLIC_MERCHANT_URL,
   helpUrl: process.env.NEXT_PUBLIC_HELP_URL,
   adminUrl: process.env.NEXT_PUBLIC_ADMIN_URL,

@@ -26,36 +26,39 @@ import {
   sessionPassedTotp,
 } from "@/lib/admin-two-factor";
 
-const rawPostgresUrl =
-  process.env.POSTGRES_URL ||
-  process.env.DATABASE_URL ||
-  process.env.POSTGRESQL_URL ||
-  process.env.PGDATABASE_URL;
+// The database pool, made on first use of `auth` (see the end of this file).
+function createPool(): Pool {
+  const rawPostgresUrl =
+    process.env.POSTGRES_URL ||
+    process.env.DATABASE_URL ||
+    process.env.POSTGRESQL_URL ||
+    process.env.PGDATABASE_URL;
 
-const normalizedPostgresUrl = rawPostgresUrl
-  ? rawPostgresUrl.trim().replace(/^"|"$/g, "")
-  : "";
+  const normalizedPostgresUrl = rawPostgresUrl
+    ? rawPostgresUrl.trim().replace(/^"|"$/g, "")
+    : "";
 
-if (!normalizedPostgresUrl) {
-  throw new Error(
-    "Better Auth Postgres URL is missing. Set one of: POSTGRES_URL, DATABASE_URL, POSTGRESQL_URL, or PGDATABASE_URL."
-  );
-}
-
-if (process.env.NODE_ENV !== "production") {
-  try {
-    const parsedUrl = new URL(normalizedPostgresUrl);
-    const databaseName = parsedUrl.pathname.replace(/^\//, "") || "(none)";
-    console.info(
-      `[auth] Better Auth DB target host=${parsedUrl.hostname} db=${databaseName}`
+  if (!normalizedPostgresUrl) {
+    throw new Error(
+      "Better Auth Postgres URL is missing. Set one of: POSTGRES_URL, DATABASE_URL, POSTGRESQL_URL, or PGDATABASE_URL."
     );
-  } catch {
-    console.info("[auth] Better Auth DB target could not be parsed");
   }
-}
 
-// CF-0001: the server cert is always verified; see lib/db-ssl.mjs for the env vars.
-const pool = new Pool(poolConfigFromUrl(normalizedPostgresUrl));
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      const parsedUrl = new URL(normalizedPostgresUrl);
+      const databaseName = parsedUrl.pathname.replace(/^\//, "") || "(none)";
+      console.info(
+        `[auth] Better Auth DB target host=${parsedUrl.hostname} db=${databaseName}`
+      );
+    } catch {
+      console.info("[auth] Better Auth DB target could not be parsed");
+    }
+  }
+
+  // CF-0001: the server cert is always verified; see lib/db-ssl.mjs for the env vars.
+  return new Pool(poolConfigFromUrl(normalizedPostgresUrl));
+}
 
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || "";
 const normalizedApiUrl = rawApiUrl.trim().replace(/^"|"$/g, "");
@@ -516,162 +519,180 @@ const sendEmailThroughBackend = async (path: string, payload: Record<string, str
   if (!res?.ok) console.error(`[${what}] Backend returned ${res?.status}`);
 };
 
-export const auth = betterAuth({
-  // E8: TOTP two-step verification ("Carabao" is the name shown in authenticator apps).
-  // Always loaded, because admins always need it (CF-0003); who may turn it on,
-  // and the other admin rules, are in adminTwoFactor above.
-  plugins: [
-    blockAdminEndpoints(),
-    admin(),
-    // No password for setup: the one-time link replaces it (CF-0018).
-    twoFactor({ issuer: "Carabao", allowPasswordless: true }),
-    phoneNumber({
-      // One stored form, so a number can't sign up twice written differently.
-      // Clients normalize first (lib/phone.ts normalizePhMobile).
-      phoneNumberValidator: (value) => PH_MOBILE_PATTERN.test(value),
-      otpLength: 6,
-      // Same as the backend's own codes (backend/app/services/otp.py).
-      expiresIn: 600,
-      allowedAttempts: 5,
-      sendOTP: ({ phoneNumber, code }, ctx) => sendAccountOtp(phoneNumber, code, "verify", ctx),
-      sendPasswordResetOTP: ({ phoneNumber, code }, ctx) =>
-        sendAccountOtp(phoneNumber, code, "password_reset", ctx),
-      signUpOnVerification: {
-        getTempEmail: (phone) => `${phone.replace(/\D/g, "")}@${PHONE_PLACEHOLDER_EMAIL_DOMAIN}`,
-        // The signup form sends the real name right after (updateUser).
-        getTempName: () => "",
-      },
-    }),
-    phoneVerifyGuard(),
-    phoneChangeHistory(),
-    phoneSignupPassword(),
-    // After twoFactor(), so that its after-hook has the last word on the response.
-    adminTwoFactor(),
-    // Last: it has the final word on whether a session stays.
-    ...(isAdminSurface ? [adminSurfaceOnly()] : [expo()]),
-    jwt({
-      // Admin deploy: own key table, so the API can tell its tokens apart.
-      // The private keys stay encrypted with this deploy's BETTER_AUTH_SECRET.
-      ...(isAdminSurface ? { schema: { jwks: { modelName: "jwks_admin" } } } : {}),
-      jwt: {
-        issuer: jwtIssuer,
-        audience: JWT_AUDIENCE,
-        expirationTime: "15m",
-        // The backend reads name, email, phone, role, ban and 2FA live from the
-        // "user" table (backend/app/models/auth_identity.py). The token adds only
-        // whether this session passed the code step (CF-0017), and the deploy
-        // (the API checks it against the key that signed the token).
-        definePayload: ({ session }) => ({
-          mfa: (session as unknown as SessionRow).mfaVerified === true,
-          surface: appSurface,
-        }),
-      },
-    }),
-  ],
-  user: {
-    // Adding an email (profile page) only takes effect once the link sent to it
-    // is opened, so every real address on an account is verified. That matters:
-    // a Google sign-in links to the account holding the same email.
-    changeEmail: { enabled: true },
-  },
-  database: pool,
-  databaseHooks: {
-    session: {
-      create: {
-        // CF-0017: mark the sessions that passed the code step. Set when the
-        // session is made, so that the session cookie cache has it too.
-        before: async (session, ctx) => {
-          if (!ctx) return;
-          const user = (await ctx.context.internalAdapter.findUserById(session.userId)) as SessionUser | null;
-          // The caller's own session, when this one replaces it (e.g. change
-          // password with "sign out other devices").
-          const caller = ctx.context.session as { session: SessionRow; user: SessionUser } | null | undefined;
-          const passed =
-            // A session that the twoFactor plugin makes again copies the old one.
-            (session as { mfaVerified?: boolean | null }).mfaVerified === true ||
-            (caller?.user.id === session.userId && caller.session.mfaVerified === true) ||
-            sessionPassedTotp(ctx.path, Boolean(user?.twoFactorEnabled));
-          return { data: { ...session, mfaVerified: passed } };
+function createAuth() {
+  return betterAuth({
+    // E8: TOTP two-step verification ("Carabao" is the name shown in authenticator apps).
+    // Always loaded, because admins always need it (CF-0003); who may turn it on,
+    // and the other admin rules, are in adminTwoFactor above.
+    plugins: [
+      blockAdminEndpoints(),
+      admin(),
+      // No password for setup: the one-time link replaces it (CF-0018).
+      twoFactor({ issuer: "Carabao", allowPasswordless: true }),
+      phoneNumber({
+        // One stored form, so a number can't sign up twice written differently.
+        // Clients normalize first (lib/phone.ts normalizePhMobile).
+        phoneNumberValidator: (value) => PH_MOBILE_PATTERN.test(value),
+        otpLength: 6,
+        // Same as the backend's own codes (backend/app/services/otp.py).
+        expiresIn: 600,
+        allowedAttempts: 5,
+        sendOTP: ({ phoneNumber, code }, ctx) => sendAccountOtp(phoneNumber, code, "verify", ctx),
+        sendPasswordResetOTP: ({ phoneNumber, code }, ctx) =>
+          sendAccountOtp(phoneNumber, code, "password_reset", ctx),
+        signUpOnVerification: {
+          getTempEmail: (phone) => `${phone.replace(/\D/g, "")}@${PHONE_PLACEHOLDER_EMAIL_DOMAIN}`,
+          // The signup form sends the real name right after (updateUser).
+          getTempName: () => "",
+        },
+      }),
+      phoneVerifyGuard(),
+      phoneChangeHistory(),
+      phoneSignupPassword(),
+      // After twoFactor(), so that its after-hook has the last word on the response.
+      adminTwoFactor(),
+      // Last: it has the final word on whether a session stays.
+      ...(isAdminSurface ? [adminSurfaceOnly()] : [expo()]),
+      jwt({
+        // Admin deploy: own key table, so the API can tell its tokens apart.
+        // The private keys stay encrypted with this deploy's BETTER_AUTH_SECRET.
+        ...(isAdminSurface ? { schema: { jwks: { modelName: "jwks_admin" } } } : {}),
+        jwt: {
+          issuer: jwtIssuer,
+          audience: JWT_AUDIENCE,
+          expirationTime: "15m",
+          // The backend reads name, email, phone, role, ban and 2FA live from the
+          // "user" table (backend/app/models/auth_identity.py). The token adds only
+          // whether this session passed the code step (CF-0017), and the deploy
+          // (the API checks it against the key that signed the token).
+          definePayload: ({ session }) => ({
+            mfa: (session as unknown as SessionRow).mfaVerified === true,
+            surface: appSurface,
+          }),
+        },
+      }),
+    ],
+    user: {
+      // Adding an email (profile page) only takes effect once the link sent to it
+      // is opened, so every real address on an account is verified. That matters:
+      // a Google sign-in links to the account holding the same email.
+      changeEmail: { enabled: true },
+    },
+    database: createPool(),
+    databaseHooks: {
+      session: {
+        create: {
+          // CF-0017: mark the sessions that passed the code step. Set when the
+          // session is made, so that the session cookie cache has it too.
+          before: async (session, ctx) => {
+            if (!ctx) return;
+            const user = (await ctx.context.internalAdapter.findUserById(session.userId)) as SessionUser | null;
+            // The caller's own session, when this one replaces it (e.g. change
+            // password with "sign out other devices").
+            const caller = ctx.context.session as { session: SessionRow; user: SessionUser } | null | undefined;
+            const passed =
+              // A session that the twoFactor plugin makes again copies the old one.
+              (session as { mfaVerified?: boolean | null }).mfaVerified === true ||
+              (caller?.user.id === session.userId && caller.session.mfaVerified === true) ||
+              sessionPassedTotp(ctx.path, Boolean(user?.twoFactorEnabled));
+            return { data: { ...session, mfaVerified: passed } };
+          },
         },
       },
     },
-  },
-  // E7: BetterAuth limits by client IP. Defaults to production only; stricter
-  // rules for the credential and SMS endpoints. (The per-number SMS limit lives
-  // in the FastAPI backend, app/services/rate_limit.py.)
-  rateLimit: {
-    enabled: process.env.NODE_ENV === "production" || process.env.BETTER_AUTH_RATE_LIMIT === "true",
-    window: 60,
-    max: 100,
-    customRules: {
-      "/sign-in/email": { window: 900, max: 10 },
-      "/sign-in/phone-number": { window: 900, max: 10 },
-      // Lenient on purpose (no CAPTCHA yet): 20 codes per IP per hour.
-      "/phone-number/send-otp": { window: 3600, max: 20 },
-      "/phone-number/request-password-reset": { window: 3600, max: 20 },
-      "/phone-number/verify": { window: 900, max: 30 },
-      "/phone-number/reset-password": { window: 900, max: 10 },
-      "/request-password-reset": { window: 900, max: 5 },
-      "/reset-password": { window: 900, max: 10 },
-      "/change-email": { window: 3600, max: 5 },
+    // E7: BetterAuth limits by client IP. Defaults to production only; stricter
+    // rules for the credential and SMS endpoints. (The per-number SMS limit lives
+    // in the FastAPI backend, app/services/rate_limit.py.)
+    rateLimit: {
+      enabled: process.env.NODE_ENV === "production" || process.env.BETTER_AUTH_RATE_LIMIT === "true",
+      window: 60,
+      max: 100,
+      customRules: {
+        "/sign-in/email": { window: 900, max: 10 },
+        "/sign-in/phone-number": { window: 900, max: 10 },
+        // Lenient on purpose (no CAPTCHA yet): 20 codes per IP per hour.
+        "/phone-number/send-otp": { window: 3600, max: 20 },
+        "/phone-number/request-password-reset": { window: 3600, max: 20 },
+        "/phone-number/verify": { window: 900, max: 30 },
+        "/phone-number/reset-password": { window: 900, max: 10 },
+        "/request-password-reset": { window: 900, max: 5 },
+        "/reset-password": { window: 900, max: 10 },
+        "/change-email": { window: 3600, max: 5 },
+      },
     },
-  },
-  session: {
-    cookieCache: {
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60,
+      },
+    },
+    advanced: {
+      cookiePrefix: isAdminSurface ? "carabao-admin" : "carabao",
+      crossSubDomainCookies,
+    },
+    baseURL: appBaseUrl,
+    trustedOrigins,
+    basePath: AUTH_BASE_PATH,
+    secret: process.env.BETTER_AUTH_SECRET,
+    emailAndPassword: {
       enabled: true,
-      maxAge: 5 * 60,
+      // Accounts are created by phone, Google or Facebook only; email + password still
+      // signs in an account that has a verified email.
+      disableSignUp: true,
+      requireEmailVerification: false,
+      revokeSessionsOnPasswordReset: true,
+      // Reset by email is for accounts with a verified email; everyone else
+      // resets by SMS (/phone-number/request-password-reset).
+      sendResetPassword: async ({ user, url }) => {
+        if (!user.emailVerified || isPlaceholderEmail(user.email)) return;
+        await sendEmailThroughBackend("/email/send-password-reset", { to: user.email, reset_url: url }, "password-reset");
+      },
     },
-  },
-  advanced: {
-    cookiePrefix: isAdminSurface ? "carabao-admin" : "carabao",
-    crossSubDomainCookies,
-  },
-  baseURL: appBaseUrl,
-  trustedOrigins,
-  basePath: AUTH_BASE_PATH,
-  secret: process.env.BETTER_AUTH_SECRET,
-  emailAndPassword: {
-    enabled: true,
-    // Accounts are created by phone, Google or Facebook only; email + password still
-    // signs in an account that has a verified email.
-    disableSignUp: true,
-    requireEmailVerification: false,
-    revokeSessionsOnPasswordReset: true,
-    // Reset by email is for accounts with a verified email; everyone else
-    // resets by SMS (/phone-number/request-password-reset).
-    sendResetPassword: async ({ user, url }) => {
-      if (!user.emailVerified || isPlaceholderEmail(user.email)) return;
-      await sendEmailThroughBackend("/email/send-password-reset", { to: user.email, reset_url: url }, "password-reset");
+    emailVerification: {
+      // Only for an email added on the profile page (changeEmail).
+      sendOnSignUp: false,
+      sendOnSignIn: false,
+      autoSignInAfterVerification: true,
+      sendVerificationEmail: async ({ user, url }) => {
+        if (isPlaceholderEmail(user.email)) return;
+        await sendEmailThroughBackend("/email/send-verification", { to: user.email, verification_url: url }, "email-verify");
+      },
     },
-  },
-  emailVerification: {
-    // Only for an email added on the profile page (changeEmail).
-    sendOnSignUp: false,
-    sendOnSignIn: false,
-    autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      if (isPlaceholderEmail(user.email)) return;
-      await sendEmailThroughBackend("/email/send-verification", { to: user.email, verification_url: url }, "email-verify");
+    // Google and Facebook accounts can be created without a phone; checkout,
+    // merchant applications and order chat ask them to add one (backend
+    // require_verified_phone). Keys live in the frontend env (.env.local).
+    // Not on the admin deploy: admins sign in with email + password, then TOTP.
+    socialProviders: isAdminSurface ? {} : {
+      google: {
+        clientId: process.env.GOOGLE_CLIENT_ID || "your-google-client-id",
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET || "your-google-client-secret",
+      },
+      facebook: {
+        clientId: process.env.FACEBOOK_CLIENT_ID || "your-facebook-client-id",
+        clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "your-facebook-client-secret",
+        // Facebook accounts registered by phone have no email; BetterAuth needs
+        // one, so they get an undeliverable placeholder (hidden like phone signups').
+        mapProfileToUser: (profile) =>
+          profile.email ? {} : { email: `facebook-${profile.id}@${PHONE_PLACEHOLDER_EMAIL_DOMAIN}` },
+      },
     },
-  },
-  // Google and Facebook accounts can be created without a phone; checkout,
-  // merchant applications and order chat ask them to add one (backend
-  // require_verified_phone). Keys live in the frontend env (.env.local).
-  // Not on the admin deploy: admins sign in with email + password, then TOTP.
-  socialProviders: isAdminSurface ? {} : {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID || "your-google-client-id",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "your-google-client-secret",
-    },
-    facebook: {
-      clientId: process.env.FACEBOOK_CLIENT_ID || "your-facebook-client-id",
-      clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "your-facebook-client-secret",
-      // Facebook accounts registered by phone have no email; BetterAuth needs
-      // one, so they get an undeliverable placeholder (hidden like phone signups').
-      mapProfileToUser: (profile) =>
-        profile.email ? {} : { email: `facebook-${profile.id}@${PHONE_PLACEHOLDER_EMAIL_DOMAIN}` },
-    },
+  });
+}
+
+// Made on first use, not at import. `next build` loads every route module to
+// read its config, and the help deploy (APP_SURFACE=help) builds with no
+// database URL and no secrets. It never calls this: proxy.ts sends only /help
+// pages there and refuses /api.
+type Auth = ReturnType<typeof createAuth>;
+let instance: Auth | null = null;
+const getAuth = (): Auth => (instance ??= createAuth());
+
+export const auth = new Proxy({} as Auth, {
+  get: (_target, property) => {
+    const real = getAuth();
+    const value = Reflect.get(real, property);
+    return typeof value === "function" ? value.bind(real) : value;
   },
 });
 
-export type Session = typeof auth.$Infer.Session;
+export type Session = Auth["$Infer"]["Session"];

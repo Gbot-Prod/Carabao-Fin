@@ -1,17 +1,12 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import { Plus_Jakarta_Sans } from "next/font/google";
-import "./globals.css";
+import "../globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import { LanguageProvider } from "@/lib/i18n/LanguageProvider";
 import IdleLogout from "@/components/IdleLogout/IdleLogout";
+import { plusJakartaSans } from "@/lib/fonts";
 
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  style: ["normal", "italic"],
-  variable: "--font-plus-jakarta-sans",
-  display: "swap",
-});
+// Root layout of every page except help (app/(help)/layout.tsx).
 
 export const metadata: Metadata = {
   title: "Carabao",

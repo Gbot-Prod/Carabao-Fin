@@ -164,3 +164,42 @@ test('sign-in page per deploy', () => {
   assert.equal(admin.signInPath(), '/admin/login');
   assert.equal(admin.signInPath('/admin/users'), '/admin/login?next=%2Fadmin%2Fusers');
 });
+
+const helpDeploy = makeSurfaces({
+  rootDomain: 'carabao.test',
+  appSurface: 'help',
+  appUrl: 'http://help.carabao.test:3002',
+  mainUrl: 'http://carabao.test:3000',
+});
+
+test('help deploy: only /help, by clean URL', () => {
+  const host = 'help.carabao.test:3002';
+  assert.deepEqual(helpDeploy.route(req(host, '/')), { kind: 'rewrite', path: '/help' });
+  assert.deepEqual(helpDeploy.route(req(host, '/contact')), { kind: 'rewrite', path: '/help/contact' });
+  assert.deepEqual(helpDeploy.route(req(host, '/help/contact?x=1')), { kind: 'redirect', location: '/contact?x=1' });
+  // Anything else is a help path that does not exist (404 from Next.js).
+  assert.deepEqual(helpDeploy.route(req(host, '/order')), { kind: 'rewrite', path: '/help/order' });
+  assert.deepEqual(helpDeploy.route(req(host, '/admin/users')), { kind: 'rewrite', path: '/help/admin/users' });
+});
+
+test('help deploy: /api is 404, framework files and assets pass', () => {
+  const host = 'help.carabao.test:3002';
+  for (const p of ['/api', '/api/auth/get-session', '/api/csp-report']) {
+    assert.deepEqual(helpDeploy.route(req(host, p)), { kind: 'notFound' }, p);
+  }
+  assert.deepEqual(helpDeploy.route(req(host, '/_next/webpack-hmr')), { kind: 'next' });
+  assert.deepEqual(helpDeploy.route(req(host, '/images/icons/carabaoLogo.png')), { kind: 'next' });
+});
+
+test('help deploy: links go back to the main site', () => {
+  assert.equal(helpDeploy.subdomainMode, true);
+  assert.equal(helpDeploy.appUrl('/terms'), 'http://carabao.test:3000/terms');
+  assert.equal(helpDeploy.merchantUrl('/onboarding'), 'http://merchant.carabao.test:3000/onboarding');
+  assert.equal(helpDeploy.helpUrl('/contact'), '/contact');
+});
+
+test('public and admin deploys leave /api to the app', () => {
+  assert.deepEqual(local.route(req('carabao.test', '/api/auth/get-session')), { kind: 'next' });
+  assert.deepEqual(local.route(req('merchant.carabao.test', '/api/auth/get-session')), { kind: 'next' });
+  assert.deepEqual(admin.route(req('admin.carabao.test', '/api/auth/jwks')), { kind: 'next' });
+});

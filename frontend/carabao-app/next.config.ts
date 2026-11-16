@@ -39,7 +39,12 @@ const nextConfig: NextConfig = {
   // lib/urls.ts reads these in client code too. Set at build, like NEXT_PUBLIC_*.
   env: {
     ROOT_DOMAIN: rootDomain,
-    APP_SURFACE: process.env.APP_SURFACE === "admin" ? "admin" : "public",
+    APP_SURFACE: process.env.APP_SURFACE === "admin" || process.env.APP_SURFACE === "help" ? process.env.APP_SURFACE : "public",
+  },
+  experimental: {
+    // Two root layouts (app/(site), app/(help)): unknown URLs use
+    // app/global-not-found.tsx.
+    globalNotFound: true,
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

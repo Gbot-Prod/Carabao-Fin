@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { routeRequest } from "@/lib/urls";
+import { appSurface, routeRequest } from "@/lib/urls";
 
 // CF-0002: Content-Security-Policy for every page.
 //
@@ -28,12 +28,21 @@ const apiOrigin = origin(
 
 const MAPBOX = ["https://api.mapbox.com", "https://*.tiles.mapbox.com", "https://events.mapbox.com"];
 
-function buildPolicy(nonce: string): string {
+// nonce null: a statically rendered page (help). Its HTML is made at build, so
+// it has no nonce, and Next.js puts inline scripts in it. Those pages have no
+// sign-in and no user data.
+const reportsOn = appSurface !== "help";
+
+function buildPolicy(nonce: string | null): string {
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
     // 'strict-dynamic' lets the nonced Next.js scripts load their chunks.
     // React needs eval only in development (for its debug tools).
-    "script-src": ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", ...(isDev ? ["'unsafe-eval'"] : [])],
+    "script-src": [
+      "'self'",
+      ...(nonce ? [`'nonce-${nonce}'`, "'strict-dynamic'"] : ["'unsafe-inline'"]),
+      ...(isDev ? ["'unsafe-eval'"] : []),
+    ],
     // CSS modules, Mapbox GL and React style={} props use inline styles.
     "style-src": ["'self'", "'unsafe-inline'"],
     // Product photos and avatars come from R2 and Google; map tiles from Mapbox.
@@ -49,8 +58,8 @@ function buildPolicy(nonce: string): string {
     "form-action": ["'self'"],
     "frame-ancestors": ["'none'"],
     "manifest-src": ["'self'"],
-    "report-uri": ["/api/csp-report"],
-    "report-to": ["csp"],
+    // The help deploy has no /api, so it sends no reports.
+    ...(reportsOn ? { "report-uri": ["/api/csp-report"], "report-to": ["csp"] } : {}),
   };
   const parts = Object.entries(directives).map(([name, values]) => `${name} ${values.join(" ")}`);
   if (!isDev && enforce) parts.push("upgrade-insecure-requests");
@@ -73,6 +82,11 @@ export function proxy(request: NextRequest) {
     pathname: request.nextUrl.pathname,
     search: request.nextUrl.search,
   });
+
+  // API routes (all deploys but help): no page, so no routing and no CSP.
+  if (decision.kind === "next" && /^\/api(\/|$)/.test(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
 
   if (decision.kind === "redirect") {
     // A relative location stays on the request host.
@@ -99,24 +113,28 @@ export function proxy(request: NextRequest) {
     return rewriteTo ? NextResponse.rewrite(rewriteTo) : NextResponse.next();
   }
 
-  const nonce = btoa(crypto.randomUUID());
+  // Help pages are static (app/(help)): no nonce for them.
+  const pagePath = rewriteTo ? rewriteTo.pathname : request.nextUrl.pathname;
+  const isStaticPage = appSurface === "help" || pagePath === "/help" || pagePath.startsWith("/help/");
+  const nonce = isStaticPage ? null : btoa(crypto.randomUUID());
   const policy = buildPolicy(nonce);
   const headerName = enforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only";
 
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-nonce", nonce);
+  if (nonce) requestHeaders.set("x-nonce", nonce);
   requestHeaders.set(headerName, policy);
 
   const response = rewriteTo
     ? NextResponse.rewrite(rewriteTo, { request: { headers: requestHeaders } })
     : NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set(headerName, policy);
-  response.headers.set("Reporting-Endpoints", 'csp="/api/csp-report"');
+  if (reportsOn) response.headers.set("Reporting-Endpoints", 'csp="/api/csp-report"');
   return response;
 }
 
 export const config = {
-  // Not /api, not framework files. Prefetches come through too: on merchant.
-  // and help. they must be rewritten like the page itself.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|public).*)"],
+  // Not framework files. /api comes through so that the help deploy can
+  // refuse it (the other deploys pass it on at once). Prefetches come through
+  // too: on merchant. and help. they must be rewritten like the page itself.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|public).*)"],
 };

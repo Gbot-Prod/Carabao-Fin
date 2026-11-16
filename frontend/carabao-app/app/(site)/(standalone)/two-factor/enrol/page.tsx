@@ -3,7 +3,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { enrolmentLinkState, hashEnrolmentToken } from "@/lib/admin-two-factor";
-import SignInAgainButton from "@/app/(admin)/SignInAgainButton";
+import SignInAgainButton from "@/app/(site)/(admin)/SignInAgainButton";
 import EnrolCard from "./EnrolCard";
 import { signInPath } from "@/lib/urls";
 import "../../auth/page.css";

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { signIn } from "@/lib/auth-client";
 import { safeNextPath } from "@/lib/next-path";
-import "@/app/(standalone)/auth/page.css";
+import "@/app/(site)/(standalone)/auth/page.css";
 
 // admin.<root> sign-in: email + password only. An admin with two-step
 // verification goes on to /two-factor (the client's onTwoFactorRedirect).
