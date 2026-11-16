@@ -11,7 +11,9 @@ actions and its own profile data, in the same transaction as the backend change:
 - admin 2FA enrolment: the one-time setup token (a "verification" row that
   lib/auth.ts checks on /two-factor/enable) and an admin's 2FA reset,
 - the uploaded avatar (``image``), so the BetterAuth session shows it too,
-- deleting an account (its sessions, logins and 2FA rows cascade).
+- deleting an account (its sessions, logins and 2FA rows cascade),
+- creating an admin account with email + password (scripts/make_admin.py
+  --create only; there is no HTTP endpoint for it).
 
 Name, email and phone are changed by the BetterAuth client, never here. A failed
 write raises (503) so the whole request rolls back.
@@ -19,8 +21,11 @@ write raises (503) so the whole request rolls back.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
+import string
+import unicodedata
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
@@ -58,7 +63,75 @@ def _run(
         db.expire(loaded)
 
 
+# ── Passwords and ids, as BetterAuth makes them ─────────────────────────────
+
+# @better-auth/utils/password: scrypt N=16384, r=16, p=1, 64 bytes, over the
+# NFKC form of the password; the salt is 16 random bytes as hex, and that hex
+# text is the scrypt salt. Stored as "<salt>:<key hex>".
+_SCRYPT_N, _SCRYPT_R, _SCRYPT_P, _SCRYPT_LEN = 16384, 16, 1, 64
+_SCRYPT_MAXMEM = 128 * _SCRYPT_N * _SCRYPT_R * 2 + 1024 * 1024
+
+_ID_ALPHABET = string.ascii_letters + string.digits
+
+
+def hash_password(password: str, *, salt: str | None = None) -> str:
+    salt = salt or secrets.token_hex(16)
+    key = hashlib.scrypt(
+        unicodedata.normalize("NFKC", password).encode("utf-8"),
+        salt=salt.encode("utf-8"),
+        n=_SCRYPT_N,
+        r=_SCRYPT_R,
+        p=_SCRYPT_P,
+        dklen=_SCRYPT_LEN,
+        maxmem=_SCRYPT_MAXMEM,
+    )
+    return f"{salt}:{key.hex()}"
+
+
+def new_id() -> str:
+    """32 letters and digits, like BetterAuth's generateId()."""
+    return "".join(secrets.choice(_ID_ALPHABET) for _ in range(32))
+
+
 # ── Writes ──────────────────────────────────────────────────────────────────
+
+
+def create_email_identity(db: Session, *, email: str, name: str, password: str) -> str:
+    """A BetterAuth user that signs in with email + password (email verified),
+    for scripts/make_admin.py --create. Returns its id. The caller sets the role
+    and commits."""
+    identity_id = new_id()
+    now = datetime.now(UTC)
+    _run(
+        db,
+        "create the account",
+        identity_id,
+        [
+            (
+                'INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", '
+                '"updatedAt") VALUES (:id, :name, :email, :verified, :now, :now)',
+                {
+                    "id": identity_id,
+                    "name": name,
+                    "email": email,
+                    "verified": True,
+                    "now": now,
+                },
+            ),
+            (
+                'INSERT INTO "account" (id, "accountId", "providerId", "userId", '
+                'password, "createdAt", "updatedAt") VALUES (:aid, :uid, '
+                "'credential', :uid, :password, :now, :now)",
+                {
+                    "aid": new_id(),
+                    "uid": identity_id,
+                    "password": hash_password(password),
+                    "now": now,
+                },
+            ),
+        ],
+    )
+    return identity_id
 
 
 def set_banned(

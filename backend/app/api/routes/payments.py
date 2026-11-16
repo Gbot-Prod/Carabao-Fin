@@ -1,7 +1,5 @@
 import logging
-import os
 from datetime import UTC, datetime
-from urllib.parse import urlparse
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db, require_verified_phone
 from app.core.errors import upstream_error
+from app.core.urls import app_url
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.statuses import OrderStatus, TransactionStatus
@@ -31,9 +30,6 @@ from app.services.paymongo import (
 from app.services.sms_service import notify_merchant_new_order
 
 router = APIRouter(prefix="/payments", tags=["payments"])
-
-_raw_frontend = os.getenv("FRONTEND_URL", "http://localhost:3000")
-FRONTEND_URL = _raw_frontend.split(",")[0].strip()
 
 logger = logging.getLogger(__name__)
 
@@ -67,12 +63,6 @@ def _reconcile_transaction_from_paymongo(txn: Transaction, db: Session) -> None:
     )
     if outcome == "paid" and txn.order is not None:
         notify_merchant_new_order(order=txn.order)
-
-
-def _validate_frontend_url(frontend_url: str) -> None:
-    parsed = urlparse(frontend_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise RuntimeError("FRONTEND_URL is invalid or missing")
 
 
 @router.post("/checkout/{order_id}", response_model=CheckoutResponse)
@@ -169,15 +159,16 @@ def create_payment_checkout(
     platform_fee = money.platform_fee(amount)
     merchant_amount = amount - platform_fee
 
-    _validate_frontend_url(FRONTEND_URL)
+    # The buyer site (APP_URL): PayMongo sends the buyer back there.
+    buyer_site = app_url()
 
     try:
         session_data = create_checkout_session(
             amount_pesos=amount,
             description=f"Carabao Order #{order_id}",
             merchant_name=merchant.merchant_name,
-            success_url=f"{FRONTEND_URL}/orders/success?order_id={order_id}",
-            cancel_url=f"{FRONTEND_URL}/checkout?payment_cancelled=1&order_id={order_id}",
+            success_url=f"{buyer_site}/orders/success?order_id={order_id}",
+            cancel_url=f"{buyer_site}/checkout?payment_cancelled=1&order_id={order_id}",
             reference_number=str(order_id),
         )
     except requests.HTTPError as e:

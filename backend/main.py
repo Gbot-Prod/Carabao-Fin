@@ -216,8 +216,18 @@ async def request_id_and_errors_middleware(request: Request, call_next):
 app.add_middleware(BodySizeLimitMiddleware)
 
 
+# Every web origin that calls the API with credentials: the buyer site, the
+# merchant site and the admin site (documentation/manuals/SUBDOMAINS.md).
+# No wildcards: with allow_credentials a "*" would let any site call as the user.
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
-_allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+_allowed_origins = []
+for _o in (o.strip().rstrip("/") for o in _raw_origins.split(",")):
+    if not _o:
+        continue
+    if "*" in _o:
+        logger.error("ALLOWED_ORIGINS: ignored wildcard %r", _o)
+        continue
+    _allowed_origins.append(_o)
 if _is_dev:
     for dev_origin in (
         "http://localhost:8081",

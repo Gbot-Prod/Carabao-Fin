@@ -5,7 +5,7 @@ import time
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -32,8 +32,11 @@ from app.models.user import User
 from tests import better_auth
 from tests.files import png_bytes
 from tests.tokens import (
+    ADMIN_KEY,
+    ADMIN_KID,
     ISSUER,
     KEY,
+    PUBLIC_KID,
     REAL_SIGNING_KEY,
     bearer,
     make_token,
@@ -120,41 +123,107 @@ def test_hs256_token_signed_with_a_guessable_secret_is_rejected(client):
 
 
 class _FakeJwks:
-    def __init__(self, error=None, key=None):
-        self.error, self.key = error, key
+    """Stands in for one key set (app.core.security._KeySet)."""
 
-    def get_signing_key_from_jwt(self, _token):
+    def __init__(self, error=None, keys=None):
+        self.error, self.keys = error, keys or {}
+
+    def find(self, kid, *, refresh):
         if self.error:
             raise self.error
-        return type("K", (), {"key": self.key})()
+        return self.keys.get(kid)
+
+
+PUBLIC_URL = "http://web.test/api/auth/jwks"
+ADMIN_URL = "http://web-admin.internal:3001/api/auth/jwks"
+
+
+def _jwks(monkeypatch, sets):
+    monkeypatch.setattr(security, "_signing_key", REAL_SIGNING_KEY)
+    monkeypatch.setattr(security, "_jwk_client", lambda url: sets[url])
 
 
 def test_keys_come_from_the_jwks_client(client, monkeypatch):
-    monkeypatch.setattr(security, "_signing_key", REAL_SIGNING_KEY)
-    monkeypatch.setattr(
-        security, "_jwk_client", lambda _url: _FakeJwks(key=KEY.public_key())
-    )
+    _jwks(monkeypatch, {PUBLIC_URL: _FakeJwks(keys={PUBLIC_KID: KEY.public_key()})})
     assert _me(client).status_code == 200
 
 
 def test_jwks_outage_is_503_not_401(client, monkeypatch):
-    monkeypatch.setattr(security, "_signing_key", REAL_SIGNING_KEY)
-    monkeypatch.setattr(
-        security,
-        "_jwk_client",
-        lambda _url: _FakeJwks(error=jwt.PyJWKClientConnectionError("down")),
-    )
+    down = _FakeJwks(error=jwt.PyJWKClientConnectionError("down"))
+    _jwks(monkeypatch, {PUBLIC_URL: down})
     assert _me(client).status_code == 503
 
 
 def test_unknown_key_id_is_401(client, monkeypatch):
-    monkeypatch.setattr(security, "_signing_key", REAL_SIGNING_KEY)
-    monkeypatch.setattr(
-        security,
-        "_jwk_client",
-        lambda _url: _FakeJwks(error=jwt.PyJWKClientError("no matching kid")),
-    )
+    _jwks(monkeypatch, {PUBLIC_URL: _FakeJwks()})
     assert _me(client).status_code == 401
+
+
+def test_token_without_kid_is_401(client, monkeypatch):
+    _jwks(monkeypatch, {PUBLIC_URL: _FakeJwks(keys={PUBLIC_KID: KEY.public_key()})})
+    token = jwt.encode({"sub": "x"}, KEY, algorithm="EdDSA")
+    assert client.get("/auth/me", headers=bearer(token)).status_code == 401
+
+
+def test_surface_comes_from_the_key_set(monkeypatch):
+    monkeypatch.setenv("BETTER_AUTH_URL", ISSUER)
+    monkeypatch.setenv("ADMIN_JWKS_URL", ADMIN_URL)
+    _jwks(
+        monkeypatch,
+        {
+            PUBLIC_URL: _FakeJwks(keys={PUBLIC_KID: KEY.public_key()}),
+            ADMIN_URL: _FakeJwks(keys={ADMIN_KID: ADMIN_KEY.public_key()}),
+        },
+    )
+    assert security.verify_access_token(make_token()).surface == "public"
+    assert security.verify_access_token(make_token(key=ADMIN_KEY)).surface == "admin"
+    # The admin key under the public kid: the public key set does not verify it.
+    with pytest.raises(HTTPException) as exc:
+        security.verify_access_token(make_token(key=ADMIN_KEY, kid=PUBLIC_KID))
+    assert exc.value.status_code == 401
+
+
+def test_without_admin_jwks_url_no_admin_token_is_accepted(monkeypatch):
+    monkeypatch.setenv("BETTER_AUTH_URL", ISSUER)
+    monkeypatch.delenv("ADMIN_JWKS_URL", raising=False)
+    _jwks(monkeypatch, {PUBLIC_URL: _FakeJwks(keys={PUBLIC_KID: KEY.public_key()})})
+    with pytest.raises(HTTPException) as exc:
+        security.verify_access_token(make_token(key=ADMIN_KEY))
+    assert exc.value.status_code == 401
+
+
+def test_admin_jwks_outage_does_not_break_public_tokens(monkeypatch):
+    monkeypatch.setenv("BETTER_AUTH_URL", ISSUER)
+    monkeypatch.setenv("ADMIN_JWKS_URL", ADMIN_URL)
+    _jwks(
+        monkeypatch,
+        {
+            PUBLIC_URL: _FakeJwks(keys={PUBLIC_KID: KEY.public_key()}),
+            ADMIN_URL: _FakeJwks(error=jwt.PyJWKClientConnectionError("down")),
+        },
+    )
+    assert security.verify_access_token(make_token()).surface == "public"
+    with pytest.raises(HTTPException) as exc:
+        security.verify_access_token(make_token(key=ADMIN_KEY))
+    assert exc.value.status_code == 503
+
+
+def test_unknown_kid_refetch_is_rate_limited():
+    calls: list[bool] = []
+
+    class _Set:
+        keys: list = []
+
+    class _Client:
+        def get_jwk_set(self, refresh=False):
+            calls.append(refresh)
+            return _Set()
+
+    key_set = security._KeySet("http://web.test/api/auth/jwks")
+    key_set.client = _Client()
+    assert key_set.find("nope", refresh=True) is None
+    assert key_set.find("nope", refresh=True) is None  # inside the interval: no fetch
+    assert calls == [True]
 
 
 def test_jwks_url_follows_better_auth_url(monkeypatch):

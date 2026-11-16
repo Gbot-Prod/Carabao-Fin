@@ -216,3 +216,9 @@ class User(Base):
     # that passed the TOTP step (the "mfa" claim, CF-0017). get_current_user
     # sets it; the admin API and admin chat require it.
     mfa_session: bool = False
+
+    # Not a column: "admin" when this request's token was signed by the admin
+    # web deploy's keys (jwks_admin), else "public". get_current_user sets it;
+    # the admin API and admin chat require "admin"
+    # (documentation/manuals/SUBDOMAINS.md).
+    token_surface: str = "public"

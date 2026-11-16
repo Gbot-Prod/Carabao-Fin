@@ -23,7 +23,7 @@ from urllib.parse import quote
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.security import token_issuer
+from app.core.urls import admin_url
 from app.integrations.sms.semaphore import send_sms
 from app.models.user import User
 from app.services import better_auth_store
@@ -75,7 +75,8 @@ def issue(db: Session, user: User) -> str:
 
 
 def setup_url(token: str) -> str:
-    return f"{token_issuer()}{SETUP_PATH}?token={quote(token)}"
+    # The enrol page is on the admin site (admin.<root>), with its own sign-in.
+    return f"{admin_url()}{SETUP_PATH}?token={quote(token)}"
 
 
 def deliver(user: User, token: str) -> list[str]:

@@ -72,3 +72,31 @@ def record_admin_action(
     )
     db.add(entry)
     return entry
+
+
+# Who acted when no admin did: a server script (scripts/make_admin.py).
+SYSTEM_ACTOR = "system"
+
+
+def record_system_action(
+    db: Session,
+    *,
+    action: str,
+    target_type: str,
+    target_id: int | None,
+    before: dict[str, Any] | None = None,
+    after: dict[str, Any] | None = None,
+) -> AdminAuditLog:
+    """Like record_admin_action, with no admin: admin_id is empty and the actor
+    is "system". Same rule: the caller's commit saves it with the change."""
+    entry = AdminAuditLog(
+        admin_id=None,
+        admin_email=SYSTEM_ACTOR,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        before=_jsonable(before),
+        after=_jsonable(after),
+    )
+    db.add(entry)
+    return entry

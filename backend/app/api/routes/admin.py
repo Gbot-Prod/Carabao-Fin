@@ -60,12 +60,19 @@ ADMIN_MFA_SESSION_DETAIL = (
     "Sign in again and enter the code from your authenticator app to use the "
     "admin area."
 )
+ADMIN_SURFACE_DETAIL = "Use the admin site to do this."
+
 
 
 def _require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Admins always need two-step verification (E8c, CF-0003), and this
     session must have passed the TOTP step (CF-0017): a Google sign-in or a
-    session from before 2FA was on does not count."""
+    session from before 2FA was on does not count.
+
+    The token must also come from the admin web deploy: signed by its own keys
+    (app/core/security.py). A session on the public site gets nothing here."""
+    if current_user.token_surface != "admin":
+        raise HTTPException(status_code=403, detail=ADMIN_SURFACE_DETAIL)
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin only")
     if not current_user.two_factor_enabled:

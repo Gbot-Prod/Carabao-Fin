@@ -33,8 +33,14 @@ def role_in_order(order: Order, user: User) -> str | None:
     if merchant is not None and merchant.user_id == user.id:
         return "merchant"
     # Same rule as the admin API (E8c, CF-0003, CF-0017): admins need two-step
-    # verification, and this session must have passed the TOTP step.
-    if user.is_admin and user.two_factor_enabled and user.mfa_session:
+    # verification, this session must have passed the TOTP step, and the token
+    # must come from the admin site.
+    if (
+        user.is_admin
+        and user.two_factor_enabled
+        and user.mfa_session
+        and user.token_surface == "admin"
+    ):
         return "admin"
     return None
 
