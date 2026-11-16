@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
 import {
   Banknote,
   Boxes,
@@ -46,6 +46,15 @@ const matches = (path: string, itemPath: string) =>
 
 /** Active on its own path, or on a related page ("/routing/5" marks Shipments). */
 const isActive = (path: string, item: NavItem) => [item.path, ...(item.also ?? [])].some((p) => matches(path, p));
+
+// Same width as the mobile rules in shell.module.css.
+const NARROW_QUERY = "(max-width: 768px)";
+const subscribeNarrow = (onChange: () => void) => {
+  const mq = window.matchMedia(NARROW_QUERY);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+};
+const getNarrow = () => window.matchMedia(NARROW_QUERY).matches;
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -132,6 +141,9 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
   } = useMerchant();
   const [signingOut, setSigningOut] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  // On a narrow screen the closed sidebar is off the screen: make it inert, so
+  // Tab does not move focus into links that cannot be seen.
+  const isNarrow = useSyncExternalStore(subscribeNarrow, getNarrow, () => false);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -229,7 +241,10 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
         tabIndex={isMobileOpen ? 0 : -1}
       />
 
-      <aside className={`${styles.sidebar} ${isMobileOpen ? styles.sidebarOpen : ""}`}>
+      <aside
+        className={`${styles.sidebar} ${isMobileOpen ? styles.sidebarOpen : ""}`}
+        inert={isNarrow && !isMobileOpen}
+      >
         <div className={styles.brandRow}>
           {shopPage?.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
