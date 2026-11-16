@@ -1,9 +1,9 @@
-import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
 import { getMigrations } from "better-auth/db/migration";
 import { admin, jwt, phoneNumber, twoFactor } from "better-auth/plugins";
+import nextEnv from "@next/env";
 import { Pool } from "pg";
 
 import { poolConfigFromUrl } from "../lib/db-ssl.mjs";
@@ -11,37 +11,13 @@ import { poolConfigFromUrl } from "../lib/db-ssl.mjs";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const appRoot = path.resolve(__dirname, "..");
+const { loadEnvConfig } = nextEnv;
 
-const readEnvLocal = () => {
-  const envPath = path.join(appRoot, ".env.local");
-  if (!fs.existsSync(envPath)) {
-    return {};
-  }
-
-  const text = fs.readFileSync(envPath, "utf8");
-  const out = {};
-
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) {
-      continue;
-    }
-
-    const idx = line.indexOf("=");
-    if (idx === -1) {
-      continue;
-    }
-
-    const key = line.slice(0, idx).trim();
-    const value = line.slice(idx + 1).trim().replace(/^"|"$/g, "");
-    out[key] = value;
-  }
-
-  return out;
-};
-
-const envFile = readEnvLocal();
-const env = { ...envFile, ...process.env };
+// The same loader as `next dev` / `next build` (.env.local, .env, ...). It reads
+// quoted values that span lines, such as a multi-line PGSSL_CA PEM. Values
+// already in process.env win.
+loadEnvConfig(appRoot);
+const env = process.env;
 
 const rawPostgresUrl = env.DATABASE_URL;
 

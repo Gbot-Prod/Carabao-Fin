@@ -190,8 +190,11 @@ const adminSurfaceOnly = (): BetterAuthPlugin => ({
 //   - Setup (/two-factor/enable) needs the one-time token from the link that
 //     the backend sends when an admin promotes a user or resets an admin's 2FA.
 //     A password or a session alone is not enough, so a person who has only
-//     those cannot enrol their own authenticator. No password is asked
-//     (allowPasswordless), so a Google-only admin can enrol too.
+//     those cannot enrol their own authenticator. allowPasswordless lets an
+//     admin with no password (Google only) enrol. An account that has a
+//     password must still type it: BetterAuth's shouldRequirePassword asks for
+//     it whenever a "credential" account has one. That is on purpose: a
+//     stolen session plus a leaked link is not enough.
 //   - Admins cannot turn 2FA off. Another admin resets it (backend).
 //   - Every way to sign in asks for the code, not only password sign-in: a
 //     Google or Facebook sign-in for a 2FA account goes to /two-factor first.
