@@ -1,0 +1,98 @@
+.card {
+  width: 100%;
+  padding: 0.75rem;
+  text-align: left;
+  background: var(--bg-white);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
+}
+
+.card:hover {
+  background: var(--green-50);
+  border-color: var(--border-strong);
+}
+
+.selected,
+.selected:hover {
+  background: var(--green-50);
+  border-color: var(--green-600);
+  box-shadow: 0 0 0 1px var(--green-600);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.thumb {
+  flex-shrink: 0;
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--green-600);
+  background: var(--surface-muted);
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.merchant {
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bought {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: var(--radius-pill);
+}
+
+.shipped {
+  color: var(--success-text);
+  background: var(--surface-muted);
+}
+
+.notShipped {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--green-border);
+}
+
+.value {
+  font-weight: 500;
+  color: var(--text-strong);
+}

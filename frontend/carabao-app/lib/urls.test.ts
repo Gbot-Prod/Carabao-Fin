@@ -198,6 +198,20 @@ test('help deploy: links go back to the main site', () => {
   assert.equal(helpDeploy.helpUrl('/contact'), '/contact');
 });
 
+test('a dot in a page path does not skip the host rules', () => {
+  const host = 'admin.carabao.test:3001';
+  assert.deepEqual(admin.route(req(host, '/farms/1.x')), { kind: 'rewrite', path: '/admin/farms/1.x' });
+  assert.deepEqual(admin.route(req(host, '/orders/5.json')), { kind: 'rewrite', path: '/admin/orders/5.json' });
+  assert.deepEqual(admin.route(req(host, '/merchant/routing/3.a')), { kind: 'rewrite', path: '/admin/merchant/routing/3.a' });
+  assert.deepEqual(helpDeploy.route(req('help.carabao.test:3002', '/farms/1.x')), { kind: 'rewrite', path: '/help/farms/1.x' });
+  assert.deepEqual(local.route(req('carabao.test', '/admin/orders.x')), { kind: 'notFound' });
+  // Real assets still pass on every deploy.
+  for (const p of ['/icon.png', '/apple-icon.png', '/file.svg', '/images/icons/carabaoLogo.png']) {
+    assert.deepEqual(admin.route(req(host, p)), { kind: 'next' }, p);
+    assert.deepEqual(local.route(req('merchant.carabao.test', p)), { kind: 'next' }, p);
+  }
+});
+
 test('public and admin deploys leave /api to the app', () => {
   assert.deepEqual(local.route(req('carabao.test', '/api/auth/get-session')), { kind: 'next' });
   assert.deepEqual(local.route(req('merchant.carabao.test', '/api/auth/get-session')), { kind: 'next' });
