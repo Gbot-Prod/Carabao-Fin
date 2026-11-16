@@ -24,11 +24,21 @@ const securityHeaders = [
     : []),
 ];
 
+const rootDomain = process.env.ROOT_DOMAIN || "carabao.online";
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // `npm run dev:admin` runs a second dev server; it needs its own folder.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+  // Local hosts (carabao.test, merchant.carabao.test, ...): Next.js blocks dev
+  // requests from other hosts than localhost unless they are listed.
+  allowedDevOrigins: [rootDomain, `*.${rootDomain}`],
+  // The admin dev server uses tsconfig.admin.json, so that Next.js writes its
+  // .next-admin type paths there and not in tsconfig.json.
+  typescript: { tsconfigPath: process.env.NEXT_TSCONFIG_PATH || "tsconfig.json" },
   // lib/urls.ts reads these in client code too. Set at build, like NEXT_PUBLIC_*.
   env: {
-    ROOT_DOMAIN: process.env.ROOT_DOMAIN || "carabao.online",
+    ROOT_DOMAIN: rootDomain,
     APP_SURFACE: process.env.APP_SURFACE === "admin" ? "admin" : "public",
   },
   async headers() {

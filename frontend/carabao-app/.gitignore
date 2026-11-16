@@ -14,5 +14,8 @@ node_modules/
 
 /generated/prisma
 
+# Admin dev server build (npm run dev:admin)
+/.next-admin/
+
 # TypeScript incremental build cache
 *.tsbuildinfo
