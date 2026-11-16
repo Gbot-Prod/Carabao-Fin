@@ -11,7 +11,7 @@ If you change a fact here in the code, update this file in the same change.
 | Host | Service | `APP_SURFACE` | Serves |
 |---|---|---|---|
 | `carabao.online` | web | `public` | Buyer app |
-| `merchant.carabao.online` | web (same deploy) | `public` | `/merchant/*` as clean URLs (`/`, `/routing/<id>`, `/onboarding`) |
+| `merchant.carabao.online` | web (same deploy) | `public` | `/merchant/*` as clean URLs (`/`, `/sales`, `/routing/<id>`, `/onboarding`, ...; see 1.5) |
 | `help.carabao.online` | web-help (same repo, own deploy) | `help` | `/help/*` only, as clean URLs (`/`, `/contact`). Static. No sign-in, no API, no database. |
 | `admin.carabao.online` | web-admin (same repo, own deploy) | `admin` | `/admin/*` only |
 | `api.carabao.online` | backend | — | FastAPI |
@@ -89,7 +89,7 @@ Use `lib/urls.ts`. Do not write a host in code.
 | `helpUrl(path)` | help page by its clean path |
 | `adminUrl(path)` | admin page by its full path (`adminUrl("/admin/orders")`) |
 | `signInPath(next?)` | `/auth` on the public deploy, `/admin/login` on the admin deploy |
-| `resolveStoredLink(link)` | a stored notification path (`/merchantDashboard`, `/admin/orders`) to the correct URL |
+| `resolveStoredLink(link)` | a stored notification path (`/merchantDashboard`, `/admin/orders`) to the correct URL. The bell first maps a plain `/merchantDashboard` by notification kind (`lib/merchant-links.ts`, 1.5). |
 
 A link from a merchant page to a buyer page goes to another origin. Use a full page load (`window.location.assign(appUrl(...))`) or a `<Link>` with the absolute URL. Do not use `router.push("/profile")` on `merchant.`.
 
@@ -142,6 +142,28 @@ Key sets are kept 1 hour. An unknown `kid` makes the API fetch the set again, at
 
 `ADMIN_JWKS_URL` must not go through Cloudflare Access. In production, use the Railway private network: `http://web-admin.railway.internal:<PORT>/api/auth/jwks`.
 
+
+### 1.5 Merchant site pages (`app/(site)/(merchant)`)
+
+The merchant pages do not use the buyer layout. `(merchant)/merchant/(shell)/layout.tsx` gives each page `MerchantShell` (a sidebar like the admin site) and `MerchantProvider` (it loads the performance, produce, shop page and orders once for all pages). The shell shows a gate when the user is signed out or has no merchant profile. Onboarding is outside the shell, because the user is not a merchant yet.
+
+| Clean path | Page |
+|---|---|
+| `/` | Dashboard: stat cards, "needs your attention", revenue and order charts, recent orders |
+| `/sales` | Orders. `?order=<id>` scrolls to one order. Not `/orders`: that is a buyer path and redirects to the apex (1.1). |
+| `/shipments` | Orders ready to ship, make a route |
+| `/routing/<id>` | One route (Shipments is active in the sidebar) |
+| `/earnings` | Earnings, payout details, cash out |
+| `/reviews` | Reviews |
+| `/produce` | Produce listings |
+| `/inventory` | Stock, stock alerts and threshold, demand insight |
+| `/shop` | Public shop page (logo, banner, title) |
+| `/settings` | Store details (address, pickup pin, delivery days and price, contact number), delete merchant profile |
+| `/onboarding` | Merchant application (no shell) |
+
+A new merchant page must not have the name of a buyer path (1.1).
+
+Notification links: the backend stores `/merchantDashboard` for all merchant notifications, and the mobile app reads it. Do not change it. The web bell opens a page by the notification kind: `new_order` and `chat_message` open `/sales`, `review_received` opens `/reviews`, `payout_released` and `payout_destination_changed` open `/earnings`. Other kinds open `/`.
 ---
 
 ## 2. Environment variables
@@ -342,8 +364,8 @@ Automatic checks: `npm test`, `npm run lint` and `npm run build` in `frontend/ca
 | 10 | On the admin site, sign in with a non-admin email account | "This account is not an admin account." and no session |
 | 11 | On the admin site, call `POST /api/auth/sign-in/social` or `/api/auth/sign-up/email` | 404 |
 | 12 | Admin: sign in on the admin site with password, then TOTP | dashboard. API calls work (token from `jwks_admin`). |
-| 13 | Merchant: from the dashboard click "View Shop", "Back to Profile", and a shipment "Routing" link | apex shop page, apex profile, `merchant.` routing page |
-| 14 | Open a notification that links to `/merchantDashboard` | opens `merchant.` dashboard |
+| 13 | Merchant: in the sidebar click "View my shop" and "Buyer site", the top-bar profile link, and a "Routing" link on Shipments | apex shop page, apex `/order`, apex profile, `merchant.` routing page |
+| 14 | Open a "New paid order" notification (stored link `/merchantDashboard`) | opens `merchant.` `/sales` |
 | 15 | Run the hardcoded-host grep (below) | only the localhost fallbacks |
 
 Hardcoded-host grep:
