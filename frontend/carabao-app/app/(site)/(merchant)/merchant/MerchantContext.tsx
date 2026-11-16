@@ -54,7 +54,8 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [shopPage, setShopPage] = useState<ShopPage | null>(null);
   const [produces, setProduces] = useState<Produce[]>([]);
-  const [produceLoading, setProduceLoading] = useState(false);
+  // true from the start: pages render only after the merchant loads, and this load starts then.
+  const [produceLoading, setProduceLoading] = useState(true);
 
   const ordersState = useMerchantOrders(isMerchant === true);
   const shipmentSelection = useShipmentSelection(ordersState.readyToShip);

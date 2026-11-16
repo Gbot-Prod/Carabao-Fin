@@ -274,7 +274,7 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
           </button>
           <span className={styles.topbarTitle}>{current?.label ?? "Merchant"}</span>
           <div className={styles.topbarRight}>
-            <NotificationBell />
+            <NotificationBell placement="down" />
             <a className={styles.topbarProfile} href={appUrl("/profile")} title="My profile">
               <span className={styles.topbarName}>{displayName}</span>
               <span className={`${styles.avatar} ${styles.avatarSm}`} aria-hidden="true">{initials(displayName)}</span>

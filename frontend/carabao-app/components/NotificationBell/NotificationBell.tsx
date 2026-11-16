@@ -21,7 +21,11 @@ type Item = {
 const POLL_MS = 60_000;
 
 /** The notification bell (U5): unread count, latest items, mark read. */
-export default function NotificationBell() {
+/**
+ * placement "up" (default) opens the list above the bell, for the bottom of the
+ * buyer sidebar; "down" opens it below and to the left, for a top bar.
+ */
+export default function NotificationBell({ placement = "up" }: { placement?: "up" | "down" } = {}) {
   const { t } = useLanguage();
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
@@ -107,7 +111,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className={styles.panel} role="dialog" aria-label={t.notificationsBell.title}>
+        <div className={`${styles.panel} ${placement === "down" ? styles.panelDown : ""}`} role="dialog" aria-label={t.notificationsBell.title}>
           <div className={styles.panelHeader}>
             <strong>{t.notificationsBell.title}</strong>
             {unread > 0 && (
