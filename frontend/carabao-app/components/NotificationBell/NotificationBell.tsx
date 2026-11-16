@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/util/api/client";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import styles from "./NotificationBell.module.css";
-import { resolveStoredLink } from "@/lib/urls";
+import { merchantUrl, resolveStoredLink } from "@/lib/urls";
+import { merchantPageForNotification } from "@/lib/merchant-links";
 
 type Item = {
   id: number;
@@ -72,7 +73,9 @@ export default function NotificationBell() {
     setOpen(false);
     // R3: stored links are paths ("/merchantDashboard", "/admin/orders"); the
     // mobile app reads them too. Map to the right host here, do not change them.
-    const target = resolveStoredLink(item.link);
+    // A plain "/merchantDashboard" opens the merchant page for this kind (new order -> Orders).
+    const merchantPage = merchantPageForNotification(item.link, item.kind);
+    const target = merchantPage ? merchantUrl(merchantPage) : resolveStoredLink(item.link);
     if (!target) return;
     if (/^https?:\/\//.test(target) && new URL(target).origin !== window.location.origin) {
       window.location.assign(target);
