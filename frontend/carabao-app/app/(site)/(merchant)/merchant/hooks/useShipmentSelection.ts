@@ -2,8 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import { MAX_SHIPMENT_ORDERS, type MerchantOrder } from "@/util/api";
 
 /**
- * Orders picked for the next shipment. Held in the page so the selection
- * survives switching tabs. Ids that stop being shippable (cancelled, shipped)
+ * Orders picked for the next shipment. Held in MerchantProvider so the
+ * selection survives a move to another merchant page. Ids that stop being shippable (cancelled, shipped)
  * drop out automatically and never count toward the cap.
  */
 export function useShipmentSelection(readyToShip: MerchantOrder[]) {
