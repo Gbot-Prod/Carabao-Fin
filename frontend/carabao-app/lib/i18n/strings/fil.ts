@@ -397,7 +397,7 @@ const fil: Strings = {
   },
   routing: {
     title: 'Ruta',
-    back: 'Bumalik sa dashboard',
+    back: 'Bumalik sa mga shipment',
     shipment: 'Shipment #{id}',
     stopsDone: '{done} sa {total} na hintuan ang tapos',
     plannedDuration: 'Planong oras ng biyahe {duration}',

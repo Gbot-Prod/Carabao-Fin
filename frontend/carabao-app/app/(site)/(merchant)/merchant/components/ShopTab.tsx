@@ -5,26 +5,21 @@ import {
   updateMyShopPage,
   uploadBannerImage,
   uploadShopLogo,
-  type Merchant,
   type ShopPage,
 } from "@/util/api";
-import StoreDetails from "./StoreDetails";
-
 type Props = {
   shopPage: ShopPage | null;
   onShopPageChange: (page: ShopPage) => void;
-  merchant: Merchant | null;
-  onMerchantChange: (merchant: Merchant) => void;
 };
 
-export default function ShopTab({ shopPage, onShopPageChange, merchant, onMerchantChange }: Props) {
+// The public shop page (logo, banner, title). Store details (address, pickup
+// pin, delivery days) are on the Settings page (StoreDetails).
+export default function ShopTab({ shopPage, onShopPageChange }: Props) {
   return (
     <div className={styles.shopLayout}>
-      <h2 className={styles.sectionTitle}>Shop Page</h2>
       {shopPage
         ? <ShopPageEditor shopPage={shopPage} onChange={onShopPageChange} />
         : <ShopPageCreateForm onCreated={onShopPageChange} />}
-      <StoreDetails merchant={merchant} onSaved={onMerchantChange} />
     </div>
   );
 }

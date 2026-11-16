@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test util/navigation.test.ts lib/blocked-auth-paths.test.ts lib/phone.test.ts lib/admin-two-factor.test.ts lib/next-path.test.ts lib/urls.test.ts",
+    "test": "node --test util/navigation.test.ts lib/blocked-auth-paths.test.ts lib/phone.test.ts lib/admin-two-factor.test.ts lib/next-path.test.ts lib/urls.test.ts lib/merchant-links.test.ts",
     "auth:migrate": "node scripts/better-auth-migrate.mjs",
     "auth:migrate:apply": "node scripts/better-auth-migrate.mjs --apply"
   },
@@ -30,14 +30,12 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4.2.1",
     "typescript": "^5"
   }
 }

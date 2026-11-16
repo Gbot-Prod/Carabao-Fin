@@ -8,7 +8,7 @@ from app.api.routes import admin, admin_audit, admin_orders
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.merchant_application import MerchantApplication
 from app.models.user import User
-from app.services import refund_service
+from app.services import admin_enrolment, refund_service
 from tests.better_auth import make_user
 from tests.test_admin_orders import _order, _txn
 from tests.test_payouts import _env, _requested_batch, transfers  # noqa: F401
@@ -38,7 +38,10 @@ def _entries(db, action=None):
     return q.order_by(AdminAuditLog.id).all()
 
 
-def test_role_change_is_logged(db, merchant):
+def test_role_change_is_logged(db, merchant, monkeypatch):
+    # Promoting sends a 2FA setup link; capture it, do not text or email it.
+    monkeypatch.setattr(admin_enrolment, "send_sms", lambda **_: None)
+    monkeypatch.setattr(admin_enrolment, "send_admin_enrolment_email", lambda *_: None)
     staff = _staff(db)
     target, _ = _buyer(db)
     res = _client(db, staff).patch(

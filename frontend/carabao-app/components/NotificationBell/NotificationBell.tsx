@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/util/api/client";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import styles from "./NotificationBell.module.css";
-import { resolveStoredLink } from "@/lib/urls";
+import { merchantUrl, resolveStoredLink } from "@/lib/urls";
+import { merchantPageForNotification } from "@/lib/merchant-links";
 
 type Item = {
   id: number;
@@ -20,7 +21,11 @@ type Item = {
 const POLL_MS = 60_000;
 
 /** The notification bell (U5): unread count, latest items, mark read. */
-export default function NotificationBell() {
+/**
+ * placement "up" (default) opens the list above the bell, for the bottom of the
+ * buyer sidebar; "down" opens it below and to the left, for a top bar.
+ */
+export default function NotificationBell({ placement = "up" }: { placement?: "up" | "down" } = {}) {
   const { t } = useLanguage();
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
@@ -72,7 +77,9 @@ export default function NotificationBell() {
     setOpen(false);
     // R3: stored links are paths ("/merchantDashboard", "/admin/orders"); the
     // mobile app reads them too. Map to the right host here, do not change them.
-    const target = resolveStoredLink(item.link);
+    // A plain "/merchantDashboard" opens the merchant page for this kind (new order -> Orders).
+    const merchantPage = merchantPageForNotification(item.link, item.kind);
+    const target = merchantPage ? merchantUrl(merchantPage) : resolveStoredLink(item.link);
     if (!target) return;
     if (/^https?:\/\//.test(target) && new URL(target).origin !== window.location.origin) {
       window.location.assign(target);
@@ -104,7 +111,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className={styles.panel} role="dialog" aria-label={t.notificationsBell.title}>
+        <div className={`${styles.panel} ${placement === "down" ? styles.panelDown : ""}`} role="dialog" aria-label={t.notificationsBell.title}>
           <div className={styles.panelHeader}>
             <strong>{t.notificationsBell.title}</strong>
             {unread > 0 && (

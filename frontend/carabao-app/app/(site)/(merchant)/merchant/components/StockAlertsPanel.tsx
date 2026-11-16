@@ -12,7 +12,7 @@ import {
 } from "@/util/api";
 
 type Props = {
-  /** Re-fetch when the listings change (e.g. stock edited on the Produce tab). */
+  /** Re-fetch when the listings change (e.g. stock edited on the Produce page). */
   refreshKey: unknown;
   onThreshold?: (threshold: number) => void;
 };

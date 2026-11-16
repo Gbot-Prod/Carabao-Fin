@@ -8,8 +8,8 @@ export const isReadyToShip = (o: MerchantOrder) =>
 
 /**
  * Merchant orders, fetched once `enabled` is true and kept afterwards.
- * Lives in the page (not a tab) because the Orders and Shipments tabs both
- * read it, and the tab bar shows counts from it.
+ * Lives in MerchantProvider (not a page) because the Orders, Shipments and
+ * dashboard pages read it, and the sidebar shows counts from it.
  */
 export function useMerchantOrders(enabled: boolean) {
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
@@ -24,7 +24,7 @@ export function useMerchantOrders(enabled: boolean) {
       setOrders(await fetchMyMerchantOrders());
       setLoaded(true);
     } catch {
-      setError("Failed to load orders. Please refresh the tab.");
+      setError("Failed to load orders. Refresh the page to try again.");
     } finally {
       setLoading(false);
     }

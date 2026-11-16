@@ -11,7 +11,7 @@ import { useAuthPrompt } from '@/components/AuthPrompt/AuthPromptContext';
 import { fetchMyFollows, followFarm, unfollowFarm } from '@/util/api/merchants';
 import { fmt } from '@/lib/i18n/format';
 import ReferencePriceHint, { useReferencePrices } from '@/components/ReferencePrice/ReferencePriceHint';
-import { formatRequestedDate } from '@/app/(site)/(app)/merchant/lib/format';
+import { formatRequestedDate } from '@/app/(site)/(merchant)/merchant/lib/format';
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
 
 export default function MerchantDetailPage() {

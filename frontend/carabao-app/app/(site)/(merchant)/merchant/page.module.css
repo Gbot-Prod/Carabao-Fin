@@ -1,33 +1,6 @@
-/* ── Full-page layout ── bleed to edges of app-shell__content ─────────────── */
-.page {
-  margin: -1.5rem -2rem;
-  min-height: calc(100dvh - 0px);
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-primary);
-}
+/* Shared styles of the merchant section components. */
 
 @media (max-width: 768px) {
-  .page {
-    margin: -1rem;
-  }
-
-  .dashHeader,
-  .tabContent {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .dashHeaderRight,
-  .quickStats {
-    width: 100%;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .kpiGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
   .overviewRow {
     grid-template-columns: 1fr;
@@ -39,190 +12,7 @@
   }
 }
 
-@media (max-width: 480px) {
-  .kpiGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .dashHeaderLeft {
-    width: 100%;
-  }
-
-  .quickStat {
-    align-items: flex-start;
-  }
-}
-
-/* ── Top header bar ──────────────────────────────────────────────────────── */
-.dashHeader {
-  background: var(--green-900);
-  padding: 18px 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.dashHeaderLeft {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.dashLogo {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-sm);
-  object-fit: cover;
-  flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.dashName {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 850;
-  color: #ffffff;
-  letter-spacing: -0.01em;
-}
-
-.dashSub {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 600;
-}
-
-.dashHeaderRight {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.quickStats {
-  display: flex;
-  gap: 24px;
-}
-
-.quickStat {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-}
-
-.quickStatLabel {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.5);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.quickStatValue {
-  font-size: 15px;
-  font-weight: 850;
-  color: #ffffff;
-}
-
-.viewShopBtn {
-  padding: 8px 14px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
-  transition: background 0.15s;
-  white-space: nowrap;
-}
-
-.viewShopBtn:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* ── Tab bar ──────────────────────────────────────────────────────────────── */
-.tabBar {
-  display: flex;
-  background: var(--bg-white);
-  border-bottom: 1px solid rgba(23, 61, 37, 0.10);
-  padding: 0 28px;
-  gap: 0;
-  overflow-x: auto;
-  flex-shrink: 0;
-}
-
-.tabBtn {
-  padding: 14px 20px;
-  border: none;
-  background: transparent;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-family: inherit;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -1px;
-  white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.tabBtn:hover {
-  color: var(--green-900);
-}
-
-.tabBtnActive {
-  color: var(--green-900);
-  border-bottom-color: var(--green-600);
-}
-
-/* ── Tab content wrapper ─────────────────────────────────────────────────── */
-.tabContent {
-  flex: 1;
-  padding: 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
 /* ── Loading / empty states ──────────────────────────────────────────────── */
-.loadingState,
-.emptyState {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
-}
-
-.loadingText {
-  color: var(--text-muted);
-  font-size: 14px;
-}
-
-.emptyTitle {
-  margin: 0 0 8px;
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--green-900);
-}
-
-.emptyDesc {
-  margin: 0 0 20px;
-  color: var(--text-muted);
-  font-size: 14px;
-}
-
-.emptyActions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
 
 .emptyText {
   font-size: 13px;
@@ -284,12 +74,6 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-}
-
-.kpiGrid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 12px;
 }
 
 .kpiCard {
@@ -800,12 +584,6 @@
   display: contents;
 }
 
-.shopDetailsLocField {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 /* ── Phone input ─────────────────────────────────────────────────────────── */
 .phoneRow {
   display: flex;
@@ -897,17 +675,6 @@
   gap: 12px;
 }
 
-
-
-
-
-
-
-
-
-
-
-
 .orderCard {
   background: var(--bg-white);
   border: 1px solid rgba(23, 61, 37, 0.08);
@@ -916,20 +683,6 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.orderCardHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.orderCardMeta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 
 .orderIdLabel {
@@ -1056,36 +809,6 @@
   font-weight: 600;
   color: var(--text-muted);
   font-size: 12px;
-}
-
-.orderActions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  border-top: 1px solid rgba(23, 61, 37, 0.06);
-  padding-top: 10px;
-}
-
-.orderActionBtn {
-  padding: 9px 16px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: var(--green-600);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-  font-family: inherit;
-  transition: opacity 0.15s;
-}
-
-.orderActionBtn:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
-.orderActionBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .orderCancelBtn {
@@ -1647,9 +1370,6 @@
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
-  .kpiGrid {
-    grid-template-columns: repeat(3, 1fr);
-  }
 
   .overviewRow {
     grid-template-columns: 1fr 1fr;
@@ -1657,30 +1377,6 @@
 }
 
 @media (max-width: 860px) {
-  .dashHeader {
-    padding: 14px 20px;
-  }
-
-  .tabBar {
-    padding: 0 20px;
-  }
-
-  .tabContent {
-    padding: 20px;
-  }
-
-  .tabBtn {
-    padding: 12px 14px;
-    font-size: 12px;
-  }
-
-  .quickStats {
-    display: none;
-  }
-
-  .kpiGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
 
   .overviewRow {
     grid-template-columns: 1fr;
@@ -1700,25 +1396,6 @@
 }
 
 @media (max-width: 540px) {
-  .page {
-    margin: -1.5rem -1rem;
-  }
-
-  .dashHeader {
-    padding: 12px 16px;
-  }
-
-  .tabBar {
-    padding: 0 16px;
-  }
-
-  .tabContent {
-    padding: 16px;
-  }
-
-  .kpiGrid {
-    grid-template-columns: 1fr 1fr;
-  }
 
   .formGrid {
     grid-template-columns: 1fr;
@@ -1730,10 +1407,6 @@
 
   .produceRowActions {
     align-self: flex-end;
-  }
-
-  .dashName {
-    font-size: 15px;
   }
 }
 
@@ -1779,24 +1452,6 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
-}
-
-/* ── Rating tile (links to Reviews) ──────────────────────────────────────── */
-.kpiCardButton {
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
-}
-
-.kpiCardButton:hover {
-  border-color: rgba(23, 61, 37, 0.2);
-  background: #f4f8f5;
-}
-
-.kpiCardButton:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
 }
 
 /* ── Order schedule & notes ──────────────────────────────────────────────── */

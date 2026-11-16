@@ -79,10 +79,16 @@ function join(base: string, path: string): string {
   return path === "/" ? base : `${base}${path}`;
 }
 
-/** A file in public/ or a framework file (the last segment has a dot). */
+/**
+ * A file in public/ or an app icon: a dotted name at the top level
+ * ("/icon.png", "/robots.txt") or anything under /images/. Not any path whose
+ * last segment has a dot: a dynamic page such as "/farms/1.x" would then skip
+ * the host rules and render on the admin host.
+ */
 function isAsset(pathname: string): boolean {
+  if (pathname.startsWith("/images/")) return true;
   const last = pathname.slice(pathname.lastIndexOf("/") + 1);
-  return last.includes(".");
+  return pathname.lastIndexOf("/") === 0 && last.includes(".");
 }
 
 export function makeSurfaces(config: SurfaceConfig) {

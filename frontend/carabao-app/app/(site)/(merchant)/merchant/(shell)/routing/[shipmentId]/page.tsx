@@ -12,7 +12,7 @@ import { fetchShipmentTracking, type ShipmentStop } from '@/util/api';
 import { getApiErrorStatus } from '@/util/errorHelper';
 import { googleMapsDirectionsUrl, isNavigable, wazeNavigationUrl } from '@/util/navigation';
 import { isClosedStatus, isRouteFinished, statusLabel } from '@/util/tracking';
-import dash from '../../page.module.css';
+import dash from '../../../page.module.css';
 import styles from './page.module.css';
 import { merchantUrl } from '@/lib/urls';
 
@@ -67,7 +67,7 @@ export default function RoutingPage() {
 
   const header = (details?: ReactNode) => (
     <header className={styles.header}>
-      <Link className={styles.backLink} href={merchantUrl("/")}>← {t.routing.back}</Link>
+      <Link className={styles.backLink} href={merchantUrl("/shipments")}>← {t.routing.back}</Link>
       <h1 className={styles.title}>{t.routing.title}</h1>
       {details}
     </header>
@@ -80,7 +80,7 @@ export default function RoutingPage() {
         <div className={styles.statePanel}>
           <h2 className={styles.stateTitle}>{t.routing.notFoundTitle}</h2>
           <p className={styles.stateText}>{t.routing.notFoundBody}</p>
-          <Link className={dash.secondaryBtn} href={merchantUrl("/")}>{t.routing.back}</Link>
+          <Link className={dash.secondaryBtn} href={merchantUrl("/shipments")}>{t.routing.back}</Link>
         </div>
       </div>
     );

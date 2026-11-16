@@ -53,6 +53,13 @@
   box-shadow: 0 12px 28px var(--color-shadow);
 }
 
+.panelDown {
+  top: 44px;
+  bottom: auto;
+  left: auto;
+  right: 0;
+}
+
 .panelHeader {
   display: flex;
   align-items: center;
