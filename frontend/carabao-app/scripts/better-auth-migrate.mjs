@@ -43,11 +43,7 @@ const readEnvLocal = () => {
 const envFile = readEnvLocal();
 const env = { ...envFile, ...process.env };
 
-const rawPostgresUrl =
-  env.POSTGRES_URL ||
-  env.DATABASE_URL ||
-  env.POSTGRESQL_URL ||
-  env.PGDATABASE_URL;
+const rawPostgresUrl = env.DATABASE_URL;
 
 const normalizedPostgresUrl = rawPostgresUrl
   ? rawPostgresUrl.trim().replace(/^"|"$/g, "")
@@ -55,7 +51,7 @@ const normalizedPostgresUrl = rawPostgresUrl
 
 if (!normalizedPostgresUrl) {
   throw new Error(
-    "Better Auth Postgres URL is missing. Set one of: POSTGRES_URL, DATABASE_URL, POSTGRESQL_URL, or PGDATABASE_URL."
+    "Better Auth Postgres URL is missing. Set DATABASE_URL."
   );
 }
 

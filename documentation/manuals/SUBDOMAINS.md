@@ -101,7 +101,7 @@ The backend stores notification links as paths, and the mobile app reads them. *
 |---|---|---|
 | Cookie prefix | `carabao` | `carabao-admin` |
 | Cookie domain | `ROOT_DOMAIN` (shared by apex and `merchant.`), only in subdomain mode | admin host only |
-| Trusted origins | apex, `merchant.`, `BETTER_AUTH_TRUSTED_ORIGINS`, `FRONTEND_URL`, `RAILWAY_PUBLIC_DOMAIN`, mobile app | admin origin only |
+| Trusted origins | apex, `merchant.`, `BETTER_AUTH_TRUSTED_ORIGINS`, `RAILWAY_PUBLIC_DOMAIN`, mobile app | admin origin only |
 | Sign-in methods | phone + password, email + password, Google, Facebook, mobile app | email + password only, then TOTP |
 | Better Auth endpoints | all (except the admin plugin's) | allow-list: `/sign-in/email`, `/sign-out`, `/get-session`, `/token`, `/jwks`, `/two-factor/*`, `/request-password-reset`, `/reset-password*`, `/change-password`, session list/revoke, `/ok`, `/error`. All others: 404 |
 | Who gets a session | everyone | admins only (403 `NOT_AN_ADMIN`) |
@@ -190,14 +190,13 @@ Same repo root (`frontend/carabao-app`), same build and start commands. Set:
 | Name | Production value | Notes |
 |---|---|---|
 | `ALLOWED_ORIGINS` | `https://carabao.online,https://merchant.carabao.online,https://admin.carabao.online` | CORS, credentials on. Wildcard entries are dropped and logged. |
-| `APP_URL` | `https://carabao.online` | PayMongo success / cancel pages. Fallback: first entry of `FRONTEND_URL`. |
+| `APP_URL` | `https://carabao.online` | PayMongo success / cancel pages. |
 | `ADMIN_URL` | `https://admin.carabao.online` | 2FA setup links (SMS, email, `make_admin.py`). Fallback: `APP_URL`. |
 | `BETTER_AUTH_URL` | `https://carabao.online` | token issuer (or set `AUTH_JWT_ISSUER`) |
 | `AUTH_JWT_ISSUER` | empty or `https://carabao.online` | must equal the web value |
-| `PUBLIC_JWKS_URL` | empty | default `<issuer>/api/auth/jwks`. Old name `BETTER_AUTH_JWKS_URL` is still read. |
+| `PUBLIC_JWKS_URL` | empty | default `<issuer>/api/auth/jwks`. |
 | `ADMIN_JWKS_URL` | `http://web-admin.railway.internal:<PORT>/api/auth/jwks` | empty = no admin tokens accepted |
 | `AUTH_SYNC_SHARED_SECRET` | same as web | unchanged |
-| `FRONTEND_URL` | empty | old name; read only as a fallback |
 
 There is no `MERCHANT_URL`: the API makes no links to the merchant site.
 

@@ -228,7 +228,6 @@ def test_unknown_kid_refetch_is_rate_limited():
 
 def test_jwks_url_follows_better_auth_url(monkeypatch):
     monkeypatch.setenv("BETTER_AUTH_URL", '"https://shop.example.com/some/path/"')
-    monkeypatch.delenv("BETTER_AUTH_JWKS_URL", raising=False)
     assert security.token_issuer() == "https://shop.example.com"
     assert security.jwks_url() == "https://shop.example.com/api/auth/jwks"
 

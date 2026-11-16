@@ -2,7 +2,7 @@ import axios, { type AxiosRequestConfig } from 'axios';
 import { getBackendToken } from '@/lib/auth-client';
 
 const rawApiBaseUrl = (
-  process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || 'http://localhost:8000'
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 ).trim().replace(/^"|"$/g, '');
 
 const API_BASE_URL = rawApiBaseUrl.startsWith('http')

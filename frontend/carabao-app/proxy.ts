@@ -23,7 +23,7 @@ function origin(url: string | undefined): string | null {
 }
 
 const apiOrigin = origin(
-  process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000",
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
 );
 
 const MAPBOX = ["https://api.mapbox.com", "https://*.tiles.mapbox.com", "https://events.mapbox.com"];
