@@ -388,7 +388,7 @@ const en = {
   },
   routing: {
     title: 'Routing',
-    back: 'Back to dashboard',
+    back: 'Back to shipments',
     shipment: 'Shipment #{id}',
     stopsDone: '{done} of {total} stops done',
     plannedDuration: 'Planned drive time {duration}',
