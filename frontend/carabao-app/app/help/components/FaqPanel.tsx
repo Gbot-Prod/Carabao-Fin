@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { appUrl, merchantUrl } from '@/lib/urls';
 import type { ReactNode } from 'react';
 import styles from '../page.module.css';
 import { SUPPORT_EMAIL } from '../sections';
@@ -15,7 +16,7 @@ const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: 'How do I place an order?',
-        a: <>Browse produce on the <Link href="/order">Order</Link> page, add items to your cart, then go to <Link href="/cart">Cart</Link> and check out.</>,
+        a: <>Browse produce on the <Link href={appUrl("/order")}>Order</Link> page, add items to your cart, then go to <Link href={appUrl("/cart")}>Cart</Link> and check out.</>,
       },
       {
         q: 'Why was my cart split into several payments?',
@@ -23,7 +24,7 @@ const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: 'How do I track my order?',
-        a: <>Open <Link href="/track">Track</Link> to see active deliveries, or <Link href="/orders">Orders</Link> for your full history and order details.</>,
+        a: <>Open <Link href={appUrl("/track")}>Track</Link> to see active deliveries, or <Link href={appUrl("/orders")}>Orders</Link> for your full history and order details.</>,
       },
     ],
   },
@@ -49,11 +50,11 @@ const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: 'How do I change my delivery address?',
-        a: <>Go to <Link href="/profile">Profile</Link> → Addresses → Edit address. Dropping a map pin helps riders find you.</>,
+        a: <>Go to <Link href={appUrl('/profile')}>Profile</Link> → Addresses → Edit address. Dropping a map pin helps riders find you.</>,
       },
       {
         q: 'How do I delete my account?',
-        a: <>On your <Link href="/profile">Profile</Link>, use Delete account in the Danger Zone. This is permanent.</>,
+        a: <>On your <Link href={appUrl('/profile')}>Profile</Link>, use Delete account in the Danger Zone. This is permanent.</>,
       },
     ],
   },
@@ -62,7 +63,7 @@ const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: 'How do I become a merchant?',
-        a: <>Apply through <Link href="/merchantOnboarding">Merchant onboarding</Link>. Once approved, you can list produce from the Merchant Dashboard.</>,
+        a: <>Apply through <Link href={merchantUrl('/onboarding')}>Merchant onboarding</Link>. Once approved, you can list produce from the Merchant Dashboard.</>,
       },
       {
         q: 'How do I withdraw my earnings?',

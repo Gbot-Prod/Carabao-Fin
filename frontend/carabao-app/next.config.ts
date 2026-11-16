@@ -26,6 +26,11 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // lib/urls.ts reads these in client code too. Set at build, like NEXT_PUBLIC_*.
+  env: {
+    ROOT_DOMAIN: process.env.ROOT_DOMAIN || "carabao.online",
+    APP_SURFACE: process.env.APP_SURFACE === "admin" ? "admin" : "public",
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { routeRequest } from "@/lib/urls";
 
 // CF-0002: Content-Security-Policy for every page.
 //
@@ -56,7 +57,48 @@ function buildPolicy(nonce: string): string {
   return parts.join("; ");
 }
 
+// Host routing (documentation/manuals/SUBDOMAINS.md). The rules are in
+// lib/urls.ts, where they are tested.
+function isPrefetch(request: NextRequest): boolean {
+  return request.headers.has("next-router-prefetch") || request.headers.get("purpose") === "prefetch";
+}
+
+// Paths that start with "_" are private folders in the app router, so no page
+// matches and Next.js renders app/not-found.tsx with status 404.
+const NOT_FOUND_PATH = "/_surface-not-found";
+
 export function proxy(request: NextRequest) {
+  const decision = routeRequest({
+    host: request.headers.get("x-forwarded-host") || request.headers.get("host"),
+    pathname: request.nextUrl.pathname,
+    search: request.nextUrl.search,
+  });
+
+  if (decision.kind === "redirect") {
+    // A relative location stays on the request host.
+    const target = /^https?:\/\//.test(decision.location)
+      ? new URL(decision.location)
+      : (() => {
+          const parsed = new URL(decision.location, "http://same.invalid");
+          const url = request.nextUrl.clone();
+          url.pathname = parsed.pathname;
+          url.search = parsed.search;
+          return url;
+        })();
+    return NextResponse.redirect(target, 307);
+  }
+
+  let rewriteTo: URL | null = null;
+  if (decision.kind === "rewrite" || decision.kind === "notFound") {
+    rewriteTo = request.nextUrl.clone();
+    rewriteTo.pathname = decision.kind === "rewrite" ? decision.path : NOT_FOUND_PATH;
+  }
+
+  // Prefetches do not render a page, so they need no nonce.
+  if (isPrefetch(request)) {
+    return rewriteTo ? NextResponse.rewrite(rewriteTo) : NextResponse.next();
+  }
+
   const nonce = btoa(crypto.randomUUID());
   const policy = buildPolicy(nonce);
   const headerName = enforce ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only";
@@ -65,21 +107,16 @@ export function proxy(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set(headerName, policy);
 
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  const response = rewriteTo
+    ? NextResponse.rewrite(rewriteTo, { request: { headers: requestHeaders } })
+    : NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set(headerName, policy);
   response.headers.set("Reporting-Endpoints", 'csp="/api/csp-report"');
   return response;
 }
 
 export const config = {
-  matcher: [
-    {
-      source: "/((?!api|_next/static|_next/image|favicon.ico|public).*)",
-      // Prefetches do not render a page, so they need no nonce.
-      missing: [
-        { type: "header", key: "next-router-prefetch" },
-        { type: "header", key: "purpose", value: "prefetch" },
-      ],
-    },
-  ],
+  // Not /api, not framework files. Prefetches come through too: on merchant.
+  // and help. they must be rewritten like the page itself.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|public).*)"],
 };

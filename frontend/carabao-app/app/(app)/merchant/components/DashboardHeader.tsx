@@ -1,5 +1,6 @@
 import Link from "next/link";
 import styles from "../page.module.css";
+import { appUrl } from "@/lib/urls";
 import type { MerchantPerformance } from "@/util/api";
 import { formatPeso } from "../lib/format";
 
@@ -38,7 +39,7 @@ export default function DashboardHeader({ performance, logoUrl }: Props) {
               <span className={styles.quickStatValue}>{performance.active_orders}</span>
             </div>
           </div>
-          <Link className={styles.viewShopBtn} href={`/merchant/${performance.merchant_id}`} target="_blank">
+          <Link className={styles.viewShopBtn} href={appUrl(`/farms/${performance.merchant_id}`)} target="_blank">
             View Shop ↗
           </Link>
           </>

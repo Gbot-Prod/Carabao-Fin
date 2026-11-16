@@ -1,0 +1,340 @@
+.page {
+  min-height: 100%;
+  color: #1f2a1f;
+}
+
+.merchantHeader {
+  background: var(--bg-white);
+  box-shadow: 0 4px 12px rgba(52, 95, 52, 0.06);
+}
+
+.shopBanner {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  display: block;
+}
+
+.shopBannerPlaceholder {
+  width: 100%;
+  height: 40px;
+  background: linear-gradient(135deg, #d7e7da 0%, #c0d9c6 100%);
+}
+
+.merchantHeaderBody {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  padding: 1.5rem 2rem;
+}
+
+.merchantImage {
+  width: 90px;
+  height: 90px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  margin-top: -30px;
+}
+
+.merchantInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.merchantName {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.ownerInfo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.5rem;
+  margin: 0 0 0.6rem;
+}
+
+.ownerRow {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.ownerRow dt {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.ownerRow dd {
+  margin: 0;
+  font-weight: 600;
+  color: #2f4a2f;
+  overflow-wrap: anywhere;
+}
+
+.ownerRow a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.ownerRow a:hover {
+  text-decoration: underline;
+}
+
+.merchantLocation {
+  margin: 0 0 0.8rem;
+  font-size: 1.1rem;
+  color: #4f6650;
+}
+
+.merchantDesc {
+  margin: 0 0 1.5rem;
+  color: #5a6f5a;
+  line-height: 1.5;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.detailItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.label {
+  font-size: 0.85rem;
+  color: var(--text-faint);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #345f34;
+}
+
+.productsSection {
+  padding: 2rem;
+}
+
+.productsSection h2 {
+  font-size: 1.8rem;
+  margin-bottom: 2rem;
+  color: #1f2a1f;
+}
+
+.productsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.5rem;
+}
+
+.productCard {
+  background: var(--bg-white);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(52, 95, 52, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.productCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(52, 95, 52, 0.12);
+}
+
+.productImage {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #d7e7da 0%, #c0d9c6 100%);
+}
+
+.productImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.productCard:hover .productImage img {
+  transform: scale(1.05);
+}
+
+.badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: #345f34;
+  color: #fff;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.productBody {
+  flex: 1;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.productBody h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #1f2a1f;
+  line-height: 1.3;
+}
+
+.price {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #345f34;
+}
+
+.freshness {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #5b6b5b;
+}
+
+.addBtn {
+  margin-top: auto;
+  padding: 0.65rem;
+  border: 2px solid #345f34;
+  background: transparent;
+  color: #345f34;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.addBtn:hover {
+  background: #345f34;
+  color: #fff;
+}
+
+@media (max-width: 768px) {
+  .shopBanner {
+    height: 90px;
+  }
+
+  .ownerInfo {
+    flex-direction: column;
+  }
+
+  .merchantHeaderBody {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1rem 1.5rem;
+  }
+
+  .merchantImage {
+    width: 72px;
+    height: 72px;
+    margin-top: -20px;
+  }
+
+  .details {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .productsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .merchantHeaderBody {
+    padding: 0.75rem 1rem;
+  }
+
+  .merchantName {
+    font-size: 1.5rem;
+  }
+
+  .details {
+    grid-template-columns: 1fr;
+  }
+
+  .productsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.cartToast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-sm);
+  background: var(--success-text);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.cartToast a {
+  color: #86efac;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+/* Follow farm (U4) */
+.merchantNameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.followBtn {
+  padding: 6px 14px;
+  border: 1px solid var(--green-600);
+  border-radius: var(--radius-pill);
+  background: var(--bg-white);
+  color: var(--green-600);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.followBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.followBtnOn {
+  background: var(--green-600);
+  color: var(--bg-white);
+}

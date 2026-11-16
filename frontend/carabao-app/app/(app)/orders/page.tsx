@@ -165,7 +165,7 @@ function OrderCard({
     }
   };
 
-  const merchantHref = order.merchant_id ? `/merchant/${order.merchant_id}` : null;
+  const merchantHref = order.merchant_id ? `/farms/${order.merchant_id}` : null;
   const dateBought = new Date(order.date_bought).toLocaleDateString("en-PH", {
     year: "numeric", month: "short", day: "numeric",
   });
@@ -262,7 +262,7 @@ function PastOrderCard({
 }) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const merchantHref = order.merchant_id ? `/merchant/${order.merchant_id}` : null;
+  const merchantHref = order.merchant_id ? `/farms/${order.merchant_id}` : null;
   // "Buy again" (U3)
   const [reordering, setReordering] = useState(false);
   const [reorder, setReorder] = useState<ReorderResult | null>(null);

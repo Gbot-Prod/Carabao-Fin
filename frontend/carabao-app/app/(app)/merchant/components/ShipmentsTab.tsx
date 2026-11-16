@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import styles from "../page.module.css";
+import { merchantUrl } from "@/lib/urls";
 import s from "./orders.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import {
@@ -130,7 +131,7 @@ export default function ShipmentsTab({ ordersState, selection, onOpenOrders }: P
           <div className={`${styles.payoutMessage} ${styles.payoutMessageSuccess} ${s.messageRow}`}>
             <span>{message.text}</span>
             {message.shipmentId != null && (
-              <Link className={s.inlineLink} href={`/merchantDashboard/routing/${message.shipmentId}`}>{t.routing.openRouting}</Link>
+              <Link className={s.inlineLink} href={merchantUrl(`/routing/${message.shipmentId}`)}>{t.routing.openRouting}</Link>
             )}
           </div>
         )}
@@ -280,7 +281,7 @@ function ShipmentRow({ shipment }: { shipment: MerchantShipmentSummary }) {
         <span className={s.progressTrack}><span className={s.progressFill} style={{ width: `${pct}%` }} /></span>
         <span className={s.shipmentMeta}>{done} / {total} stops</span>
       </div>
-      <Link className={styles.secondaryBtn} href={`/merchantDashboard/routing/${shipment.id}`}>{t.routing.routingButton}</Link>
+      <Link className={styles.secondaryBtn} href={merchantUrl(`/routing/${shipment.id}`)}>{t.routing.routingButton}</Link>
     </li>
   );
 }

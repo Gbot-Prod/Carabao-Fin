@@ -14,6 +14,7 @@ import { googleMapsDirectionsUrl, isNavigable, wazeNavigationUrl } from '@/util/
 import { isClosedStatus, isRouteFinished, statusLabel } from '@/util/tracking';
 import dash from '../../page.module.css';
 import styles from './page.module.css';
+import { merchantUrl } from '@/lib/urls';
 
 // Merchant/driver view of one shipment: every stop in ALNS order, with
 // turn-by-turn links per stop. Positions and arrival times are estimated from
@@ -66,7 +67,7 @@ export default function RoutingPage() {
 
   const header = (details?: ReactNode) => (
     <header className={styles.header}>
-      <Link className={styles.backLink} href="/merchantDashboard">← {t.routing.back}</Link>
+      <Link className={styles.backLink} href={merchantUrl("/")}>← {t.routing.back}</Link>
       <h1 className={styles.title}>{t.routing.title}</h1>
       {details}
     </header>
@@ -79,7 +80,7 @@ export default function RoutingPage() {
         <div className={styles.statePanel}>
           <h2 className={styles.stateTitle}>{t.routing.notFoundTitle}</h2>
           <p className={styles.stateText}>{t.routing.notFoundBody}</p>
-          <Link className={dash.secondaryBtn} href="/merchantDashboard">{t.routing.back}</Link>
+          <Link className={dash.secondaryBtn} href={merchantUrl("/")}>{t.routing.back}</Link>
         </div>
       </div>
     );

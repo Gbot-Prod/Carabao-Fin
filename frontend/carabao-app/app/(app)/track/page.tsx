@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import styles from './page.module.css';
+import { merchantUrl } from '@/lib/urls';
 
 import { useEffect, useState, useCallback, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import OrderCard from './components/orderCard';
 import {
   fetchCurrentOrders,
@@ -60,7 +61,6 @@ const toTrackOrder = (order: CurrentOrder): TrackOrder => ({
 
 function Track() {
   const { t } = useLanguage();
-  const router = useRouter();
   const searchParams = useSearchParams();
   // Old merchant links (/track?shipment_id=N) now live on the Routing page.
   const legacyShipmentId = searchParams.get('shipment_id');
@@ -73,9 +73,10 @@ function Track() {
 
   useEffect(() => {
     if (legacyShipmentId) {
-      router.replace(`/merchantDashboard/routing/${encodeURIComponent(legacyShipmentId)}`);
+      // The routing page is on merchant.<root>, another origin.
+      window.location.replace(merchantUrl(`/routing/${encodeURIComponent(legacyShipmentId)}`));
     }
-  }, [legacyShipmentId, router]);
+  }, [legacyShipmentId]);
 
   useEffect(() => {
     if (legacyShipmentId) return;
@@ -221,7 +222,7 @@ function Track() {
             <span className={styles.detailLabel}>Merchant</span>
             <p className={styles.detailValue}>
               {selectedOrder.merchantId ? (
-                <Link className={styles.detailLink} href={`/merchant/${selectedOrder.merchantId}`}>{selectedOrder.merchant}</Link>
+                <Link className={styles.detailLink} href={`/farms/${selectedOrder.merchantId}`}>{selectedOrder.merchant}</Link>
               ) : (
                 selectedOrder.merchant
               )}

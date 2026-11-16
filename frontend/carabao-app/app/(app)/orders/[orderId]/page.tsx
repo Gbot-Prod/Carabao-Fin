@@ -299,7 +299,7 @@ export default function OrderDetailPage() {
         <div>
           <p className={styles.eyebrow}>Order #{order.order_id}</p>
           <h1 className={styles.title}>
-            {order.merchant_id ? <Link href={`/merchant/${order.merchant_id}`}>{order.merchant}</Link> : order.merchant}
+            {order.merchant_id ? <Link href={`/farms/${order.merchant_id}`}>{order.merchant}</Link> : order.merchant}
           </h1>
           <p className={styles.headerMeta}>Placed {formatDateTime(order.date_bought)}</p>
         </div>

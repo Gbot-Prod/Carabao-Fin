@@ -112,7 +112,7 @@ export default function ProduceResults({ query }: { query: string }) {
         <ul className={styles.grid}>
           {rows.map((p) => (
             <li key={p.id}>
-              <Link href={`/merchant/${p.merchant_id}`} className={styles.card}>
+              <Link href={`/farms/${p.merchant_id}`} className={styles.card}>
                 {p.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={p.image_url} alt={p.name ? `Photo of ${p.name}` : "Produce photo"} className={styles.image} loading="lazy" />

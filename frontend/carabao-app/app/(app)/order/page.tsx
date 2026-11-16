@@ -287,7 +287,7 @@ function OrderContent() {
           {filteredFarms.map((farm) => (
             <Link
               key={farm.merchantId}
-              href={`/merchant/${farm.merchantId}`}
+              href={`/farms/${farm.merchantId}`}
               className={styles.farmCard}
             >
               <div className={styles.cardImage}>

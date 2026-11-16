@@ -6,7 +6,7 @@ import { normalizePhMobile } from "@/lib/phone";
 import { sendPhoneCode, verifyMyPhone } from "@/lib/auth-client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { appUrl } from "@/lib/urls";
 import styles from "./page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
@@ -60,7 +60,6 @@ function formatRSBSA(raw: string): string {
 }
 
 export default function MerchantOnboardingPage() {
-  const router = useRouter();
   const [stepIndex, setStepIndex] = useState(0);
   const step = STEPS[stepIndex] ?? STEPS[0]!;
 
@@ -316,7 +315,7 @@ export default function MerchantOnboardingPage() {
               <div className={styles.successValue}>{successApplication.merchant_name}</div>
             </div>
             <div className={styles.successActions}>
-              <button className={styles.secondaryBtn} type="button" onClick={() => router.push("/profile")}>Back to profile</button>
+              <button className={styles.secondaryBtn} type="button" onClick={() => window.location.assign(appUrl("/profile"))}>Back to profile</button>
             </div>
           </div>
         </section>

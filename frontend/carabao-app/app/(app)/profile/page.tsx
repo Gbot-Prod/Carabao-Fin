@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import styles from './page.module.css';
+import { helpUrl, merchantUrl } from '@/lib/urls';
 import {
   createMyAddress,
   deleteMyAccount,
@@ -393,7 +394,7 @@ export default function Profile() {
           {/* Non-merchants get an entry point to onboarding */}
           {!hasMerchant && (
             <section className={styles.merchantSection}>
-              <Link className={`${styles.merchantBtn} ${styles.merchantBtnPrimary}`} href="/merchantOnboarding">
+              <Link className={`${styles.merchantBtn} ${styles.merchantBtnPrimary}`} href={merchantUrl("/onboarding")}>
                 Apply as Merchant
               </Link>
             </section>
@@ -403,9 +404,9 @@ export default function Profile() {
               Status only: setup is on /two-factor/enrol with the link's token (CF-0018). */}
           {profile?.is_admin && <TwoFactorSettings />}
 
-          {/* Help & Support: FAQ, contact, Terms, Privacy (app/(app)/help) */}
+          {/* Help & Support: FAQ, contact, Terms, Privacy (help.<root>, app/help) */}
           <section className={styles.merchantSection}>
-            <Link className={styles.merchantBtn} href="/help">❓ Help &amp; Support</Link>
+            <Link className={styles.merchantBtn} href={helpUrl("/")}>❓ Help &amp; Support</Link>
           </section>
 
           <section className={styles.profileDangerZone}>

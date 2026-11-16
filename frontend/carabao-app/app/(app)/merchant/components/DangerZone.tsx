@@ -1,16 +1,15 @@
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { appUrl } from "@/lib/urls";
 import styles from "../page.module.css";
 import { deleteMyMerchant } from "@/util/api";
 
 export default function DangerZone() {
-  const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
     setDeleting(true);
-    try { await deleteMyMerchant(); router.push("/profile"); }
+    try { await deleteMyMerchant(); window.location.assign(appUrl("/profile")); }
     catch { setDeleting(false); setConfirming(false); }
   };
 

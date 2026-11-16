@@ -10,6 +10,7 @@ import Logo from "@/public/images/icons/carabaoLogo.png";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import "./page.css";
+import { appUrl } from "@/lib/urls";
 
 const MIN_PASSWORD = 8;
 
@@ -394,12 +395,12 @@ export default function AuthPage() {
           {isSignup && (
             <p className="auth-terms-notice">
               {t.auth.termsNotice}{" "}
-              {/* /help is public; a new tab keeps a half-filled signup. */}
-              <a href="/help?section=terms" target="_blank" rel="noopener" className="auth-terms-link">
+              {/* /terms and /privacy are public; a new tab keeps a half-filled signup. */}
+              <a href={appUrl("/terms")} target="_blank" rel="noopener" className="auth-terms-link">
                 {t.auth.termsLink}
               </a>{" "}
               {t.auth.and}{" "}
-              <a href="/help?section=privacy" target="_blank" rel="noopener" className="auth-terms-link">
+              <a href={appUrl("/privacy")} target="_blank" rel="noopener" className="auth-terms-link">
                 {t.auth.privacyLink}
               </a>
             </p>

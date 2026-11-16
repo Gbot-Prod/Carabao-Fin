@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { appUrl } from '@/lib/urls';
 import styles from '../page.module.css';
 import { SUPPORT_EMAIL } from '../sections';
 
@@ -15,7 +16,7 @@ export default function ContactPanel() {
       </div>
       <div className={styles.contactCard}>
         <span className={styles.contactLabel}>About an order</span>
-        <Link className={styles.contactValue} href="/orders">Go to my orders</Link>
+        <Link className={styles.contactValue} href={appUrl('/orders')}>Go to my orders</Link>
         <p className={styles.contactNote}>Open the order to see its status and message the merchant directly.</p>
       </div>
       <div className={styles.contactCard}>
