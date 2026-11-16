@@ -1,7 +1,7 @@
 """Web origins the API puts in links (documentation/manuals/SUBDOMAINS.md).
 
-- ``APP_URL``: the buyer site (PayMongo return pages). Falls back to the first
-  entry of ``FRONTEND_URL``, then ``http://localhost:3000``.
+- ``APP_URL``: the buyer site (PayMongo return pages). Falls back to
+  ``http://localhost:3000``.
 - ``ADMIN_URL``: the admin site (2FA setup links). Falls back to ``APP_URL``,
   for a local setup that runs one web app only.
 
@@ -28,7 +28,6 @@ def _origin(value: str | None) -> str | None:
 def app_url() -> str:
     return (
         _origin(os.getenv("APP_URL"))
-        or _origin(os.getenv("FRONTEND_URL"))
         or "http://localhost:3000"
     )
 

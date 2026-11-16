@@ -17,9 +17,9 @@ The surface of a token comes ONLY from the key set that verified it. A
 token that the admin key set verified.
 
 Settings:
-- ``AUTH_JWT_ISSUER`` (falls back to ``BETTER_AUTH_URL``, then ``FRONTEND_URL``):
+- ``AUTH_JWT_ISSUER`` (falls back to ``BETTER_AUTH_URL``):
   the public web origin, the issuer of every token (both deploys).
-- ``PUBLIC_JWKS_URL`` (old name ``BETTER_AUTH_JWKS_URL``): defaults to
+- ``PUBLIC_JWKS_URL``: defaults to
   ``<issuer>/api/auth/jwks``.
 - ``ADMIN_JWKS_URL``: the admin deploy's ``/api/auth/jwks``, on a route that
   does not go through Cloudflare Access (Railway private network). Unset: no
@@ -75,14 +75,7 @@ def _unauthorized() -> HTTPException:
 
 
 def token_issuer() -> str:
-    # FRONTEND_URL may be a comma-separated list (it doubles as the CORS list);
-    # the first entry is the web app's own origin.
-    frontend = os.getenv("FRONTEND_URL", "").split(",")[0]
-    issuer = (
-        _origin(os.getenv("AUTH_JWT_ISSUER"))
-        or _origin(os.getenv("BETTER_AUTH_URL"))
-        or _origin(frontend)
-    )
+    issuer = _origin(os.getenv("AUTH_JWT_ISSUER")) or _origin(os.getenv("BETTER_AUTH_URL"))
     if not issuer:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -96,10 +89,7 @@ def token_audience() -> str:
 
 
 def public_jwks_url() -> str:
-    override = (
-        os.getenv("PUBLIC_JWKS_URL", "").strip()
-        or os.getenv("BETTER_AUTH_JWKS_URL", "").strip()
-    )
+    override = os.getenv("PUBLIC_JWKS_URL", "").strip()
     return override or f"{token_issuer()}/api/auth/jwks"
 
 

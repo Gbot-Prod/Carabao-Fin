@@ -28,11 +28,7 @@ import {
 
 // The database pool, made on first use of `auth` (see the end of this file).
 function createPool(): Pool {
-  const rawPostgresUrl =
-    process.env.POSTGRES_URL ||
-    process.env.DATABASE_URL ||
-    process.env.POSTGRESQL_URL ||
-    process.env.PGDATABASE_URL;
+  const rawPostgresUrl = process.env.DATABASE_URL;
 
   const normalizedPostgresUrl = rawPostgresUrl
     ? rawPostgresUrl.trim().replace(/^"|"$/g, "")
@@ -40,7 +36,7 @@ function createPool(): Pool {
 
   if (!normalizedPostgresUrl) {
     throw new Error(
-      "Better Auth Postgres URL is missing. Set one of: POSTGRES_URL, DATABASE_URL, POSTGRESQL_URL, or PGDATABASE_URL."
+      "Better Auth Postgres URL is missing. Set DATABASE_URL."
     );
   }
 
@@ -60,7 +56,7 @@ function createPool(): Pool {
   return new Pool(poolConfigFromUrl(normalizedPostgresUrl));
 }
 
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_FASTAPI_URL || "";
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "";
 const normalizedApiUrl = rawApiUrl.trim().replace(/^"|"$/g, "");
 const apiBaseUrl = normalizedApiUrl
   ? normalizedApiUrl.startsWith("http")
@@ -119,7 +115,6 @@ const trustedOrigins = isAdminSurface
         process.env.NEXT_PUBLIC_APP_URL,
         // merchant.<root>; on one host this is a path and adds nothing.
         merchantUrl("/"),
-        process.env.FRONTEND_URL,
         process.env.RAILWAY_PUBLIC_DOMAIN,
         ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS || "").split(","),
       ]),
