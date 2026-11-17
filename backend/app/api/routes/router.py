@@ -12,6 +12,7 @@ from .carts import router as carts_router
 from .chat import router as chat_router
 from .demand_insight import router as demand_insight_router
 from .email import router as email_router
+from .email_otp import router as email_otp_router
 from .follows import router as follows_router
 from .merchant_onboarding import router as merchant_onboarding_router
 from .merchant_sales import router as merchant_sales_router
@@ -50,6 +51,7 @@ router.include_router(admin_transactions_router)
 router.include_router(admin_audit_router)
 router.include_router(admin_produce_router)
 router.include_router(email_router)
+router.include_router(email_otp_router)
 router.include_router(misc_router)
 router.include_router(merchant_onboarding_router)
 router.include_router(merchants_router)

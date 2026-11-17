@@ -39,4 +39,5 @@ export const MERCHANT_PAGES = {
   shop: "/shop",
   settings: "/settings",
   onboarding: "/onboarding",
+  login: "/login",
 } as const;

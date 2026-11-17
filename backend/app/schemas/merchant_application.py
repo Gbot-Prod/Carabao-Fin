@@ -19,6 +19,21 @@ BusinessType = Literal[
     "Sole Proprietor", "Partnership", "Corporation", "Cooperative", "Farmer"
 ]
 RegistrationType = Literal["DTI", "SEC", "CDA", "LGU"]
+# Valid Philippine government IDs (onboarding section 2). RSBSA is a separate
+# upload, not one of these.
+GovIdType = Literal[
+    "PhilSys National ID",
+    "Passport",
+    "Driver's License",
+    "UMID",
+    "SSS",
+    "PRC",
+    "Postal ID",
+    "Voter's ID",
+    "PhilHealth",
+    "Senior Citizen ID",
+    "PWD ID",
+]
 Weekday = Literal["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 # What an admin may set; "submitted" is set only by the applicant (re)submitting.
@@ -36,17 +51,7 @@ class ApplicationReviewPayload(BaseModel):
 
 
 class MerchantOnboardingPayload(BaseModel):
-    # Step 1
-    merchant_name: str = Field(min_length=3, max_length=100)
-    legal_business_name: str = Field(min_length=3, max_length=150)
-    business_type: BusinessType
-    tin: str = Field(min_length=6, max_length=20)
-    registration_type: RegistrationType | None = None
-    registration_number: str = Field(default="", max_length=30)
-    contact_email: EmailStr
-    contact_number: str = Field(min_length=6, max_length=20)
-
-    # Step 2
+    # Section 1: operations and contact
     region: str = Field(min_length=1, max_length=100)
     province: str = Field(min_length=1, max_length=100)
     city: str = Field(min_length=1, max_length=100)
@@ -57,17 +62,27 @@ class MerchantOnboardingPayload(BaseModel):
     lat: float | None = None
     lng: float | None = None
     available_days: list[Weekday] = Field(min_length=1, max_length=7)
-
-    # Step 3
-    rsbsa_number: str | None = Field(default=None, max_length=30)
-
-    # Step 4: token from /sms/otp/verify proving contact_number was confirmed;
-    # not needed when contact_number is the account's own verified phone.
+    contact_email: EmailStr
+    contact_number: str = Field(min_length=6, max_length=20)
+    # Tokens from /email/otp/verify and /sms/otp/verify. Not needed when the
+    # value is the account's own verified email / phone.
+    email_verification_token: str | None = Field(default=None, max_length=2000)
     phone_verification_token: str | None = Field(default=None, max_length=2000)
+
+    # Section 2: legal details and documents
+    merchant_name: str = Field(min_length=3, max_length=100)
+    legal_business_name: str = Field(min_length=3, max_length=150)
+    business_type: BusinessType
+    # Optional; a blank value is stored as no TIN.
+    tin: str | None = Field(default=None, min_length=6, max_length=20)
+    registration_type: RegistrationType | None = None
+    registration_number: str = Field(default="", max_length=30)
+    rsbsa_number: str | None = Field(default=None, max_length=30)
+    gov_id_type: GovIdType
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    @field_validator("registration_type", "rsbsa_number", mode="before")
+    @field_validator("tin", "registration_type", "rsbsa_number", mode="before")
     @classmethod
     def blank_is_none(cls, value: object) -> object:
         # The form sends "" for "None" / an empty optional field.
@@ -112,8 +127,12 @@ class MerchantApplicationResponse(BaseModel):
     rsbsa_number: str | None = None
     rsbsa_document_original_name: str | None = None
     rsbsa_document_content_type: str | None = None
+    gov_id_type: str
+    gov_id_document_original_name: str | None = None
+    gov_id_document_content_type: str | None = None
 
     admin_note: str | None = None
+    reviewed_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

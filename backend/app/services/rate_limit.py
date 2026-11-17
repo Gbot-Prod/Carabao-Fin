@@ -40,6 +40,9 @@ class Limit:
 LIMITS: dict[str, tuple[Limit, Limit]] = {
     "otp_send": (Limit(20, 900), Limit(5, 900)),
     "otp_verify": (Limit(30, 900), Limit(10, 900)),
+    # Merchant contact-email codes; the identifier is the email.
+    "email_otp_send": (Limit(20, 900), Limit(5, 900)),
+    "email_otp_verify": (Limit(30, 900), Limit(10, 900)),
 }
 
 # scope -> per identifier, for server-to-server calls where the client IP is
@@ -51,6 +54,8 @@ IDENTIFIER_LIMITS: dict[str, Limit] = {
     "account_otp": Limit(int(os.getenv("ACCOUNT_OTP_PER_HOUR", "5")), 3600),
     # Merchant contact-number codes per signed-in user, across numbers.
     "otp_send_user": Limit(5, 3600),
+    # Merchant contact-email codes per signed-in user, across emails.
+    "email_otp_send_user": Limit(5, 3600),
 }
 
 

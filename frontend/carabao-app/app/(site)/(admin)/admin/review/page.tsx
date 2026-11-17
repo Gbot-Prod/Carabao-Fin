@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   fetchAdminMerchantApplications,
+  fetchGovIdDocumentUrl,
   fetchRsbsaDocumentUrl,
   reviewMerchantApplication,
   type MerchantApplication,
@@ -17,6 +18,16 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Rejected",
   clarification: "Needs Clarification",
   suspended: "Suspended",
+};
+
+type DocumentKind = "rsbsa" | "govId";
+
+const DOCUMENTS: Record<
+  DocumentKind,
+  { label: string; button: string; fetchUrl: typeof fetchRsbsaDocumentUrl }
+> = {
+  rsbsa: { label: "RSBSA document", button: "View RSBSA Document", fetchUrl: fetchRsbsaDocumentUrl },
+  govId: { label: "government ID", button: "View Government ID", fetchUrl: fetchGovIdDocumentUrl },
 };
 
 type ReviewAction = "approved" | "rejected" | "clarification" | "suspended";
@@ -40,7 +51,7 @@ function ApplicationCard({
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentLoading, setDocumentLoading] = useState<DocumentKind | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const allowed = ALLOWED_ACTIONS[app.status] ?? [];
 
@@ -78,17 +89,18 @@ function ApplicationCard({
       ? "Confirm Suspension"
       : "Send Clarification Request";
 
-  const handleViewDocument = async () => {
-    setDocumentLoading(true);
+  const handleViewDocument = async (kind: DocumentKind) => {
+    const { label, fetchUrl } = DOCUMENTS[kind];
+    setDocumentLoading(kind);
     setDocumentError(null);
     // Open synchronously so popup blockers do not reject the document after
     // the asynchronous URL request completes.
     const documentWindow = window.open("", "_blank");
 
     try {
-      const { url } = await fetchRsbsaDocumentUrl(app.id);
+      const { url } = await fetchUrl(app.id);
       if (!url || !/^https?:\/\//i.test(url)) {
-        throw new Error("The RSBSA document URL is invalid.");
+        throw new Error(`The ${label} URL is invalid.`);
       }
 
       if (documentWindow) {
@@ -99,9 +111,9 @@ function ApplicationCard({
       }
     } catch {
       documentWindow?.close();
-      setDocumentError("Unable to open the RSBSA document.");
+      setDocumentError(`Unable to open the ${label}.`);
     } finally {
-      setDocumentLoading(false);
+      setDocumentLoading(null);
     }
   };
 
@@ -137,6 +149,7 @@ function ApplicationCard({
             <Field label="Postal Code" value={app.postal_code} />
             <Field label="Available Days" value={app.available_days.join(", ")} />
             <Field label="RSBSA No." value={app.rsbsa_number} />
+            <Field label="Government ID" value={app.gov_id_type} />
             <Field
               label="Submitted"
               value={
@@ -148,19 +161,27 @@ function ApplicationCard({
           </div>
 
           <div className={styles.documentPanel}>
-            <button
-              type="button"
-              className={styles.docLink}
-              onClick={handleViewDocument}
-              disabled={documentLoading}
-            >
-              {documentLoading ? "Preparing document..." : "View RSBSA Document"}
-            </button>
-            {app.rsbsa_document_original_name && (
-              <span className={styles.documentName}>
-                {app.rsbsa_document_original_name}
-              </span>
-            )}
+            {(["rsbsa", "govId"] as const).map((kind) => {
+              const fileName =
+                kind === "rsbsa"
+                  ? app.rsbsa_document_original_name
+                  : app.gov_id_document_original_name;
+              return (
+                <div key={kind} className={styles.documentRow}>
+                  <button
+                    type="button"
+                    className={styles.docLink}
+                    onClick={() => handleViewDocument(kind)}
+                    disabled={documentLoading !== null}
+                  >
+                    {documentLoading === kind
+                      ? "Preparing document..."
+                      : DOCUMENTS[kind].button}
+                  </button>
+                  {fileName && <span className={styles.documentName}>{fileName}</span>}
+                </div>
+              );
+            })}
             {documentError && (
               <span className={styles.actionError}>{documentError}</span>
             )}

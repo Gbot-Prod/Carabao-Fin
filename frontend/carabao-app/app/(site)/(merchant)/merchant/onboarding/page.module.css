@@ -1,21 +1,17 @@
 .page {
   min-height: 100%;
-  padding: 2rem;
+  padding: 2rem 24px 0;
 }
 
+/* The form is part of the page, not a card: a centred column on the page. */
 .card {
-  --pad-x: clamp(14px, 3vw, 22px);
-  --pad-y: clamp(16px, 3vw, 22px);
+  --pad-x: 0px;
+  --pad-y: clamp(8px, 2vw, 16px);
 
   width: 100%;
-  padding: var(--pad-y) var(--pad-x);
   max-width: 920px;
   margin: 0 auto;
-  background: var(--bg-white);
-  border: 1px solid rgba(23, 61, 37, 0.08);
-  border-radius: var(--radius-md);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.10);
-  overflow: hidden;
+  padding-bottom: 2rem;
 }
 
 .header {
@@ -63,7 +59,7 @@
 .stepper {
   padding: 12px var(--pad-x) 8px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
 }
 
@@ -385,17 +381,22 @@
   font-weight: 650;
 }
 
+/* Stays at the bottom of the screen while a long step scrolls. */
 .footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
   padding: 14px var(--pad-x) 18px;
   display: flex;
   justify-content: space-between;
   gap: 10px;
   border-top: 1px solid rgba(23, 61, 37, 0.08);
+  background: var(--bg-white);
 }
 
 @media (max-width: 640px) {
   .page {
-    padding: 1rem 0.75rem 2rem;
+    padding: 1rem 16px 0;
   }
 
   .header {
@@ -489,96 +490,70 @@
   gap: 10px;
 }
 
-/* ── Verify step ──────────────────────────────────────────────────── */
-.verifyStep {
+/* ── Contact codes (email and SMS) ────────────────────────────────── */
+.codeRow {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  padding: 8px 0 4px;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
 }
 
-.verifyPhoneBox {
-  width: 100%;
-  max-width: 400px;
-  padding: 16px 18px;
-  background: rgba(49, 146, 93, 0.05);
-  border: 1px solid rgba(49, 146, 93, 0.22);
+.codeInputs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.codeInput {
+  width: 160px;
+  padding: 9px 12px;
+  border: 2px solid #d0e4d5;
   border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.verifyPhoneLeft {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.verifyPhoneLabel {
-  font-size: 11px;
-  font-weight: 900;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.verifyPhoneNum {
   font-size: 18px;
   font-weight: 800;
   color: var(--green-900);
+  text-align: center;
+  letter-spacing: 0.3em;
+  font-family: monospace;
+  background: #f9fcf9;
+  outline: none;
 }
 
-.editPhoneBtn {
-  padding: 6px 14px;
+.codeInput:focus {
+  border-color: rgba(49, 146, 93, 0.55);
+  box-shadow: 0 0 0 4px rgba(49, 146, 93, 0.12);
+}
+
+.verifyBtn {
+  padding: 9px 18px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(49, 146, 93, 0.30);
-  background: rgba(49, 146, 93, 0.08);
-  color: var(--green-600);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
-  white-space: nowrap;
-}
-
-.editPhoneBtn:hover {
-  background: rgba(49, 146, 93, 0.15);
-}
-
-.sendOtpBtn {
-  padding: 12px 28px;
-  border-radius: var(--radius-md);
   border: none;
   background: var(--green-600);
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
   font-family: inherit;
-  box-shadow: 0 6px 16px rgba(49, 146, 93, 0.22);
 }
 
-.sendOtpBtn:disabled {
+.verifyBtn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.otpGroup {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
+.verifiedNote {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--green-600);
 }
 
 .otpHint {
   margin: 0;
   font-size: 13px;
   color: var(--text-muted);
-  text-align: center;
 }
 
 .otpInput {

@@ -11,13 +11,15 @@ from app.models.merchant_application import MerchantApplication
 from app.models.order import Order
 from app.models.produce import Produce
 from app.schemas.cart import MAX_CART_ITEMS, MAX_ITEM_QUANTITY
-from app.services import r2_service
 from app.services.account_suspension import merchant_is_public
 from tests.better_auth import make_user
-from tests.files import pdf_bytes
 from tests.test_audit_log import _client as _admin_client
 from tests.test_audit_log import _staff
-from tests.test_merchant_onboarding_phone import PAYLOAD
+from tests.test_merchant_onboarding_phone import (
+    PAYLOAD,
+    onboarding_files,
+    patch_uploads,
+)
 from tests.test_produce_pricing import _client, tomatoes  # noqa: F401 - fixture
 from tests.test_reviews import _buyer, buyer, db, merchant  # noqa: F401 - fixtures
 
@@ -156,6 +158,8 @@ def _second_merchant(db, **fields):  # noqa: F811
         operating_hours={},
         business_type="Farmer",
         rsbsa_document_path="rsbsa/2.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
         **fields,
     )
 
@@ -190,9 +194,7 @@ def test_closed_merchant_frees_its_tin(db, merchant):  # noqa: F811
 @pytest.fixture
 def applicant(db, monkeypatch):  # noqa: F811
     monkeypatch.setenv("AUTH_SYNC_SHARED_SECRET", "test-secret")
-    monkeypatch.setattr(
-        r2_service, "upload_rsbsa_document", lambda *a, **k: "rsbsa/x.pdf"
-    )
+    patch_uploads(monkeypatch)
     user = make_user(db, "applicant@example.com", phone_number="+639171234567")
     db.commit()
     return user
@@ -209,11 +211,11 @@ def _submit(db, user, **overrides):  # noqa: F811
     app.include_router(merchant_onboarding.router)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: user
-    payload = {**PAYLOAD, **overrides}
+    payload = {**PAYLOAD, "contact_email": user.email, **overrides}
     return TestClient(app).post(
         "/merchant-onboarding/me",
         data={"payload": json.dumps(payload)},
-        files={"rsbsa_file": ("r.pdf", pdf_bytes(), "application/pdf")},
+        files=onboarding_files(),
     )
 
 
@@ -222,6 +224,13 @@ def test_onboarding_saves_the_normalized_number(db, applicant):  # noqa: F811
     assert resp.status_code == 200, resp.text
     application = db.query(MerchantApplication).one()
     assert application.contact_number == "+639171234567"
+
+
+def test_onboarding_tin_is_optional(db, applicant):  # noqa: F811
+    resp = _submit(db, applicant, tin="")
+    assert resp.status_code == 200, resp.text
+    application = db.query(MerchantApplication).one()
+    assert application.tin is None and application.tin_hmac is None
 
 
 @pytest.mark.parametrize(
@@ -236,6 +245,7 @@ def test_onboarding_saves_the_normalized_number(db, applicant):  # noqa: F811
         {"available_days": ["Mon", "Mon"]},
         {"merchant_name": "x" * 101},
         {"address": "x" * 501},
+        {"tin": "123"},
     ],
 )
 def test_onboarding_refuses_bad_payloads(db, applicant, overrides):  # noqa: F811
@@ -258,6 +268,8 @@ def _application(db, user, status):  # noqa: F811
         contact_email="applicant@example.com",
         contact_number="+639170000001",
         rsbsa_document_path="rsbsa/3.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
         region="Region III",
         province="Bulacan",
         city="Malolos",

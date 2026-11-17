@@ -30,6 +30,13 @@ class MerchantApplication(Base):
             sqlite_where=text(f"{column} IS NOT NULL"),
         )
         for column in ("tin_hmac", "rsbsa_number_hmac")
+    ) + (
+        # Duplicate lookups for the automated document checks. Not unique: a
+        # duplicate only raises a flag for the admin.
+        Index("ix_merchant_applications_gov_id_number_hmac", "gov_id_number_hmac"),
+        Index(
+            "ix_merchant_applications_ocr_rsbsa_number_hmac", "ocr_rsbsa_number_hmac"
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -77,6 +84,11 @@ class MerchantApplication(Base):
     rsbsa_document_path = Column(String, nullable=False)
     rsbsa_document_original_name = Column(String, nullable=True)
     rsbsa_document_content_type = Column(String, nullable=True)
+    # Any valid government ID (onboarding section 2), private bucket.
+    gov_id_type = Column(String, nullable=False)
+    gov_id_document_path = Column(String, nullable=False)
+    gov_id_document_original_name = Column(String, nullable=True)
+    gov_id_document_content_type = Column(String, nullable=True)
 
     # Step 2: Location / availability
     region = Column(String, nullable=False)
@@ -92,6 +104,25 @@ class MerchantApplication(Base):
 
     # Admin review
     admin_note = Column(String, nullable=True)
+    # The admin who made the last decision, and when.
+    reviewed_by_user_id = Column(
+        Integer, ForeignKey("backend_users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Automated document checks (app/services/document_checks.py). They only
+    # collect data and raise flags; an admin makes every decision. The OCR
+    # text itself is not stored. Numbers are kept as blind indexes (HMAC).
+    gov_id_number_hmac = Column(String(64), nullable=True)
+    ocr_rsbsa_number_hmac = Column(String(64), nullable=True)
+    gov_id_file_sha256 = Column(String(64), nullable=True, index=True)
+    rsbsa_file_sha256 = Column(String(64), nullable=True, index=True)
+    ocr_gov_id_name = Column(EncryptedString("ocr_gov_id_name"), nullable=True)
+    ocr_rsbsa_number = Column(EncryptedString("rsbsa_number"), nullable=True)
+    name_match_score = Column(Float, nullable=True)
+    check_flags = Column(JSON, nullable=True)
+    check_status = Column(String, nullable=True, index=True)  # pending|completed|failed
+    checked_at = Column(DateTime(timezone=True), nullable=True)
 
     @validates("tin")
     def _set_tin_hmac(self, _key: str, value: str | None) -> str | None:

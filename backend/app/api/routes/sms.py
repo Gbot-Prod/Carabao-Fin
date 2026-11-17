@@ -15,14 +15,17 @@ from app.integrations.sms.semaphore import SemaphoreError
 from app.integrations.sms.semaphore import send_otp as semaphore_send_otp
 from app.models.user import User
 from app.services import otp, rate_limit
-from app.services.phone_verification import normalize_ph_mobile, sign_token
+from app.services.phone_verification import (
+    CONTACT_VERIFICATION_TTL,
+    normalize_ph_mobile,
+    sign_token,
+)
 
 router = APIRouter(tags=["sms"])
 logger = logging.getLogger(__name__)
 
 _otp_lock = Lock()  # guards _sent_today only
 _OTP_USER_HOURLY_LIMIT = rate_limit.IDENTIFIER_LIMITS["otp_send_user"].max_hits
-_PHONE_VERIFICATION_TTL = 1800  # 30 minutes to finish onboarding after verifying
 
 # Literal {otp} is Semaphore's placeholder — do not .format() this.
 _OTP_MESSAGE = "Your Carabao verification code is {otp}. Valid for 10 minutes. Do not share this with anyone."
@@ -122,7 +125,7 @@ def verify_otp_code(
         otp.check_code(db, _merchant_otp_key(current_user.id, number), body.otp)
         token = sign_token(
             {"purpose": "merchant_phone", "user_id": current_user.id, "number": number},
-            _PHONE_VERIFICATION_TTL,
+            CONTACT_VERIFICATION_TTL,
         )
     except RuntimeError as exc:
         raise upstream_error(

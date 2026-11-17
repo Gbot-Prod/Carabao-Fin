@@ -133,6 +133,11 @@ def create_merchant_from_application(
         "rsbsa_document_path": application.rsbsa_document_path,
         "rsbsa_document_original_name": application.rsbsa_document_original_name,
         "rsbsa_document_content_type": application.rsbsa_document_content_type,
+        # The R2 keys and metadata, not the files.
+        "gov_id_type": application.gov_id_type,
+        "gov_id_document_path": application.gov_id_document_path,
+        "gov_id_document_original_name": application.gov_id_document_original_name,
+        "gov_id_document_content_type": application.gov_id_document_content_type,
     }
 
     existing_merchant = (

@@ -1,0 +1,445 @@
+/* Merchant Centre login: a top bar, a hero on the left, the form card on the right. */
+
+.page {
+  --ml-green: #1d7a46;
+  --ml-green-hover: #17663a;
+  --ml-green-deep: #133520;
+  --ml-line: #dfe5e0;
+  --ml-input-line: #c9d3cc;
+  --ml-muted: #5f6f62;
+
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f7f4;
+  color: var(--text-strong);
+}
+
+/* ── Main ────────────────────────────────────── */
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 56px 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  align-items: center;
+  gap: 64px;
+}
+
+.hero {
+  max-width: 480px;
+}
+
+.heroTitle {
+  margin: 0 0 12px;
+  font-size: 34px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: var(--ml-green);
+}
+
+.heroBody {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ml-muted);
+}
+
+.illustration {
+  display: block;
+  width: 100%;
+  max-width: 440px;
+  height: auto;
+  margin-top: 28px;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Card ────────────────────────────────────── */
+
+.card {
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 14px rgba(19, 46, 29, 0.08);
+  padding: 28px 30px 26px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.cardHeader h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--ml-input-line);
+  border-radius: 3px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+}
+
+.input::placeholder,
+.phoneInput::placeholder {
+  color: #8a978d;
+}
+
+.input:focus,
+.phone:focus-within {
+  outline: none;
+  border-color: var(--ml-green);
+  box-shadow: 0 0 0 3px rgba(29, 122, 70, 0.15);
+}
+
+.passwordWrap {
+  position: relative;
+}
+
+.passwordWrap .input {
+  padding-right: 46px;
+}
+
+.eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--ml-muted);
+  cursor: pointer;
+}
+
+.eye:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.phone {
+  display: flex;
+  align-items: center;
+  height: 42px;
+  border: 1px solid var(--ml-input-line);
+  border-radius: 3px;
+  background: #fff;
+}
+
+.phoneInvalid {
+  border-color: var(--danger);
+}
+
+.phonePrefix {
+  padding: 0 12px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  border-right: 1px solid var(--ml-line);
+  color: var(--ml-muted);
+  font-size: 15px;
+}
+
+.phoneInput {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+/* The field around it shows the focus ring. */
+.phoneInput:focus,
+.phoneInput:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.fieldError {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.submit {
+  height: 44px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--ml-green);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--ml-green-hover);
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.submit:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: -4px;
+  font-size: 13px;
+}
+
+.remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ml-muted);
+  cursor: pointer;
+}
+
+.remember input {
+  accent-color: var(--ml-green);
+}
+
+.link,
+.inlineLink {
+  color: #1f5fa8;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.inlineLink {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.link:hover,
+.inlineLink:hover {
+  text-decoration: underline;
+}
+
+.right {
+  align-self: flex-end;
+  margin-top: -8px;
+}
+
+.help2 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ml-muted);
+}
+
+.notice,
+.error {
+  padding: 10px 12px;
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.notice {
+  background: #eef6f0;
+  color: var(--success-text);
+}
+
+.error {
+  background: #fdecec;
+  color: var(--danger);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 20px 0 16px;
+  color: #8a978d;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--ml-line);
+}
+
+.social {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.socialBtn {
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--ml-input-line);
+  border-radius: 3px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.socialBtn:hover:not(:disabled) {
+  background: #f6f8f6;
+}
+
+.socialBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.socialBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.terms {
+  margin: 22px 0 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ml-muted);
+}
+
+.terms a {
+  color: var(--ml-green);
+  text-decoration: none;
+}
+
+.terms a:hover {
+  text-decoration: underline;
+}
+
+.switchLine {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: #8a978d;
+}
+
+.switchBtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ml-green);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.switchBtn:hover {
+  text-decoration: underline;
+}
+
+.buyerLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 46px;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 14px rgba(19, 46, 29, 0.08);
+  color: var(--text-strong);
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.buyerLink:hover {
+  color: var(--ml-green);
+}
+
+.footer {
+  padding: 28px 16px 32px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ml-muted);
+}
+
+/* ── Narrow screens ──────────────────────────── */
+
+@media (max-width: 900px) {
+  .main {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    max-width: 460px;
+    padding: 28px 16px;
+    gap: 24px;
+  }
+
+  .hero {
+    text-align: center;
+    max-width: none;
+  }
+
+  .heroTitle {
+    font-size: 26px;
+  }
+
+  .heroBody {
+    font-size: 15px;
+  }
+
+  .illustration {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .card {
+    padding: 22px 18px;
+  }
+}

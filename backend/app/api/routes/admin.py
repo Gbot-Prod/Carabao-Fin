@@ -696,6 +696,14 @@ def review_merchant_application(
             status_code=400, detail="Failed to create merchant profile"
         ) from exc
     application.admin_note = payload.admin_note or None
+    now = datetime.now(UTC)
+    application.reviewed_by_user_id = admin.id
+    application.reviewed_at = now
+    if payload.status == "approved" and application.merchant_id is not None:
+        merchant = db.get(Merchant, application.merchant_id)
+        if merchant is not None:
+            merchant.verified_by_user_id = admin.id
+            merchant.verified_at = now
 
     audit_log.record_admin_action(
         db,
@@ -715,42 +723,53 @@ def review_merchant_application(
     return application
 
 
+def _document_url_response(
+    db: Session, app_id: int, document: str, label: str
+) -> dict:
+    """A short-lived signed URL for one of an application's private documents."""
+    application = (
+        db.query(MerchantApplication).filter(MerchantApplication.id == app_id).first()
+    )
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    path = getattr(application, f"{document}_document_path")
+    content_type = getattr(application, f"{document}_document_content_type")
+    if not path:
+        raise HTTPException(status_code=404, detail=f"{label} not found")
+
+    try:
+        url = r2_service.create_private_document_url(path, content_type)
+    except Exception as exc:
+        raise upstream_error(
+            502,
+            f"Unable to prepare {label}",
+            log=f"R2 {label} signed URL failed",
+            exc=exc,
+        ) from exc
+    if not url:
+        raise HTTPException(status_code=502, detail=f"Unable to prepare {label}")
+
+    return {
+        "url": url,
+        "filename": getattr(application, f"{document}_document_original_name"),
+        "content_type": content_type,
+    }
+
+
 @router.get("/admin/merchant-applications/{app_id}/rsbsa-document")
 def get_rsbsa_document_url(
     app_id: int,
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
-    application = (
-        db.query(MerchantApplication).filter(MerchantApplication.id == app_id).first()
-    )
+    return _document_url_response(db, app_id, "rsbsa", "RSBSA document")
 
-    if application is None:
-        raise HTTPException(status_code=404, detail="Application not found")
 
-    if not application.rsbsa_document_path:
-        raise HTTPException(status_code=404, detail="RSBSA document not found")
-
-    try:
-        url = r2_service.create_rsbsa_document_url(
-            application.rsbsa_document_path,
-            application.rsbsa_document_content_type,
-        )
-    except Exception as exc:
-        raise upstream_error(
-            502,
-            "Unable to prepare RSBSA document",
-            log="R2 RSBSA signed URL failed",
-            exc=exc,
-        ) from exc
-    if not url:
-        raise HTTPException(
-            status_code=502,
-            detail="Unable to prepare RSBSA document",
-        )
-
-    return {
-        "url": url,
-        "filename": application.rsbsa_document_original_name,
-        "content_type": application.rsbsa_document_content_type,
-    }
+@router.get("/admin/merchant-applications/{app_id}/gov-id-document")
+def get_gov_id_document_url(
+    app_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(_require_admin),
+):
+    return _document_url_response(db, app_id, "gov_id", "government ID")

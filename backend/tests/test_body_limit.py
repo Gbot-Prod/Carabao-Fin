@@ -56,5 +56,6 @@ def test_real_app_limits():
     middleware = [m for m in app.user_middleware if m.cls is BodySizeLimitMiddleware]
     assert middleware, "main.py adds BodySizeLimitMiddleware"
     # The RSBSA upload (20 MB) fits; everything else uses the default.
-    assert PATH_LIMITS["/merchant-onboarding/me"] > 20 * 1024 * 1024
+    # Two documents (RSBSA and government ID) of up to 20 MB each.
+    assert PATH_LIMITS["/merchant-onboarding/me"] > 40 * 1024 * 1024
     assert DEFAULT_MAX_BODY < PATH_LIMITS["/merchant-onboarding/me"]

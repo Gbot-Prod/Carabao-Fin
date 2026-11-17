@@ -13,6 +13,10 @@ from typing import Any
 # lib/auth.ts keeps the same 3 days for the account number.
 OLD_NUMBER_ALERT_WINDOW = timedelta(days=3)
 
+# How long a merchant applicant has to submit after verifying the contact email
+# or number. Both are verified in onboarding section 1, before section 2.
+CONTACT_VERIFICATION_TTL = 3600
+
 
 def changed_recently(changed_at: datetime | None, now: datetime) -> bool:
     """True when a number changed less than OLD_NUMBER_ALERT_WINDOW ago."""

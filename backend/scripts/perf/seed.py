@@ -121,6 +121,8 @@ def build_merchants(n_merchants: int, first_user_id: int, now: datetime) -> list
             "delivery_price": 40,
             "business_type": "individual",
             "rsbsa_document_path": "perf/rsbsa.pdf",
+            "gov_id_type": "Passport",
+            "gov_id_document_path": "perf/gov-id.pdf",
             "created_at": now,
             "updated_at": now,
         }

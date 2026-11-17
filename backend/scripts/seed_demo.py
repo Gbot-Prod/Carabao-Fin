@@ -309,6 +309,8 @@ def make_merchant(db, user, farm, idx) -> Merchant:
         business_type="Farm",
         rsbsa_number=f"03-49-{idx:02d}-{RNG.randint(100, 999)}-{RNG.randint(10000, 99999)}",
         rsbsa_document_path="demo/rsbsa-placeholder.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
         rsbsa_document_original_name="rsbsa.pdf",
         rsbsa_document_content_type="application/pdf",
     )
@@ -550,6 +552,8 @@ def seed(db, hub_email: str, n_ready: int, n_history: int) -> None:
         contact_email=applicant.email, contact_number=phone(401),
         rsbsa_number="03-69-04-012-34567",
         rsbsa_document_path="demo/rsbsa-placeholder.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
         region="Central Luzon", province="Tarlac", city="Capas",
         barangay="Sta. Lucia", address="Sitio Sta. Lucia", postal_code="2315",
         delivery_time=2, delivery_price=90,
