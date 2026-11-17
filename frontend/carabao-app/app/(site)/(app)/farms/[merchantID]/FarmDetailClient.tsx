@@ -14,7 +14,7 @@ import ReferencePriceHint, { useReferencePrices } from '@/components/ReferencePr
 import { formatRequestedDate } from '@/app/(site)/(merchant)/merchant/lib/format';
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
 
-export default function MerchantDetailPage() {
+export default function FarmDetailClient() {
   const params = useParams<{ merchantID?: string }>();
   const merchantID = Number(params?.merchantID ?? '0');
   const hasValidMerchantId = Number.isFinite(merchantID) && merchantID > 0;
