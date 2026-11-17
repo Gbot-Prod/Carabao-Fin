@@ -184,6 +184,36 @@ const adminSurfaceOnly = (): BetterAuthPlugin => ({
   },
 });
 
+// Public deploy: an admin account gets no session. The admin works on the admin
+// site only, and uses a separate account to buy or sell. Before this rule, an
+// admin who had not yet set up 2FA could still sign in here.
+// Comes before adminTwoFactor(): a Google or Facebook sign-in is refused here,
+// before that plugin sends it to the code page.
+const ADMIN_ACCOUNT_MESSAGE =
+  "This is a Carabao admin account. Sign in on the admin site, and use a separate account to buy or sell.";
+
+const noAdminsOnPublicSurface = (): BetterAuthPlugin => ({
+  id: "carabao-no-admins-on-public-surface",
+  hooks: {
+    after: [
+      {
+        // Every endpoint that makes a session (password, phone, social, signup,
+        // two-factor verify).
+        matcher: () => true,
+        handler: createAuthMiddleware(async (ctx) => {
+          const created = ctx.context.newSession as { session: SessionRow; user: SessionUser } | null;
+          if (!created || !isAdmin(created.user)) return;
+          deleteSessionCookie(ctx, true);
+          await ctx.context.internalAdapter.deleteSession(created.session.token).catch(() => {});
+          // An OAuth callback is a browser redirect: show the message on the sign-in page.
+          if (ctx.request?.method === "GET") throw ctx.redirect(`${appBaseUrl}/auth?error=admin_account`);
+          throw new APIError("FORBIDDEN", { code: "ADMIN_ACCOUNT", message: ADMIN_ACCOUNT_MESSAGE });
+        }),
+      },
+    ],
+  },
+});
+
 // ── Admin two-step verification (CF-0003, CF-0017, CF-0018) ───────────────
 //
 // Only admins use 2FA, and the admin area and API require it.
@@ -547,6 +577,8 @@ function createAuth() {
       phoneVerifyGuard(),
       phoneChangeHistory(),
       phoneSignupPassword(),
+      // Public deploy: no session for an admin account (before adminTwoFactor()).
+      ...(isAdminSurface ? [] : [noAdminsOnPublicSurface()]),
       // After twoFactor(), so that its after-hook has the last word on the response.
       adminTwoFactor(),
       // Last: it has the final word on whether a session stays.

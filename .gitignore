@@ -29,7 +29,7 @@ Thumbs.db
 
 #secrets, kys if this gets out
 *.env
-*.env.example
+!*.env.example
 
 
 revisions/

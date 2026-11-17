@@ -397,6 +397,27 @@ def test_role_writes(db):
     assert better_auth.get_identity(db, "ba_user")["role"] == "user"
 
 
+def test_role_change_ends_every_session(db):
+    """A promoted user must not keep a buyer session: the public site gives
+    admins no session."""
+    from sqlalchemy import text
+
+    from app.services import better_auth_store
+
+    for sid, uid in (("s1", "ba_user"), ("s2", "ba_user"), ("s3", "ba_other")):
+        db.execute(
+            text('INSERT INTO "session" (id, "userId") VALUES (:s, :u)'),
+            {"s": sid, "u": uid},
+        )
+    db.commit()
+
+    better_auth_store.set_role(db, "ba_user", is_admin=True)
+
+    count = 'SELECT COUNT(*) FROM "session" WHERE "userId" = :u'
+    assert db.execute(text(count), {"u": "ba_user"}).scalar() == 0
+    assert db.execute(text(count), {"u": "ba_other"}).scalar() == 1
+
+
 def test_writes_refresh_an_identity_already_loaded(client, db):
     from app.services import better_auth_store
 

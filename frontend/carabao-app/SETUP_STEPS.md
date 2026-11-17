@@ -1,3 +1,5 @@
+> **Old file.** This file is from before the subdomain setup. Some values here are not correct now (for example `localhost:3000` as the standard origin). For local setup, use `documentation/manuals/SUBDOMAINS.md` section 5. For env names, use `documentation/manuals/SYSTEM_REFERENCE.md` section 4.
+
 # BetterAuth Setup - Next Steps
 
 ## 1. Delete node_modules and reinstall

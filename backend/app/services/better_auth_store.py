@@ -163,7 +163,11 @@ def set_role(db: Session, identity_id: str | None, *, is_admin: bool) -> None:
             (
                 'UPDATE "user" SET role = :role WHERE id = :id',
                 {"role": "admin" if is_admin else "user", "id": identity_id},
-            )
+            ),
+            # A role change ends every session. A promoted user loses the buyer
+            # session (the public site gives admins no session); a demoted admin
+            # loses the admin session.
+            ('DELETE FROM "session" WHERE "userId" = :id', {"id": identity_id}),
         ],
     )
 

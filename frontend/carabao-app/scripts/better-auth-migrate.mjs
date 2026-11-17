@@ -81,19 +81,24 @@ const config = {
 // (lib/auth.ts). One config has one "jwks" model, so this is a second pass
 // with only that plugin. Migrations only add tables and columns, so it adds
 // "jwks_admin" and nothing else.
-const adminJwksConfig = {
+//
+// Built lazily, AFTER the public pass: Better Auth's mergeSchema renames the
+// jwt plugin's shared module-level schema in place, so calling
+// jwt({ modelName: "jwks_admin" }) early also renames the public pass's model,
+// and "jwks" is never created.
+const adminJwksConfig = () => ({
   ...config,
   plugins: [jwt({ schema: { jwks: { modelName: "jwks_admin" } } })],
-};
+});
 
 const shouldApply = process.argv.includes("--apply");
 
 try {
-  for (const [name, cfg] of [
-    ["public", config],
+  for (const [name, makeCfg] of [
+    ["public", () => config],
     ["admin JWT keys (jwks_admin)", adminJwksConfig],
   ]) {
-    const migrations = await getMigrations(cfg);
+    const migrations = await getMigrations(makeCfg());
 
     if (migrations.toBeCreated.length === 0 && migrations.toBeAdded.length === 0) {
       console.log(`[${name}] Better Auth schema is already up to date.`);

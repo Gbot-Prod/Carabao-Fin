@@ -147,6 +147,8 @@ export const socialErrorMessage = (code: string) => {
       return "That email already belongs to a Carabao account. Log in with your number or email instead.";
     case "banned":
       return SUSPENDED_MESSAGE;
+    case "admin_account":
+      return "This is a Carabao admin account. Sign in on the admin site, and use a separate account to buy or sell.";
     case "access_denied":
       return "Sign-in was cancelled.";
     default:

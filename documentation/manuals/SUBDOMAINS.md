@@ -104,7 +104,7 @@ The backend stores notification links as paths, and the mobile app reads them. *
 | Trusted origins | apex, `merchant.`, `BETTER_AUTH_TRUSTED_ORIGINS`, `RAILWAY_PUBLIC_DOMAIN`, mobile app | admin origin only |
 | Sign-in methods | phone + password, email + password, Google, Facebook, mobile app | email + password only, then TOTP |
 | Better Auth endpoints | all (except the admin plugin's) | allow-list: `/sign-in/email`, `/sign-out`, `/get-session`, `/token`, `/jwks`, `/two-factor/*`, `/request-password-reset`, `/reset-password*`, `/change-password`, session list/revoke, `/ok`, `/error`. All others: 404 |
-| Who gets a session | everyone | admins only (403 `NOT_AN_ADMIN`) |
+| Who gets a session | everyone except admins (403 `ADMIN_ACCOUNT`; a Google or Facebook sign-in goes to `/auth?error=admin_account`) | admins only (403 `NOT_AN_ADMIN`) |
 | JWT key table | `jwks` | `jwks_admin` |
 | JWT issuer | `AUTH_JWT_ISSUER`, else `BETTER_AUTH_URL` | `AUTH_JWT_ISSUER` (required in production) |
 | JWT claims added | `mfa`, `surface: "public"` | `mfa`, `surface: "admin"` |
@@ -120,6 +120,7 @@ The admin deploy never reads the `carabao.*` cookie. A session from the apex the
 Results of the separate secret:
 
 - An admin's TOTP secret can be read only by the admin deploy. An admin account therefore cannot complete sign-in on the public site. Use a separate account to buy or sell.
+- The public deploy also refuses every admin sign-in (`noAdminsOnPublicSurface` in `lib/auth.ts`), also before the admin sets up 2FA. A role change in the API (`better_auth_store.set_role`) deletes all sessions of that user, so a promoted user does not keep a buyer session.
 - The 2FA setup link (`/two-factor/enrol`) opens on the admin site (`ADMIN_URL` in the API).
 
 ### 1.4 API tokens (`backend/app/core/security.py`)
@@ -326,11 +327,112 @@ Open:
 - `http://admin.carabao.test:3001`
 
 Notes:
+- Subdomain mode is the standard local setup. It is the only mode that tests the host rules, the parent-domain session cookie and the links between hosts.
+- In subdomain mode, open `carabao.test:3000`, not `localhost:3000`. The proxy does not redirect `localhost` to `carabao.test`. On `localhost`, some pages open, but sign-in and the links between hosts do not work.
 - `dev:admin` uses its own build folder (`.next-admin`) and `tsconfig.admin.json`, so both dev servers can run at the same time.
 - While `dev:admin` runs, Next.js changes the import line in `next-env.d.ts` to `.next-admin`. Do not commit that change.
-- Without the hosts file, use `NEXT_PUBLIC_APP_URL=http://localhost:3000`. The site then runs on one host, and the subdomain checks below do not apply.
+- Without the hosts file, use one-host mode (5.5). The subdomain checks below do not apply in that mode.
+- If a page gives `Cannot find module '...css'` but the file is in `node_modules`, the Turbopack cache is old (for example, after the CSS toolchain changed). Stop the dev server, delete `.next` (or `.next-admin`), and start it again.
+- The Expo app on a phone cannot resolve `carabao.test`, because the hosts file is only on the PC. The mobile app uses `EXPO_PUBLIC_WEB_URL=http://<PC-LAN-IP>:3000`.
 
-### 5.4 Help deploy (optional)
+### 5.4 OAuth sign-in (Google, Facebook) on local
+
+Better Auth makes the callback URL from `BETTER_AUTH_URL`: `<BETTER_AUTH_URL>/api/auth/callback/google` and `.../facebook` ([lib/auth.ts](../../frontend/carabao-app/lib/auth.ts), `socialProviders`, no custom `redirectURI`).
+
+In subdomain mode, the callback is `http://carabao.test:3000/api/auth/callback/...`. The providers do not accept it:
+- Google: a redirect URI must use HTTPS and a public top-level domain. Only `localhost` can use plain HTTP. `.test` is not public.
+- Facebook: strict mode needs HTTPS. Only `localhost` can use HTTP.
+
+Thus Google and Facebook sign-in do not work in subdomain mode. Phone and email sign-in work.
+
+To test OAuth on local:
+1. Change to one-host mode (5.5).
+2. Use **dev** OAuth clients, not the production clients. Add these redirect URIs to them:
+   - `http://localhost:3000/api/auth/callback/google`
+   - `http://localhost:3000/api/auth/callback/facebook`
+3. Put the dev client IDs and secrets in `.env.local`.
+4. When the OAuth work is complete, change back to subdomain mode.
+
+Other options:
+- An HTTPS tunnel (for example `cloudflared` or `ngrok`) on a public domain. Register the tunnel callback URL. A tunnel serves one host only, unless you also map a wildcard domain to it.
+- Test OAuth only on a hosted deploy (`https://carabao.online/api/auth/callback/...`, see section 7 step 8).
+
+### 5.5 One-host mode (`localhost`)
+
+Use this mode for:
+- OAuth work (5.4). Google and Facebook accept `http://localhost` only.
+- A PC without the hosts file (5.1).
+
+Subdomain mode (5.2) is the standard mode. Change back to it when the work is complete.
+
+#### How the mode is selected
+
+The site uses subdomain mode only when the host of `NEXT_PUBLIC_APP_URL` is equal to `ROOT_DOMAIN`. When `NEXT_PUBLIC_APP_URL` is `http://localhost:3000`, the site uses one-host mode. You do not change `ROOT_DOMAIN`. It stays `carabao.test`.
+
+#### Where the pages are
+
+In one-host mode, the public dev server (`npm run dev`) serves the merchant and help pages under a path prefix on `localhost:3000`:
+
+| Site | Subdomain mode (standard) | One-host mode |
+|---|---|---|
+| Buyer | `http://carabao.test:3000/` | `http://localhost:3000/` |
+| Merchant dashboard | `http://merchant.carabao.test:3000/` | `http://localhost:3000/merchant` |
+| A merchant page (example: routing) | `http://merchant.carabao.test:3000/routing/5` | `http://localhost:3000/merchant/routing/5` |
+| Merchant onboarding | `http://merchant.carabao.test:3000/onboarding` | `http://localhost:3000/merchant/onboarding` |
+| Help (FAQ) | `http://help.carabao.test:3000/` | `http://localhost:3000/help` |
+| A help page (example: contact) | `http://help.carabao.test:3000/contact` | `http://localhost:3000/help/contact` |
+| Admin | `http://admin.carabao.test:3001/` | see "Admin site" below |
+
+The links in the site change to these paths automatically. There are no host redirects in one-host mode.
+
+Note: `/merchant/<digits>` (for example `/merchant/42`) is an old shop link. It redirects to `/farms/42` in both modes.
+
+#### Values to change
+
+Change only the values in this table. Keep all other values.
+
+| File | Name | Subdomain mode (standard) | One-host mode |
+|---|---|---|---|
+| `frontend/carabao-app/.env.local` | `NEXT_PUBLIC_APP_URL` | `http://carabao.test:3000` | `http://localhost:3000` |
+| `frontend/carabao-app/.env.local` | `BETTER_AUTH_URL` | `http://carabao.test:3000` | `http://localhost:3000` |
+| `frontend/carabao-app/.env.local` | `NEXT_PUBLIC_MERCHANT_URL`, `NEXT_PUBLIC_HELP_URL` | empty | empty (if they have a value, the links go to that host) |
+| `frontend/carabao-app/.env.admin.local` | `AUTH_JWT_ISSUER` | `http://carabao.test:3000` | `http://localhost:3000` |
+| `backend/.env` | `BETTER_AUTH_URL` | `http://carabao.test:3000` | `http://localhost:3000` |
+| `backend/.env` | `APP_URL` | `http://carabao.test:3000` | `http://localhost:3000` |
+| `backend/.env` | `ALLOWED_ORIGINS` | `http://carabao.test:3000,http://merchant.carabao.test:3000,http://admin.carabao.test:3001` | `http://localhost:3000,<admin origin>` |
+
+Why each value changes:
+- Web `BETTER_AUTH_URL` gives the OAuth callback URL and the token issuer. It must be on `localhost` for OAuth.
+- The token issuer must be the same in three places: web (`BETTER_AUTH_URL`, because `AUTH_JWT_ISSUER` is empty), web-admin (`AUTH_JWT_ISSUER`) and the API (`BETTER_AUTH_URL`). If one of them is different, the API refuses the tokens with 401. If you do not change the admin value, admin sign-in works, but all admin API calls fail.
+- `APP_URL` is the return page after a PayMongo payment.
+- `ALLOWED_ORIGINS` is the CORS list. The browser calls the API from `localhost:3000`, so that origin must be in the list.
+
+Do not change `ROOT_DOMAIN`, `NEXT_PUBLIC_API_URL`, `PUBLIC_JWKS_URL` (empty) or `ADMIN_JWKS_URL` (`http://localhost:3001/api/auth/jwks`).
+
+#### Admin site
+
+The admin site always runs on its own port (3001), in both modes. Select one of these options:
+
+| | Option A: the hosts file has `admin.carabao.test` | Option B: no hosts file |
+|---|---|---|
+| Open | `http://admin.carabao.test:3001` | `http://localhost:3001` |
+| `.env.admin.local` `BETTER_AUTH_URL` | `http://admin.carabao.test:3001` (no change) | `http://localhost:3001` |
+| `.env.admin.local` and `.env.local` `NEXT_PUBLIC_ADMIN_URL` | `http://admin.carabao.test:3001` (no change) | `http://localhost:3001` |
+| `backend/.env` `ADMIN_URL` | `http://admin.carabao.test:3001` (no change) | `http://localhost:3001` |
+| `<admin origin>` in `ALLOWED_ORIGINS` | `http://admin.carabao.test:3001` | `http://localhost:3001` |
+
+With option B, both sites are on the host `localhost`. This is safe: the cookie names are different (`carabao.*` and `carabao-admin.*`), so each site reads only its own session.
+
+#### Change the mode
+
+1. Stop the three servers (public, admin, API).
+2. Change the values in the tables above.
+3. Start the three servers again (5.3). The `NEXT_PUBLIC_*` values are read when the dev server starts.
+4. Sign in again. The old session cookie is on `carabao.test`, so `localhost` does not have it.
+
+To change back to subdomain mode, set the "Subdomain mode (standard)" values again and do steps 1 to 4.
+
+### 5.6 Help deploy (optional)
 
 ```
 cd frontend/carabao-app
@@ -359,7 +461,7 @@ Automatic checks: `npm test`, `npm run lint` and `npm run build` in `frontend/ca
 | 7 | Open `carabao.test:3000/merchantOnboarding` (mobile link) | redirect to `merchant.carabao.test:3000/onboarding` |
 | 8 | Open `carabao.test:3000/help?section=terms` | redirect to `/terms` |
 | 9 | Open `help.carabao.test:3000/` signed out | FAQ, no sign-in asked |
-| 9a | Help deploy (5.4): open `help.carabao.test:3002/`, `/contact`, `/help/contact`, `/order`, `/api/auth/get-session` | 200, 200, redirect to `/contact`, 404, 404 |
+| 9a | Help deploy (5.6): open `help.carabao.test:3002/`, `/contact`, `/help/contact`, `/order`, `/api/auth/get-session` | 200, 200, redirect to `/contact`, 404, 404 |
 | 9b | Help deploy: Terms and Privacy links | go to `carabao.test:3000/terms` and `/privacy` |
 | 10 | On the admin site, sign in with a non-admin email account | "This account is not an admin account." and no session |
 | 11 | On the admin site, call `POST /api/auth/sign-in/social` or `/api/auth/sign-up/email` | 404 |
