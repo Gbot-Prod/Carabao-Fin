@@ -1,11 +1,11 @@
 # Improvement Log
-branch: improve/loop    push: no    iteration: 5
+branch: improve/loop    push: no    iteration: 6
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-FEATURE 1/#4 · STRENGTHEN 2/#5 · SECURITY 1/#3 · AUDIT 1/#1
+FEATURE 1/#4 · STRENGTHEN 2/#5 · SECURITY 2/#6 · AUDIT 1/#1
 
 ## Needs human
 - Push policy: header says `push: no`. Change to `yes` if the loop should push `improve/loop`.
@@ -14,7 +14,6 @@ FEATURE 1/#4 · STRENGTHEN 2/#5 · SECURITY 1/#3 · AUDIT 1/#1
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
 | B02 | SECURITY | M | 4 | 2 | produce schemas | | `ProduceBase.unit_quantity` has no bounds (0 or negative accepted → divide-by-zero / negative per-unit math); `name`/`description` have no `max_length`; schemas lack `extra="forbid"`. Add bounds + forbid on produce, review, shop page, shipment, payment schemas — test: `unit_quantity=0` → 422, 10k-char name → 422, unknown field → 422. |
-| B03 | SECURITY | M | 4 | 2 | rate limits | | No rate limit on review create/update, order chat send, support chat send, or `/produce/search` (only OTP/SMS/onboarding/merchant phone use `services/rate_limit.py`). Add per-user (per-IP for search) limits — test: N+1th request → 429 with standard error body. |
 | B05 | FEATURE | L | 5 | 4 | checkout/money | promos | Voucher/promo codes: model + Alembic, admin CRUD, server-side validation in checkout pricing via `services/money.py` (percent/fixed, min spend, usage cap, expiry, merchant- or platform-scoped). Slice 1: model + validation service + apply at place-order with tests. |
 | B06 | FEATURE | M | 4 | 3 | discovery | wishlist | Saved produce (wishlist): `saved_produce` table + Alembic, `POST/DELETE/GET /me/saved-produce`, heart button on produce cards, saved list on profile — test: save, list, unsave; hidden listings excluded. |
 | B08 | FEATURE | M | 3 | 2 | SEO | seo | Extend `app/sitemap.ts` beyond `/` and `/farms/:id`: category/search landing pages and help pages; add lastModified from farm `updated_at` — test: pure sitemap builder unit test. |
@@ -44,9 +43,12 @@ FEATURE 1/#4 · STRENGTHEN 2/#5 · SECURITY 1/#3 · AUDIT 1/#1
 | B33 | FEATURE | S | 2 | 1 | mobile | parity | Mobile has no SEO surface; no parity needed for B07 (log only). |
 | B34 | FEATURE | S | 2 | 2 | mobile | parity | Mobile HistoryScreen still loads the whole list; switch to `/orders/me/history/page` with infinite scroll, then retire the unpaged route — test: screen loads page 2 on scroll. |
 | B35 | STRENGTHEN | S | 2 | 1 | web orders | | Keep history page/filter/search in the URL (`?tab=history&page=2&status=delivered`) so back/refresh keep the view — test: pure parse/serialize helper. Batch with other order-page polish. |
+| B36 | SECURITY | S | 3 | 2 | rate limits | | `client_ip()` trusts the *first* `X-Forwarded-For` entry when `RATE_LIMIT_TRUST_PROXY=true`; if Railway/Vercel append rather than overwrite, a client can pick its IP and dodge every per-IP limit (OTP + search). Use the right-most untrusted hop (`RATE_LIMIT_PROXY_HOPS`, default 1) — test: spoofed left-most entry does not change the key. Needs a check of the Railway proxy behaviour (Needs human if unclear). |
 | B29 | SECURITY | M | 4 | 2 | deps | | `npm audit --omit=dev` 13 vulns (2 critical): apply patch/minor upgrades (sharp etc.), log majors — test: audit count drops, build passes. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #6 — SECURITY — rate limits (reviews, chat, support, search) — CF-0037 — M
+What: new `rate_limit.ACTION_LIMITS` + `enforce_action(db, scope, identifier)` (429 "Too many requests. Please try again in …" + `Retry-After`; same DB sliding window, purge covers the new windows). Called first in: review create + edit (`review_write`, 10/user/h), order chat send (`order_chat_send`, 30/user/min), support chat send (`support_chat_send`, 20/user/min), public `/produce/search` (`produce_search`, 120/IP/min — each search also writes a `search_log` row). Web `errorHelper` already shows the API `detail`. Docs: SYSTEM_REFERENCE §7.1 API limits list. Why: B03 — these reach merchant inboxes, admin support and the demand log with no cap. Tests: `tests/test_action_rate_limits.py` (6): per-buyer review limit incl. edits and nothing saved when blocked, per-sender order chat (farm still answers), per-user support chat, per-IP search (blocked search not logged, other IP fine), sane defaults. Typed `tests/test_reviews._order`. `/security-review`: no findings ≥ 8 (checked: commit in enforce_action has nothing pending at all 5 call sites; key is bound params; 429 leaks nothing). Checks: pytest 691 passed; ruff 142 (unchanged); mypy 2348→2328; web test 63/63, lint, tsc pass. Follow-ups: B36.
 ### #5 — STRENGTHEN — buyer order history (API + web) — CF-0036 — M
 What: new `GET /orders/me/history/page` (`Page[OrderItemResponse]`): newest first in SQL (`ordered_at DESC NULLS LAST, id DESC`), `status` group filter (`active` / `delivered` / `cancelled` incl. payment_mismatch), `q` = order reference (`CB-2026-0042`, `#42`, `42`) or farm name (ILIKE, `%`/`_` escaped), `page` ≤ 10 000, `page_size` ≤ 50 (default 10). The old `/orders/me/history` list stays for the mobile app but is now sorted by SQL instead of Python. Web orders page History tab: status select, search form, "No matching orders" empty state, pager. Moved the admin `Pagination` component to `components/Pagination/` (6 admin imports updated) so the buyer site can use it. Pure helpers `lib/order-history.ts` (params, page after a delete). Why: B04 — the whole history was loaded and sorted in Python on every visit. Tests: backend `tests/test_order_history_page.py` (9: paging + total, past-the-end, own orders only, filter groups + 422 on unknown, ref search 4 forms, ref search can't reach another buyer's order, farm search with wildcards literal, bounds 422, plain list still newest-first); web `lib/order-history.test.ts` (4). Checks: pytest 685 passed; ruff 142 / mypy 2348 (unchanged, pre-existing; new code typed); web test 63/63, lint, tsc pass. No build this iteration (not FEATURE, not 4th). Not checked in a browser. Follow-ups: B34, B35.
 ### #4 — FEATURE — web SEO (farm pages) — CF-0035 — M

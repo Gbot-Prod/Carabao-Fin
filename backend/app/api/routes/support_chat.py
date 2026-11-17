@@ -12,7 +12,7 @@ from app.api.routes.admin import _require_admin
 from app.api.routes.chat import ChatMessageOut, _out
 from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.user import User
-from app.services import chat, notifications
+from app.services import chat, notifications, rate_limit
 
 router = APIRouter(tags=["support"])
 
@@ -110,6 +110,7 @@ def write_to_support(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    rate_limit.enforce_action(db, "support_chat_send", str(current_user.id))
     conv = (
         db.query(Conversation)
         .filter(Conversation.kind == "support", Conversation.user_id == current_user.id)
