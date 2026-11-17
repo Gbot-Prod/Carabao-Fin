@@ -3,7 +3,7 @@
 import csv
 import io
 from collections.abc import Iterator
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -22,6 +22,7 @@ from app.schemas.admin_transaction import (
     AdminTransactionRow,
     AdminTransactionTotals,
 )
+from app.services.produce_freshness import PH_TZ, ph_day_start
 
 router = APIRouter(tags=["admin"])
 
@@ -76,11 +77,12 @@ def _filtered(db: Session, f: TransactionFilters) -> SAQuery:
         q = q.filter(Transaction.status == f.status)
     if f.merchant_id is not None:
         q = q.filter(Transaction.merchant_id == f.merchant_id)
-    # Dates filter on when the checkout attempt was created.
+    # Dates filter on when the checkout attempt was created, in Manila
+    # calendar days (CF-0039).
     if f.date_from is not None:
-        q = q.filter(Transaction.created_at >= datetime.combine(f.date_from, time.min))
+        q = q.filter(Transaction.created_at >= ph_day_start(f.date_from))
     if f.date_to is not None:
-        end = datetime.combine(f.date_to + timedelta(days=1), time.min)
+        end = ph_day_start(f.date_to + timedelta(days=1))
         q = q.filter(Transaction.created_at < end)
     if f.q is not None:
         like = f"%{f.q}%"
@@ -219,7 +221,7 @@ def export_transactions(
     # Load everything before streaming: the request's DB session may close
     # before a lazily-consumed generator would finish reading from it.
     rows = [_row(*r) for r in _ordered(_filtered(db, filters)).all()]
-    stamp = datetime.now().strftime("%Y%m%d-%H%M")
+    stamp = datetime.now(UTC).astimezone(PH_TZ).strftime("%Y%m%d-%H%M")
     return StreamingResponse(
         _csv_lines(rows),
         media_type="text/csv; charset=utf-8",

@@ -17,7 +17,6 @@ from .follows import router as follows_router
 from .merchant_onboarding import router as merchant_onboarding_router
 from .merchant_sales import router as merchant_sales_router
 from .merchants import router as merchants_router
-from .misc import router as misc_router
 from .notifications import router as notifications_router
 from .orders import router as orders_router
 from .payments import router as payments_router
@@ -54,7 +53,6 @@ router.include_router(admin_audit_router)
 router.include_router(admin_produce_router)
 router.include_router(email_router)
 router.include_router(email_otp_router)
-router.include_router(misc_router)
 router.include_router(merchant_onboarding_router)
 router.include_router(merchants_router)
 router.include_router(users_router)

@@ -1,6 +1,6 @@
 """Admin view of every order (A1) and the refund queue (A2)."""
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, exists, not_
@@ -23,6 +23,7 @@ from app.schemas.admin_order import (
 )
 from app.schemas.pagination import Page
 from app.services.order_status import payment_status
+from app.services.produce_freshness import ph_day_start
 from app.services.refund_service import RefundError, record_refund
 
 router = APIRouter(tags=["admin"])
@@ -91,12 +92,11 @@ def list_all_orders(
         q = q.filter(Order.merchant_id == merchant_id)
     if payment is not None:
         q = q.filter(_payment_status_clause(payment))
+    # Days are Manila calendar days (CF-0039); date_to includes the whole day.
     if date_from is not None:
-        q = q.filter(Order.ordered_at >= datetime.combine(date_from, time.min))
+        q = q.filter(Order.ordered_at >= ph_day_start(date_from))
     if date_to is not None:
-        # Inclusive of the whole end day.
-        end = datetime.combine(date_to + timedelta(days=1), time.min)
-        q = q.filter(Order.ordered_at < end)
+        q = q.filter(Order.ordered_at < ph_day_start(date_to + timedelta(days=1)))
 
     total = q.count()
     orders = (

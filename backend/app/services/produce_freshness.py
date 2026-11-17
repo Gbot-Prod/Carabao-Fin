@@ -6,7 +6,7 @@ delete it. Listings created before these dates existed have NULL dates and stay
 listed. Dates are calendar days in Philippine time.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta, timezone
 
 from sqlalchemy import ColumnElement, and_, or_
 
@@ -17,6 +17,16 @@ PH_TZ = timezone(timedelta(hours=8))
 
 def ph_today() -> date:
     return datetime.now(PH_TZ).date()
+
+
+def ph_day_start(day: date) -> datetime:
+    """UTC instant at which ``day`` starts in Philippine time (CF-0039).
+
+    Date filters on timestamps use this so "Nov 18" means Nov 18 in Manila
+    (16:00 UTC on the 17th), not Nov 18 in UTC. The result is UTC so it also
+    compares right against SQLite test rows, which store UTC wall time.
+    """
+    return datetime.combine(day, time.min, tzinfo=PH_TZ).astimezone(UTC)
 
 
 def is_listed(today: date) -> ColumnElement[bool]:

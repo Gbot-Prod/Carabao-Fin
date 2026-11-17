@@ -3,19 +3,24 @@
 import csv
 import io
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from httpx2 import Response
+from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import admin_transactions
+from app.models.order import Order
 from app.models.transaction import Transaction
+from app.models.user import User
+from tests.shared_fixtures import _buyer
 from tests.test_admin_orders import _admin, _order
 from tests.test_merchant_listings import _other_merchant
-from tests.test_reviews import _buyer
 
 
-def _client(db, user) -> TestClient:
+def _client(db: Session, user: User) -> TestClient:
     app = FastAPI()
     app.include_router(admin_transactions.router)
     app.dependency_overrides[get_db] = lambda: db
@@ -23,7 +28,15 @@ def _client(db, user) -> TestClient:
     return TestClient(app)
 
 
-def _txn(db, order, status, amount=500, fee=10, created_at=None, **extra):
+def _txn(
+    db: Session,
+    order: Order,
+    status: str,
+    amount: float = 500,
+    fee: float = 10,
+    created_at: datetime | None = None,
+    **extra: Any,
+) -> Transaction:
     txn = Transaction(
         order_id=order.id,
         merchant_id=order.merchant_id,
@@ -40,7 +53,7 @@ def _txn(db, order, status, amount=500, fee=10, created_at=None, **extra):
     return txn
 
 
-def _ids(res):
+def _ids(res: Response) -> list[int]:
     assert res.status_code == 200, res.text
     return sorted(t["id"] for t in res.json()["items"])
 
@@ -75,7 +88,7 @@ def test_filters_status_merchant_and_dates(db, merchant):
     o2 = _order(db, other, buyer)
     a = _txn(db, o1, "paid", created_at=datetime(2026, 11, 1, 9, tzinfo=UTC))
     b = _txn(db, o1, "failed", created_at=datetime(2026, 11, 5, 9, tzinfo=UTC))
-    c = _txn(db, o2, "paid", created_at=datetime(2026, 11, 9, 23, tzinfo=UTC))
+    c = _txn(db, o2, "paid", created_at=datetime(2026, 11, 9, 15, tzinfo=UTC))
     client = _client(db, _admin(db))
 
     assert _ids(client.get("/admin/transactions?status=paid")) == sorted([a.id, c.id])

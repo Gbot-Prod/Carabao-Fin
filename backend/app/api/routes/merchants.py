@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -90,6 +91,8 @@ from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
 from app.services.sms_service import notify_order_shipped
 from app.utils.geocoding import _geocode
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["merchants"])
 
 
@@ -109,7 +112,7 @@ def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
             url, params={"access_token": token, "overview": "false"}, timeout=10
         )
         if not resp.ok:
-            print(f"[shipment-directions] Mapbox error {resp.status_code}")
+            logger.warning("shipment directions: Mapbox error %s", resp.status_code)
             return None
         legs = resp.json().get("routes", [{}])[0].get("legs", [])
         cumulative, total = [], 0.0
@@ -118,14 +121,15 @@ def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
             cumulative.append(total)
         return cumulative
     except Exception as exc:
-        print(f"[shipment-directions] Exception: {exc}")
+        # Type only: the exception text can hold the request URL with the token.
+        logger.warning("shipment directions failed: %s", type(exc).__name__)
         return None
 
 
 def _compute_and_store_route(db: Session, order: Order) -> None:
     """Compute ALNS route for order and store waypoints. Called when marking for shipping."""
     if not order.merchant:
-        print(f"[route] Skipping route computation for order {order.id}: no merchant")
+        logger.info("route: skipping order %s, no merchant", order.id)
         return
 
     whole_address = [
@@ -138,11 +142,7 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
     ]
 
     if whole_address == [None, None, None, None, None, None]:
-        print(
-            f"[route] Skipping route computation for order {
-                order.id
-            }: no merchant location or address"
-        )
+        logger.info("route: skipping order %s, no merchant address", order.id)
         return
 
     merchant_address = ", ".join(part for part in whole_address if part)
@@ -154,11 +154,7 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
         delivery_address = saved_address.short_line
 
     if not delivery_address and order.delivery_lat is None:
-        print(
-            f"[route] Skipping route computation for order {
-                order.id
-            }: no delivery address"
-        )
+        logger.info("route: skipping order %s, no delivery address", order.id)
         return
 
     # Saved map pins first (U1); geocode the address text only without one.
@@ -166,19 +162,14 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
     dest_coords = delivery_point(order, saved_address, delivery_address, _geocode)
 
     if not origin_coords:
-        print(
-            f"[route] Could not geocode merchant address for order {order.id}: {
-                merchant_address!r
-            }"
+        # No address text in the log: it is personal data (CF-0039).
+        logger.warning(
+            "route: could not geocode merchant address, order %s", order.id
         )
         return
 
     if not dest_coords:
-        print(
-            f"[route] Could not geocode delivery address for order {order.id}: {
-                delivery_address!r
-            }"
-        )
+        logger.warning("route: could not geocode delivery address, order %s", order.id)
         return
 
     # Build stop and run ALNS
@@ -242,11 +233,7 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
     ]
     if arrival_at:
         order.time_of_arrival = arrival_at
-    print(
-        f"[route] Computed and stored route for order {order.id} with {
-            len(ordered_stops)
-        } stops"
-    )
+    logger.info("route: stored for order %s, %s stops", order.id, len(ordered_stops))
 
 
 @router.get("/merchants", response_model=list[MerchantResponse])

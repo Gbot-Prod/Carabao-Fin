@@ -1,28 +1,27 @@
 # Improvement Log
-branch: improve/loop    push: no    iteration: 8    target: 20
+branch: improve/loop    push: no    iteration: 9    target: 20
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-FEATURE 2/#7 · STRENGTHEN 2/#5 · SECURITY 2/#6 · AUDIT 2/#8
+FEATURE 2/#7 · STRENGTHEN 3/#9 · SECURITY 2/#6 · AUDIT 2/#8
 
 ## Needs human
 - Major dependency upgrades need a plan and a go-ahead: TypeScript 5.9→7, ESLint 9→10, `@types/node` 20→26, `python-dateutil` 2→4 (was B44). The loop only does patch/minor (B29).
 - B36 needs a fact: does the Railway (and Vercel) proxy overwrite or append `X-Forwarded-For`?
+- `npx tsc --noEmit` reports 6 errors, all in stale generated `.next/types` / `.next/dev/types` files that point at pages moved by later commits (`merchant/login/layout`, `privacy`, `terms`); 0 in source. A `next build` or deleting `.next/` should clear them — not done by the loop (build output). Found #9.
 - Push policy: header says `push: no`. Change to `yes` if the loop should push `improve/loop`.
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
-| B40 | STRENGTHEN | M | 4 | 1 | admin filters (tz) | | **New.** `admin_orders.py:95-98` and `admin_transactions.py:81-83` build `date_from`/`date_to` with naive `datetime.combine(..., time.min)` — UTC in Postgres — while `admin.py`/`merchant_sales.py` use `PH_TZ`. A "Nov 18" filter misses 00:00–08:00 Manila. Use `PH_TZ`; also `admin_transactions.py:222` CSV filename stamp uses server-local `datetime.now()`. Batch with B41+B42 — test: order at 07:30 Manila on the 18th is in a `date_from=date_to=18` filter. |
 | B30 | STRENGTHEN | S | 3 | 1 | tests | | Audit other env leaks from a local `.env` into tests (anything `load_dotenv` sets that code reads at call time: PAYMONGO_*, R2_*, SEMAPHORE_*, RESEND_*) — test: pytest passes with a `.env` full of dummy values. Batch with B20. |
 | B31 | SECURITY | S | 3 | 1 | data | | Image URLs stored before CF-0034 may point off-site; a one-off check script listing produce/shop rows whose image URLs don't start with `CLOUDFLARE_R2_PUBLIC_URL` (report only, no auto-delete) — test: script unit test on a seeded SQLite db. Batch with B02. |
 | B39 | SECURITY | M | 5 | 2 | checkout + reviews | | **New (code reading).** Nothing stops a merchant ordering from their own farm (`orders.py` place-order checks `merchant_takes_orders` only), confirming delivery as the buyer, then reviewing their own shop — rating inflation. `ensure_reviewable` has no owner check either. Refuse own-farm lines at place-order and own-shop reviews — test: owner's cart line → 400, owner review → 403; other buyers unaffected. |
 | B29 | SECURITY | M | 5 | 2 | deps | | `npm audit --omit=dev`: 2 critical (`better-auth` ≤1.7.6 → 1.7.25 in range; `next` pinned 16.1.6 → 16.4.6 minor, needs package.json edit), highs in axios 1.13→1.21, zod 4.3→4.6, kysely, sharp (via next), postcss, nanoid, form-data. Backend patches: fastapi 0.163, pydantic 2.14.3, psycopg 3.3.9, boto3. Minor/patch only (SYSTEM_REFERENCE §3: re-run `auth:migrate` dry-run after better-auth); majors logged in B44 — test: audit criticals 0, all checks + build pass. |
 | B02 | SECURITY | M | 4 | 2 | produce schemas | | `ProduceBase.unit_quantity` has no bounds (0 or negative accepted → divide-by-zero / negative per-unit math); `name`/`description` have no `max_length`; schemas lack `extra="forbid"`. Add bounds + forbid on produce, review, shop page, shipment, payment schemas — test: `unit_quantity=0` → 422, 10k-char name → 422, unknown field → 422. |
 | B35 | STRENGTHEN | S | 2 | 1 | web orders | | Keep history page/filter/search in the URL (`?tab=history&page=2&status=delivered`) so back/refresh keep the view — test: pure parse/serialize helper. Batch with other order-page polish. |
-| B41 | STRENGTHEN | S | 2 | 1 | logging | | **New.** `routes/merchants.py:112-160` logs Mapbox/route errors with `print()` (no request id, exception text to stdout) → module logger; and `routes/misc.py` is an empty `APIRouter()` still included in `router.py` → remove (was B42). Batch with B40 — test: caplog sees the warning; route list unchanged. |
 | B08 | FEATURE | M | 3 | 2 | SEO | seo | Extend `app/sitemap.ts` beyond `/` and `/farms/:id` (help pages, lastModified from farm `updated_at`); add `BreadcrumbList` to the farm JSON-LD; validate on a deployed farm with Google's Rich Results Test (was B32) — test: pure sitemap/breadcrumb builder unit tests. |
 | B11 | FEATURE | M | 3 | 2 | reviews | | Merchant reply to reviews (one reply per review, editable, shown publicly) — test: only the reviewed merchant can reply; others 403/404. |
 | B15 | STRENGTHEN | M | 3 | 2 | tests | idor | Routes with no dedicated tests: `carts.py`, `payments.py` (`/transactions/*`), `users.py`, `email.py`, `email_otp.py`, `admin_produce.py`. Add ownership/cross-user tests for each `{id}` route among them (was B16; audit #8 spot-check found owner filters in notifications, tracking, shipments, addresses, transactions) — test: cross-user access → 404. |
@@ -46,9 +45,11 @@ FEATURE 2/#7 · STRENGTHEN 2/#5 · SECURITY 2/#6 · AUDIT 2/#8
 | B23 | FEATURE | M | 2 | 3 | merchant tools | | Bulk produce edit / CSV import-export for merchants — test: CSV round-trip. |
 | B24 | STRENGTHEN | M | 2 | 3 | web refactor | | Largest files are refactor candidates: `api/routes/merchants.py` (1170 lines), `api/routes/admin.py` (775), `lib/auth.ts` (767), merchant onboarding page (705). Split merchants.py into produce / shop page / payouts modules without behaviour change. |
 
-Retired/merged at audit #8: B26 (→ B34 + promos epic), B33 (log-only), B21→B05, B32→B08, B42→B41, B38→B34, B16→B15, B28→B27, B44 → Needs human. Done: B00, B01, B03, B04, B06, B07.
+Retired/merged at audit #8: B26 (→ B34 + promos epic), B33 (log-only), B21→B05, B32→B08, B42→B41, B38→B34, B16→B15, B28→B27, B44 → Needs human. Done: B00, B01, B03, B04, B06, B07. Done since: B40, B41 (#9).
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #9 — STRENGTHEN — admin date filters (tz) + route logging — CF-0039 — M
+What: new `produce_freshness.ph_day_start(day)` = UTC instant of Manila midnight. `GET /admin/orders` and `/admin/transactions` (+ `/export`) `date_from`/`date_to` now use Manila calendar days (were naive midnights → UTC in Postgres, so a one-day filter was shifted 8 h). Transactions CSV filename stamp now Manila time. `routes/merchants.py`: all 9 `print()` calls → module `logger`; the Mapbox exception logs only its type (requests puts the URL with `access_token` in the text) and geocode failures no longer log address text (PII). Removed empty `routes/misc.py` router and its include. Why: B40 + B41. Branch note: `improve/loop` was merged into `main` (PR #33) and deleted; recreated from `main`. Tests: new `tests/test_manila_date_filters.py` (4: helper; orders and transactions one-day filter takes 07:30 + 23:30 Manila on the day, leaves 23:30 the day before and 00:30 the day after; export follows the filter; directions failure logged without the token). Moved two edge rows in `test_admin_orders`/`test_admin_transactions` from 23:00 UTC (= next Manila day) to 15:00 UTC (23:00 Manila) — same "whole end day" check under the new rule. Typed the shared admin test helpers (`_order`, `_txn`, `_ids`, `_client`; `_buyer` from `shared_fixtures`). Checks: pytest 706 passed; ruff 141 (unchanged); mypy 2329→2262; web test 66/66, lint pass; tsc 6 errors only in stale `.next/` (see Needs human), 0 in source. No build (not FEATURE, not 4th). Follow-ups: none new.
 ### #8 — AUDIT — whole codebase — (no CF) — M
 What: refreshed Health (pytest, ruff, mypy whole + app, web test/lint/tsc/build, npm audit, outdated on both sides); re-sorted backlog to 30 items (merged 7 overlapping); retired B26, B33; updated B14, B16, B29 from findings. New from code reading (not from §2): B39 merchant self-order → self-review rating inflation; B40 admin order/transaction date filters in UTC not Manila (+ CSV stamp); B41 `print()` logging in merchants.py; B42 empty `misc.py` router; B43 double notification polling + hidden-tab polling; B14 cart accepts unlisted/own listings; B44 majors. Spot-checked ownership on notifications/tracking/shipments/addresses/transactions — fine. Checks: all pass (see Health). Follow-ups: next picks B39 (SECURITY) / B40 (STRENGTHEN) / B29.
 ### #7 — FEATURE — saved produce / wishlist (model → web) — CF-0038 — M

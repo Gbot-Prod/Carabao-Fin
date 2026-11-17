@@ -1,22 +1,26 @@
 """A1: admin order list (filters) and detail view."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from httpx2 import Response
+from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import admin_orders
+from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.shipment import Shipment
 from app.models.transaction import Transaction
 from app.models.user import User
 from tests.better_auth import make_user
+from tests.shared_fixtures import _buyer
 from tests.test_merchant_listings import _other_merchant
-from tests.test_reviews import _buyer
 
 
-def _client(db, user) -> TestClient:
+def _client(db: Session, user: User) -> TestClient:
     app = FastAPI()
     app.include_router(admin_orders.router)
     app.dependency_overrides[get_db] = lambda: db
@@ -32,8 +36,14 @@ def _admin(db) -> User:
 
 
 def _order(
-    db, merchant, buyer, status="processing", ordered_at=None, items=None, **extra
-):
+    db: Session,
+    merchant: Merchant,
+    buyer: tuple[User, Any],
+    status: str = "processing",
+    ordered_at: datetime | None = None,
+    items: list[dict[str, Any]] | None = None,
+    **extra: Any,
+) -> Order:
     user, _ = buyer
     order = Order(
         user_id=user.id,
@@ -53,7 +63,7 @@ def _order(
     return order
 
 
-def _txn(db, order, status):
+def _txn(db: Session, order: Order, status: str) -> Transaction:
     txn = Transaction(
         order_id=order.id,
         merchant_id=order.merchant_id,
@@ -68,7 +78,7 @@ def _txn(db, order, status):
     return txn
 
 
-def _ids(res):
+def _ids(res: Response) -> list[int]:
     assert res.status_code == 200, res.text
     return sorted(o["id"] for o in res.json()["items"])
 
@@ -97,7 +107,7 @@ def test_filters_by_status_merchant_and_date(db, merchant):
     buyer = _buyer(db)
     other = _other_merchant(db)
     a = _order(db, merchant, buyer, "shipped", datetime(2026, 11, 1, tzinfo=UTC))
-    b = _order(db, merchant, buyer, "delivered", datetime(2026, 11, 7, 23, tzinfo=UTC))
+    b = _order(db, merchant, buyer, "delivered", datetime(2026, 11, 7, 15, tzinfo=UTC))
     c = _order(db, other, buyer, "shipped", datetime(2026, 11, 9, tzinfo=UTC))
     client = _client(db, _admin(db))
 
