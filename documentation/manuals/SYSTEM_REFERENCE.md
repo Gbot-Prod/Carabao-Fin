@@ -107,6 +107,7 @@ The web app never sends SMS or email itself. It asks the API.
 | Phone code length 6, TTL 600 s, 5 attempts | `lib/auth.ts` phoneNumber() | `backend/app/services/otp.py` |
 | Phone format `+639XXXXXXXXX` | `lib/phone.ts` `normalizePhMobile` | `phone_verification.normalize_ph_mobile` (returns without `+`) |
 | Status values | `backend/app/models/statuses.py` | `frontend/.../util/api/statuses.ts` |
+| Review reply max length 1000 (CF-0043) | `REPLY_MAX_LENGTH` in `backend/app/schemas/review.py` | `REPLY_MAX_LENGTH` in `frontend/.../lib/review-reply.ts` |
 | Cart line `issue` values (CF-0042) | `CartIssue` in `backend/app/api/routes/_order_helpers.py` and `schemas/cart.py` | `frontend/.../lib/cart-issues.ts` (unknown values show no message but still block checkout) |
 | Postgres TLS rules | `lib/db-ssl.mjs` | `app/core/database_url.py` |
 | Mobile app scheme `carabaomobile://` | `lib/auth.ts`, `lib/admin-two-factor.ts` | mobile `app.json` |
@@ -396,6 +397,7 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
   - `email_otp_send_user`: 5 per user per hour
   - Action limits (`ACTION_LIMITS`, 429 "Too many requests", CF-0037):
     - `review_write`: 10 review creates + edits per user per hour
+    - `review_reply`: 30 merchant reply writes + deletes per user per hour (CF-0043)
     - `order_chat_send`: 30 order chat messages per user per minute
     - `support_chat_send`: 20 support messages per user per minute
     - `produce_search`: 120 `/produce/search` calls per IP per minute (needs `RATE_LIMIT_TRUST_PROXY=true` behind a proxy)

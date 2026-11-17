@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -14,6 +16,7 @@ from app.schemas.review import (
     MerchantReviewsResponse,
     MyMerchantReviewsResponse,
     ReviewCreate,
+    ReviewReplyIn,
     ReviewResponse,
     ReviewUpdate,
 )
@@ -55,7 +58,7 @@ def get_my_order_review(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ReviewResponse:
     order = _get_my_order(db, order_id, current_user)
     review = _get_order_review(db, order.id)
     if review is None:
@@ -71,7 +74,7 @@ def create_order_review(
     payload: ReviewCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ReviewResponse:
     """Buyer rates the merchant of a delivered order. One review per order."""
     rate_limit.enforce_action(db, "review_write", str(current_user.id))
     order = _get_my_order(db, order_id, current_user)
@@ -119,7 +122,7 @@ def update_order_review(
     payload: ReviewUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ReviewResponse:
     """Buyer edits their review while the review window is still open."""
     rate_limit.enforce_action(db, "review_write", str(current_user.id))
     order = _get_my_order(db, order_id, current_user)
@@ -155,7 +158,7 @@ def list_my_merchant_reviews(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> MyMerchantReviewsResponse:
     """The signed-in merchant's reviews, newest first, linked to their orders."""
     merchant = get_active_merchant(db, current_user.id)
     if merchant is None:
@@ -213,7 +216,7 @@ def list_merchant_reviews(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-):
+) -> MerchantReviewsResponse:
     """Public, newest-first list of a merchant's reviews with the summary."""
     merchant = db.query(Merchant).filter(Merchant.id == merchant_id).first()
     if merchant is None:
@@ -236,3 +239,65 @@ def list_merchant_reviews(
         limit=limit,
         offset=offset,
     )
+
+
+# --- merchant replies (CF-0043) ----------------------------------------------
+
+
+def _my_farm_review(db: Session, user: User, review_id: int) -> Review:
+    """A review of the caller's own farm; 404 for any other review."""
+    merchant = get_active_merchant(db, user.id)
+    if merchant is None:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    review = (
+        db.query(Review)
+        .options(selectinload(Review.user))
+        .filter(Review.id == review_id, Review.merchant_id == merchant.id)
+        .first()
+    )
+    if review is None:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return review
+
+
+def _set_reply(db: Session, review: Review, reply: str | None) -> None:
+    # Bulk UPDATE that sets updated_at to itself, so onupdate=now() does not
+    # fire: updated_at marks the buyer's edits ("edited" in the dashboard).
+    db.query(Review).filter(Review.id == review.id).update(
+        {
+            Review.merchant_reply: reply,
+            Review.merchant_replied_at: datetime.now(UTC) if reply else None,
+            Review.updated_at: Review.updated_at,
+        },
+        synchronize_session=False,
+    )
+    db.commit()
+    db.refresh(review)
+
+
+@router.put("/merchants/me/reviews/{review_id}/reply", response_model=ReviewResponse)
+def set_review_reply(
+    review_id: int,
+    payload: ReviewReplyIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ReviewResponse:
+    """The reviewed merchant writes or edits their one public reply."""
+    rate_limit.enforce_action(db, "review_reply", str(current_user.id))
+    review = _my_farm_review(db, current_user, review_id)
+    _set_reply(db, review, payload.reply)
+    return to_review_response(review)
+
+
+@router.delete("/merchants/me/reviews/{review_id}/reply", status_code=204)
+def delete_review_reply(
+    review_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    """Remove the reply. Idempotent: no reply is also 204."""
+    rate_limit.enforce_action(db, "review_reply", str(current_user.id))
+    review = _my_farm_review(db, current_user, review_id)
+    if review.merchant_reply is not None:
+        _set_reply(db, review, None)
+    return Response(status_code=204)

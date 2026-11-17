@@ -45,6 +45,10 @@ class Review(Base):
     )
     rating = Column(SmallInteger, nullable=False)
     comment = Column(Text, nullable=True)
+    # CF-0043: the reviewed merchant's one public reply. Setting it does not
+    # touch ``updated_at``, which marks the buyer's own edits.
+    merchant_reply = Column(Text, nullable=True)
+    merchant_replied_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

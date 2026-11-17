@@ -106,6 +106,8 @@ def to_review_response(review: Review, order=None) -> ReviewResponse:
         reviewer_name=reviewer_display_name(review.user),
         created_at=review.created_at,
         updated_at=review.updated_at,
+        merchant_reply=review.merchant_reply,
+        merchant_replied_at=review.merchant_replied_at,
         editable_until=review_deadline(order) if order is not None else None,
     )
 
@@ -120,4 +122,6 @@ def to_public_review_response(review: Review) -> PublicReviewResponse:
         reviewer_name=reviewer_display_name(review.user),
         created_at=review.created_at,
         updated_at=review.updated_at,
+        merchant_reply=review.merchant_reply,
+        merchant_replied_at=review.merchant_replied_at,
     )

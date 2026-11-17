@@ -68,6 +68,8 @@ IDENTIFIER_LIMITS: dict[str, Limit] = {
 ACTION_LIMITS: dict[str, Limit] = {
     # Create + edit together; a buyer reviews a handful of orders at a time.
     "review_write": Limit(10, 3600),
+    # Merchant replies to reviews, set + edit + delete (CF-0043).
+    "review_reply": Limit(30, 3600),
     "order_chat_send": Limit(30, 60),
     "support_chat_send": Limit(20, 60),
     # Every search also writes a search_log row (demand insight).

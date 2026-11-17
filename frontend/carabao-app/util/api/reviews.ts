@@ -9,6 +9,9 @@ export type PublicReview = {
   reviewer_name: string;
   created_at: string;
   updated_at: string;
+  // The farm's public reply (CF-0043).
+  merchant_reply?: string | null;
+  merchant_replied_at?: string | null;
 };
 
 // A review as its buyer or the reviewed merchant sees it.
@@ -83,4 +86,14 @@ export const fetchMyMerchantReviews = async ({
   if (offset !== undefined) params.set('offset', String(offset));
   const response = await apiClient.get<MyMerchantReviews>('/merchants/me/reviews', { params });
   return response.data;
+};
+
+// CF-0043: the reviewed merchant's one reply; PUT creates or edits it.
+export const setReviewReply = async (reviewId: number, reply: string): Promise<Review> => {
+  const response = await apiClient.put<Review>(`/merchants/me/reviews/${reviewId}/reply`, { reply });
+  return response.data;
+};
+
+export const deleteReviewReply = async (reviewId: number): Promise<void> => {
+  await apiClient.delete(`/merchants/me/reviews/${reviewId}/reply`);
 };

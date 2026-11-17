@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 COMMENT_MAX_LENGTH = 2000
+REPLY_MAX_LENGTH = 1000
 
 
 def _clean_comment(value: str | None) -> str | None:
@@ -28,6 +29,14 @@ class ReviewUpdate(BaseModel):
     _clean = field_validator("comment")(_clean_comment)
 
 
+class ReviewReplyIn(BaseModel):
+    """The reviewed merchant's reply (CF-0043). Blank after trimming → 422."""
+
+    reply: str = Field(min_length=1, max_length=REPLY_MAX_LENGTH)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
 class PublicReviewResponse(BaseModel):
     """A review as anyone browsing the shop sees it: no order linkage."""
 
@@ -38,6 +47,8 @@ class PublicReviewResponse(BaseModel):
     reviewer_name: str
     created_at: datetime
     updated_at: datetime
+    merchant_reply: str | None = None
+    merchant_replied_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

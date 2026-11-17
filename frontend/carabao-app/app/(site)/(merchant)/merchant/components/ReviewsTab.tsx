@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "../page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
-import { fetchMyMerchantReviews, type MyMerchantReviews, type MyMerchantReviewsQuery, type Review } from "@/util/api";
+import {
+  deleteReviewReply,
+  fetchMyMerchantReviews,
+  setReviewReply,
+  type MyMerchantReviews,
+  type MyMerchantReviewsQuery,
+  type Review,
+} from "@/util/api";
+import getApiErrorMessage from "@/util/errorHelper";
+import { REPLY_MAX_LENGTH, replyProblem } from "@/lib/review-reply";
 import { formatDate } from "../lib/format";
 
 type ReviewFilter = "all" | "commented" | "critical" | "1" | "2" | "3" | "4" | "5";
@@ -40,6 +49,61 @@ export default function ReviewsTab({ onViewOrder }: Props) {
   const [error, setError] = useState<string | null>(null);
   // Drops responses from a filter the merchant has already clicked away from.
   const requestRef = useRef(0);
+  // CF-0043: one reply form open at a time.
+  const [replyingTo, setReplyingTo] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
+  const [replyBusy, setReplyBusy] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
+
+  const openReply = (review: Review) => {
+    setReplyingTo(review.id);
+    setDraft(review.merchant_reply ?? "");
+    setReplyError(null);
+  };
+
+  const closeReply = () => {
+    setReplyingTo(null);
+    setDraft("");
+    setReplyError(null);
+  };
+
+  const replaceReview = (updated: Review) =>
+    setReviews((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+
+  const saveReply = async (review: Review) => {
+    const problem = replyProblem(draft);
+    if (problem) {
+      setReplyError(problem);
+      return;
+    }
+    setReplyBusy(true);
+    setReplyError(null);
+    try {
+      replaceReview(await setReviewReply(review.id, draft.trim()));
+      closeReply();
+    } catch (err) {
+      setReplyError(getApiErrorMessage(err, "Could not save your reply. Please try again."));
+    } finally {
+      setReplyBusy(false);
+    }
+  };
+
+  const removeReply = async (review: Review) => {
+    if (!window.confirm("Delete your reply? Buyers will no longer see it.")) return;
+    setReplyBusy(true);
+    setReplyError(null);
+    try {
+      await deleteReviewReply(review.id);
+      replaceReview({ ...review, merchant_reply: null, merchant_replied_at: null });
+      closeReply();
+    } catch (err) {
+      setReplyingTo(review.id);
+      setDraft(review.merchant_reply ?? "");
+      setReplyError(getApiErrorMessage(err, "Could not delete your reply. Please try again."));
+    } finally {
+      setReplyBusy(false);
+    }
+  };
 
   const load = useCallback(async (f: ReviewFilter, offset: number) => {
     const requestId = ++requestRef.current;
@@ -166,15 +230,77 @@ export default function ReviewsTab({ onViewOrder }: Props) {
               ) : (
                 <p className={styles.reviewNoComment}>No comment left.</p>
               )}
-              {review.order_id != null && (
-                <button
-                  type="button"
-                  className={styles.reviewOrderLink}
-                  onClick={() => onViewOrder(review.order_id as number)}
+              {replyingTo === review.id ? (
+                <form
+                  className={styles.reviewReplyForm}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void saveReply(review);
+                  }}
                 >
-                  View order #{review.order_id} →
-                </button>
-              )}
+                  <label className={styles.reviewReplyLabel} htmlFor={`reply-${review.id}`}>
+                    Your public reply
+                  </label>
+                  <textarea
+                    id={`reply-${review.id}`}
+                    className={styles.reviewReplyInput}
+                    value={draft}
+                    maxLength={REPLY_MAX_LENGTH}
+                    rows={3}
+                    onChange={(e) => setDraft(e.target.value)}
+                    aria-describedby={replyError ? `reply-error-${review.id}` : undefined}
+                  />
+                  {replyError && (
+                    <p id={`reply-error-${review.id}`} className={styles.errorText} role="alert">
+                      {replyError}
+                    </p>
+                  )}
+                  <div className={styles.reviewReplyActions}>
+                    <button type="submit" className={styles.primaryBtn} disabled={replyBusy}>
+                      {replyBusy ? "Saving…" : "Save reply"}
+                    </button>
+                    <button type="button" className={styles.secondaryBtn} onClick={closeReply} disabled={replyBusy}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : review.merchant_reply ? (
+                <div className={styles.reviewReply}>
+                  <p className={styles.reviewReplyLabel}>
+                    Your reply{review.merchant_replied_at ? ` · ${formatDate(review.merchant_replied_at)}` : ""}
+                  </p>
+                  <p className={styles.reviewComment}>{review.merchant_reply}</p>
+                  <div className={styles.reviewReplyActions}>
+                    <button type="button" className={styles.linkBtn} onClick={() => openReply(review)}>
+                      Edit reply
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.linkBtn}
+                      onClick={() => void removeReply(review)}
+                      disabled={replyBusy}
+                    >
+                      Delete reply
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              <div className={styles.reviewReplyActions}>
+                {replyingTo !== review.id && !review.merchant_reply && (
+                  <button type="button" className={styles.linkBtn} onClick={() => openReply(review)}>
+                    Reply
+                  </button>
+                )}
+                {review.order_id != null && (
+                  <button
+                    type="button"
+                    className={styles.reviewOrderLink}
+                    onClick={() => onViewOrder(review.order_id as number)}
+                  >
+                    View order #{review.order_id} →
+                  </button>
+                )}
+              </div>
             </article>
           ))}
         </div>

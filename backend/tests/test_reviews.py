@@ -287,7 +287,9 @@ def _owner(db, merchant):
     return db.get(User, merchant.user_id)
 
 
-def _review(client, order, rating, comment=None):
+def _review(
+    client: TestClient, order: Order, rating: int, comment: str | None = None
+) -> None:
     resp = client.post(
         f"/orders/me/{order.id}/review", json={"rating": rating, "comment": comment}
     )

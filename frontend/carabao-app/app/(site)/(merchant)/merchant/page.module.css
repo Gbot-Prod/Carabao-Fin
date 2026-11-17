@@ -1667,3 +1667,45 @@
   font-size: 12px;
   line-height: 1.45;
 }
+
+/* CF-0043: merchant reply to a review. */
+.reviewReply {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--border-strong);
+  background: var(--surface-muted);
+  border-radius: var(--radius-sm);
+}
+
+.reviewReplyForm {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.reviewReplyLabel {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.reviewReplyInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.reviewReplyActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 6px;
+}
