@@ -97,7 +97,9 @@ test('out of stock, lbs units, and unnamed or unpriced items', () => {
     { ...tomato, id: 3, name: '  ' },
     { ...tomato, id: 4, price: 0 },
   ];
-  const products = graph(farmJsonLd({ ...farm, produces: items }, null, URL_)).slice(1);
+  const products = graph(farmJsonLd({ ...farm, produces: items }, null, URL_)).filter(
+    (n) => (n['@type'] as unknown) === 'Product',
+  );
   assert.equal(products.length, 1);
   assert.equal(products[0].offers.availability, 'https://schema.org/OutOfStock');
   assert.equal(products[0].offers.priceSpecification.referenceQuantity.unitCode, 'LBR');
@@ -105,7 +107,8 @@ test('out of stock, lbs units, and unnamed or unpriced items', () => {
 
 test('products are capped', () => {
   const many = Array.from({ length: MAX_PRODUCTS + 5 }, (_, i) => ({ ...tomato, id: i + 1 }));
-  assert.equal(graph(farmJsonLd({ ...farm, produces: many }, null, URL_)).length, MAX_PRODUCTS + 1);
+  // Farm + products + breadcrumbs.
+  assert.equal(graph(farmJsonLd({ ...farm, produces: many }, null, URL_)).length, MAX_PRODUCTS + 2);
 });
 
 test('non-http image URLs are dropped', () => {
@@ -127,4 +130,21 @@ test('serialized JSON cannot close the script tag', () => {
   assert.equal(out.includes('\u2028'), false);
   // Still valid JSON that round-trips to the same value.
   assert.deepEqual(JSON.parse(out), data);
+});
+
+test('breadcrumbs go Home > Farms > farm, with absolute URLs (CF-0041)', () => {
+  const nodes = graph(farmJsonLd(farm, { title: '  Shop Title ' }, URL_));
+  const crumbs = nodes.find((n) => (n['@type'] as unknown) === 'BreadcrumbList') as Node & {
+    itemListElement: { position: number; name: string; item: string }[];
+  };
+  assert.ok(crumbs);
+  const origin = new URL(URL_).origin;
+  assert.deepEqual(
+    crumbs.itemListElement.map((c) => [c.position, c.name, c.item]),
+    [
+      [1, 'Home', `${origin}/`],
+      [2, 'Farms', `${origin}/farms`],
+      [3, 'Shop Title', URL_],
+    ],
+  );
 });

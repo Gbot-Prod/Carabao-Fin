@@ -88,6 +88,8 @@ class MerchantResponse(BaseModel):
     rating: float | None = None
     rating_count: int = 0
     deleted_at: datetime | None = None
+    # Sitemap lastModified on the web (CF-0041).
+    updated_at: datetime | None = None
 
     shop_page: MerchantShopResponse | None = None
     produces: list[ProduceResponse] = Field(default_factory=list)

@@ -1,5 +1,6 @@
 import { cache } from "react";
 import type { Merchant, ShopPage } from "@/util/api/merchants";
+import { rootDomain } from "@/lib/urls";
 
 // Server-side helpers for metadata, robots.txt and sitemap.xml.
 // Crawlers (Facebook, Messenger, Google) read the HTML only, so the farm name
@@ -21,6 +22,19 @@ export const siteUrl = new URL(
     toOrigin(process.env.NEXT_PUBLIC_APP_URL) ||
     "http://localhost:3000",
 );
+
+/**
+ * The help site's origin, for the help deploy only (CF-0041): NEXT_PUBLIC_HELP_URL,
+ * else NEXT_PUBLIC_APP_URL (that deploy's own URL, SUBDOMAINS.md 2.4), else
+ * help.<ROOT_DOMAIN>.
+ */
+export function helpSiteOrigin(): string | null {
+  return (
+    toOrigin(process.env.NEXT_PUBLIC_HELP_URL) ||
+    toOrigin(process.env.NEXT_PUBLIC_APP_URL) ||
+    (rootDomain ? toOrigin(`help.${rootDomain}`) : null)
+  );
+}
 
 const apiBase = toOrigin(process.env.NEXT_PUBLIC_API_URL) || "http://localhost:8000";
 

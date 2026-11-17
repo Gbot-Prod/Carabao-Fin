@@ -2,8 +2,8 @@
 // Pure functions, no imports with runtime code, so `npm test` runs them.
 //
 // One @graph per farm page: the farm as a LocalBusiness (with AggregateRating
-// only when it has reviews) and each listed produce item as a Product with an
-// Offer sold by that farm. Only public fields are used: the street address,
+// only when it has reviews), each listed produce item as a Product with an
+// Offer sold by that farm, and a BreadcrumbList. Only public fields are used: the street address,
 // pin location and contact details are left out on purpose (many farms are
 // someone's home).
 
@@ -133,7 +133,25 @@ export function farmJsonLd(
       }),
     );
 
-  return { '@context': 'https://schema.org', '@graph': [business, ...products] };
+  // CF-0041: Home › Farms › this farm, so results show the path, not the bare URL.
+  const breadcrumbs = {
+    '@type': 'BreadcrumbList',
+    '@id': `${pageUrl}#breadcrumbs`,
+    itemListElement: [
+      { name: 'Home', path: '/' },
+      { name: 'Farms', path: '/farms' },
+    ]
+      .map((crumb, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: crumb.name,
+        item: new URL(crumb.path, pageUrl).toString(),
+      }))
+      // The last crumb is the page itself.
+      .concat([{ '@type': 'ListItem', position: 3, name, item: pageUrl }]),
+  };
+
+  return { '@context': 'https://schema.org', '@graph': [business, ...products, breadcrumbs] };
 }
 
 /**

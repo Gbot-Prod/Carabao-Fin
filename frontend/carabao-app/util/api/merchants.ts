@@ -29,6 +29,8 @@ export type Merchant = {
   rating: number | null;
   // Number of reviews behind `rating` (public GET /merchants/{id}).
   rating_count?: number;
+  /** Last change to the farm row (CF-0041, sitemap lastModified). */
+  updated_at?: string | null;
   produces: Produce[];
 };
 

@@ -1,26 +1,34 @@
 import type { MetadataRoute } from 'next';
-import { appSurface } from '@/lib/urls';
-import { getPublicFarms, siteUrl } from '@/lib/seo';
+import { headers } from 'next/headers';
+import { appSurface, helpUrl, hostKind, subdomainMode } from '@/lib/urls';
+import { getPublicFarms, helpSiteOrigin, siteUrl } from '@/lib/seo';
+import { buyerSitemap, helpSitemap } from '@/lib/sitemap';
 
-// Buyer pages that need no sign-in, plus one entry for each public farm.
-// The farm list comes from the public GET /merchants (approved farms only).
+// One file for every deploy and host (documentation/manuals/SUBDOMAINS.md).
+// Each host lists only its own pages (CF-0041):
+// - buyer site: `/`, `/farms`, each public farm (approved farms only, from
+//   GET /merchants), plus `/help/*` when one host serves everything;
+// - help site (help deploy, or help. on the public deploy): the help pages;
+// - merchant and admin hosts: nothing.
 
 // Build the list per request, not at build time: the API is not always
 // available during `next build`, and new farms must show without a deploy.
 export const dynamic = 'force-dynamic';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  if (appSurface !== 'public') return [];
+  if (appSurface === 'admin') return [];
+  if (appSurface === 'help') {
+    const origin = helpSiteOrigin();
+    return origin ? helpSitemap((path) => new URL(path, origin).toString()) : [];
+  }
 
-  const url = (path: string) => new URL(path, siteUrl).toString();
-  const pages: MetadataRoute.Sitemap = [
-    { url: url('/'), changeFrequency: 'daily', priority: 1 },
-    { url: url('/farms'), changeFrequency: 'daily', priority: 0.9 },
-  ];
+  const kind = subdomainMode ? hostKind((await headers()).get('host')) : 'other';
+  if (kind === 'merchant') return [];
+  // In subdomain mode helpUrl() is absolute (help.<root>).
+  if (kind === 'help') return helpSitemap((path) => helpUrl(path));
 
   const farms = (await getPublicFarms()) ?? [];
-  for (const farm of farms) {
-    pages.push({ url: url(`/farms/${farm.id}`), changeFrequency: 'daily', priority: 0.8 });
-  }
-  return pages;
+  const buyer = buyerSitemap(siteUrl, farms);
+  if (subdomainMode) return buyer;
+  return [...buyer, ...helpSitemap((path) => new URL(helpUrl(path), siteUrl).toString())];
 }

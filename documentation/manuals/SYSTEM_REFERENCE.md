@@ -59,7 +59,8 @@ The web app never sends SMS or email itself. It asks the API.
 | CSP with nonce, host routing | `frontend/carabao-app/proxy.ts` |
 | Host rules, cross-host links | `frontend/carabao-app/lib/urls.ts` |
 | SEO metadata, sitemap data | `frontend/carabao-app/lib/seo.ts` |
-| JSON-LD structured data (farm pages) | `frontend/carabao-app/lib/structured-data.ts` |
+| JSON-LD structured data (farm pages: LocalBusiness, Product/Offer, BreadcrumbList) | `frontend/carabao-app/lib/structured-data.ts` |
+| Sitemap entries per host (buyer pages + farms with `lastModified`; help pages) | `frontend/carabao-app/lib/sitemap.ts`, used by `app/sitemap.ts` |
 | Admin deploy endpoint allow-list | `frontend/carabao-app/lib/blocked-auth-paths.ts` |
 | Admin sign-in page | `frontend/carabao-app/app/(admin-auth)/admin/login/` |
 | Admin dev server | `frontend/carabao-app/scripts/dev-admin.mjs` |
