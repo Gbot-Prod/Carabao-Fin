@@ -6,8 +6,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.models.merchant_payout import PayoutDestinationChange
+from app.models.otp import OtpCode
 from app.models.payout_batch import PayoutBatch
 from app.models.statuses import PayoutStatus
+from app.services import rate_limit
 from app.services.phone_verification import normalize_ph_mobile
 from tests import payout_codes
 from tests.better_auth import set_identity
@@ -45,6 +47,22 @@ def test_code_only_saves_the_destination_it_was_sent_for(db, merchant, _payout_s
     assert swapped.status_code == 400
     ok = client.put("/merchants/me/payout-info", json={**GCASH, "code": last_code()})
     assert ok.status_code == 200, ok.text
+
+
+def test_payout_codes_count_against_the_per_user_sms_limit(db, merchant, _payout_sms):  # noqa: F811
+    # The user's other SMS codes this hour (e.g. contact-number codes) used up
+    # the shared count; the account number's own limit is untouched.
+    for _ in range(rate_limit.IDENTIFIER_LIMITS["otp_send_user"].max_hits):
+        rate_limit.enforce_identifier(db, "otp_send_user", str(merchant.user_id))
+    sent_before = len(_payout_sms)
+
+    blocked = _merchant_client(db, merchant).post("/merchants/me/payout-info/code", json=GCASH)
+    assert blocked.status_code == 429
+    assert blocked.json()["detail"].startswith("Too many codes requested")
+    assert int(blocked.headers["Retry-After"]) > 60
+    assert len(_payout_sms) == sent_before
+    # The refused send freed its cooldown claim.
+    assert db.query(OtpCode).count() == 0
 
 
 def test_change_is_audited_and_alerts_old_contacts(db, merchant, _payout_sms):  # noqa: F811

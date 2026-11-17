@@ -12,7 +12,7 @@ If you change a fact here in the code, update this file in the same change.
 |---|---|---|---|
 | `carabao.online` | web | `public` | Buyer app |
 | `merchant.carabao.online` | web (same deploy) | `public` | `/merchant/*` as clean URLs (`/`, `/sales`, `/routing/<id>`, `/onboarding`, ...; see 1.5) |
-| `help.carabao.online` | web-help (same repo, own deploy) | `help` | `/help/*` only, as clean URLs (`/`, `/contact`). Static. No sign-in, no API, no database. |
+| `help.carabao.online` | web-help (same repo, own deploy) | `help` | `/help/*` only, as clean URLs (`/`, `/contact`, `/terms`, `/privacy`). Static. No sign-in, no API, no database. |
 | `admin.carabao.online` | web-admin (same repo, own deploy) | `admin` | `/admin/*` only |
 | `api.carabao.online` | backend | — | FastAPI |
 
@@ -40,12 +40,16 @@ Public deploy:
 | any host, `/merchant/<digits>[/...]` (old shop link) | redirect to apex `/farms/<digits>` (comes before the next rule) |
 | any host, `/merchantDashboard[/...]` | redirect to `merchant.` `/...` |
 | any host, `/merchantOnboarding` (the mobile app opens this) | redirect to `merchant.` `/onboarding` |
-| `/help?section=terms` / `privacy` / `contact` / `faq` | redirect to `/terms`, `/privacy`, `help.` `/contact`, `help.` `/` |
+| `/help?section=terms` / `privacy` / `contact` / `faq` | redirect to `help.` `/terms`, `/privacy`, `/contact`, `/` |
+| apex or `merchant.`, `/terms` or `/privacy` (old links; the pages moved) | redirect to `help.` `/terms` or `/privacy` |
 | apex, `/merchant/*` | redirect to `merchant.` (prefix removed) |
 | apex, `/help/*` | redirect to `help.` (prefix removed) |
 | `merchant.`, `/merchant/*` | redirect to the clean URL on the same host |
-| `merchant.`, `/auth`, `/forgot-password`, `/reset-password`, `/email-verified`, `/two-factor*` | served as they are |
-| `merchant.`, a buyer path (`/order`, `/orders`, `/cart`, `/checkout`, `/confirmation`, `/profile`, `/track`, `/landing`, `/farms`, `/terms`, `/privacy`) | redirect to the apex |
+| any host, `/merchant/login` (old merchant login) | redirect to `merchant.` `/auth` |
+| `merchant.`, `/auth` | rewrite to `/merchant/auth` (the Merchant Centre login, not the buyer sign-in) |
+| `merchant.`, `/login` (old merchant login) | redirect to `/auth` on the same host |
+| `merchant.`, `/forgot-password`, `/reset-password`, `/email-verified`, `/two-factor*` | served as they are |
+| `merchant.`, a buyer path (`/order`, `/orders`, `/cart`, `/checkout`, `/confirmation`, `/profile`, `/track`, `/landing`, `/farms`) | redirect to the apex |
 | `merchant.`, any other path `/x` | rewrite to `/merchant/x` |
 | `help.`, `/help/*` | redirect to the clean URL |
 | `help.`, a buyer or sign-in path | redirect to the apex |
@@ -89,6 +93,7 @@ Use `lib/urls.ts`. Do not write a host in code.
 | `helpUrl(path)` | help page by its clean path |
 | `adminUrl(path)` | admin page by its full path (`adminUrl("/admin/orders")`) |
 | `signInPath(next?)` | `/auth` on the public deploy, `/admin/login` on the admin deploy |
+| `signInPathFor({host, pathname}, next?)` / `signInPathHere(next?)` | **the sign-in page of the site you are on** (standard): buyer `/auth`, merchant `merchant.` `/auth` (`/merchant/auth` on one host), admin `/admin/login`. Logout, idle logout and the "back to sign in" links on shared pages (`/forgot-password`, `/reset-password`, `/two-factor`, via `useSignInPath()`) use it. |
 | `resolveStoredLink(link)` | a stored notification path (`/merchantDashboard`, `/admin/orders`) to the correct URL. The bell first maps a plain `/merchantDashboard` by notification kind (`lib/merchant-links.ts`, 1.5). |
 
 A link from a merchant page to a buyer page goes to another origin. Use a full page load (`window.location.assign(appUrl(...))`) or a `<Link>` with the absolute URL. Do not use `router.push("/profile")` on `merchant.`.
@@ -161,6 +166,7 @@ The merchant pages do not use the buyer layout. `(merchant)/merchant/(shell)/lay
 | `/shop` | Public shop page (logo, banner, title) |
 | `/settings` | Store details (address, pickup pin, delivery days and price, contact number), delete merchant profile |
 | `/onboarding` | Merchant application (no shell) |
+| `/auth` | Merchant Centre login (no shell). Same accounts as the buyer site. Was `/login`, which now redirects here. |
 
 A new merchant page must not have the name of a buyer path (1.1).
 
@@ -232,7 +238,7 @@ Same repo root and build/start commands. **Only these four variables** (the buil
 | `APP_SURFACE` | `help` | |
 | `ROOT_DOMAIN` | `carabao.online` | |
 | `NEXT_PUBLIC_APP_URL` | `https://help.carabao.online` | this deploy's own URL |
-| `NEXT_PUBLIC_MAIN_URL` | `https://carabao.online` | links back to the apex, `/terms`, `/privacy`, merchant onboarding |
+| `NEXT_PUBLIC_MAIN_URL` | `https://carabao.online` | links back to the apex and merchant onboarding |
 
 Do not give web-help `DATABASE_URL`, `BETTER_AUTH_SECRET` or OAuth keys. It does not need them.
 
@@ -380,6 +386,7 @@ In one-host mode, the public dev server (`npm run dev`) serves the merchant and 
 | A merchant page (example: routing) | `http://merchant.carabao.test:3000/routing/5` | `http://localhost:3000/merchant/routing/5` |
 | Merchant onboarding | `http://merchant.carabao.test:3000/onboarding` | `http://localhost:3000/merchant/onboarding` |
 | Help (FAQ) | `http://help.carabao.test:3000/` | `http://localhost:3000/help` |
+| Terms, Privacy | `http://help.carabao.test:3000/terms`, `/privacy` | `http://localhost:3000/help/terms`, `/help/privacy` |
 | A help page (example: contact) | `http://help.carabao.test:3000/contact` | `http://localhost:3000/help/contact` |
 | Admin | `http://admin.carabao.test:3001/` | see "Admin site" below |
 
@@ -459,10 +466,10 @@ Automatic checks: `npm test`, `npm run lint` and `npm run build` in `frontend/ca
 | 5 | Open `merchant.carabao.test:3000/merchant/routing/5` | redirect to `merchant.carabao.test:3000/routing/5` |
 | 6 | Open `carabao.test:3000/merchant/42` | redirect to `/farms/42` (shop page) |
 | 7 | Open `carabao.test:3000/merchantOnboarding` (mobile link) | redirect to `merchant.carabao.test:3000/onboarding` |
-| 8 | Open `carabao.test:3000/help?section=terms` | redirect to `/terms` |
+| 8 | Open `carabao.test:3000/help?section=terms`, then `carabao.test:3000/privacy` | redirect to `help.carabao.test:3000/terms`, then `help.carabao.test:3000/privacy` |
 | 9 | Open `help.carabao.test:3000/` signed out | FAQ, no sign-in asked |
 | 9a | Help deploy (5.6): open `help.carabao.test:3002/`, `/contact`, `/help/contact`, `/order`, `/api/auth/get-session` | 200, 200, redirect to `/contact`, 404, 404 |
-| 9b | Help deploy: Terms and Privacy links | go to `carabao.test:3000/terms` and `/privacy` |
+| 9b | Help deploy: Terms and Privacy in the nav | open `help.carabao.test:3002/terms` and `/privacy` (same host) |
 | 10 | On the admin site, sign in with a non-admin email account | "This account is not an admin account." and no session |
 | 11 | On the admin site, call `POST /api/auth/sign-in/social` or `/api/auth/sign-up/email` | 404 |
 | 12 | Admin: sign in on the admin site with password, then TOTP | dashboard. API calls work (token from `jwks_admin`). |

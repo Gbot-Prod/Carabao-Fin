@@ -4,12 +4,13 @@ import { formatPhMobile, normalizePhMobile } from "@/lib/phone";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { MIN_PASSWORD, useAuthForm } from "@/hooks/useAuthForm";
+import { formatCountdown } from "@/hooks/useResendCooldown";
 import { FacebookIcon, GoogleIcon } from "@/components/SocialIcons";
 import Logo from "@/public/images/icons/carabaoLogo.png";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import "./page.css";
-import { appUrl } from "@/lib/urls";
+import { helpUrl } from "@/lib/urls";
 
 /**
  * Log in with a mobile number (or a verified email) and password, or with
@@ -28,6 +29,7 @@ export default function AuthPage() {
     handleChange,
     switchMode,
     sendCode,
+    resendIn,
     continueWith,
     handleSubmit,
     rememberMe,
@@ -156,10 +158,11 @@ export default function AuthPage() {
                   <button
                     type="button"
                     className="auth-inline-link auth-link--right"
-                    disabled={busy}
+                    disabled={busy || resendIn > 0}
                     onClick={() => void sendCode()}
+                    aria-live="polite"
                   >
-                    {t.auth.resendCode}
+                    {resendIn > 0 ? t.auth.resendCodeIn.replace("{time}", formatCountdown(resendIn)) : t.auth.resendCode}
                   </button>
                 </>
               ) : (
@@ -272,12 +275,12 @@ export default function AuthPage() {
           {isSignup && (
             <p className="auth-terms-notice">
               {t.auth.termsNotice}{" "}
-              {/* /terms and /privacy are public; a new tab keeps a half-filled signup. */}
-              <a href={appUrl("/terms")} target="_blank" rel="noopener" className="auth-terms-link">
+              {/* Terms and Privacy are on the help site; a new tab keeps a half-filled signup. */}
+              <a href={helpUrl("/terms")} target="_blank" rel="noopener" className="auth-terms-link">
                 {t.auth.termsLink}
               </a>{" "}
               {t.auth.and}{" "}
-              <a href={appUrl("/privacy")} target="_blank" rel="noopener" className="auth-terms-link">
+              <a href={helpUrl("/privacy")} target="_blank" rel="noopener" className="auth-terms-link">
                 {t.auth.privacyLink}
               </a>
             </p>

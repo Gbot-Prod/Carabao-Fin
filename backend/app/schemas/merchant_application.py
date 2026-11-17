@@ -41,6 +41,8 @@ Weekday = Literal["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 ReviewStatus = Literal["approved", "rejected", "clarification", "suspended"]
 
 MAX_ADMIN_NOTE = 2000
+# Shop name and legal business name (onboarding/page.tsx NAME_MAX).
+MERCHANT_NAME_MAX = 50
 
 
 class ApplicationReviewPayload(BaseModel):
@@ -70,8 +72,9 @@ class MerchantOnboardingPayload(BaseModel):
     phone_verification_token: str | None = Field(default=None, max_length=2000)
 
     # Section 2: legal details and documents
-    merchant_name: str = Field(min_length=3, max_length=100)
-    legal_business_name: str = Field(min_length=3, max_length=150)
+    # The form shows a 0/50 counter for both names (MERCHANT_NAME_MAX).
+    merchant_name: str = Field(min_length=3, max_length=MERCHANT_NAME_MAX)
+    legal_business_name: str = Field(min_length=3, max_length=MERCHANT_NAME_MAX)
     business_type: BusinessType
     # Optional; a blank value is stored as no TIN.
     tin: str | None = Field(default=None, min_length=6, max_length=20)

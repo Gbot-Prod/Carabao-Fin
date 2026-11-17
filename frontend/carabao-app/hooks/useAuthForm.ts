@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { isValidPhone, sendPhoneCode, signIn, signUpWithPhone, socialErrorMessage } from "@/lib/auth-client";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { safeNextPath } from "@/lib/next-path";
+import { normalizePhMobile } from "@/lib/phone";
+import { useResendCooldown } from "@/hooks/useResendCooldown";
 
 export const MIN_PASSWORD = 8;
 
@@ -51,6 +53,9 @@ export function useAuthForm({ defaultNext, onSuccess, socialUrls }: Options) {
   const [idleNotice, setIdleNotice] = useState(false);
   // ?next= is where to go after sign-in, e.g. the admin setup link (CF-0018).
   const [nextPath, setNextPath] = useState(defaultNext);
+  // Site-wide: a minute between codes to one number, counted down on the page.
+  const cooldown = useResendCooldown();
+  const codeTarget = normalizePhMobile(form.phoneNumber) ?? form.phoneNumber.trim();
 
   // "Create an account" links (E4) open the page on sign-up; ?reason=idle (E5)
   // explains an automatic sign-out; ?error= is a failed Google/Facebook sign-in.
@@ -84,9 +89,11 @@ export function useAuthForm({ defaultNext, onSuccess, socialUrls }: Options) {
     setIsLoading(true);
     try {
       await sendPhoneCode(form.phoneNumber);
+      cooldown.start(codeTarget);
       setForm((f) => ({ ...f, code: "" }));
       setStep("code");
     } catch (err) {
+      cooldown.startFromError(codeTarget, err);
       setError(err instanceof Error ? err.message : t.auth.genericError);
     } finally {
       setIsLoading(false);
@@ -117,6 +124,8 @@ export function useAuthForm({ defaultNext, onSuccess, socialUrls }: Options) {
     if (authMode === "signup" && step === "details") {
       if (form.password.length < MIN_PASSWORD) return setError(t.auth.passwordTooShort);
       if (form.password !== form.confirmPassword) return setError(t.auth.passwordMismatch);
+      // Back from the code step within the minute: the code already sent still works.
+      if (cooldown.secondsLeft(codeTarget) > 0) return setStep("code");
       return sendCode();
     }
     if (authMode === "signup" && !/^\d{6}$/.test(form.code.trim())) return setError(t.auth.codeInvalid);
@@ -157,6 +166,8 @@ export function useAuthForm({ defaultNext, onSuccess, socialUrls }: Options) {
     handleChange,
     switchMode,
     sendCode,
+    /** Seconds before "Send a new code" works again (0 = now). */
+    resendIn: cooldown.secondsLeft(codeTarget),
     continueWith,
     handleSubmit,
     rememberMe,

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import errorHelper from "@/util/errorHelper";
+import { formatCountdown, useResendCooldown } from "@/hooks/useResendCooldown";
 import styles from "./page.module.css";
 
 type Props = {
@@ -33,7 +34,9 @@ export default function ContactCodeField({
 }: Props) {
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState("");
-  const [cooldown, setCooldown] = useState(0);
+  // Site-wide: a minute between codes to one value, counted down on the page.
+  const resendTimer = useResendCooldown();
+  const cooldown = resendTimer.secondsLeft(value);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,12 +48,6 @@ export default function ContactCodeField({
     setError(null);
   }, [value]);
 
-  useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [cooldown]);
-
   const send = async () => {
     setError(null);
     const invalid = validate();
@@ -60,8 +57,9 @@ export default function ContactCodeField({
       await onSend();
       setSent(true);
       setCode("");
-      setCooldown(60);
+      resendTimer.start(value);
     } catch (e: unknown) {
+      resendTimer.startFromError(value, e);
       setError(errorHelper(e) || "Failed to send the code. Please try again.");
     } finally {
       setSending(false);
@@ -130,8 +128,9 @@ export default function ContactCodeField({
               className={styles.resendBtn}
               onClick={send}
               disabled={disabled || cooldown > 0 || sending}
+              aria-live="polite"
             >
-              {cooldown > 0 ? `Resend (${cooldown}s)` : "Resend"}
+              {cooldown > 0 ? `Resend in ${formatCountdown(cooldown)}` : "Resend"}
             </button>
           </div>
         </>

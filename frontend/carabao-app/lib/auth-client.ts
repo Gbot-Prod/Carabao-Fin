@@ -164,9 +164,17 @@ export const isValidPhone = (value: string) => normalizePhMobile(value) !== null
 // ── Text codes ────────────────────────────────────────────────────────────
 // For signup, and for verifying a number on an existing account (checkout, profile).
 
+/** A refused code send, keeping the wait (lib/otp-cooldown.ts retryAfterFromError reads it). */
+const codeSendError = (error: unknown) => {
+  const retryAfter = (error as { retryAfter?: number } | null)?.retryAfter;
+  return Object.assign(new Error(getErrorMessage(error, "We couldn't send the code. Try again shortly.")), {
+    retryAfter,
+  });
+};
+
 export const sendPhoneCode = async (phoneNumber: string) => {
   const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: requirePhone(phoneNumber) });
-  if (error) throw new Error(getErrorMessage(error, "We couldn't send the code. Try again shortly."));
+  if (error) throw codeSendError(error);
 };
 
 /**
@@ -277,7 +285,7 @@ export const signOut = async () => {
 
 export const requestPhonePasswordReset = async (phoneNumber: string) => {
   const { error } = await authClient.phoneNumber.requestPasswordReset({ phoneNumber: requirePhone(phoneNumber) });
-  if (error) throw new Error(getErrorMessage(error, "We couldn't send the code. Try again shortly."));
+  if (error) throw codeSendError(error);
 };
 
 export const resetPasswordWithPhone = async ({

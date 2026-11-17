@@ -52,9 +52,11 @@ IDENTIFIER_LIMITS: dict[str, Limit] = {
     # Signup / phone-change / password-reset codes per number. Lenient on
     # purpose (no CAPTCHA yet); tighten with ACCOUNT_OTP_PER_HOUR.
     "account_otp": Limit(int(os.getenv("ACCOUNT_OTP_PER_HOUR", "5")), 3600),
-    # Merchant contact-number codes per signed-in user, across numbers.
+    # Site-wide: 5 codes an hour per signed-in user per channel. SMS codes
+    # (merchant contact number, payout change) share one count, emailed codes
+    # (merchant contact email) the other. The 60-second wait between codes to
+    # one target is app/services/otp.py OTP_RESEND_COOLDOWN_SECONDS.
     "otp_send_user": Limit(5, 3600),
-    # Merchant contact-email codes per signed-in user, across emails.
     "email_otp_send_user": Limit(5, 3600),
 }
 

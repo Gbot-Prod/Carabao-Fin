@@ -6,7 +6,9 @@ import { requestPasswordReset, requestPhonePasswordReset, resetPasswordWithPhone
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import "../auth/page.css";
-import { signInPath } from "@/lib/urls";
+import { useSignInPath } from "@/hooks/useSignInPath";
+import { formatCountdown, useResendCooldown } from "@/hooks/useResendCooldown";
+import { normalizePhMobile } from "@/lib/phone";
 
 const MIN_PASSWORD = 8;
 
@@ -15,6 +17,8 @@ const MIN_PASSWORD = 8;
  * that added and verified an email. Neither says whether an account exists.
  */
 export default function ForgotPasswordPage() {
+  // This site's own sign-in page (merchant. gets the Merchant Centre login).
+  const signInHref = useSignInPath();
   const { t } = useLanguage();
   const [channel, setChannel] = useState<"phone" | "email">("phone");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -27,6 +31,10 @@ export default function ForgotPasswordPage() {
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Site-wide: a minute between codes to one number, counted down on the page.
+  const cooldown = useResendCooldown();
+  const codeTarget = normalizePhMobile(phoneNumber) ?? phoneNumber.trim();
+  const resendIn = cooldown.secondsLeft(codeTarget);
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -48,12 +56,7 @@ export default function ForgotPasswordPage() {
         setEmailSent(true);
       });
     }
-    if (!codeSent) {
-      return void run(async () => {
-        await requestPhonePasswordReset(phoneNumber);
-        setCodeSent(true);
-      });
-    }
+    if (!codeSent) return void sendResetCode();
     if (password.length < MIN_PASSWORD) return setError(t.reset.tooShort);
     if (password !== confirm) return setError(t.reset.mismatch);
     void run(async () => {
@@ -61,6 +64,19 @@ export default function ForgotPasswordPage() {
       setDone(true);
     });
   };
+
+  const sendResetCode = () =>
+    run(async () => {
+      try {
+        await requestPhonePasswordReset(phoneNumber);
+      } catch (err) {
+        cooldown.startFromError(codeTarget, err);
+        throw err;
+      }
+      cooldown.start(codeTarget);
+      setCode("");
+      setCodeSent(true);
+    });
 
   const switchChannel = () => {
     setChannel(channel === "phone" ? "email" : "phone");
@@ -129,6 +145,15 @@ export default function ForgotPasswordPage() {
                           value={code}
                           onChange={(e) => setCode(e.target.value)}
                         />
+                        <button
+                          type="button"
+                          className="auth-inline-link auth-link--right"
+                          disabled={busy || resendIn > 0}
+                          onClick={() => void sendResetCode()}
+                          aria-live="polite"
+                        >
+                          {resendIn > 0 ? t.auth.resendCodeIn.replace("{time}", formatCountdown(resendIn)) : t.auth.resendCode}
+                        </button>
                         <input
                           type="password"
                           autoComplete="new-password"
@@ -171,7 +196,7 @@ export default function ForgotPasswordPage() {
               )}
             </form>
           )}
-          <Link href={signInPath()} className="auth-link">{t.reset.backToSignIn}</Link>
+          <Link href={signInHref} className="auth-link">{t.reset.backToSignIn}</Link>
         </div>
       </section>
     </div>

@@ -200,21 +200,24 @@ def applicant(db, monkeypatch):  # noqa: F811
     return user
 
 
-def _submit(db, user, **overrides):  # noqa: F811
+def _submit(db, user, raw_payload=None, **overrides):  # noqa: F811
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
     from app.api.dependencies import get_current_user, get_db
     from app.api.routes import merchant_onboarding
 
+    from app.core.errors import FieldErrors, field_errors_handler
+
     app = FastAPI()
+    app.add_exception_handler(FieldErrors, field_errors_handler)
     app.include_router(merchant_onboarding.router)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: user
     payload = {**PAYLOAD, "contact_email": user.email, **overrides}
     return TestClient(app).post(
         "/merchant-onboarding/me",
-        data={"payload": json.dumps(payload)},
+        data={"payload": raw_payload if raw_payload is not None else json.dumps(payload)},
         files=onboarding_files(),
     )
 
@@ -252,6 +255,50 @@ def test_onboarding_refuses_bad_payloads(db, applicant, overrides):  # noqa: F81
     resp = _submit(db, applicant, **overrides)
     assert resp.status_code == 400
     assert db.query(MerchantApplication).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("overrides", "field", "expected"),
+    [
+        ({"postal_code": ""}, "postal_code", "Postal code is required."),
+        ({"merchant_name": "ab"}, "merchant_name", "Merchant name must be at least 3 characters."),
+        ({"tin": "123"}, "tin", "TIN must be at least 6 characters."),
+        ({"business_type": "Pirate"}, "business_type", "Business type is not one of the allowed options."),
+        ({"lat": 999, "lng": 999}, "pin", None),
+        ({"merchant_name": "x" * 51}, "merchant_name", "Merchant name must be at most 50 characters."),
+        (
+            {"legal_business_name": "x" * 51},
+            "legal_business_name",
+            "Legal business name must be at most 50 characters.",
+        ),
+    ],
+)
+def test_onboarding_says_which_field_failed(db, applicant, overrides, field, expected):  # noqa: F811
+    resp = _submit(db, applicant, **overrides)
+    assert resp.status_code in (400, 422)
+    body = resp.json()
+    assert list(body["errors"]) == [field]
+    if expected is not None:
+        assert body["errors"][field] == expected
+        assert body["detail"] == expected
+
+
+def test_onboarding_accepts_50_character_names(db, applicant):  # noqa: F811
+    resp = _submit(db, applicant, merchant_name="x" * 50, legal_business_name="y" * 50)
+    assert resp.status_code == 200, resp.text
+
+
+def test_onboarding_lists_every_failing_field(db, applicant):  # noqa: F811
+    resp = _submit(db, applicant, postal_code="", merchant_name="ab")
+    assert resp.status_code == 400
+    assert set(resp.json()["errors"]) == {"postal_code", "merchant_name"}
+
+
+def test_onboarding_refuses_deeply_nested_json(db, applicant):  # noqa: F811
+    # json.loads raises RecursionError here, not ValueError: still a clean 400.
+    resp = _submit(db, applicant, raw_payload="[" * 100_000 + "]" * 100_000)
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Invalid onboarding payload"
 
 
 # --- CF-0010: application status transitions --------------------------------

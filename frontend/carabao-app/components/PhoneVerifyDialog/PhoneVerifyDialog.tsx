@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { sendPhoneCode, verifyMyPhone } from "@/lib/auth-client";
 import { formatPhMobile, normalizePhMobile } from "@/lib/phone";
+import { formatCountdown, useResendCooldown } from "@/hooks/useResendCooldown";
 import styles from "./PhoneVerifyDialog.module.css";
 
 type Props = {
@@ -25,6 +26,34 @@ export default function PhoneVerifyDialog({ reason, initialNumber, onClose, onVe
   const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Site-wide: a minute between codes to one number, counted down on the page.
+  const cooldown = useResendCooldown();
+  const codeTarget = normalizePhMobile(phone) ?? phone.trim();
+  const resendIn = cooldown.secondsLeft(codeTarget);
+
+  const sendCode = async () => {
+    try {
+      await sendPhoneCode(phone);
+    } catch (err) {
+      cooldown.startFromError(codeTarget, err);
+      throw err;
+    }
+    cooldown.start(codeTarget);
+    setCode("");
+    setCodeSent(true);
+  };
+
+  const resend = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await sendCode();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -32,8 +61,9 @@ export default function PhoneVerifyDialog({ reason, initialNumber, onClose, onVe
     setError(null);
     try {
       if (!codeSent) {
-        await sendPhoneCode(phone);
-        setCodeSent(true);
+        // Back from "Use a different number" with the same one: its code still works.
+        if (resendIn > 0) setCodeSent(true);
+        else await sendCode();
       } else {
         await verifyMyPhone(phone, code);
         onVerified(normalizePhMobile(phone) ?? phone);
@@ -82,6 +112,15 @@ export default function PhoneVerifyDialog({ reason, initialNumber, onClose, onVe
               required
               autoFocus
             />
+            <button
+              type="button"
+              className={styles.link}
+              onClick={() => void resend()}
+              disabled={busy || resendIn > 0}
+              aria-live="polite"
+            >
+              {resendIn > 0 ? `Send a new code in ${formatCountdown(resendIn)}` : "Send a new code"}
+            </button>
             <button type="button" className={styles.link} onClick={() => { setCodeSent(false); setCode(""); }} disabled={busy}>
               Use a different number
             </button>

@@ -8,11 +8,10 @@ import "./sidebar.css";
 import Logo from "@/public/images/icons/carabaoLogo.png";
 import { LogoutButton } from "@/components/LogoutButton";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
-import NotificationBell from "@/components/NotificationBell/NotificationBell";
+import { useNotifications } from "@/components/Notifications/NotificationsProvider";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
-import { SidebarFilterChips } from "./SidebarFilterChips";
 import { fetchMyProfile, type UserProfile } from "@/util/api/users";
 import { appUrl, helpUrl, hostKind, merchantUrl } from "@/lib/urls";
 
@@ -87,6 +86,15 @@ function DashboardIcon() {
   );
 }
 
+function BellIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+
 function HelpIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -105,6 +113,7 @@ export default function Sidebar() {
   const { user, isAuthenticated, isBackendAuthenticated, isLoading } = useAuth();
   const { showPrompt } = useAuthPrompt();
   const { t } = useLanguage();
+  const { unread: unreadNotifications } = useNotifications();
 
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   // The sidebar also shows on merchant.<root>, so buyer links go to the apex.
@@ -156,7 +165,8 @@ export default function Sidebar() {
     icon: React.ReactNode,
     isProtected = false,
     activePath: string = href,
-    forceActive = false
+    forceActive = false,
+    badge = 0
   ) => {
     const blocked = isProtected && !isLoading && !isAuthenticated;
     const isActive =
@@ -170,6 +180,9 @@ export default function Sidebar() {
         >
           <span className="sidebar__nav-icon">{icon}</span>
           <span className="sidebar__nav-label">{label}</span>
+          {badge > 0 && (
+            <span className="sidebar__nav-badge" aria-label={`${badge} unread`}>{badge > 99 ? "99+" : badge}</span>
+          )}
         </Link>
       </li>
     );
@@ -256,16 +269,17 @@ export default function Sidebar() {
             </div>
           )}
 
-          <div className="sidebar__section sidebar__section--divided">
-            <SidebarFilterChips />
-          </div>
+          {isAuthenticated && (
+            <div className="sidebar__section sidebar__section--divided">
+              <ul className="sidebar__nav-list">
+                {renderNavLink(appUrl("/notifications"), t.nav.notifications, <BellIcon />, true, "/notifications", false, unreadNotifications)}
+              </ul>
+            </div>
+          )}
         </nav>
 
         <div className="sidebar__footer">
-          <div className="sidebar__footer-tools">
-            <LanguageToggle className="sidebar__language" />
-            {isAuthenticated && <NotificationBell />}
-          </div>
+          <LanguageToggle className="sidebar__language" />
           {/* Help is public: shown to guests and signed-in users alike */}
           <Link
             href={helpUrl("/")}

@@ -5,11 +5,12 @@ import { ChevronRight, Eye, EyeOff } from "lucide-react";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import { FacebookIcon, GoogleIcon } from "@/components/SocialIcons";
 import { MIN_PASSWORD, useAuthForm } from "@/hooks/useAuthForm";
+import { formatCountdown } from "@/hooks/useResendCooldown";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { MERCHANT_PAGES as P } from "@/lib/merchant-links";
 import { formatPhMobile, normalizePhMobile } from "@/lib/phone";
-import { appUrl, merchantUrl } from "@/lib/urls";
+import { appUrl, helpUrl, merchantUrl } from "@/lib/urls";
 import { merchantLoginUrl } from "../lib/signIn";
 import MerchantTopBar from "../MerchantTopBar";
 import StallIllustration from "./StallIllustration";
@@ -81,6 +82,7 @@ export default function MerchantLoginPage() {
     handleChange,
     switchMode,
     sendCode,
+    resendIn,
     continueWith,
     handleSubmit,
     rememberMe,
@@ -212,10 +214,11 @@ export default function MerchantLoginPage() {
                   <button
                     type="button"
                     className={`${styles.inlineLink} ${styles.right}`}
-                    disabled={busy}
+                    disabled={busy || resendIn > 0}
                     onClick={() => void sendCode()}
+                    aria-live="polite"
                   >
-                    {t.auth.resendCode}
+                    {resendIn > 0 ? t.auth.resendCodeIn.replace("{time}", formatCountdown(resendIn)) : t.auth.resendCode}
                   </button>
                 </>
               ) : (
@@ -310,9 +313,9 @@ export default function MerchantLoginPage() {
             <p className={styles.terms}>
               {isSignup ? t.auth.termsNotice : m.signInTerms}{" "}
               {/* A new tab keeps a half-filled form. */}
-              <a href={appUrl("/terms")} target="_blank" rel="noopener">{t.auth.termsLink}</a>{" "}
+              <a href={helpUrl("/terms")} target="_blank" rel="noopener">{t.auth.termsLink}</a>{" "}
               {t.auth.and}{" "}
-              <a href={appUrl("/privacy")} target="_blank" rel="noopener">{t.auth.privacyLink}</a>
+              <a href={helpUrl("/privacy")} target="_blank" rel="noopener">{t.auth.privacyLink}</a>
             </p>
 
             <p className={styles.switchLine}>

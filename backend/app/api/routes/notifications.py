@@ -1,4 +1,4 @@
-"""The notification bell (U5): list, unread count, mark read."""
+"""In-app notifications (U5): list, unread count, mark read/unread, delete."""
 
 from datetime import UTC, datetime
 
@@ -28,6 +28,7 @@ class NotificationItem(BaseModel):
 class NotificationList(BaseModel):
     items: list[NotificationItem]
     unread: int
+    total: int
 
 
 def _view(n: Notification) -> NotificationItem:
@@ -45,19 +46,35 @@ def _view(n: Notification) -> NotificationItem:
 @router.get("/users/me/notifications", response_model=NotificationList)
 def my_notifications(
     limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     unread_only: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     mine = db.query(Notification).filter(Notification.user_id == current_user.id)
-    unread = mine.filter(Notification.read_at.is_(None)).count()
-    q = mine.filter(Notification.read_at.is_(None)) if unread_only else mine
+    unread_q = mine.filter(Notification.read_at.is_(None))
+    unread = unread_q.count()
+    q = unread_q if unread_only else mine
+    # Unread-only: the total is the unread count (the bell polls this often).
+    total = unread if unread_only else mine.count()
     rows = (
         q.order_by(Notification.created_at.desc(), Notification.id.desc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
-    return NotificationList(items=[_view(n) for n in rows], unread=unread)
+    return NotificationList(items=[_view(n) for n in rows], unread=unread, total=total)
+
+
+def _mine(db: Session, user: User, notification_id: int) -> Notification:
+    n = (
+        db.query(Notification)
+        .filter(Notification.id == notification_id, Notification.user_id == user.id)
+        .first()
+    )
+    if n is None:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return n
 
 
 @router.post("/users/me/notifications/{notification_id}/read", status_code=204)
@@ -66,18 +83,21 @@ def mark_read(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    n = (
-        db.query(Notification)
-        .filter(
-            Notification.id == notification_id,
-            Notification.user_id == current_user.id,
-        )
-        .first()
-    )
-    if n is None:
-        raise HTTPException(status_code=404, detail="Notification not found")
+    n = _mine(db, current_user, notification_id)
     if n.read_at is None:
         n.read_at = datetime.now(UTC)
+        db.commit()
+
+
+@router.post("/users/me/notifications/{notification_id}/unread", status_code=204)
+def mark_unread(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    n = _mine(db, current_user, notification_id)
+    if n.read_at is not None:
+        n.read_at = None
         db.commit()
 
 
@@ -89,4 +109,27 @@ def mark_all_read(
     db.query(Notification).filter(
         Notification.user_id == current_user.id, Notification.read_at.is_(None)
     ).update({Notification.read_at: datetime.now(UTC)}, synchronize_session=False)
+    db.commit()
+
+
+# Registered before the {notification_id} route so "read" is not parsed as an id.
+@router.delete("/users/me/notifications/read", status_code=204)
+def delete_read(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Clear every notification the user has already read."""
+    db.query(Notification).filter(
+        Notification.user_id == current_user.id, Notification.read_at.is_not(None)
+    ).delete(synchronize_session=False)
+    db.commit()
+
+
+@router.delete("/users/me/notifications/{notification_id}", status_code=204)
+def delete_notification(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db.delete(_mine(db, current_user, notification_id))
     db.commit()

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import styles from "../page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
 import { sendOtp, updateMyMerchant, verifyOtp, type Merchant } from "@/util/api";
+import { formatCountdown, useResendCooldown } from "@/hooks/useResendCooldown";
 import errorHelper from "@/util/errorHelper";
 import { normalizePhMobile } from "@/lib/phone";
 import { formatLocalPhone } from "../lib/format";
@@ -57,17 +58,13 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
   const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [sendingCode, setSendingCode] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
   // The code is used up once checked; keep its token in case the save fails.
   const [verified, setVerified] = useState<{ number: string; token: string } | null>(null);
 
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [resendCooldown]);
-
   const newNumber = normalizePhMobile(draft.contact_number);
+  // Site-wide: a minute between codes to one number, counted down on the page.
+  const resendTimer = useResendCooldown();
+  const resendCooldown = resendTimer.secondsLeft(newNumber ?? "");
   const numberChanged =
     draft.contact_number.trim() !== "" &&
     newNumber !== normalizePhMobile(merchant?.contact_number ?? "");
@@ -99,8 +96,9 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
       await sendOtp(newNumber);
       setCodeSentTo(newNumber);
       setCode("");
-      setResendCooldown(60);
+      resendTimer.start(newNumber);
     } catch (err: unknown) {
+      resendTimer.startFromError(newNumber, err);
       setError(errorHelper(err) || "The code could not be sent. Try again.");
     } finally {
       setSendingCode(false);
@@ -240,7 +238,7 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
                   {sendingCode
                     ? "Sending…"
                     : codeSentTo === newNumber
-                      ? resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"
+                      ? resendCooldown > 0 ? `Resend code in ${formatCountdown(resendCooldown)}` : "Resend code"
                       : "Send code"}
                 </button>
               </>

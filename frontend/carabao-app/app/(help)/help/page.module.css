@@ -10,6 +10,9 @@
   display: flex;
   gap: 20px;
   width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px;
   align-items: flex-start;
 }
 
@@ -85,6 +88,13 @@
 }
 
 .navItem:hover { background: var(--surface-muted); }
+
+.navIcon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.navItemActive .navIcon { color: var(--green-600); }
 
 .navItem:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
@@ -248,7 +258,7 @@
 
 /* ─── Responsive ─────────────────────────────────────────────────────────────── */
 @media (max-width: 960px) {
-  .main { flex-direction: column; }
+  .main { flex-direction: column; padding: 16px; }
 
   .leftCol {
     flex: none;

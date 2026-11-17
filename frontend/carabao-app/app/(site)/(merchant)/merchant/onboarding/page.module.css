@@ -603,3 +603,31 @@
     grid-template-columns: 1fr;
   }
 }
+/* Field errors (site standard, globals.css): wrapped controls in this form. */
+:global(.field-invalid) .phoneRow,
+:global(.field-invalid) .dropzone {
+  border-color: var(--danger);
+}
+
+:global(.field-invalid) .dropzone {
+  background: rgba(185, 28, 28, 0.04);
+}
+
+:global(.field-invalid) .dayChip:not(.dayChipActive) {
+  border-color: rgba(185, 28, 28, 0.45);
+}
+
+/* Label with a character counter on the right (merchant / legal name). */
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.charCount {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}

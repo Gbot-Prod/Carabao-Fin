@@ -40,6 +40,7 @@ const SHARED_PREFIXES = ["/auth", "/forgot-password", "/reset-password", "/email
 const BUYER_PREFIXES = [
   "/order",
   "/orders",
+  "/notifications",
   "/cart",
   "/checkout",
   "/confirmation",
@@ -47,9 +48,10 @@ const BUYER_PREFIXES = [
   "/track",
   "/landing",
   "/farms",
-  "/terms",
-  "/privacy",
 ];
+// Pages that moved from the apex to help.<root>. The old apex URLs redirect
+// there (sign-up links, bookmarks, search results).
+const MOVED_TO_HELP = ["/terms", "/privacy"];
 // R2: paths the admin deploy serves as they are. /api and /_next are not in
 // the proxy matcher, so they never get here.
 const ADMIN_PASS_PREFIXES = ["/api", "/two-factor", "/reset-password", "/forgot-password"];
@@ -140,14 +142,16 @@ export function makeSurfaces(config: SurfaceConfig) {
     const dash = stripPrefix(pathname, "/merchantDashboard");
     if (dash !== null) return merchantUrl(dash) + search;
     if (stripPrefix(pathname, "/merchantOnboarding") !== null) return merchantUrl("/onboarding") + search;
+    // The merchant login moved from /login to /auth.
+    if (pathname === "/merchant/login") return merchantUrl("/auth") + search;
     return null;
   };
 
   /** /help?section=... from before the split. */
   const legacyHelpSection = (search: string): string | null => {
     const section = new URLSearchParams(search).get("section");
-    if (section === "terms") return appUrl("/terms");
-    if (section === "privacy") return appUrl("/privacy");
+    if (section === "terms") return helpUrl("/terms");
+    if (section === "privacy") return helpUrl("/privacy");
     if (section === "contact") return helpUrl("/contact");
     if (section === "faq") return helpUrl("/");
     return null;
@@ -190,6 +194,11 @@ export function makeSurfaces(config: SurfaceConfig) {
       if (target) return { kind: "redirect", location: target };
     }
 
+    // On help. these are help pages (rewritten below); elsewhere they moved.
+    if (kind !== "help" && MOVED_TO_HELP.includes(pathname)) {
+      return { kind: "redirect", location: helpUrl(pathname) + search };
+    }
+
     if (kind === "apex") {
       const m = stripPrefix(pathname, "/merchant");
       if (m !== null) return { kind: "redirect", location: merchantUrl(m) + search };
@@ -201,6 +210,10 @@ export function makeSurfaces(config: SurfaceConfig) {
     if (kind === "merchant") {
       const m = stripPrefix(pathname, "/merchant");
       if (m !== null) return { kind: "redirect", location: m + search };
+      // Each site signs in at /auth: here it is the Merchant Centre login, not
+      // the buyer page. The old /login redirects to it.
+      if (pathname === "/auth") return { kind: "rewrite", path: "/merchant/auth" };
+      if (pathname === "/login") return { kind: "redirect", location: "/auth" + search };
       if (hasPrefix(pathname, SHARED_PREFIXES)) return { kind: "next" };
       if (hasPrefix(pathname, BUYER_PREFIXES)) return { kind: "redirect", location: appUrl(pathname + search) };
       const h = stripPrefix(pathname, "/help");
@@ -235,6 +248,7 @@ export function makeSurfaces(config: SurfaceConfig) {
     const rest = q === -1 ? "" : link.slice(q);
     const old = legacy(pathname, rest);
     if (old) return old;
+    if (MOVED_TO_HELP.includes(pathname)) return helpUrl(pathname) + rest;
     if (stripPrefix(pathname, "/admin") !== null) {
       return config.appSurface === "admin" ? link : adminUrl(link);
     }
@@ -251,6 +265,30 @@ export function makeSurfaces(config: SurfaceConfig) {
     return next && next !== "/" ? `${base}?next=${encodeURIComponent(next)}` : base;
   };
 
+  /**
+   * The Merchant Centre login (merchant.<root>/auth, or /merchant/auth on one
+   * host). `next` is a path as the browser shows it; the dashboard needs none.
+   * "/auth" is MERCHANT_PAGES.login (lib/merchant-links.ts; no imports here).
+   */
+  const merchantSignInPath = (next?: string | null): string => {
+    const base = merchantUrl("/auth");
+    if (!next || next === "/" || next === "/merchant" || next === merchantUrl("/")) return base;
+    return `${base}?next=${encodeURIComponent(next)}`;
+  };
+
+  /**
+   * Site standard: each site signs in on its own page. Admin deploy:
+   * /admin/login. Merchant pages (merchant. host, or /merchant/* on one host):
+   * the Merchant Centre login (merchant.<root>/auth). Everything else: /auth.
+   */
+  const signInPathFor = (where: { host: string | null; pathname: string }, next?: string | null): string => {
+    if (config.appSurface === "admin") return signInPath(next);
+    const onMerchant = subdomainMode
+      ? hostKind(where.host) === "merchant"
+      : stripPrefix(where.pathname, "/merchant") !== null;
+    return onMerchant ? merchantSignInPath(next) : signInPath(next);
+  };
+
   return {
     rootDomain: root,
     appSurface: config.appSurface,
@@ -263,7 +301,14 @@ export function makeSurfaces(config: SurfaceConfig) {
     route,
     resolveStoredLink,
     signInPath,
+    merchantSignInPath,
+    signInPathFor,
   };
+}
+
+/** `url` with one more query parameter, e.g. ("/login?next=%2Fx", "reason", "idle"). */
+export function withQueryParam(url: string, key: string, value: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
 }
 
 // Literal process.env reads, so that Next.js puts the values in client code
@@ -278,7 +323,13 @@ const surfaces = makeSurfaces({
   adminUrl: process.env.NEXT_PUBLIC_ADMIN_URL,
 });
 
-export const { appUrl, merchantUrl, helpUrl, adminUrl, resolveStoredLink, signInPath } = surfaces;
+export const { appUrl, merchantUrl, helpUrl, adminUrl, resolveStoredLink, signInPath, merchantSignInPath, signInPathFor } = surfaces;
+
+/** The sign-in page for the site the browser is on now (signInPathFor). Browser only. */
+export function signInPathHere(next?: string | null): string {
+  if (typeof window === "undefined") return signInPath(next);
+  return signInPathFor({ host: window.location.host, pathname: window.location.pathname }, next);
+}
 export const { rootDomain, appSurface, subdomainMode } = surfaces;
 export const routeRequest = surfaces.route;
 export const hostKind = surfaces.hostKind;

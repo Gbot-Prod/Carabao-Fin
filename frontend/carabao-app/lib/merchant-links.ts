@@ -39,5 +39,6 @@ export const MERCHANT_PAGES = {
   shop: "/shop",
   settings: "/settings",
   onboarding: "/onboarding",
-  login: "/login",
+  // Same path as the buyer sign-in: each site signs in at /auth.
+  login: "/auth",
 } as const;

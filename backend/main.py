@@ -16,6 +16,8 @@ from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.database import SessionLocal
 from app.core.errors import (
     REQUEST_ID_HEADER,
+    FieldErrors,
+    field_errors_handler,
     request_id_from_header,
     reset_request_id,
     set_request_id,
@@ -245,7 +247,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     # Lets the browser read the CSV export filename and the request ID (CF-0013).
-    expose_headers=["Content-Disposition", REQUEST_ID_HEADER],
+    # Retry-After: the OTP pages resume their resend countdown from it.
+    expose_headers=["Content-Disposition", "Retry-After", REQUEST_ID_HEADER],
 )
+
+# Per-field form errors (FieldErrors). HTTPException handlers run inside CORS.
+app.add_exception_handler(FieldErrors, field_errors_handler)
 
 app.include_router(router)

@@ -20,6 +20,7 @@ const PRIVATE_PATHS = [
   '/confirmation',
   '/order',
   '/orders',
+  '/notifications',
   '/profile',
   '/track',
 ];

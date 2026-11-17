@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { completeTwoFactorSignIn } from "@/lib/auth-client";
-import { signInPath } from "@/lib/urls";
+import { useSignInPath } from "@/hooks/useSignInPath";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import "../auth/page.css";
 
 /** Second step of sign-in for accounts with two-step verification (E8b). */
 export default function TwoFactorPage() {
+  // This site's own sign-in page (merchant. gets the Merchant Centre login).
+  const signInHref = useSignInPath();
   const { t } = useLanguage();
   const s = t.twoFactorSignIn;
   const [useBackup, setUseBackup] = useState(false);
@@ -83,7 +85,7 @@ export default function TwoFactorPage() {
               </button>
             </form>
           )}
-          <Link href={signInPath()} className="auth-link">{s.backToSignIn}</Link>
+          <Link href={signInHref} className="auth-link">{s.backToSignIn}</Link>
         </div>
       </section>
     </div>

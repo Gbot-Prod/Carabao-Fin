@@ -6,6 +6,7 @@ export * from './orders';
 export * from './payments';
 export * from './produce';
 export * from './reviews';
+export * from './notifications';
 export * from './tracking';
 export * from './users';
 export * from './admin';

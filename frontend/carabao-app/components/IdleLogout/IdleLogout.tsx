@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { signOut } from "@/lib/auth-client";
-import { signInPath } from "@/lib/urls";
+import { signInPathHere, withQueryParam } from "@/lib/urls";
 import { idleState, idleTimeoutMs, secondsLeft } from "@/lib/idle";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt } from "@/lib/i18n/format";
@@ -85,7 +85,10 @@ export default function IdleLogout() {
           .finally(() => {
             // A full page load, not a client navigation: it drops every bit of
             // in-memory state, including this component's stale "signed in".
-            window.location.assign(`${signInPath()}?reason=idle`);
+            // This site's own sign-in page (merchant pages: the Merchant Centre
+            // login), then back to the page the user was on.
+            const { pathname, search } = window.location;
+            window.location.assign(withQueryParam(signInPathHere(pathname + search), "reason", "idle"));
           });
       } else if (state === "warning") {
         setWarning(secondsLeft(now, last, timeoutMs));

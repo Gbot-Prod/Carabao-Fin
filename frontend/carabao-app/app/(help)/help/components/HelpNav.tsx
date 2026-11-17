@@ -22,7 +22,7 @@ export default function HelpNav() {
                 className={`${styles.navItem} ${active ? styles.navItemActive : ''}`}
                 aria-current={active ? 'page' : undefined}
               >
-                <span aria-hidden="true">{s.icon}</span>
+                <s.icon size={18} strokeWidth={2} className={styles.navIcon} aria-hidden="true" />
                 {s.label}
               </Link>
             </li>
