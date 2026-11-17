@@ -49,7 +49,7 @@ Public deploy:
 | `merchant.`, `/auth` | rewrite to `/merchant/auth` (the Merchant Centre login, not the buyer sign-in) |
 | `merchant.`, `/login` (old merchant login) | redirect to `/auth` on the same host |
 | `merchant.`, `/forgot-password`, `/reset-password`, `/email-verified`, `/two-factor*` | served as they are |
-| `merchant.`, a buyer path (`/order`, `/orders`, `/cart`, `/checkout`, `/confirmation`, `/profile`, `/track`, `/landing`, `/farms`) | redirect to the apex |
+| `merchant.`, a buyer path (`/order`, `/orders`, `/saved`, `/notifications`, `/cart`, `/checkout`, `/confirmation`, `/profile`, `/track`, `/landing`, `/farms`; `BUYER_PREFIXES` in `lib/urls.ts`) | redirect to the apex |
 | `merchant.`, any other path `/x` | rewrite to `/merchant/x` |
 | `help.`, `/help/*` | redirect to the clean URL |
 | `help.`, a buyer or sign-in path | redirect to the apex |

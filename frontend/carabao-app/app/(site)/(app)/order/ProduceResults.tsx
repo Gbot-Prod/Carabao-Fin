@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { searchProduce, type ProduceSearchResult, type ProduceSort } from "@/util/api/produceSearch";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt, plural } from "@/lib/i18n/format";
+import SaveProduceButton from "@/components/SaveProduceButton/SaveProduceButton";
+import { useSavedProduce } from "@/components/SaveProduceButton/useSavedProduce";
 import styles from "./ProduceResults.module.css";
 
 const PAGE_SIZE = 24;
@@ -25,6 +27,7 @@ export default function ProduceResults({ query }: { query: string }) {
   const [total, setTotal] = useState(0);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState(false);
+  const saved = useSavedProduce();
 
   const key = JSON.stringify([query.trim(), category, inStock, fresh, sort, minPrice, maxPrice, page]);
 
@@ -111,7 +114,15 @@ export default function ProduceResults({ query }: { query: string }) {
       ) : (
         <ul className={styles.grid}>
           {rows.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} className={styles.item}>
+              <div className={styles.save}>
+                <SaveProduceButton
+                  produceName={p.name}
+                  saved={saved.isSaved(p.id)}
+                  busy={saved.isBusy(p.id)}
+                  onToggle={() => saved.toggle(p.id)}
+                />
+              </div>
               <Link href={`/farms/${p.merchant_id}`} className={styles.card}>
                 {p.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element

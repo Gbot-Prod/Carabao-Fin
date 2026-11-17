@@ -40,6 +40,7 @@ const SHARED_PREFIXES = ["/auth", "/forgot-password", "/reset-password", "/email
 const BUYER_PREFIXES = [
   "/order",
   "/orders",
+  "/saved",
   "/notifications",
   "/cart",
   "/checkout",
