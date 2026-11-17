@@ -21,6 +21,8 @@ from typing import Any
 from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from app.core.errors import FieldErrors
+
 MB = 1024 * 1024
 IMAGE_MAX_BYTES = 5 * MB
 DOCUMENT_MAX_BYTES = 20 * MB
@@ -244,3 +246,39 @@ def safe_filename(name: str | None, max_length: int = 120) -> str | None:
     base = re.split(r"[\\/]", name)[-1]
     base = "".join(ch for ch in base if ch.isprintable()).strip()
     return base[:max_length] or None
+
+
+# CF-0034: image URLs a client may send in a JSON body.
+_IMAGE_URL_LABELS = {
+    "image_url": "Photo",
+    "banner_image_url": "Banner",
+    "logo_url": "Logo",
+}
+
+
+def check_image_url_fields(
+    requested: dict[str, Any], current: dict[str, str | None]
+) -> None:
+    """Allow a JSON body to keep or clear a stored image URL, never to set one.
+
+    Stored image URLs are only written by the upload routes, after the file
+    passed ``check_image_upload`` and went to our R2 bucket. Without this a
+    merchant could PATCH any URL (a tracking pixel, an off-site or
+    non-https link) onto a listing every buyer loads. Edit forms send the
+    stored URL back unchanged, so an unchanged value and ``None``/``""``
+    (remove the image) are accepted. Raises ``FieldErrors`` naming each field.
+    """
+    errors: dict[str, str] = {}
+    for field, value in requested.items():
+        if field not in _IMAGE_URL_LABELS or value in (None, ""):
+            continue
+        if value != current.get(field):
+            label = _IMAGE_URL_LABELS[field]
+            errors[field] = f"{label} can only be changed by uploading an image."
+    if errors:
+        raise FieldErrors(errors)
+
+
+def blank_to_none(value: str | None) -> str | None:
+    """``""`` from a cleared form field means no image."""
+    return value or None

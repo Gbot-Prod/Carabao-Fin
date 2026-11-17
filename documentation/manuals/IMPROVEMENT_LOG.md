@@ -1,11 +1,11 @@
 # Improvement Log
-branch: improve/loop    push: no    iteration: 2
+branch: improve/loop    push: no    iteration: 3
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-FEATURE 0/- · STRENGTHEN 1/#2 · SECURITY 0/- · AUDIT 1/#1
+FEATURE 0/- · STRENGTHEN 1/#2 · SECURITY 1/#3 · AUDIT 1/#1
 
 ## Needs human
 - Push policy: header says `push: no`. Change to `yes` if the loop should push `improve/loop`.
@@ -13,7 +13,6 @@ FEATURE 0/- · STRENGTHEN 1/#2 · SECURITY 0/- · AUDIT 1/#1
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
-| B01 | SECURITY | M | 5 | 2 | produce API | | Merchants can set `image_url` (produce) / `banner_image_url` (shop page) to any string on create/update, bypassing the R2 upload flow (tracking pixels, `javascript:`/off-site URLs). Drop the field from create/update schemas or allow only our R2 public base — test: POST/PATCH with `https://evil.example/x.png` → 422, upload endpoint still sets it. |
 | B02 | SECURITY | M | 4 | 2 | produce schemas | | `ProduceBase.unit_quantity` has no bounds (0 or negative accepted → divide-by-zero / negative per-unit math); `name`/`description` have no `max_length`; schemas lack `extra="forbid"`. Add bounds + forbid on produce, review, shop page, shipment, payment schemas — test: `unit_quantity=0` → 422, 10k-char name → 422, unknown field → 422. |
 | B03 | SECURITY | M | 4 | 2 | rate limits | | No rate limit on review create/update, order chat send, support chat send, or `/produce/search` (only OTP/SMS/onboarding/merchant phone use `services/rate_limit.py`). Add per-user (per-IP for search) limits — test: N+1th request → 429 with standard error body. |
 | B04 | STRENGTHEN | M | 4 | 2 | orders API + profile UI | | `GET /orders/me/history` loads every order and sorts in Python, no pagination. Move to SQL `ORDER BY ordered_at DESC` with `Page[...]` (limit/offset, status filter, search by order ref) + UI pager — test: 25 orders, page_size=10 → 3 pages in order. |
@@ -42,9 +41,12 @@ FEATURE 0/- · STRENGTHEN 1/#2 · SECURITY 0/- · AUDIT 1/#1
 | B27 | STRENGTHEN | M | 3 | 2 | lint | | Ruff to green, 142 left: 130 E501 (28 in HTML strings in `services/email.py`, 23 in `scripts/seed_demo.py`, ~45 across app routes/services), 4 E402 in scripts, 2 F811 from importing the autouse `_env` + `transfers` fixtures of `test_payouts.py` (move into a payouts plugin applied only via `pytestmark = pytest.mark.usefixtures`), misc I001/UP017/UP046/B905 — test: `uv run ruff check .` exits 0. Do not use `ruff format` wholesale (24 app files would reformat). |
 | B28 | STRENGTHEN | L | 2 | 4 | types | | Mypy 2391 errors, mostly untyped test helpers; slice by directory (app/ first) — test: `uv run mypy app` exits 0. |
 | B30 | STRENGTHEN | S | 3 | 1 | tests | | Audit other env leaks from a local `.env` into tests (anything `load_dotenv` sets that code reads at call time: PAYMONGO_*, R2_*, SEMAPHORE_*, RESEND_*) — test: pytest passes with a `.env` full of dummy values. Batch with B20. |
+| B31 | SECURITY | S | 3 | 1 | data | | Image URLs stored before CF-0034 may point off-site; a one-off check script listing produce/shop rows whose image URLs don't start with `CLOUDFLARE_R2_PUBLIC_URL` (report only, no auto-delete) — test: script unit test on a seeded SQLite db. Batch with B02. |
 | B29 | SECURITY | M | 4 | 2 | deps | | `npm audit --omit=dev` 13 vulns (2 critical): apply patch/minor upgrades (sharp etc.), log majors — test: audit count drops, build passes. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #3 — SECURITY — produce + shop page API — CF-0034 — M
+What: JSON bodies can no longer set image URLs. New `upload_validation.check_image_url_fields`: on `POST /produce/` `image_url` must be empty; on `PATCH /produce/{id}` and `PATCH /merchants/me/shoppage`, `image_url` / `banner_image_url` / `logo_url` may only be sent unchanged (the web edit form posts the stored URL back) or cleared (`null`/`""` → `None`); anything else → 400 `FieldErrors` naming the field. Only the upload routes (validated, re-encoded, R2) write these. Also typed `field_errors_handler` (fixes a mypy error at `main.py` registration). Why: B01 — a merchant could point a listing every buyer loads at a tracking pixel or off-site URL. Tests: `tests/test_image_url_fields.py` (11: create refused for off-site/`javascript:`/relative, create without image ok, edit can't repoint, edit can send stored URL back, edit can clear, shop banner+logo refused, shop keep/clear ok). `/security-review` on the diff: no findings ≥ 8 confidence; confirmed no other write path (ShopPageCreate has no image fields, admin routes don't write them). Checks: pytest 676 passed; ruff 142 (unchanged, all pre-existing); mypy 2351→2348; web test/lint/tsc pass. Mobile never sends image URLs. Follow-ups: B31.
 ### #2 — STRENGTHEN — backend tests — CF-0033 — M
 What: fixed the 2 failing JWKS tests (B00) and cleared 137 of 139 ruff F811. Root cause of the failures: `load_dotenv()` copies `PUBLIC_JWKS_URL`/`ADMIN_JWKS_URL` from a developer `.env` into the test process, so key-set URLs pointed at localhost; new autouse `_jwks_urls` fixture in `tests/conftest.py` clears them. F811: moved the shared `db`/`merchant`/`buyer` fixtures (+ `_buyer`, the SQLite JSONB compile hook) out of `test_reviews.py` into `tests/shared_fixtures.py`, loaded via `pytest_plugins`, and dropped the fixture names from 39 modules' imports. Why: broken-first; and the suite was only green on machines without a `.env`. Tests: full pytest 665 passed (was 663 + 2 failed). Checks: pytest pass; ruff 282→142 (rest pre-existing, B27); mypy 2391→2351 (no new errors; new module fully typed); web test/lint/tsc pass. Follow-ups: B27 (rest of ruff), B30.
 ### #1 — AUDIT — whole codebase — (no CF) — M
