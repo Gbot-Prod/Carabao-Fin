@@ -1,12 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import styles from "./page.module.css";
 import SkeletonList, { LoadError } from "@/components/Skeleton/Skeleton";
+import Pagination from "@/components/Pagination/Pagination";
+import {
+  HISTORY_FILTERS,
+  HISTORY_PAGE_SIZE,
+  HISTORY_SEARCH_MAX,
+  pageAfterRemoval,
+  type HistoryFilter,
+} from "@/lib/order-history";
 import {
   fetchCurrentOrders,
-  fetchOrderHistory,
+  fetchOrderHistoryPage,
   deleteOrderFromHistory,
   reorderOrder,
   type ReorderResult,
@@ -405,7 +413,14 @@ export default function Orders() {
   const [currentAttempt, setCurrentAttempt] = useState(0);
   const [historyFetched, setHistoryFetched] = useState(false);
   const [historyError, setHistoryError] = useState(false);
+  // CF-0036: history is paged, filtered and searched on the server.
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyStatus, setHistoryStatus] = useState<HistoryFilter | "">("");
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyQuery, setHistoryQuery] = useState("");
   const loadingHistory = tab === "history" && !historyFetched;
+  const historyFiltered = historyStatus !== "" || historyQuery !== "";
 
   useEffect(() => {
     fetchCurrentOrders()
@@ -419,15 +434,40 @@ export default function Orders() {
 
   useEffect(() => {
     if (tab === "history" && !historyFetched) {
-      fetchOrderHistory()
-        .then((rows) => {
-          setPastOrders(rows);
+      fetchOrderHistoryPage({ page: historyPage, status: historyStatus, q: historyQuery })
+        .then((result) => {
+          setPastOrders(result.items);
+          setHistoryTotal(result.total);
           setHistoryError(false);
         })
         .catch(() => setHistoryError(true))
         .finally(() => { setHistoryFetched(true); });
     }
-  }, [tab, historyFetched]);
+  }, [tab, historyFetched, historyPage, historyStatus, historyQuery]);
+
+  // Any change to what is shown refetches; filters start again at page 1.
+  const reloadHistory = (page: number) => {
+    setHistoryPage(page);
+    setHistoryFetched(false);
+  };
+
+  const changeHistoryStatus = (value: HistoryFilter | "") => {
+    setHistoryStatus(value);
+    reloadHistory(1);
+  };
+
+  const submitHistorySearch = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setHistoryQuery(historySearch.trim());
+    reloadHistory(1);
+  };
+
+  const clearHistoryFilters = () => {
+    setHistorySearch("");
+    setHistoryQuery("");
+    setHistoryStatus("");
+    reloadHistory(1);
+  };
 
   const retryCurrent = () => {
     setLoadingCurrent(true);
@@ -440,6 +480,8 @@ export default function Orders() {
 
   const handleDelete = (id: number) => {
     setPastOrders((prev) => prev.filter((o) => o.id !== id));
+    // Refetch so the page fills up again from the next one.
+    reloadHistory(pageAfterRemoval(historyPage, historyTotal));
   };
 
   return (
@@ -488,21 +530,71 @@ export default function Orders() {
       )}
 
       {tab === "history" && (
+        <form className={styles.historyFilters} onSubmit={submitHistorySearch} role="search">
+          <label className={styles.historyField}>
+            <span>Show</span>
+            <select
+              value={historyStatus}
+              onChange={(e) => changeHistoryStatus(e.target.value as HistoryFilter | "")}
+            >
+              {HISTORY_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className={`${styles.historyField} ${styles.historySearch}`}>
+            <span>Search</span>
+            <input
+              type="search"
+              value={historySearch}
+              maxLength={HISTORY_SEARCH_MAX}
+              placeholder="Order number or farm name"
+              onChange={(e) => setHistorySearch(e.target.value)}
+            />
+          </label>
+          <button type="submit" className={styles.historyButton}>Search</button>
+          {historyFiltered && (
+            <button type="button" className={styles.historyClear} onClick={clearHistoryFilters}>
+              Clear
+            </button>
+          )}
+        </form>
+      )}
+
+      {tab === "history" && (
         loadingHistory ? (
           <SkeletonList label="Loading order history…" rows={3} />
         ) : historyError ? (
           <LoadError message="We couldn't load your order history. Check your connection and try again." onRetry={() => setHistoryFetched(false)} />
         ) : pastOrders.length === 0 ? (
-          <div className={styles.empty}>
-            <p className={styles.emptyTitle}>No past orders</p>
-            <p className={styles.emptyText}>Completed orders will show up here.</p>
-          </div>
+          historyFiltered ? (
+            <div className={styles.empty}>
+              <p className={styles.emptyTitle}>No matching orders</p>
+              <p className={styles.emptyText}>Try another order number, farm name or filter.</p>
+            </div>
+          ) : (
+            <div className={styles.empty}>
+              <p className={styles.emptyTitle}>No past orders</p>
+              <p className={styles.emptyText}>Completed orders will show up here.</p>
+            </div>
+          )
         ) : (
-          <ul className={styles.list}>
-            {pastOrders.map((order) => (
-              <PastOrderCard key={order.id} order={order} onDelete={handleDelete} />
-            ))}
-          </ul>
+          <>
+            <ul className={styles.list}>
+              {pastOrders.map((order) => (
+                <PastOrderCard key={order.id} order={order} onDelete={handleDelete} />
+              ))}
+            </ul>
+            {historyTotal > HISTORY_PAGE_SIZE && (
+              <Pagination
+                page={historyPage}
+                pageSize={HISTORY_PAGE_SIZE}
+                total={historyTotal}
+                disabled={loadingHistory}
+                onPageChange={reloadHistory}
+              />
+            )}
+          </>
         )
       )}
     </div>

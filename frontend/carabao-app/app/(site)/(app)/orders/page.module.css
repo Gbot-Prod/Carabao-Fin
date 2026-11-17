@@ -272,6 +272,76 @@
   color: var(--text-muted);
 }
 
+/* ── History filters (CF-0036) ───────────────────────────────────────────── */
+
+.historyFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  background: var(--bg-white);
+  border: 1px solid #d9e7dd;
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1rem;
+}
+
+.historyField {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #3a6b4d;
+}
+
+.historySearch {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.historyField select,
+.historyField input {
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--text-strong);
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #b9ddc7;
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.historyField select:focus-visible,
+.historyField input:focus-visible,
+.historyButton:focus-visible,
+.historyClear:focus-visible {
+  outline: 2px solid #2e8b57;
+  outline-offset: 2px;
+}
+
+.historyButton,
+.historyClear {
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.historyButton {
+  border: 1px solid #1f7a45;
+  background: #1f7a45;
+  color: #fff;
+}
+
+.historyClear {
+  border: 1px solid #b9ddc7;
+  background: transparent;
+  color: #3a6b4d;
+}
+
 /* ── Empty state ──────────────────────────────────────────────────────────── */
 
 .empty {

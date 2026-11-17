@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ADMIN_PAGE_SIZE, fetchAdminMerchantsPage, type AdminMerchant } from "@/util/api/admin";
-import Pagination from "../../Pagination";
+import Pagination from "@/components/Pagination/Pagination";
 import SuspendControl from "../../SuspendControl";
 import styles from "./page.module.css";
 import PageHeader from "../../PageHeader";
