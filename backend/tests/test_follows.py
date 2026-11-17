@@ -10,7 +10,6 @@ from app.models.farm_follow import FarmFollow
 from app.models.user import User
 from tests.better_auth import make_user, set_identity
 from tests.test_merchant_listings import _other_merchant
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 
 def _client(db, user) -> TestClient:  # noqa: F811

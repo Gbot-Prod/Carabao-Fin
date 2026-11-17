@@ -12,7 +12,7 @@ from app.services import admin_enrolment, refund_service
 from tests.better_auth import make_user
 from tests.test_admin_orders import _order, _txn
 from tests.test_payouts import _env, _requested_batch, transfers  # noqa: F401
-from tests.test_reviews import _buyer, buyer, db, merchant  # noqa: F401 - fixtures
+from tests.test_reviews import _buyer
 
 
 def _client(db, user) -> TestClient:

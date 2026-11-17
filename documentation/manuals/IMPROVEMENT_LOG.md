@@ -1,11 +1,11 @@
 # Improvement Log
-branch: improve/loop    push: no    iteration: 1
+branch: improve/loop    push: no    iteration: 2
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-FEATURE 0/- · STRENGTHEN 0/- · SECURITY 0/- · AUDIT 1/#1
+FEATURE 0/- · STRENGTHEN 1/#2 · SECURITY 0/- · AUDIT 1/#1
 
 ## Needs human
 - Push policy: header says `push: no`. Change to `yes` if the loop should push `improve/loop`.
@@ -13,7 +13,6 @@ FEATURE 0/- · STRENGTHEN 0/- · SECURITY 0/- · AUDIT 1/#1
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
-| B00 | STRENGTHEN | S | 5 | 1 | tests | | **Broken first.** Fix the 2 failing `test_auth_identity.py` JWKS tests (KeyError on JWKS URL) without weakening them — test: full pytest green. Batch with B27 slice to make M. |
 | B01 | SECURITY | M | 5 | 2 | produce API | | Merchants can set `image_url` (produce) / `banner_image_url` (shop page) to any string on create/update, bypassing the R2 upload flow (tracking pixels, `javascript:`/off-site URLs). Drop the field from create/update schemas or allow only our R2 public base — test: POST/PATCH with `https://evil.example/x.png` → 422, upload endpoint still sets it. |
 | B02 | SECURITY | M | 4 | 2 | produce schemas | | `ProduceBase.unit_quantity` has no bounds (0 or negative accepted → divide-by-zero / negative per-unit math); `name`/`description` have no `max_length`; schemas lack `extra="forbid"`. Add bounds + forbid on produce, review, shop page, shipment, payment schemas — test: `unit_quantity=0` → 422, 10k-char name → 422, unknown field → 422. |
 | B03 | SECURITY | M | 4 | 2 | rate limits | | No rate limit on review create/update, order chat send, support chat send, or `/produce/search` (only OTP/SMS/onboarding/merchant phone use `services/rate_limit.py`). Add per-user (per-IP for search) limits — test: N+1th request → 429 with standard error body. |
@@ -40,11 +39,14 @@ FEATURE 0/- · STRENGTHEN 0/- · SECURITY 0/- · AUDIT 1/#1
 | B24 | STRENGTHEN | M | 2 | 3 | web refactor | | Largest files are refactor candidates: `api/routes/merchants.py` (1170 lines), `api/routes/admin.py` (775), `lib/auth.ts` (767), merchant onboarding page (705). Split merchants.py into produce / shop page / payouts modules without behaviour change. |
 | B25 | STRENGTHEN | M | 3 | 2 | CSP | | Progress toward `CSP_ENFORCE=true`: inventory report-only violations and remove them. |
 | B26 | FEATURE | S | 2 | 2 | mobile | parity | Mobile parity backlog: wishlist, vouchers, order history pagination once the web versions land. |
-| B27 | STRENGTHEN | M | 3 | 2 | lint | | Ruff to green: 139 F811 (duplicate defs — check each is dead, not a shadowed bug), 130 E501, imports — test: `uv run ruff check .` exits 0. |
+| B27 | STRENGTHEN | M | 3 | 2 | lint | | Ruff to green, 142 left: 130 E501 (28 in HTML strings in `services/email.py`, 23 in `scripts/seed_demo.py`, ~45 across app routes/services), 4 E402 in scripts, 2 F811 from importing the autouse `_env` + `transfers` fixtures of `test_payouts.py` (move into a payouts plugin applied only via `pytestmark = pytest.mark.usefixtures`), misc I001/UP017/UP046/B905 — test: `uv run ruff check .` exits 0. Do not use `ruff format` wholesale (24 app files would reformat). |
 | B28 | STRENGTHEN | L | 2 | 4 | types | | Mypy 2391 errors, mostly untyped test helpers; slice by directory (app/ first) — test: `uv run mypy app` exits 0. |
+| B30 | STRENGTHEN | S | 3 | 1 | tests | | Audit other env leaks from a local `.env` into tests (anything `load_dotenv` sets that code reads at call time: PAYMONGO_*, R2_*, SEMAPHORE_*, RESEND_*) — test: pytest passes with a `.env` full of dummy values. Batch with B20. |
 | B29 | SECURITY | M | 4 | 2 | deps | | `npm audit --omit=dev` 13 vulns (2 critical): apply patch/minor upgrades (sharp etc.), log majors — test: audit count drops, build passes. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #2 — STRENGTHEN — backend tests — CF-0033 — M
+What: fixed the 2 failing JWKS tests (B00) and cleared 137 of 139 ruff F811. Root cause of the failures: `load_dotenv()` copies `PUBLIC_JWKS_URL`/`ADMIN_JWKS_URL` from a developer `.env` into the test process, so key-set URLs pointed at localhost; new autouse `_jwks_urls` fixture in `tests/conftest.py` clears them. F811: moved the shared `db`/`merchant`/`buyer` fixtures (+ `_buyer`, the SQLite JSONB compile hook) out of `test_reviews.py` into `tests/shared_fixtures.py`, loaded via `pytest_plugins`, and dropped the fixture names from 39 modules' imports. Why: broken-first; and the suite was only green on machines without a `.env`. Tests: full pytest 665 passed (was 663 + 2 failed). Checks: pytest pass; ruff 282→142 (rest pre-existing, B27); mypy 2391→2351 (no new errors; new module fully typed); web test/lint/tsc pass. Follow-ups: B27 (rest of ruff), B30.
 ### #1 — AUDIT — whole codebase — (no CF) — M
 What: created this log and `improve/loop` branch; surveyed routes, services, schemas, tests, SEO, web/mobile; wrote a 26-item backlog. Why: no state file existed. Tests: baseline checks run (see Health). Checks: see Health. Follow-ups: start with B01/B02 (SECURITY) then B05 slice 1 (FEATURE).
 New from code reading (not from §2): B01 image_url mass assignment, B02 unit_quantity unbounded, B04 unpaginated Python-sorted history, B10 hard-delete stopgap, B24 oversized modules, B03 missing limits on chat/reviews/search.

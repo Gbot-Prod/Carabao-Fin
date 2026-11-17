@@ -14,7 +14,6 @@ from app.models.user import User
 from app.services.produce_freshness import ph_today
 from tests.better_auth import set_identity
 from tests.test_merchant_listings import _other_merchant
-from tests.test_reviews import db, merchant  # noqa: F401 - fixtures
 
 TODAY = ph_today()
 

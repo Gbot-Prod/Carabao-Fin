@@ -13,7 +13,6 @@ from app.services import r2_service
 from app.services.phone_verification import sign_token
 from tests.better_auth import make_user
 from tests.files import pdf_bytes
-from tests.test_reviews import db  # noqa: F401 - fixture
 
 PAYLOAD = {
     "merchant_name": "Bulacan Farm",

@@ -13,7 +13,6 @@ from app.models.order import Order
 from app.models.produce import Produce
 from app.models.user import User
 from app.services.pinned_location import delivery_point, merchant_point, validate_pin
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 MALOLOS = (14.8433, 120.8114)
 DAVAO = (7.0731, 125.6128)

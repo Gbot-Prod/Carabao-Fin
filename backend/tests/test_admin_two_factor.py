@@ -15,7 +15,6 @@ from app.models.user import User
 from app.services import admin_enrolment
 from app.services.better_auth_store import enrolment_identifier
 from tests.better_auth import get_identity, make_user
-from tests.test_reviews import db  # noqa: F401 - fixture
 from tests.tokens import ADMIN_KEY, bearer, make_token, trust_test_key
 
 

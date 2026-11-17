@@ -14,7 +14,6 @@ from app.models.produce import Produce
 from app.models.user import User
 from app.services.produce_freshness import ph_today
 from app.services.produce_pricing import unit_price_for
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 TODAY = ph_today()
 TIERS = [{"min_qty": 10, "unit_price": 45}, {"min_qty": 25, "unit_price": 40}]

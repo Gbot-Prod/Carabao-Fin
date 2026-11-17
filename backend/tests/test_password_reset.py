@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_db
 from app.api.routes import email
-from tests.test_reviews import db  # noqa: F401 - fixture
 
 SECRET = "reset-test-secret"
 

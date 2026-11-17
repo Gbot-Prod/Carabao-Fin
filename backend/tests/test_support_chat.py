@@ -8,7 +8,7 @@ from app.api.routes import support_chat
 from app.models.chat import Conversation
 from app.models.notification import Notification
 from tests.better_auth import make_user
-from tests.test_reviews import _buyer, db  # noqa: F401 - fixtures
+from tests.test_reviews import _buyer
 
 
 def _client(db, user) -> TestClient:  # noqa: F811

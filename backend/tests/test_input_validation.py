@@ -21,7 +21,7 @@ from tests.test_merchant_onboarding_phone import (
     patch_uploads,
 )
 from tests.test_produce_pricing import _client, tomatoes  # noqa: F401 - fixture
-from tests.test_reviews import _buyer, buyer, db, merchant  # noqa: F401 - fixtures
+from tests.test_reviews import _buyer
 
 # --- CF-0008: the cart takes produce_id and quantity only -------------------
 
@@ -206,7 +206,6 @@ def _submit(db, user, raw_payload=None, **overrides):  # noqa: F811
 
     from app.api.dependencies import get_current_user, get_db
     from app.api.routes import merchant_onboarding
-
     from app.core.errors import FieldErrors, field_errors_handler
 
     app = FastAPI()
