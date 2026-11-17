@@ -11,7 +11,6 @@ from app.models.order import Order
 from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 
 def _merchant_client(db, merchant) -> TestClient:

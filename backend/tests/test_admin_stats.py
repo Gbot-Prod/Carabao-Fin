@@ -7,7 +7,7 @@ from app.models.payout_batch import PayoutBatch
 from tests.better_auth import make_user
 from tests.test_admin_orders import _order, _txn
 from tests.test_audit_log import _client, _staff
-from tests.test_reviews import _buyer, db, merchant  # noqa: F401 - fixtures
+from tests.test_reviews import _buyer
 
 
 def _batch(db, merchant, status):

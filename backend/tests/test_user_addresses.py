@@ -8,7 +8,6 @@ from app.api.routes import user_addresses, users
 from app.api.routes.user_addresses import MAX_ADDRESSES
 from app.models.user_address import UserAddress
 from tests.better_auth import make_user
-from tests.test_reviews import buyer, db  # noqa: F401 - fixtures
 
 
 def _client(db, user):  # noqa: F811

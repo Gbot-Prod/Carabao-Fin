@@ -12,7 +12,7 @@ from app.api.routes import admin_transactions
 from app.models.transaction import Transaction
 from tests.test_admin_orders import _admin, _order
 from tests.test_merchant_listings import _other_merchant
-from tests.test_reviews import _buyer, db, merchant  # noqa: F401 - fixtures
+from tests.test_reviews import _buyer
 
 
 def _client(db, user) -> TestClient:

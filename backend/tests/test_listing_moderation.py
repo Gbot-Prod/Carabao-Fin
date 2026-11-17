@@ -9,7 +9,7 @@ from app.models.admin_audit_log import AdminAuditLog
 from app.models.produce import Produce
 from app.models.user import User
 from tests.better_auth import make_user
-from tests.test_reviews import _buyer, db, merchant  # noqa: F401 - fixtures
+from tests.test_reviews import _buyer
 
 
 def _client(db, user=None) -> TestClient:

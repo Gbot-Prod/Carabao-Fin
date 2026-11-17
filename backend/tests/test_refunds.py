@@ -6,7 +6,7 @@ from app.models.transaction import Transaction
 from app.services import refund_service
 from tests.better_auth import set_identity
 from tests.test_admin_orders import _admin, _client, _order, _txn
-from tests.test_reviews import _buyer, db, merchant  # noqa: F401 - fixtures
+from tests.test_reviews import _buyer
 
 
 @pytest.fixture

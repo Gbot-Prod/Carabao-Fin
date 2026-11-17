@@ -10,7 +10,6 @@ from app.api.dependencies import get_db
 from app.api.routes import reference_prices as routes
 from app.models.reference_price import ReferencePrice
 from app.services import reference_prices
-from tests.test_reviews import db  # noqa: F401 - fixture
 
 
 def _client(db) -> TestClient:  # noqa: F811

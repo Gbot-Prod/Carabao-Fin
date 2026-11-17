@@ -7,7 +7,6 @@ import pytest
 
 from app.services.phone_verification import sign_token
 from tests.test_merchant_orders import _merchant_client
-from tests.test_reviews import db, merchant  # noqa: F401 - fixtures
 
 NEW_NUMBER = "+639185550000"
 

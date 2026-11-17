@@ -4,15 +4,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import orders, reviews
-from app.core.database import Base
 from app.models.cart import Cart  # noqa: F401 - registers the table
 from app.models.merchant import Merchant
 from app.models.order import Order
@@ -28,69 +22,7 @@ from app.services.review_service import (
     ensure_reviewable,
     reviewer_display_name,
 )
-from tests.better_auth import make_user
-
-
-@compiles(JSONB, "sqlite")
-def _jsonb_as_json(_type, _compiler, **_):
-    return "JSON"
-
-
-@pytest.fixture
-def db():
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-
-    @event.listens_for(engine, "connect")
-    def _fk_on(dbapi_conn, _):
-        dbapi_conn.execute("PRAGMA foreign_keys=ON")
-
-    Base.metadata.create_all(engine)
-    session = sessionmaker(bind=engine)()
-    yield session
-    session.close()
-    engine.dispose()
-
-
-@pytest.fixture
-def merchant(db):
-    owner = make_user(db, "farmer@example.com")
-    db.add(owner)
-    db.flush()
-    merchant = Merchant(
-        user_id=owner.id,
-        merchant_name="Dela Cruz Farm",
-        contact_number="639171234567",
-        region="Region III",
-        province="Bulacan",
-        address="Purok 1",
-        postal_code="3000",
-        available_days=["mon"],
-        operating_hours={},
-        business_type="individual",
-        rsbsa_document_path="rsbsa/1.pdf",
-        gov_id_type="Passport",
-        gov_id_document_path="gov-id/x.pdf",
-    )
-    db.add(merchant)
-    db.commit()
-    return merchant
-
-
-def _buyer(db, email="buyer@example.com", name="Juan dela Cruz"):
-    user = make_user(db, email, name=name)
-    db.add(user)
-    db.flush()
-    db.commit()
-    return user, None  # (user, _): kept for the many call sites
-
-
-@pytest.fixture
-def buyer(db):
-    return _buyer(db)
+from tests.shared_fixtures import _buyer
 
 
 def _order(db, merchant, buyer, status="delivered", delivered_days_ago=1.0):

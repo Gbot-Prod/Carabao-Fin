@@ -1,6 +1,6 @@
-import os
 import base64
 import importlib
+import os
 import pkgutil
 
 import pytest
@@ -11,6 +11,9 @@ from sqlalchemy.pool import StaticPool
 import app.models
 from app.core import field_crypto
 from app.models.otp import OtpCode, RateLimitHit
+
+# CF-0033: shared db / merchant / buyer fixtures for every test module.
+pytest_plugins = ["tests.shared_fixtures"]
 
 # Every model, so relationships by name (User -> "Cart") resolve in any test run.
 for _module in pkgutil.iter_modules(app.models.__path__):
@@ -41,6 +44,18 @@ def _field_keys(monkeypatch):
     field_crypto.reset_keys()
     yield
     field_crypto.reset_keys()
+
+
+@pytest.fixture(autouse=True)
+def _jwks_urls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CF-0033: key-set URLs come from BETTER_AUTH_URL, not the developer's .env.
+
+    load_dotenv() (app.core.database) puts PUBLIC_JWKS_URL / ADMIN_JWKS_URL from
+    a local .env into os.environ, which pointed the JWKS tests at localhost.
+    Tests that need an override set it themselves.
+    """
+    monkeypatch.delenv("PUBLIC_JWKS_URL", raising=False)
+    monkeypatch.delenv("ADMIN_JWKS_URL", raising=False)
 
 
 @pytest.fixture(autouse=True)

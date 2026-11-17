@@ -10,7 +10,7 @@ from app.api.routes import stock_alerts
 from app.models.produce import Produce
 from app.models.user import User
 from app.services.produce_freshness import is_listed, ph_today
-from tests.test_reviews import _buyer, db, merchant  # noqa: F401 - fixtures
+from tests.test_reviews import _buyer
 
 
 def _client(db, user) -> TestClient:  # noqa: F811
