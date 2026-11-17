@@ -17,7 +17,7 @@ from app.schemas.review import (
     ReviewResponse,
     ReviewUpdate,
 )
-from app.services import notifications
+from app.services import notifications, rate_limit
 from app.services.merchant_service import get_active_merchant
 from app.services.review_service import (
     ReviewError,
@@ -73,6 +73,7 @@ def create_order_review(
     current_user: User = Depends(get_current_user),
 ):
     """Buyer rates the merchant of a delivered order. One review per order."""
+    rate_limit.enforce_action(db, "review_write", str(current_user.id))
     order = _get_my_order(db, order_id, current_user)
     try:
         ensure_reviewable(order)
@@ -120,6 +121,7 @@ def update_order_review(
     current_user: User = Depends(get_current_user),
 ):
     """Buyer edits their review while the review window is still open."""
+    rate_limit.enforce_action(db, "review_write", str(current_user.id))
     order = _get_my_order(db, order_id, current_user)
     review = _get_order_review(db, order.id)
     if review is None:

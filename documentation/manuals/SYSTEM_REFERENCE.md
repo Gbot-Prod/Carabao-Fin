@@ -392,6 +392,11 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
   - `email_otp_send`: 20 per IP and 5 per email, per 15 min
   - `email_otp_verify`: 30 per IP and 10 per email, per 15 min
   - `email_otp_send_user`: 5 per user per hour
+  - Action limits (`ACTION_LIMITS`, 429 "Too many requests", CF-0037):
+    - `review_write`: 10 review creates + edits per user per hour
+    - `order_chat_send`: 30 order chat messages per user per minute
+    - `support_chat_send`: 20 support messages per user per minute
+    - `produce_search`: 120 `/produce/search` calls per IP per minute (needs `RATE_LIMIT_TRUST_PROXY=true` behind a proxy)
 - Better Auth admin plugin HTTP endpoints are blocked (404). Server-side `auth.api.*` calls still work.
 
 ### 7.2 Tokens

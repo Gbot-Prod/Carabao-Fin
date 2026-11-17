@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import orders, reviews
@@ -25,7 +26,13 @@ from app.services.review_service import (
 from tests.shared_fixtures import _buyer
 
 
-def _order(db, merchant, buyer, status="delivered", delivered_days_ago=1.0):
+def _order(
+    db: Session,
+    merchant: Merchant,
+    buyer: tuple[User, None],
+    status: str = "delivered",
+    delivered_days_ago: float = 1.0,
+) -> Order:
     user, _ = buyer
     order = Order(
         user_id=user.id,

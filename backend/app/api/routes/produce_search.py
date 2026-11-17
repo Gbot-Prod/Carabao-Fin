@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
@@ -16,6 +16,7 @@ from app.models.produce import Produce
 from app.models.search_log import SearchLog
 from app.schemas.pagination import Page
 from app.schemas.produce import ProduceResponse
+from app.services import rate_limit
 from app.services.account_suspension import merchant_is_public
 from app.services.produce_freshness import is_listed, ph_today
 
@@ -38,6 +39,7 @@ def _like(value: str) -> str:
 
 @router.get("/produce/search", response_model=Page[ProduceSearchResult])
 def search_produce(
+    request: Request,
     q: str | None = Query(None, max_length=100),
     category: str | None = Query(None, max_length=50),
     province: str | None = Query(None, max_length=100),
@@ -55,6 +57,8 @@ def search_produce(
     ``fresh`` additionally requires a best-before date (undated listings are left
     out); ``in_stock`` requires stock above zero.
     """
+    # CF-0037: per client IP; public, and each search writes a search_log row.
+    rate_limit.enforce_action(db, "produce_search", rate_limit.client_ip(request))
     today = ph_today()
     query = (
         db.query(Produce)

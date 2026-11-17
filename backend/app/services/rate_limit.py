@@ -1,4 +1,4 @@
-"""Per-IP and per-identifier rate limits for the OTP endpoints (E7, CF-0016).
+"""Per-IP and per-identifier rate limits (E7, CF-0016; CF-0037 for actions).
 
 Sign-in, sign-up and BetterAuth's phone OTP endpoints are limited per IP by
 BetterAuth (lib/auth.ts rateLimit); the backend adds the per-number limit.
@@ -58,6 +58,20 @@ IDENTIFIER_LIMITS: dict[str, Limit] = {
     # one target is app/services/otp.py OTP_RESEND_COOLDOWN_SECONDS.
     "otp_send_user": Limit(5, 3600),
     "email_otp_send_user": Limit(5, 3600),
+}
+
+
+# CF-0037: scope -> limit for writes and lookups that are cheap to repeat and
+# reach other people (merchant inboxes, admin support, the search log).
+# Generous for a person, low enough to stop a script. The identifier is a
+# user id, except ``produce_search`` (public), which is the client IP.
+ACTION_LIMITS: dict[str, Limit] = {
+    # Create + edit together; a buyer reviews a handful of orders at a time.
+    "review_write": Limit(10, 3600),
+    "order_chat_send": Limit(30, 60),
+    "support_chat_send": Limit(20, 60),
+    # Every search also writes a search_log row (demand insight).
+    "produce_search": Limit(120, 60),
 }
 
 
@@ -164,9 +178,29 @@ def enforce_identifier(db: Session, scope: str, identifier: str) -> None:
         )
 
 
+def enforce_action(db: Session, scope: str, identifier: str) -> None:
+    """Raise 429 with Retry-After when ``identifier`` is over ``scope``'s limit.
+
+    Commits ``db`` (see the module docstring), so call it first in the route.
+    """
+    limit = ACTION_LIMITS[scope]
+    wait = _check_and_record(db, [(f"{scope}:id:{identifier.strip().lower()}", limit)])
+    if wait is not None:
+        retry_after = max(1, math.ceil(wait))
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "Too many requests. "
+                f"Please try again in {_humanize(retry_after)}."
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
 def longest_window_seconds() -> int:
     windows = [limit.window_seconds for pair in LIMITS.values() for limit in pair]
     windows += [limit.window_seconds for limit in IDENTIFIER_LIMITS.values()]
+    windows += [limit.window_seconds for limit in ACTION_LIMITS.values()]
     return max(windows)
 
 
