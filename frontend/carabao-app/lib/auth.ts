@@ -741,8 +741,13 @@ function createAuth() {
         clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "your-facebook-client-secret",
         // Facebook accounts registered by phone have no email; BetterAuth needs
         // one, so they get an undeliverable placeholder (hidden like phone signups').
+        // BetterAuth 1.7: a Limited Login profile has `sub`, a Graph one `id`.
         mapProfileToUser: (profile) =>
-          profile.email ? {} : { email: `facebook-${profile.id}@${PHONE_PLACEHOLDER_EMAIL_DOMAIN}` },
+          profile.email
+            ? {}
+            : {
+                email: `facebook-${"id" in profile ? profile.id : profile.sub}@${PHONE_PLACEHOLDER_EMAIL_DOMAIN}`,
+              },
       },
     },
   });

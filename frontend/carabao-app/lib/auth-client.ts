@@ -333,12 +333,18 @@ const ENROLMENT_TOKEN_HEADER = "x-admin-enrol-token";
 
 // An account with a password (phone signup) must also give it: BetterAuth
 // skips the password only for accounts without one (Google-only).
+// BetterAuth 1.7 also has method "otp" (SMS/email codes, on at once). Carabao
+// uses authenticator apps only, and the server has no OTP sender, so it
+// refuses "otp"; ask for "totp" and treat any other answer as a failure.
 export const enableTwoFactor = async (enrolmentToken: string, password?: string) => {
   const { data, error } = await authClient.twoFactor.enable({
+    method: "totp",
     ...(password ? { password } : {}),
     fetchOptions: { headers: { [ENROLMENT_TOKEN_HEADER]: enrolmentToken } },
   });
-  if (error || !data) throw new Error(getErrorMessage(error, "Could not start two-step verification"));
+  if (error || !data || data.method !== "totp") {
+    throw new Error(getErrorMessage(error, "Could not start two-step verification"));
+  }
   return data;
 };
 
