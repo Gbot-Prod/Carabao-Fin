@@ -62,3 +62,14 @@ export default function getApiErrorMessage(
 
   return fallback;
 }
+/** Per-field messages from a backend FieldErrors response
+ * ({"detail", "errors": {field: message}}), or {} when there are none. */
+export function getApiFieldErrors(error: unknown): Record<string, string> {
+  const data = getApiErrorResponse(error)?.response?.data;
+  if (typeof data !== "object" || data === null || !("errors" in data)) return {};
+  const errors = (data as { errors: unknown }).errors;
+  if (typeof errors !== "object" || errors === null) return {};
+  return Object.fromEntries(
+    Object.entries(errors).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}

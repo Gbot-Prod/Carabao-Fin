@@ -1,12 +1,15 @@
 "use client";
 
-import errorHelper, { isPhoneVerificationRequired } from "@/util/errorHelper";
+import errorHelper, { getApiFieldErrors, isPhoneVerificationRequired } from "@/util/errorHelper";
+import FieldError, { FieldErrors, focusFirstInvalid, invalidClass, invalidProps } from "@/components/FieldError/FieldError";
 import PhoneVerifyDialog from "@/components/PhoneVerifyDialog/PhoneVerifyDialog";
 import { displayEmail, normalizePhMobile } from "@/lib/phone";
 import { sendPhoneCode, verifyMyPhone } from "@/lib/auth-client";
 
 import { useEffect, useState } from "react";
-import { appUrl } from "@/lib/urls";
+import { NCR_PROVINCE } from "@/util/serviceArea";
+import { MERCHANT_PAGES } from "@/lib/merchant-links";
+import { merchantUrl } from "@/lib/urls";
 import styles from "./page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
@@ -26,6 +29,31 @@ import {
 } from "@/util/api";
 
 type StepId = "ops" | "legal";
+// Payload fields plus the parts of the form that are not payload fields.
+type FieldKey = keyof MerchantOnboardingPayload | "pin" | "rsbsa_file" | "gov_id_file";
+
+const OPS_FIELDS = new Set<string>([
+  "address", "region", "province", "city", "barangay", "postal_code", "pin", "lat", "lng",
+  "available_days", "contact_email", "contact_number", "email_verification_token", "phone_verification_token",
+]);
+const stepOfField = (field: string): StepId => (OPS_FIELDS.has(field) ? "ops" : "legal");
+// Server keys with no message slot of their own, shown under the field they belong to.
+const SERVER_FIELD_ALIASES: Record<string, FieldKey> = {
+  email_verification_token: "contact_email",
+  phone_verification_token: "contact_number",
+  lat: "pin",
+  lng: "pin",
+};
+// Fields that show a message under themselves (keep in step with the JSX below).
+const SHOWN_FIELDS = new Set<string>([
+  "address", "available_days", "barangay", "business_type", "city", "contact_email", "contact_number",
+  "gov_id_file", "gov_id_type", "legal_business_name", "merchant_name", "pin", "postal_code", "province",
+  "region", "registration_number", "registration_type", "rsbsa_file", "rsbsa_number", "tin",
+]);
+// NCR has no provinces; the payload still needs one (backend requires it).
+const isNcrRegion = (region: string) => /\b(ncr|national capital|metro manila)\b/i.test(region);
+// Merchant and legal business name limit (backend MERCHANT_NAME_MAX).
+const NAME_MAX = 50;
 
 const STEPS: { id: StepId; title: string; subtitle: string }[] = [
   { id: "ops", title: "Operations & Contact", subtitle: "Where you operate, and a verified email and number." },
@@ -72,7 +100,10 @@ export default function MerchantOnboardingPage() {
   const [rsbsaFile, setRsbsaFile] = useState<File | null>(null);
   const [govIdFile, setGovIdFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Errors that belong to no field (network, server); field errors show under each field.
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<FieldKey>>({});
+  const [scrollRequest, setScrollRequest] = useState(0);
   const [successApplication, setSuccessApplication] = useState<MerchantApplication | null>(null);
 
   // The account's own verified number and email need no second code.
@@ -103,6 +134,24 @@ export default function MerchantOnboardingPage() {
     rsbsa_number: "",
     gov_id_type: "PhilSys National ID",
   });
+
+  // After the invalid fields render, bring the first one into view.
+  useEffect(() => {
+    if (scrollRequest) focusFirstInvalid();
+  }, [scrollRequest]);
+
+  const clearErrors = (...keys: FieldKey[]) =>
+    setFieldErrors((prev) => {
+      if (!keys.some((k) => k in prev)) return prev;
+      const next = { ...prev };
+      for (const k of keys) delete next[k];
+      return next;
+    });
+
+  const showFieldErrors = (errors: FieldErrors<FieldKey>) => {
+    setFieldErrors(errors);
+    setScrollRequest((n) => n + 1);
+  };
 
   useEffect(() => {
     const prefill = async () => {
@@ -139,10 +188,13 @@ export default function MerchantOnboardingPage() {
       (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const value = e.target.value;
         setForm((prev) => ({ ...prev, [key]: value }) as MerchantOnboardingPayload);
+        clearErrors(key);
       };
 
-  const handleTIN = (e: React.ChangeEvent<HTMLInputElement>) =>
+  const handleTIN = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, tin: formatTIN(e.target.value) }));
+    clearErrors("tin");
+  };
 
   // A new number or email is unverified again and needs a new code.
   const handlePhone = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,19 +202,25 @@ export default function MerchantOnboardingPage() {
     if (next === form.contact_number) return;
     setForm((prev) => ({ ...prev, contact_number: next }));
     setPhoneVerificationToken(null);
+    clearErrors("contact_number");
   };
 
   const handleEmail = (e: React.ChangeEvent<HTMLInputElement>) => {
     const next = e.target.value;
     if (normalizeEmail(next) !== normalizeEmail(form.contact_email)) setEmailVerificationToken(null);
     setForm((prev) => ({ ...prev, contact_email: next }));
+    clearErrors("contact_email");
   };
 
-  const handleRegNum = (e: React.ChangeEvent<HTMLInputElement>) =>
+  const handleRegNum = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, registration_number: formatRegNum(e.target.value) }));
+    clearErrors("registration_number");
+  };
 
-  const handleRSBSA = (e: React.ChangeEvent<HTMLInputElement>) =>
+  const handleRSBSA = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, rsbsa_number: formatRSBSA(e.target.value) }));
+    clearErrors("rsbsa_number");
+  };
 
   const toggleDay = (day: (typeof DAYS)[number]) => {
     setForm((prev) => {
@@ -171,6 +229,7 @@ export default function MerchantOnboardingPage() {
       else set.add(day);
       return { ...prev, available_days: Array.from(set) };
     });
+    clearErrors("available_days");
   };
 
   const validateEmail = () =>
@@ -188,46 +247,77 @@ export default function MerchantOnboardingPage() {
     if (accountPhone === null) {
       await verifyMyPhone(fullPhoneNumber, code);
       setAccountPhone(normalizePhMobile(fullPhoneNumber));
-      return;
+    } else {
+      setPhoneVerificationToken(await verifyOtp(fullPhoneNumber, code));
     }
-    setPhoneVerificationToken(await verifyOtp(fullPhoneNumber, code));
+    clearErrors("contact_number");
   };
   const sendEmail = () => sendEmailOtp(form.contact_email.trim());
   const verifyEmail = async (code: string) => {
     setEmailVerificationToken(await verifyEmailOtp(form.contact_email.trim(), code));
+    clearErrors("contact_email");
   };
 
-  const validateStep = (id: StepId): string | null => {
+  // Every problem in a step, keyed by field. Mirrors backend MerchantOnboardingPayload.
+  const validateStep = (id: StepId): FieldErrors<FieldKey> => {
+    const errors: FieldErrors<FieldKey> = {};
     if (id === "ops") {
-      if (!form.address.trim()) return "Address is required.";
-      if (!Array.isArray(form.available_days) || form.available_days.length === 0) return "Select at least one available day.";
-      if (!form.contact_email.trim()) return "Contact email is required.";
-      if (!emailVerified) return "Verify your contact email first.";
-      if (!phoneVerified) return "Verify your contact number first.";
-      return null;
+      if (!form.address.trim()) errors.address = "Address is required.";
+      if (!form.region.trim()) errors.region = "Select your region.";
+      else if (!form.province.trim() && !isNcrRegion(form.region)) errors.province = "Select your province.";
+      if (form.region.trim() && !form.city?.trim()) errors.city = "Select your city / municipality.";
+      if (form.city?.trim() && !form.barangay?.trim()) errors.barangay = "Select your barangay.";
+      if (!form.postal_code?.trim()) errors.postal_code = "Postal code is required.";
+      if (!Array.isArray(form.available_days) || form.available_days.length === 0)
+        errors.available_days = "Select at least one available day.";
+      if (!form.contact_email.trim()) errors.contact_email = "Contact email is required.";
+      else if (!emailVerified) errors.contact_email = "Verify your contact email first.";
+      if (!phoneVerified) errors.contact_number = "Verify your contact number first.";
+      return errors;
     }
-    if (!form.merchant_name.trim()) return "Merchant name is required.";
-    if (!form.legal_business_name.trim()) return "Legal business name is required.";
-    if (!form.business_type.trim()) return "Business type is required.";
-    return documentError(rsbsaFile, "RSBSA document") ?? documentError(govIdFile, "government ID");
+    const merchantName = form.merchant_name.trim();
+    if (!merchantName) errors.merchant_name = "Merchant name is required.";
+    else if (merchantName.length < 3) errors.merchant_name = "Merchant name must be at least 3 characters.";
+    const legalName = form.legal_business_name.trim();
+    if (!legalName) errors.legal_business_name = "Legal business name is required.";
+    else if (legalName.length < 3) errors.legal_business_name = "Legal business name must be at least 3 characters.";
+    if (!form.business_type.trim()) errors.business_type = "Business type is required.";
+    const tin = form.tin?.trim() ?? "";
+    if (tin && tin.length < 6) errors.tin = "TIN looks incomplete. Enter the full number (e.g. 123-456-789-000) or leave it blank.";
+    const rsbsaError = documentError(rsbsaFile, "RSBSA document");
+    if (rsbsaError) errors.rsbsa_file = rsbsaError;
+    const govIdError = documentError(govIdFile, "government ID");
+    if (govIdError) errors.gov_id_file = govIdError;
+    return errors;
   };
 
   const goNext = () => {
     setError(null);
-    const validationError = validateStep(step.id);
-    if (validationError) return setError(validationError);
+    const errors = validateStep(step.id);
+    if (Object.keys(errors).length) return showFieldErrors(errors);
+    // Keep server errors for later steps, so they show when the user gets there.
+    setFieldErrors((prev) =>
+      Object.fromEntries(Object.entries(prev).filter(([k]) => stepOfField(k) !== step.id)) as FieldErrors<FieldKey>,
+    );
     setStepIndex((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
   const goBack = () => {
     setError(null);
+    setFieldErrors({});
     setStepIndex((s) => Math.max(s - 1, 0));
   };
 
   const submit = async () => {
     setError(null);
-    const validationError = validateStep("ops") ?? validateStep("legal");
-    if (validationError) return setError(validationError);
+    // Take the user to the first step with problems and mark each field there.
+    for (const [idx, s] of STEPS.entries()) {
+      const errors = validateStep(s.id);
+      if (Object.keys(errors).length) {
+        setStepIndex(idx);
+        return showFieldErrors(errors);
+      }
+    }
     if (!rsbsaFile || !govIdFile) return;
     setIsSubmitting(true);
     try {
@@ -238,6 +328,7 @@ export default function MerchantOnboardingPage() {
       const merchantApplication = await submitMyMerchantOnboarding(
         {
           ...form,
+          province: form.province.trim() || (isNcrRegion(form.region) ? NCR_PROVINCE : ""),
           contact_email: form.contact_email.trim(),
           contact_number: form.contact_number.trim() ? `+63 ${form.contact_number.trim()}` : "",
           available_days: [...form.available_days].sort((a, b) => dayOrder(a) - dayOrder(b)),
@@ -253,6 +344,24 @@ export default function MerchantOnboardingPage() {
         setNeedsAccountPhone(true);
         return;
       }
+      // The backend names the fields it refused: show them under those fields.
+      // A key with no field on the page (e.g. "payload") goes to the banner instead.
+      const shown: FieldErrors<FieldKey> = {};
+      const unplaced: string[] = [];
+      for (const [key, message] of Object.entries(getApiFieldErrors(error))) {
+        const field = SERVER_FIELD_ALIASES[key] ?? key;
+        if (SHOWN_FIELDS.has(field)) shown[field as FieldKey] ??= message;
+        else unplaced.push(message);
+      }
+      const fields = Object.keys(shown);
+      if (unplaced.length) setError(unplaced.join(" "));
+      if (fields.length) {
+        // The earliest step with a problem; later steps keep theirs (goNext).
+        const target = STEPS.findIndex((s) => fields.some((f) => stepOfField(f) === s.id));
+        if (target !== -1) setStepIndex(target);
+        showFieldErrors(shown);
+      }
+      if (fields.length || unplaced.length) return;
       const message = errorHelper(error) ?? "Unable to submit your merchant application right now. Please try again.";
       setError(message);
     } finally {
@@ -274,7 +383,7 @@ export default function MerchantOnboardingPage() {
               <div className={styles.successValue}>{successApplication.merchant_name}</div>
             </div>
             <div className={styles.successActions}>
-              <button className={styles.secondaryBtn} type="button" onClick={() => window.location.assign(appUrl("/profile"))}>Back to profile</button>
+              <button className={styles.secondaryBtn} type="button" onClick={() => window.location.assign(merchantUrl(MERCHANT_PAGES.dashboard))}>Go to Merchant Centre</button>
             </div>
           </div>
         </section>
@@ -313,9 +422,10 @@ export default function MerchantOnboardingPage() {
         <div className={styles.body}>
           {step.id === "ops" && (
             <div className={styles.grid}>
-              <div className={`${styles.field} ${styles.fieldFull}`}>
+              <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.address)}`}>
                 <label htmlFor="merchantonboarding-address" className={styles.label}>Address</label>
-                <input id="merchantonboarding-address" className={styles.input} value={form.address} onChange={setField("address")} placeholder="Street, Barangay" />
+                <input id="merchantonboarding-address" className={styles.input} value={form.address} onChange={setField("address")} placeholder="Street, Barangay" {...invalidProps("merchantonboarding-address", fieldErrors.address)} />
+                <FieldError id="merchantonboarding-address" message={fieldErrors.address} />
               </div>
 
               <LocationSelects
@@ -325,36 +435,50 @@ export default function MerchantOnboardingPage() {
                   city: form.city,
                   barangay: form.barangay,
                 }}
-                onChange={(location) => setForm((previous) => ({ ...previous, ...location }))}
+                onChange={(location) => {
+                  setForm((previous) => ({ ...previous, ...location }));
+                  clearErrors("region", "province", "city", "barangay");
+                }}
+                errors={{
+                  region: fieldErrors.region,
+                  province: fieldErrors.province,
+                  city: fieldErrors.city,
+                  barangay: fieldErrors.barangay,
+                }}
                 selectClassName={styles.select}
                 labelClassName={styles.label}
                 wrapClassName={styles.field}
               />
 
-              <div className={styles.field}>
-                <label htmlFor="merchantonboarding-postal-code" className={styles.label}>Postal code (optional)</label>
-                <input id="merchantonboarding-postal-code" className={styles.input} value={form.postal_code ?? ""} onChange={setField("postal_code")} placeholder="1634" />
+              <div className={`${styles.field}${invalidClass(fieldErrors.postal_code)}`}>
+                <label htmlFor="merchantonboarding-postal-code" className={styles.label}>Postal code</label>
+                <input id="merchantonboarding-postal-code" className={styles.input} value={form.postal_code ?? ""} onChange={setField("postal_code")} placeholder="1634" {...invalidProps("merchantonboarding-postal-code", fieldErrors.postal_code)} />
+                <FieldError id="merchantonboarding-postal-code" message={fieldErrors.postal_code} />
               </div>
 
               {/* Farm pickup point (U1c): deliveries start from this pin. */}
-              <div className={`${styles.field} ${styles.fieldFull}`}>
+              <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.pin)}`}>
                 <MapPinPicker
                   value={form.lat != null && form.lng != null ? { lat: form.lat, lng: form.lng } : null}
-                  onChange={(pin, found) =>
+                  onChange={(pin, found) => {
                     setForm((prev) => ({
                       ...prev,
                       lat: pin.lat,
                       lng: pin.lng,
                       address: prev.address || found?.street || prev.address,
                       postal_code: prev.postal_code || found?.postcode || prev.postal_code,
-                    }))
-                  }
+                    }));
+                    clearErrors("pin");
+                    if (found?.street) clearErrors("address");
+                    if (found?.postcode) clearErrors("postal_code");
+                  }}
                 />
+                <FieldError id="merchantonboarding-pin" message={fieldErrors.pin} />
               </div>
 
-              <div className={`${styles.field} ${styles.fieldFull}`}>
+              <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.available_days)}`}>
                 <label className={styles.label}>Available days</label>
-                <div className={styles.days}>
+                <div className={styles.days} role="group" aria-label="Available days" {...invalidProps("merchantonboarding-days", fieldErrors.available_days)}>
                   {DAYS.map((d) => {
                     const checked = form.available_days.includes(d);
                     return (
@@ -370,9 +494,10 @@ export default function MerchantOnboardingPage() {
                     );
                   })}
                 </div>
+                <FieldError id="merchantonboarding-days" message={fieldErrors.available_days} />
               </div>
 
-              <div className={`${styles.field} ${styles.fieldFull}`}>
+              <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.contact_email)}`}>
                 <label htmlFor="merchantonboarding-contact-email" className={styles.label}>Contact email</label>
                 <input
                   id="merchantonboarding-contact-email"
@@ -382,7 +507,9 @@ export default function MerchantOnboardingPage() {
                   onChange={handleEmail}
                   placeholder="you@farm.com"
                   disabled={isSubmitting}
+                  {...invalidProps("merchantonboarding-contact-email", fieldErrors.contact_email)}
                 />
+                <FieldError id="merchantonboarding-contact-email" message={fieldErrors.contact_email} />
                 <ContactCodeField
                   channel="email"
                   value={normalizeEmail(form.contact_email)}
@@ -395,7 +522,7 @@ export default function MerchantOnboardingPage() {
                 />
               </div>
 
-              <div className={`${styles.field} ${styles.fieldFull}`}>
+              <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.contact_number)}`}>
                 <label htmlFor="merchantonboarding-contact-number" className={styles.label}>Contact number</label>
                 <div className={styles.phoneRow}>
                   <span className={styles.phonePrefix}>+63</span>
@@ -408,8 +535,10 @@ export default function MerchantOnboardingPage() {
                     inputMode="numeric"
                     maxLength={12}
                     disabled={isSubmitting}
+                    {...invalidProps("merchantonboarding-contact-number", fieldErrors.contact_number)}
                   />
                 </div>
+                <FieldError id="merchantonboarding-contact-number" message={fieldErrors.contact_number} />
                 <ContactCodeField
                   channel="number"
                   value={form.contact_number}
@@ -426,28 +555,37 @@ export default function MerchantOnboardingPage() {
 
           {step.id === "legal" && (
             <div className={styles.grid}>
-              <div className={styles.field}>
-                <label htmlFor="merchantonboarding-merchant-name" className={styles.label}>Merchant name</label>
-                <input id="merchantonboarding-merchant-name" className={styles.input} value={form.merchant_name} onChange={setField("merchant_name")} placeholder="Carabao Fresh Farm" />
+              <div className={`${styles.field}${invalidClass(fieldErrors.merchant_name)}`}>
+                <div className={styles.labelRow}>
+                  <label htmlFor="merchantonboarding-merchant-name" className={styles.label}>Merchant name</label>
+                  <span className={styles.charCount} aria-hidden="true">{form.merchant_name.length}/{NAME_MAX}</span>
+                </div>
+                <input {...invalidProps("merchantonboarding-merchant-name", fieldErrors.merchant_name)} id="merchantonboarding-merchant-name" className={styles.input} maxLength={NAME_MAX} aria-label={`Merchant name, up to ${NAME_MAX} characters`} value={form.merchant_name} onChange={setField("merchant_name")} placeholder="Carabao Fresh Farm" />
+                <FieldError id="merchantonboarding-merchant-name" message={fieldErrors.merchant_name} />
               </div>
-              <div className={styles.field}>
-                <label htmlFor="merchantonboarding-legal-business-name" className={styles.label}>Legal business name</label>
-                <input id="merchantonboarding-legal-business-name" className={styles.input} value={form.legal_business_name} onChange={setField("legal_business_name")} placeholder="Carabao Fresh Farm Trading" />
+              <div className={`${styles.field}${invalidClass(fieldErrors.legal_business_name)}`}>
+                <div className={styles.labelRow}>
+                  <label htmlFor="merchantonboarding-legal-business-name" className={styles.label}>Legal business name</label>
+                  <span className={styles.charCount} aria-hidden="true">{form.legal_business_name.length}/{NAME_MAX}</span>
+                </div>
+                <input {...invalidProps("merchantonboarding-legal-business-name", fieldErrors.legal_business_name)} id="merchantonboarding-legal-business-name" className={styles.input} maxLength={NAME_MAX} aria-label={`Legal business name, up to ${NAME_MAX} characters`} value={form.legal_business_name} onChange={setField("legal_business_name")} placeholder="Carabao Fresh Farm Trading" />
+                <FieldError id="merchantonboarding-legal-business-name" message={fieldErrors.legal_business_name} />
               </div>
 
-              <div className={styles.field}>
+              <div className={`${styles.field}${invalidClass(fieldErrors.business_type)}`}>
                 <label htmlFor="merchantonboarding-business-type" className={styles.label}>Business type</label>
-                <select id="merchantonboarding-business-type" className={styles.select} value={form.business_type} onChange={setField("business_type")}>
+                <select {...invalidProps("merchantonboarding-business-type", fieldErrors.business_type)} id="merchantonboarding-business-type" className={styles.select} value={form.business_type} onChange={setField("business_type")}>
                   <option value="Sole Proprietor">Sole Proprietor</option>
                   <option value="Partnership">Partnership</option>
                   <option value="Corporation">Corporation</option>
                   <option value="Cooperative">Cooperative</option>
                   <option value="Farmer">Farmer</option>
                 </select>
+                <FieldError id="merchantonboarding-business-type" message={fieldErrors.business_type} />
               </div>
-              <div className={styles.field}>
+              <div className={`${styles.field}${invalidClass(fieldErrors.tin)}`}>
                 <label htmlFor="merchantonboarding-tin" className={styles.label}>TIN (optional)</label>
-                <input id="merchantonboarding-tin"
+                <input {...invalidProps("merchantonboarding-tin", fieldErrors.tin)} id="merchantonboarding-tin"
                   className={styles.input}
                   value={form.tin ?? ""}
                   onChange={handleTIN}
@@ -455,27 +593,30 @@ export default function MerchantOnboardingPage() {
                   inputMode="numeric"
                   maxLength={15}
                 />
+                <FieldError id="merchantonboarding-tin" message={fieldErrors.tin} />
               </div>
 
-              <div className={styles.field}>
+              <div className={`${styles.field}${invalidClass(fieldErrors.registration_type)}`}>
                 <label htmlFor="merchantonboarding-registration-type" className={styles.label}>Registration type</label>
-                <select id="merchantonboarding-registration-type" className={styles.select} value={form.registration_type ?? ""} onChange={setField("registration_type")}>
+                <select {...invalidProps("merchantonboarding-registration-type", fieldErrors.registration_type)} id="merchantonboarding-registration-type" className={styles.select} value={form.registration_type ?? ""} onChange={setField("registration_type")}>
                   <option value="DTI">DTI</option>
                   <option value="SEC">SEC</option>
                   <option value="CDA">CDA</option>
                   <option value="LGU">LGU / Permit</option>
                   <option value="">None</option>
                 </select>
+                <FieldError id="merchantonboarding-registration-type" message={fieldErrors.registration_type} />
               </div>
-              <div className={styles.field}>
+              <div className={`${styles.field}${invalidClass(fieldErrors.registration_number)}`}>
                 <label htmlFor="merchantonboarding-registration-number" className={styles.label}>Registration number (optional)</label>
-                <input id="merchantonboarding-registration-number"
+                <input {...invalidProps("merchantonboarding-registration-number", fieldErrors.registration_number)} id="merchantonboarding-registration-number"
                   className={styles.input}
                   value={form.registration_number ?? ""}
                   onChange={handleRegNum}
                   placeholder="DTI-00000-000000"
                   maxLength={30}
                 />
+                <FieldError id="merchantonboarding-registration-number" message={fieldErrors.registration_number} />
               </div>
 
               <div className={`${styles.fieldFull} ${styles.docsIntro}`}>
@@ -484,37 +625,41 @@ export default function MerchantOnboardingPage() {
                 </p>
               </div>
 
-              <div className={styles.field}>
+              <div className={`${styles.field}${invalidClass(fieldErrors.rsbsa_number)}`}>
                 <label htmlFor="merchantonboarding-rsbsa-number" className={styles.label}>RSBSA number (optional)</label>
-                <input id="merchantonboarding-rsbsa-number"
+                <input {...invalidProps("merchantonboarding-rsbsa-number", fieldErrors.rsbsa_number)} id="merchantonboarding-rsbsa-number"
                   className={styles.input}
                   value={form.rsbsa_number ?? ""}
                   onChange={handleRSBSA}
                   placeholder="RSBSA-XXXX-XXXX"
                   maxLength={24}
                 />
+                <FieldError id="merchantonboarding-rsbsa-number" message={fieldErrors.rsbsa_number} />
               </div>
-              <div className={styles.field}>
+              <div className={`${styles.field}${invalidClass(fieldErrors.gov_id_type)}`}>
                 <label htmlFor="merchantonboarding-gov-id-type" className={styles.label}>Government ID type</label>
-                <select id="merchantonboarding-gov-id-type" className={styles.select} value={form.gov_id_type} onChange={setField("gov_id_type")}>
+                <select {...invalidProps("merchantonboarding-gov-id-type", fieldErrors.gov_id_type)} id="merchantonboarding-gov-id-type" className={styles.select} value={form.gov_id_type} onChange={setField("gov_id_type")}>
                   {GOV_ID_TYPES.map((t) => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
+                <FieldError id="merchantonboarding-gov-id-type" message={fieldErrors.gov_id_type} />
               </div>
 
-              <div className={styles.field}>
+              <div className={`${styles.field}${invalidClass(fieldErrors.rsbsa_file)}`}>
                 <span className={styles.label}>RSBSA document (photo or PDF)</span>
-                <DocumentDropzone label="RSBSA document" file={rsbsaFile} onChange={setRsbsaFile} />
+                <DocumentDropzone label="RSBSA document" file={rsbsaFile} onChange={(f) => { setRsbsaFile(f); clearErrors("rsbsa_file"); }} />
+                <FieldError id="merchantonboarding-rsbsa-file" message={fieldErrors.rsbsa_file} />
               </div>
-              <div className={styles.field}>
+              <div className={`${styles.field}${invalidClass(fieldErrors.gov_id_file)}`}>
                 <span className={styles.label}>Government ID (photo or PDF)</span>
-                <DocumentDropzone label="government ID" file={govIdFile} onChange={setGovIdFile} />
+                <DocumentDropzone label="government ID" file={govIdFile} onChange={(f) => { setGovIdFile(f); clearErrors("gov_id_file"); }} />
+                <FieldError id="merchantonboarding-gov-id-file" message={fieldErrors.gov_id_file} />
               </div>
             </div>
           )}
 
-          {error && <div className={styles.errorBox}>{error}</div>}
+          {error && <div className={styles.errorBox} role="alert">{error}</div>}
         </div>
 
         <footer className={styles.footer}>
@@ -531,7 +676,7 @@ export default function MerchantOnboardingPage() {
               className={styles.primaryBtn}
               type="button"
               onClick={goNext}
-              disabled={isSubmitting || !emailVerified || !phoneVerified}
+              disabled={isSubmitting}
             >
               Continue
             </button>

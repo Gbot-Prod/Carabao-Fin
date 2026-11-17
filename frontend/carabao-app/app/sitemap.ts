@@ -16,8 +16,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const pages: MetadataRoute.Sitemap = [
     { url: url('/'), changeFrequency: 'daily', priority: 1 },
     { url: url('/farms'), changeFrequency: 'daily', priority: 0.9 },
-    { url: url('/terms'), changeFrequency: 'yearly', priority: 0.2 },
-    { url: url('/privacy'), changeFrequency: 'yearly', priority: 0.2 },
   ];
 
   const farms = (await getPublicFarms()) ?? [];

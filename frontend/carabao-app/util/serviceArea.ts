@@ -12,6 +12,9 @@ const REGION_NUMBERS: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 
 const hasWord = (haystack: string, needle: string) =>
   new RegExp(`(^|[^a-z0-9_])${needle}($|[^a-z0-9_])`).test(haystack);
 
+// Site standard: NCR has no provinces, so its province is shown and saved as this.
+export const NCR_PROVINCE = 'Metro Manila';
+
 export const SERVICE_AREA_NOTE = 'Carabao currently delivers within Luzon only.';
 
 export function isLuzonRegion(region: string | null | undefined): boolean {

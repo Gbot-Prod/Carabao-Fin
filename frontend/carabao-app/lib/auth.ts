@@ -17,6 +17,7 @@ import { poolConfigFromUrl } from "@/lib/db-ssl.mjs";
 import { AUTH_BASE_PATH, isBlockedAuthPath, isBlockedOnAdminSurface } from "@/lib/blocked-auth-paths";
 import { appSurface, merchantUrl, rootDomain, subdomainMode } from "@/lib/urls";
 import { PH_MOBILE_PATTERN, PHONE_PLACEHOLDER_EMAIL_DOMAIN, isPlaceholderEmail } from "@/lib/phone";
+import { OTP_SEND_PATHS, resendWaitSeconds } from "@/lib/otp-cooldown";
 import {
   ENROLMENT_TOKEN_HEADER,
   TOTP_SECRET_PATHS,
@@ -437,6 +438,43 @@ const phoneVerifyGuard = (): BetterAuthPlugin => ({
   },
 });
 
+// Site-wide OTP resend wait (lib/otp-cooldown.ts): one code a minute per
+// number. Checked before BetterAuth writes the new code, so a refused resend
+// leaves the code already sent working. A password-reset request for a number
+// with no account also writes a row, so the wait doesn't reveal which exist.
+const otpResendCooldown = (): BetterAuthPlugin => ({
+  id: "carabao-otp-resend-cooldown",
+  hooks: {
+    before: [
+      {
+        matcher: (ctx) => Boolean(ctx.path && OTP_SEND_PATHS[ctx.path]),
+        handler: createAuthMiddleware(async (ctx) => {
+          const phone = (ctx.body as { phoneNumber?: unknown } | undefined)?.phoneNumber;
+          if (typeof phone !== "string" || !phone) return;
+          const [latest] = await ctx.context.adapter.findMany<{ createdAt: Date }>({
+            model: "verification",
+            where: [{ field: "identifier", value: OTP_SEND_PATHS[ctx.path!](phone) }],
+            sortBy: { field: "createdAt", direction: "desc" },
+            limit: 1,
+          });
+          const wait = resendWaitSeconds(latest?.createdAt);
+          if (wait > 0) {
+            throw new APIError(
+              "TOO_MANY_REQUESTS",
+              {
+                code: "OTP_RESEND_COOLDOWN",
+                message: `Please wait ${wait} seconds before requesting another code.`,
+                retryAfter: wait,
+              },
+              { "Retry-After": String(wait) },
+            );
+          }
+        }),
+      },
+    ],
+  },
+});
+
 // CF-0019: when /phone-number/verify (updatePhoneNumber) replaces a number,
 // keep the old one and the time. For 3 days the backend also sends payout-change
 // alerts to the old number (backend/app/services/payout_otp.py alert_numbers),
@@ -575,6 +613,7 @@ function createAuth() {
         },
       }),
       phoneVerifyGuard(),
+      otpResendCooldown(),
       phoneChangeHistory(),
       phoneSignupPassword(),
       // Public deploy: no session for an admin account (before adminTwoFactor()).

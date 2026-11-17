@@ -344,3 +344,43 @@ textarea:focus-visible {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-subtle);
 }
+/* Site standard: per-field form errors (components/FieldError).
+   Put .field-invalid on the field's container; the message goes under it. */
+.field-invalid :is(input:not([type="file"]):not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  border-color: var(--danger) !important;
+  background-color: rgba(185, 28, 28, 0.04);
+}
+
+.field-invalid :is(input, select, textarea):focus {
+  box-shadow: 0 0 0 4px rgba(185, 28, 28, 0.14) !important;
+}
+
+.field-invalid > label,
+.field-invalid > span:first-child {
+  color: var(--danger);
+}
+
+.field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--danger);
+}
+
+.field-error::before {
+  content: "!";
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}

@@ -14,6 +14,7 @@ import {
   type PayoutType,
 } from "@/util/api";
 import { getApiErrorStatus } from "@/util/errorHelper";
+import { formatCountdown, useResendCooldown } from "@/hooks/useResendCooldown";
 import { formatDate, formatPeso, type StatusMessage } from "../lib/format";
 
 export const PAYOUT_METHOD_LABELS: Record<PayoutType, string> = {
@@ -68,6 +69,8 @@ export default function CashOutPanel({
   const [requesting, setRequesting] = useState(false);
   const [banks, setBanks] = useState<PayoutInstitution[] | null>(null);
   const [banksError, setBanksError] = useState(false);
+  // Site-wide: a minute between codes for one destination, counted down on the page.
+  const resendTimer = useResendCooldown();
 
   const needsBanks = editing && draft.payout_type === "bank" && banks === null && !banksError;
   useEffect(() => {
@@ -107,6 +110,18 @@ export default function CashOutPanel({
     account_name: draft.account_name || null,
     ewallet_number: draft.ewallet_number || null,
   });
+  const codeTarget = JSON.stringify(payload());
+  const resendIn = resendTimer.secondsLeft(codeTarget);
+
+  const sendCode = async () => {
+    try {
+      setCodeSentTo(await sendPayoutInfoCode(payload()));
+    } catch (err) {
+      resendTimer.startFromError(codeTarget, err);
+      throw err;
+    }
+    resendTimer.start(codeTarget);
+  };
 
   const saveError = (err: unknown) => {
     // 422: the backend rejects incomplete payout details instead of saving them.
@@ -128,7 +143,7 @@ export default function CashOutPanel({
     setSaving(true);
     try {
       if (codeSentTo === null) {
-        setCodeSentTo(await sendPayoutInfoCode(payload()));
+        await sendCode();
         onMessage(null);
         return;
       }
@@ -146,7 +161,7 @@ export default function CashOutPanel({
   const handleResend = async () => {
     setSaving(true);
     try {
-      setCodeSentTo(await sendPayoutInfoCode(payload()));
+      await sendCode();
       setCode("");
       onMessage(null);
     } catch (err) {
@@ -318,8 +333,14 @@ export default function CashOutPanel({
             />
             <span className={styles.payoutFieldHint}>
               For your security, a change of payout account must be confirmed by SMS.{" "}
-              <button type="button" className={styles.linkBtn} onClick={() => void handleResend()} disabled={saving}>
-                Send a new code
+              <button
+                type="button"
+                className={styles.linkBtn}
+                onClick={() => void handleResend()}
+                disabled={saving || resendIn > 0}
+                aria-live="polite"
+              >
+                {resendIn > 0 ? `Send a new code in ${formatCountdown(resendIn)}` : "Send a new code"}
               </button>
             </span>
           </label>

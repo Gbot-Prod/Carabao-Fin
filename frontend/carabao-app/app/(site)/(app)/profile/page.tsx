@@ -1,9 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import styles from './page.module.css';
-import { helpUrl, merchantUrl } from '@/lib/urls';
 import {
   createMyAddress,
   deleteMyAccount,
@@ -27,8 +25,8 @@ import PhoneVerifyDialog from '@/components/PhoneVerifyDialog/PhoneVerifyDialog'
 // Hidden for now — kept as components in ./components so they can be re-enabled:
 //   NotificationsPanel  (🔔 Notifications)    <NotificationsPanel profile={profile} onSaved={setProfile} />
 //   SupportPanel        (💬 Contact support)  <SupportPanel />
-// The "View Merchant Page" / "Merchant Dashboard" links were also removed from
-// the left column; merchants reach the dashboard from the main navigation.
+// The "View Merchant Page" / "Merchant Dashboard" links, the "Apply as Merchant"
+// card and the "Help & Support" card were also removed from the left column.
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatDate = (v: string | null | undefined) => {
@@ -331,6 +329,7 @@ export default function Profile() {
   const fullName = profile ? profile.name?.trim() || 'Carabao User' : null;
   const hasMerchant = !!profile?.merchant?.id;
   const cart = profile?.cart;
+  const memberSince = formatDate(profile?.created_at);
 
   if (isLoading) return <PageLoader label="Loading your profile…" />;
 
@@ -341,6 +340,7 @@ export default function Profile() {
         {/* ── Left column ── */}
         <div className={styles.leftCol}>
           <section className={styles.profileSection}>
+            <div className={styles.profileCover} aria-hidden="true" />
             <UserAvatar
               pictureUrl={profile?.profile_picture_url ?? null}
               uploading={avatarUploading}
@@ -349,65 +349,67 @@ export default function Profile() {
 
             <div className={styles.nameBlock}>
               <h2 className={styles.name}>{fullName ?? '—'}</h2>
-              <p className={styles.email}>{profile?.email ?? 'No email added'}</p>
-            </div>
-
-            <div className={styles.metaBlock}>
-              <div className={styles.metaRow}>
-                <span className={styles.metaLabel}>Phone</span>
-                <span className={styles.metaValue}>
-                  {profile?.phone_number
-                    ? `${formatPhMobile(profile.phone_number)}${profile.phone_verified ? '' : ' (not verified)'}`
-                    : 'No data'}
-                </span>
-              </div>
-              <button className={styles.panelEditBtn} onClick={() => setPhoneDialogOpen(true)} disabled={!!loadError} type="button">
-                {profile?.phone_verified ? 'Change number' : 'Add mobile number'}
-              </button>
+              {memberSince && <p className={styles.memberSince}>Member since {memberSince}</p>}
             </div>
 
             {loadError && <p className={styles.errorBanner}>{loadError}</p>}
             {notice && <p className={styles.noticeBanner} role="status">{notice}</p>}
 
+            <dl className={styles.contactList}>
+              <div className={styles.contactRow}>
+                <dt className={styles.contactLabel}>Email</dt>
+                <dd className={styles.contactValue}>
+                  <span className={styles.contactText}>{profile?.email ?? <NoData text="No email added" />}</span>
+                  {profile?.email && (
+                    <span className={profile.email_verified ? styles.badgeOk : styles.badgeWarn}>
+                      {profile.email_verified ? 'Verified' : 'Not verified'}
+                    </span>
+                  )}
+                </dd>
+              </div>
+              <div className={styles.contactRow}>
+                <dt className={styles.contactLabel}>Mobile</dt>
+                <dd className={styles.contactValue}>
+                  <span className={styles.contactText}>
+                    {profile?.phone_number ? formatPhMobile(profile.phone_number) : <NoData text="No number added" />}
+                  </span>
+                  {profile?.phone_number && (
+                    <span className={profile.phone_verified ? styles.badgeOk : styles.badgeWarn}>
+                      {profile.phone_verified ? 'Verified' : 'Not verified'}
+                    </span>
+                  )}
+                </dd>
+                <button className={styles.linkBtn} onClick={() => setPhoneDialogOpen(true)} disabled={!!loadError} type="button">
+                  {profile?.phone_verified ? 'Change number' : profile?.phone_number ? 'Verify number' : 'Add mobile number'}
+                </button>
+              </div>
+            </dl>
+
+            <div className={styles.profileStats}>
+              <div className={styles.statCard}>
+                <strong className={styles.statValue}>{cart?.total_items ?? 0}</strong>
+                <span className={styles.statLabel}>Item{cart?.total_items === 1 ? '' : 's'} in cart</span>
+              </div>
+              <div className={styles.statCard}>
+                <strong className={styles.statValue}>{formatPeso(cart?.total_price ?? 0)}</strong>
+                <span className={styles.statLabel}>Cart total</span>
+              </div>
+              {hasMerchant && (
+                <div className={`${styles.statCard} ${styles.statCardWide}`}>
+                  <strong className={styles.statValue}>{profile?.merchant?.merchant_name}</strong>
+                  <span className={styles.statLabel}>Your store</span>
+                </div>
+              )}
+            </div>
+
             <button className={styles.editBtn} onClick={openModal} disabled={!!loadError} type="button">
               Edit Profile
             </button>
-
-            <div className={styles.profileSnapshot}>
-              <div className={styles.snapshotCard}>
-                <span className={styles.snapshotLabel}>Member since</span>
-                <strong className={styles.snapshotValue}>{formatDate(profile?.created_at) ?? 'No data'}</strong>
-              </div>
-              <div className={styles.snapshotCard}>
-                <span className={styles.snapshotLabel}>Merchant</span>
-                <strong className={styles.snapshotValue}>{profile?.merchant?.merchant_name ?? 'None'}</strong>
-              </div>
-              <div className={`${styles.snapshotCard} ${styles.snapshotCardWide}`}>
-                <span className={styles.snapshotLabel}>Cart</span>
-                <strong className={styles.snapshotValue}>
-                  {cart ? `${cart.total_items} item${cart.total_items === 1 ? '' : 's'} · ${formatPeso(cart.total_price)}` : 'No data'}
-                </strong>
-              </div>
-            </div>
           </section>
-
-          {/* Non-merchants get an entry point to onboarding */}
-          {!hasMerchant && (
-            <section className={styles.merchantSection}>
-              <Link className={`${styles.merchantBtn} ${styles.merchantBtnPrimary}`} href={merchantUrl("/onboarding")}>
-                Apply as Merchant
-              </Link>
-            </section>
-          )}
 
           {/* Two-step verification (E8a): admins only, and required for them (CF-0003).
               Status only: setup is on /two-factor/enrol with the link's token (CF-0018). */}
           {profile?.is_admin && <TwoFactorSettings />}
-
-          {/* Help & Support: FAQ, contact, Terms, Privacy (help.<root>, app/help) */}
-          <section className={styles.merchantSection}>
-            <Link className={styles.merchantBtn} href={helpUrl("/")}>❓ Help &amp; Support</Link>
-          </section>
 
           <section className={styles.profileDangerZone}>
             <p className={styles.profileDangerLabel}>Danger Zone</p>

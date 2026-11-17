@@ -81,3 +81,27 @@ def upstream_error(
         detail=with_reference(message, request_id),
         headers={REQUEST_ID_HEADER: request_id},
     )
+
+
+class FieldErrors(HTTPException):
+    """A refusal that names the form fields at fault (site standard).
+
+    The response is ``{"detail": "<all messages>", "errors": {field: message}}``
+    so the client can mark each field and show its message under it. Without
+    ``field_errors_handler`` registered it is still a plain HTTPException with
+    a readable ``detail``.
+    """
+
+    def __init__(self, errors: dict[str, str], status_code: int = 400) -> None:
+        self.errors = errors
+        super().__init__(status_code=status_code, detail=" ".join(errors.values()))
+
+
+async def field_errors_handler(_request, exc: FieldErrors):
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "errors": exc.errors},
+        headers=exc.headers,
+    )

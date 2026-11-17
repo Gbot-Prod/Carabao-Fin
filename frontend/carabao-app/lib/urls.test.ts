@@ -54,7 +54,22 @@ test('merchant host: clean URL is rewritten to /merchant', () => {
 });
 
 test('merchant host: sign-in pages pass, buyer pages go to the apex', () => {
-  assert.deepEqual(local.route(req('merchant.carabao.test', '/auth?next=/')), { kind: 'next' });
+  // /auth on merchant. is the Merchant Centre login, not the buyer sign-in.
+  assert.deepEqual(local.route(req('merchant.carabao.test', '/auth?next=/')), { kind: 'rewrite', path: '/merchant/auth' });
+  assert.deepEqual(local.route(req('merchant.carabao.test', '/login?next=%2Fsales')), {
+    kind: 'redirect',
+    location: '/auth?next=%2Fsales',
+  });
+  assert.deepEqual(local.route(req('merchant.carabao.test', '/merchant/login')), {
+    kind: 'redirect',
+    location: 'http://merchant.carabao.test:3000/auth',
+  });
+  assert.deepEqual(single.route(req('localhost:3000', '/merchant/login?next=x')), {
+    kind: 'redirect',
+    location: '/merchant/auth?next=x',
+  });
+  assert.deepEqual(single.route(req('localhost:3000', '/auth')), { kind: 'next' });
+  assert.deepEqual(local.route(req('merchant.carabao.test', '/forgot-password')), { kind: 'next' });
   assert.deepEqual(local.route(req('merchant.carabao.test', '/two-factor')), { kind: 'next' });
   assert.deepEqual(local.route(req('merchant.carabao.test', '/order?q=1')), {
     kind: 'redirect',
@@ -101,12 +116,25 @@ test('legacy: dashboard and onboarding paths (mobile opens /merchantOnboarding)'
 test('legacy: /help?section= goes to the new pages', () => {
   assert.deepEqual(local.route(req('carabao.test', '/help?section=terms')), {
     kind: 'redirect',
-    location: 'http://carabao.test:3000/terms',
+    location: 'http://help.carabao.test:3000/terms',
   });
   assert.deepEqual(single.route(req('localhost:3000', '/help?section=contact')), {
     kind: 'redirect',
     location: '/help/contact',
   });
+});
+
+test('terms and privacy moved to help: old URLs redirect, help host serves them', () => {
+  for (const host of ['carabao.test', 'merchant.carabao.test']) {
+    assert.deepEqual(local.route(req(host, '/terms')), { kind: 'redirect', location: 'http://help.carabao.test:3000/terms' }, host);
+    assert.deepEqual(local.route(req(host, '/privacy?x=1')), { kind: 'redirect', location: 'http://help.carabao.test:3000/privacy?x=1' }, host);
+  }
+  assert.deepEqual(local.route(req('help.carabao.test', '/terms')), { kind: 'rewrite', path: '/help/terms' });
+  assert.deepEqual(local.route(req('help.carabao.test', '/privacy')), { kind: 'rewrite', path: '/help/privacy' });
+  assert.deepEqual(local.route(req('help.carabao.test', '/help/terms')), { kind: 'redirect', location: '/terms' });
+  assert.deepEqual(single.route(req('localhost:3000', '/terms')), { kind: 'redirect', location: '/help/terms' });
+  assert.deepEqual(single.route(req('localhost:3000', '/help/privacy')), { kind: 'next' });
+  assert.equal(local.resolveStoredLink('/privacy'), 'http://help.carabao.test:3000/privacy');
 });
 
 test('help host: clean URL rewritten, prefix redirected', () => {
@@ -165,6 +193,33 @@ test('sign-in page per deploy', () => {
   assert.equal(admin.signInPath('/admin/users'), '/admin/login?next=%2Fadmin%2Fusers');
 });
 
+test('sign-in page per site: buyer /auth, merchant /login, admin /admin/login', () => {
+  const at = (host: string, pathname: string) => ({ host, pathname });
+  // Subdomain mode: the host decides.
+  assert.equal(local.signInPathFor(at('carabao.test:3000', '/order')), '/auth');
+  assert.equal(local.signInPathFor(at('carabao.test:3000', '/order'), '/order'), '/auth?next=%2Forder');
+  assert.equal(
+    local.signInPathFor(at('merchant.carabao.test:3000', '/onboarding'), '/onboarding'),
+    'http://merchant.carabao.test:3000/auth?next=%2Fonboarding',
+  );
+  assert.equal(local.signInPathFor(at('merchant.carabao.test:3000', '/'), '/'), 'http://merchant.carabao.test:3000/auth');
+  // Shared pages on the merchant host (/forgot-password) also go back to the merchant login.
+  assert.equal(local.signInPathFor(at('merchant.carabao.test:3000', '/forgot-password')), 'http://merchant.carabao.test:3000/auth');
+  // One host: the /merchant prefix decides.
+  assert.equal(single.signInPathFor(at('localhost:3000', '/merchant/sales'), '/merchant/sales'), '/merchant/auth?next=%2Fmerchant%2Fsales');
+  assert.equal(single.signInPathFor(at('localhost:3000', '/merchant')), '/merchant/auth');
+  assert.equal(single.signInPathFor(at('localhost:3000', '/merchants')), '/auth');
+  assert.equal(single.signInPathFor(at('localhost:3000', '/profile')), '/auth');
+  // Admin deploy: always its own login.
+  assert.equal(admin.signInPathFor(at('admin.carabao.test:3001', '/admin/users'), '/admin/users'), '/admin/login?next=%2Fadmin%2Fusers');
+});
+
+test('withQueryParam adds to an existing query', async () => {
+  const { withQueryParam } = await import('./urls.ts');
+  assert.equal(withQueryParam('/auth', 'reason', 'idle'), '/auth?reason=idle');
+  assert.equal(withQueryParam('/login?next=%2Fsales', 'reason', 'idle'), '/login?next=%2Fsales&reason=idle');
+});
+
 const helpDeploy = makeSurfaces({
   rootDomain: 'carabao.test',
   appSurface: 'help',
@@ -176,6 +231,7 @@ test('help deploy: only /help, by clean URL', () => {
   const host = 'help.carabao.test:3002';
   assert.deepEqual(helpDeploy.route(req(host, '/')), { kind: 'rewrite', path: '/help' });
   assert.deepEqual(helpDeploy.route(req(host, '/contact')), { kind: 'rewrite', path: '/help/contact' });
+  assert.deepEqual(helpDeploy.route(req(host, '/terms')), { kind: 'rewrite', path: '/help/terms' });
   assert.deepEqual(helpDeploy.route(req(host, '/help/contact?x=1')), { kind: 'redirect', location: '/contact?x=1' });
   // Anything else is a help path that does not exist (404 from Next.js).
   assert.deepEqual(helpDeploy.route(req(host, '/order')), { kind: 'rewrite', path: '/help/order' });
@@ -193,7 +249,8 @@ test('help deploy: /api is 404, framework files and assets pass', () => {
 
 test('help deploy: links go back to the main site', () => {
   assert.equal(helpDeploy.subdomainMode, true);
-  assert.equal(helpDeploy.appUrl('/terms'), 'http://carabao.test:3000/terms');
+  assert.equal(helpDeploy.appUrl('/order'), 'http://carabao.test:3000/order');
+  assert.equal(helpDeploy.helpUrl('/terms'), '/terms');
   assert.equal(helpDeploy.merchantUrl('/onboarding'), 'http://merchant.carabao.test:3000/onboarding');
   assert.equal(helpDeploy.helpUrl('/contact'), '/contact');
 });

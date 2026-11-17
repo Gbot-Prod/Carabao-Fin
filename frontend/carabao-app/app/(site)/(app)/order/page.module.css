@@ -151,17 +151,41 @@
 .activeFilters {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.4rem;
 }
 
-.filterTag {
-  border: 1px solid #d1fae5;
+.filterLabel {
+  font-size: 0.8rem;
+  color: var(--text-subtle);
+  margin-right: 0.15rem;
+}
+
+.filterChip {
+  border: 1px solid var(--border-strong);
+  background-color: var(--bg-white);
+  color: var(--text-subtle);
+  border-radius: var(--radius-pill);
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.filterChip:hover {
+  border-color: #86efac;
+}
+
+.filterChip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.filterChipActive {
+  border-color: #d1fae5;
   background-color: #f0fdf4;
   color: var(--success-text);
-  border-radius: var(--radius-pill);
-  padding: 0.2rem 0.6rem;
-  font-size: 0.75rem;
-  font-weight: 600;
 }
 
 .sortLabel {

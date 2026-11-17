@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Clock, Search, ShoppingCart, Star, Store, Truck, X } from 'lucide-react';
 import styles from './page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
@@ -23,6 +23,12 @@ type FarmView = {
   logoUrl: string | null;
   bannerUrl: string | null;
 };
+
+// URL values stay in English so shared links work in either language.
+const SHOP_FILTERS: { value: string; label: keyof Strings['browse'] }[] = [
+  { value: 'Fruits', label: 'filterFruits' },
+  { value: 'Veggies', label: 'filterVeggies' },
+];
 
 type SortKey = 'recommended' | 'rating' | 'fastest' | 'fee';
 
@@ -57,6 +63,8 @@ const getInitials = (name: string) =>
 
 function OrderContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const { t } = useLanguage();
   const [farmList, setFarmList] = useState<FarmView[]>([]);
   const [cartItemCount, setCartItemCount] = useState(0);
@@ -136,6 +144,17 @@ function OrderContent() {
       (searchParams.get("filters") ?? "").split(",").filter(Boolean)
     );
   }, [searchParams]);
+
+  const toggleFilter = (filter: string) => {
+    const next = new Set(activeFilters);
+    if (next.has(filter)) next.delete(filter);
+    else next.add(filter);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next.size > 0) params.set('filters', Array.from(next).join(','));
+    else params.delete('filters');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   const filteredFarms = useMemo(() => {
     let result = farmList;
@@ -231,10 +250,22 @@ function OrderContent() {
       ) : (
       <>
       <div className={styles.toolbar}>
-        <div className={styles.activeFilters}>
-          {Array.from(activeFilters).map((filter) => (
-            <span key={filter} className={styles.filterTag}>{filter}</span>
-          ))}
+        <div className={styles.activeFilters} role="group" aria-label={t.browse.filterBy}>
+          <span className={styles.filterLabel}>{t.browse.filterBy}</span>
+          {SHOP_FILTERS.map((filter) => {
+            const active = activeFilters.has(filter.value);
+            return (
+              <button
+                key={filter.value}
+                type="button"
+                aria-pressed={active}
+                className={`${styles.filterChip} ${active ? styles.filterChipActive : ''}`}
+                onClick={() => toggleFilter(filter.value)}
+              >
+                {t.browse[filter.label]}
+              </button>
+            );
+          })}
         </div>
         <label className={styles.sortLabel}>
           {t.browse.sortBy}

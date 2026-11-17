@@ -1,18 +1,17 @@
-import Link from 'next/link';
 import styles from './page.module.css';
 import HelpNav from './components/HelpNav';
-import { appUrl } from '@/lib/urls';
+import HelpHeader from './components/HelpHeader';
 
 // help.<root>: public pages, no sign-in, no data from the API.
-// The pages render per request only because the root layout needs the CSP
-// nonce (CF-0002).
+// Layout: green header (logo · search · buyer/farmer sites), then a left
+// column (intro + section nav) beside the content card.
 export default function HelpLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className={styles.container}>
+      <HelpHeader />
       <main className={styles.main}>
         <div className={styles.leftCol}>
           <section className={styles.introCard}>
-            <Link href={appUrl('/order')} className={styles.backLink}>← Back to Carabao</Link>
             <h2 className={styles.introTitle}>Help &amp; Support</h2>
             <p className={styles.introText}>Answers to common questions, ways to reach us, and our policies.</p>
           </section>

@@ -80,6 +80,8 @@ def send_code(db: Session, request: Request, user: User, values: dict) -> str:
     # Checks the secret and the cooldown before any SMS credit is spent.
     otp.reserve_send(db, key)
     try:
+        # SMS codes count against one per-user limit across every purpose.
+        rate_limit.enforce_identifier(db, "otp_send_user", str(user.id))
         # Semaphore may send its own code; keep the one the merchant gets.
         code = send_otp(
             number=number,

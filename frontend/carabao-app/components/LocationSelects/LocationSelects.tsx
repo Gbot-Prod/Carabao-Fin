@@ -3,8 +3,9 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { fetchRegions, fetchProvincesByRegion, fetchCitiesByProvince, fetchBarangaysByCity, fetchCitiesByRegion } from '@/util/psgc';
 import type { PsgcRegion, PsgcProvince, PsgcCity, PsgcBarangay } from '@/util/psgc';
-import { isLuzonRegion } from '@/util/serviceArea';
+import { isLuzonRegion, NCR_PROVINCE } from '@/util/serviceArea';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
+import FieldError, { invalidClass, invalidProps } from '@/components/FieldError/FieldError';
 
 export type LocationSelectsValue = {
   region?: string;
@@ -21,6 +22,8 @@ interface LocationSelectsProps {
   selectStyle?: React.CSSProperties;
   labelStyle?: React.CSSProperties;
   wrapStyle?: React.CSSProperties;
+  /** Per-select messages, shown under each select (site standard). */
+  errors?: Partial<Record<keyof LocationSelectsValue, string>>;
 }
 
 const NCR_CODE = '1300000000';
@@ -60,6 +63,7 @@ export default function LocationSelects({
   selectStyle,
   labelStyle,
   wrapStyle,
+  errors = {},
 }: LocationSelectsProps) {
   const { t } = useLanguage();
   // Q2b: ids per instance, so two pickers on one page don't collide.
@@ -94,7 +98,9 @@ export default function LocationSelects({
 
   const handleRegionChange = (code: string) => {
     const region = regions.find((item) => item.code === code);
-    onChange({ region: region?.name ?? '', province: '', city: '', barangay: '' });
+    // NCR has no provinces: it is always Metro Manila (site standard).
+    const province = region?.code === NCR_CODE ? NCR_PROVINCE : '';
+    onChange({ region: region?.name ?? '', province, city: '', barangay: '' });
   };
 
   const handleProvinceChange = (code: string) => {
@@ -114,10 +120,11 @@ export default function LocationSelects({
 
   return (
     <>
-      <div className={wrapClassName} style={wrapStyle}>
+      <div className={`${wrapClassName}${invalidClass(errors.region)}`} style={wrapStyle}>
         <label htmlFor={`${uid}-region`} className={labelClassName} style={labelStyle}>{t.location.region}</label>
 
         <select id={`${uid}-region`}
+          {...invalidProps(`${uid}-region`, errors.region)}
           className={selectClassName}
           style={selectStyle}
           value={selectedRegion?.code ?? ''}
@@ -129,12 +136,14 @@ export default function LocationSelects({
             <option key={region.code} value={region.code}>{region.name}</option>
           ))}
         </select>
+        <FieldError id={`${uid}-region`} message={errors.region} />
         <small style={{ display: 'block', marginTop: 4, fontSize: 12, color: 'var(--text-subtle)' }}>{t.location.serviceAreaNote}</small>
       </div>
 
-      <div className={wrapClassName} style={wrapStyle}>
+      <div className={`${wrapClassName}${invalidClass(errors.province)}`} style={wrapStyle}>
         <label htmlFor={`${uid}-province`} className={labelClassName} style={labelStyle}>{t.location.province}</label>
         <select id={`${uid}-province`}
+          {...invalidProps(`${uid}-province`, errors.province)}
           className={selectClassName}
           style={selectStyle}
           value={selectedProvince?.code ?? ''}
@@ -142,17 +151,19 @@ export default function LocationSelects({
           disabled={!value.region || isNcr || loadingProvinces}
         >
           <option value="">
-            {!value.region ? t.location.selectRegionFirst : isNcr ? t.location.notApplicableNcr : loadingProvinces ? t.location.loading : t.location.selectProvince}
+            {!value.region ? t.location.selectRegionFirst : isNcr ? NCR_PROVINCE : loadingProvinces ? t.location.loading : t.location.selectProvince}
           </option>
           {provinces.map((province) => (
             <option key={province.code} value={province.code}>{province.name}</option>
           ))}
         </select>
+        <FieldError id={`${uid}-province`} message={errors.province} />
       </div>
 
-      <div className={wrapClassName} style={wrapStyle}>
+      <div className={`${wrapClassName}${invalidClass(errors.city)}`} style={wrapStyle}>
         <label htmlFor={`${uid}-city`} className={labelClassName} style={labelStyle}>{t.location.city}</label>
         <select id={`${uid}-city`}
+          {...invalidProps(`${uid}-city`, errors.city)}
           className={selectClassName}
           style={selectStyle}
           value={selectedCity?.code ?? ''}
@@ -166,11 +177,13 @@ export default function LocationSelects({
             <option key={city.code} value={city.code}>{city.name}</option>
           ))}
         </select>
+        <FieldError id={`${uid}-city`} message={errors.city} />
       </div>
 
-      <div className={wrapClassName} style={wrapStyle}>
+      <div className={`${wrapClassName}${invalidClass(errors.barangay)}`} style={wrapStyle}>
         <label htmlFor={`${uid}-barangay`} className={labelClassName} style={labelStyle}>{t.location.barangay}</label>
         <select id={`${uid}-barangay`}
+          {...invalidProps(`${uid}-barangay`, errors.barangay)}
           className={selectClassName}
           style={selectStyle}
           value={selectedBarangay?.code ?? ''}
@@ -184,6 +197,7 @@ export default function LocationSelects({
             <option key={barangay.code} value={barangay.code}>{barangay.name}</option>
           ))}
         </select>
+        <FieldError id={`${uid}-barangay`} message={errors.barangay} />
       </div>
     </>
   );

@@ -6,12 +6,14 @@ import { resetPassword } from "@/lib/auth-client";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import "../auth/page.css";
-import { signInPath } from "@/lib/urls";
+import { useSignInPath } from "@/hooks/useSignInPath";
 
 const MIN_LENGTH = 8;
 
 /** Where BetterAuth's emailed link lands: ?token=... or ?error=INVALID_TOKEN (E6). */
 export default function ResetPasswordPage() {
+  // This site's own sign-in page (merchant. gets the Merchant Centre login).
+  const signInHref = useSignInPath();
   const { t } = useLanguage();
   const [token, setToken] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
@@ -62,7 +64,7 @@ export default function ResetPasswordPage() {
           {done ? (
             <>
               <div className="auth-notice" role="status">{t.reset.done}</div>
-              <Link href={signInPath()} className="auth-submit auth-submit--link">{t.auth.signIn}</Link>
+              <Link href={signInHref} className="auth-submit auth-submit--link">{t.auth.signIn}</Link>
             </>
           ) : invalid ? (
             <>
@@ -100,7 +102,7 @@ export default function ResetPasswordPage() {
               </button>
             </form>
           )}
-          {!done && <Link href={signInPath()} className="auth-link">{t.reset.backToSignIn}</Link>}
+          {!done && <Link href={signInHref} className="auth-link">{t.reset.backToSignIn}</Link>}
         </div>
       </section>
     </div>

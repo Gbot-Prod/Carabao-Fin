@@ -125,6 +125,38 @@ def test_bell_api_lists_counts_and_marks_read(db, merchant, buyer):  # noqa: F81
     assert db.get(Notification, theirs.id).read_at is None
 
 
+def test_manage_unread_delete_and_page(db, merchant, buyer):  # noqa: F811
+    user, _ = buyer
+    other = make_user(db, "other2@example.com", notifications_preferences={})
+    for i in range(3):
+        notifications.notify(db, user.id, notifications.ORDER_PLACED, f"Order {i}")
+    notifications.notify(db, other.id, notifications.ORDER_PLACED, "Theirs")
+    db.commit()
+    client = _client(db, user)
+    mine = client.get("/users/me/notifications").json()
+    assert mine["total"] == 3 and mine["unread"] == 3
+    first, second, third = (n["id"] for n in mine["items"])
+    theirs = db.query(Notification).filter_by(user_id=other.id).one()
+
+    page = client.get("/users/me/notifications", params={"limit": 1, "offset": 1}).json()
+    assert [n["id"] for n in page["items"]] == [second] and page["total"] == 3
+
+    assert client.post(f"/users/me/notifications/{first}/read").status_code == 204
+    assert client.post(f"/users/me/notifications/{second}/read").status_code == 204
+    assert client.post(f"/users/me/notifications/{first}/unread").status_code == 204
+    assert client.get("/users/me/notifications").json()["unread"] == 2
+    assert client.post(f"/users/me/notifications/{theirs.id}/unread").status_code == 404
+
+    assert client.delete(f"/users/me/notifications/{third}").status_code == 204
+    assert client.delete(f"/users/me/notifications/{third}").status_code == 404
+    assert client.delete(f"/users/me/notifications/{theirs.id}").status_code == 404
+    # Clear read: only `second` is read.
+    assert client.delete("/users/me/notifications/read").status_code == 204
+    left = client.get("/users/me/notifications").json()
+    assert [n["id"] for n in left["items"]] == [first]
+    assert db.get(Notification, theirs.id) is not None
+
+
 def test_preferences_gate_sms_and_email():
     yes = User(notifications_preferences={})
     no_sms = User(notifications_preferences={"order_updates": False})

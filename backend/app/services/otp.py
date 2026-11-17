@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -24,6 +25,9 @@ from app.models.otp import OtpCode
 from app.services.rate_limit import lock_keys
 
 OTP_TTL_SECONDS = 600  # 10 minutes
+# Site-wide: one code per minute to the same target. BetterAuth's account codes
+# use the same wait (lib/auth.ts otpResendCooldown), and the web pages count it
+# down (hooks/useResendCooldown.ts OTP_RESEND_SECONDS).
 OTP_RESEND_COOLDOWN_SECONDS = 60
 OTP_MAX_ATTEMPTS = 5
 
@@ -75,9 +79,12 @@ def reserve_send(db: Session, key: str) -> None:
                 seconds=OTP_RESEND_COOLDOWN_SECONDS
             )
             if now < ready_at:
+                # Retry-After lets the client resume its countdown (hooks/useResendCooldown.ts).
+                wait = max(1, math.ceil((ready_at - now).total_seconds()))
                 raise HTTPException(
                     status_code=429,
-                    detail="Please wait before requesting another code",
+                    detail=f"Please wait {wait} seconds before requesting another code.",
+                    headers={"Retry-After": str(wait)},
                 )
             db.delete(record)
             db.flush()

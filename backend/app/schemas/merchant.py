@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.schemas.merchant_application import Weekday
+from app.schemas.merchant_application import MERCHANT_NAME_MAX, Weekday
 from app.schemas.produce import ProduceResponse
 
 # Columns that must keep a value once the shop exists.
@@ -13,7 +13,9 @@ _REQUIRED = ("merchant_name", "region", "province", "address", "postal_code")
 class MerchantUpdate(BaseModel):
     """PATCH /merchants/me. Same limits as onboarding (CF-0030)."""
 
-    merchant_name: str | None = Field(default=None, min_length=3, max_length=100)
+    merchant_name: str | None = Field(
+        default=None, min_length=3, max_length=MERCHANT_NAME_MAX
+    )
     contact_email: EmailStr | None = None
     # Normalized to +639XXXXXXXXX; a change needs phone_verification_token.
     contact_number: str | None = Field(default=None, min_length=6, max_length=20)

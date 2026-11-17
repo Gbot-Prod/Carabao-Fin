@@ -1,19 +1,18 @@
 "use client";
 
 import { signOut } from "@/lib/auth-client";
-import { signInPath } from "@/lib/urls";
-import { useRouter } from "next/navigation";
+import { signInPathHere } from "@/lib/urls";
 import { useState } from "react";
 
 export function LogoutButton({ className, children }: { className?: string; children?: React.ReactNode } = {}) {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogout = async () => {
     setIsLoading(true);
     try {
       await signOut();
-      router.push(signInPath());
+      // This site's own sign-in page; a full load drops the old session's state.
+      window.location.assign(signInPathHere());
     } catch (error) {
       console.error("Logout failed:", error);
     } finally {

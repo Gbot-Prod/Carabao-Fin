@@ -72,7 +72,10 @@ def test_otp_send_rejects_non_ph_number(sent):
 def test_otp_send_cooldown(sent):
     client = _client()
     assert client.post("/sms/otp/send", json={"number": NUMBER}).status_code == 200
-    assert client.post("/sms/otp/send", json={"number": NUMBER}).status_code == 429
+    again = client.post("/sms/otp/send", json={"number": NUMBER})
+    assert again.status_code == 429
+    # The page resumes its countdown from this.
+    assert 0 < int(again.headers["Retry-After"]) <= 60
     assert len(sent) == 1
     assert sent[0][0] == NORMALIZED
 
