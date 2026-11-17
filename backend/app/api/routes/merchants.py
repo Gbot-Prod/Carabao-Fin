@@ -508,10 +508,14 @@ def create_produce(
     )
     if error:
         raise HTTPException(status_code=400, detail=error)
+    # CF-0034: a new listing gets its photo from POST /produce/{id}/image.
+    upload_validation.check_image_url_fields(
+        {"image_url": produce_in.image_url}, {"image_url": None}
+    )
 
     produce = Produce(
         merchant_id=merchant.id,
-        **produce_in.model_dump(exclude={"price_tiers"}),
+        **produce_in.model_dump(exclude={"price_tiers", "image_url"}),
         price_tiers=serialize_tiers(produce_in.price_tiers),
     )
     db.add(produce)
@@ -540,6 +544,11 @@ def update_produce(
         raise HTTPException(status_code=404, detail="Produce item not found")
 
     changes = produce_update.model_dump(exclude_unset=True, exclude={"price_tiers"})
+    upload_validation.check_image_url_fields(
+        changes, {"image_url": produce.image_url}
+    )
+    if "image_url" in changes:
+        changes["image_url"] = upload_validation.blank_to_none(changes["image_url"])
     for field, value in changes.items():
         setattr(produce, field, value)
     tiers = (
@@ -656,6 +665,16 @@ def update_my_shoppage(
         if existing:
             raise HTTPException(status_code=400, detail="Slug already taken")
 
+    upload_validation.check_image_url_fields(
+        updates,
+        {
+            "banner_image_url": shop_page.banner_image_url,
+            "logo_url": shop_page.logo_url,
+        },
+    )
+    for field in ("banner_image_url", "logo_url"):
+        if field in updates:
+            updates[field] = upload_validation.blank_to_none(updates[field])
     for field, value in updates.items():
         setattr(shop_page, field, value)
 

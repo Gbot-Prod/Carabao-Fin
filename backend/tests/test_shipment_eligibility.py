@@ -9,7 +9,6 @@ from app.api.routes import shipments
 from app.models.order import Order
 from app.models.shipment import Shipment
 from app.models.user import User
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 
 def _client(db, merchant) -> TestClient:

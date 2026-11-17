@@ -11,7 +11,6 @@ from app.models.merchant import Merchant
 from app.models.produce import Produce
 from app.models.user import User
 from tests.better_auth import make_user
-from tests.test_reviews import db, merchant  # noqa: F401 - fixtures
 
 # Every listing needs both dates (services/produce_freshness.py).
 HARVEST = date.today()

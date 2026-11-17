@@ -58,6 +58,8 @@ The web app never sends SMS or email itself. It asks the API.
 | Security headers, HSTS | `frontend/carabao-app/next.config.ts` |
 | CSP with nonce, host routing | `frontend/carabao-app/proxy.ts` |
 | Host rules, cross-host links | `frontend/carabao-app/lib/urls.ts` |
+| SEO metadata, sitemap data | `frontend/carabao-app/lib/seo.ts` |
+| JSON-LD structured data (farm pages) | `frontend/carabao-app/lib/structured-data.ts` |
 | Admin deploy endpoint allow-list | `frontend/carabao-app/lib/blocked-auth-paths.ts` |
 | Admin sign-in page | `frontend/carabao-app/app/(admin-auth)/admin/login/` |
 | Admin dev server | `frontend/carabao-app/scripts/dev-admin.mjs` |
@@ -390,6 +392,11 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
   - `email_otp_send`: 20 per IP and 5 per email, per 15 min
   - `email_otp_verify`: 30 per IP and 10 per email, per 15 min
   - `email_otp_send_user`: 5 per user per hour
+  - Action limits (`ACTION_LIMITS`, 429 "Too many requests", CF-0037):
+    - `review_write`: 10 review creates + edits per user per hour
+    - `order_chat_send`: 30 order chat messages per user per minute
+    - `support_chat_send`: 20 support messages per user per minute
+    - `produce_search`: 120 `/produce/search` calls per IP per minute (needs `RATE_LIMIT_TRUST_PROXY=true` behind a proxy)
 - Better Auth admin plugin HTTP endpoints are blocked (404). Server-side `auth.api.*` calls still work.
 
 ### 7.2 Tokens

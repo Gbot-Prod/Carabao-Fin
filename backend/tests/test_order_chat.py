@@ -15,7 +15,7 @@ from app.models.user import User
 from app.services import chat
 from tests.better_auth import make_user, set_identity
 from tests.test_merchant_listings import _other_merchant
-from tests.test_reviews import _buyer, buyer, db, merchant  # noqa: F401 - fixtures
+from tests.test_reviews import _buyer
 
 
 def _client(db, user) -> TestClient:  # noqa: F811

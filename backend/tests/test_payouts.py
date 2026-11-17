@@ -24,10 +24,9 @@ from app.models.payout_batch import PayoutBatch
 from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.services import paymongo, payout_service
-from tests.payout_codes import save_payout_info
 from tests.better_auth import make_user
+from tests.payout_codes import save_payout_info
 from tests.test_merchant_orders import _merchant_client
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 GCASH = {
     "payout_type": "gcash",

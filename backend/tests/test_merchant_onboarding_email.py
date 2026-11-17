@@ -20,7 +20,6 @@ from tests.test_merchant_onboarding_phone import (
     onboarding_files,
     patch_uploads,
 )
-from tests.test_reviews import db  # noqa: F401 - fixture
 
 EMAIL = "Farm@Example.com"
 NORMALIZED = "farm@example.com"

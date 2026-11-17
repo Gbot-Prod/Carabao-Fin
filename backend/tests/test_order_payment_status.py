@@ -13,7 +13,7 @@ from app.models.transaction import Transaction
 from app.services.order_status import payment_status
 from tests.payout_codes import save_payout_info
 from tests.test_merchant_orders import _merchant_client
-from tests.test_reviews import _client, buyer, db, merchant  # noqa: F401 - fixtures
+from tests.test_reviews import _client
 
 
 def _order(db, merchant, buyer, status, *txn_statuses, total=500):

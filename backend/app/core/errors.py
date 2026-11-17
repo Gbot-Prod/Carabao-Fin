@@ -15,7 +15,7 @@ import re
 import uuid
 from contextvars import ContextVar
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request, Response
 
 logger = logging.getLogger("app.errors")
 
@@ -97,9 +97,11 @@ class FieldErrors(HTTPException):
         super().__init__(status_code=status_code, detail=" ".join(errors.values()))
 
 
-async def field_errors_handler(_request, exc: FieldErrors):
+async def field_errors_handler(_request: Request, exc: Exception) -> Response:
     from fastapi.responses import JSONResponse
 
+    # Registered for FieldErrors only; typed Exception to fit Starlette.
+    assert isinstance(exc, FieldErrors)
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail, "errors": exc.errors},

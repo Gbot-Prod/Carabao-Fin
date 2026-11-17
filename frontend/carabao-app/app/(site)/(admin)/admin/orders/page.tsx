@@ -14,7 +14,7 @@ import {
   type AdminPaymentStatus,
   type Merchant,
 } from "@/util/api/admin";
-import Pagination from "../../Pagination";
+import Pagination from "@/components/Pagination/Pagination";
 import styles from "./page.module.css";
 import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";

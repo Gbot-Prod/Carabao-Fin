@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import FarmDetailClient from './FarmDetailClient';
-import { farmDescription, getPublicFarm } from '@/lib/seo';
+import { farmDescription, getPublicFarm, siteUrl } from '@/lib/seo';
+import { farmJsonLd, serializeJsonLd } from '@/lib/structured-data';
 
 // Server wrapper: a shared farm link must show the farm name and banner in the
 // Facebook / Messenger preview, and crawlers do not run client JavaScript.
@@ -46,6 +47,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default function FarmPage() {
-  return <FarmDetailClient />;
+export default async function FarmPage({ params }: Props) {
+  const { merchantID } = await params;
+  const id = Number(merchantID);
+  // Same cached request as generateMetadata, so no extra API call.
+  const farm = Number.isInteger(id) && id > 0 ? await getPublicFarm(id) : null;
+  const jsonLd = farm?.merchant
+    ? serializeJsonLd(farmJsonLd(farm.merchant, farm.shopPage, new URL(`/farms/${id}`, siteUrl).toString()))
+    : null;
+
+  return (
+    <>
+      {jsonLd ? (
+        // CF-0035: structured data for search results. A data block, not
+        // script, so CSP does not apply; serializeJsonLd escapes "<".
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+      ) : null}
+      <FarmDetailClient />
+    </>
+  );
 }

@@ -5,8 +5,8 @@ from app.api.webhooks.paymongo import router as paymongo_webhook_router
 from .admin import router as admin_router
 from .admin_audit import router as admin_audit_router
 from .admin_orders import router as admin_orders_router
-from .admin_transactions import router as admin_transactions_router
 from .admin_produce import router as admin_produce_router
+from .admin_transactions import router as admin_transactions_router
 from .auth import router as auth_router
 from .carts import router as carts_router
 from .chat import router as chat_router
@@ -25,6 +25,7 @@ from .produce_search import router as produce_search_router
 from .reference_prices import router as reference_prices_router
 from .reorder import router as reorder_router
 from .reviews import router as reviews_router
+from .saved_produce import router as saved_produce_router
 from .shipments import router as shipments_router
 from .sms import router as sms_router
 from .stock_alerts import router as stock_alerts_router
@@ -39,6 +40,7 @@ router = APIRouter()
 router.include_router(produce_search_router)
 router.include_router(reorder_router)
 router.include_router(follows_router)
+router.include_router(saved_produce_router)
 router.include_router(notifications_router)
 router.include_router(chat_router)
 router.include_router(support_chat_router)

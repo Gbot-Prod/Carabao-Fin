@@ -121,3 +121,15 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* Saved produce heart (CF-0038): over the photo, outside the card link. */
+.item {
+  position: relative;
+}
+
+.save {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}

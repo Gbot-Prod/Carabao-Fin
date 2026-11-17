@@ -10,7 +10,7 @@ import {
   type AdminProduce,
 } from "@/util/api/admin";
 import getApiErrorMessage from "@/util/errorHelper";
-import Pagination from "../../Pagination";
+import Pagination from "@/components/Pagination/Pagination";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import suspend from "../../suspend.module.css";

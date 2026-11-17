@@ -1,6 +1,6 @@
 "use client";
 
-import styles from "./pagination.module.css";
+import styles from "./Pagination.module.css";
 
 type Props = {
   page: number;

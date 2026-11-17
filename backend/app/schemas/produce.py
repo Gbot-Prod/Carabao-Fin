@@ -72,3 +72,12 @@ class ProduceResponse(ProduceBase):
     hidden_reason: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SavedProduceResponse(ProduceResponse):
+    """A saved listing as its buyer sees it (CF-0038), with where it is from."""
+
+    merchant_name: str
+    merchant_province: str | None = None
+    merchant_city: str | None = None
+    saved_at: datetime

@@ -10,7 +10,6 @@ from app.models.admin_audit_log import AdminAuditLog
 from app.models.auth_identity import AuthIdentity
 from app.services import admin_enrolment, audit_log, better_auth_store
 from tests.better_auth import create_tables, get_identity, make_user
-from tests.test_reviews import db  # noqa: F401 - fixture
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "make_admin.py"
 _spec = importlib.util.spec_from_file_location("make_admin_script", _SCRIPT)
