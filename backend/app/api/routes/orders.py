@@ -115,6 +115,12 @@ def place_order_from_cart(
         .populate_existing()
         .all()
     }
+    # CF-0040: a merchant may not buy from their own farm. Self-orders could be
+    # confirmed as delivered by the same person and then reviewed (rating
+    # inflation) or used to fake sales history.
+    own_merchant_id = (
+        db.query(Merchant.id).filter(Merchant.user_id == current_user.id).scalar()
+    )
     items_by_merchant: dict[int, list[dict]] = {}
     subtotal_by_merchant: dict[int, int] = {}
     for item in cart_items:
@@ -129,6 +135,12 @@ def place_order_from_cart(
         if produce is None:
             raise HTTPException(
                 status_code=400, detail=f"Produce ID {produce_id} not found"
+            )
+        if own_merchant_id is not None and produce.merchant_id == own_merchant_id:
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{produce.name}' is from your own farm. Remove it from "
+                "your cart to continue.",
             )
         if produce.hidden_at is not None:
             raise HTTPException(
