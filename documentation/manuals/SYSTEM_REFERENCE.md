@@ -107,6 +107,7 @@ The web app never sends SMS or email itself. It asks the API.
 | Phone code length 6, TTL 600 s, 5 attempts | `lib/auth.ts` phoneNumber() | `backend/app/services/otp.py` |
 | Phone format `+639XXXXXXXXX` | `lib/phone.ts` `normalizePhMobile` | `phone_verification.normalize_ph_mobile` (returns without `+`) |
 | Status values | `backend/app/models/statuses.py` | `frontend/.../util/api/statuses.ts` |
+| Cart line `issue` values (CF-0042) | `CartIssue` in `backend/app/api/routes/_order_helpers.py` and `schemas/cart.py` | `frontend/.../lib/cart-issues.ts` (unknown values show no message but still block checkout) |
 | Postgres TLS rules | `lib/db-ssl.mjs` | `app/core/database_url.py` |
 | Mobile app scheme `carabaomobile://` | `lib/auth.ts`, `lib/admin-two-factor.ts` | mobile `app.json` |
 

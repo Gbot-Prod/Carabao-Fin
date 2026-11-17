@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from typing import Any
+from datetime import UTC, date, datetime
+from typing import Any, Literal
 
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -16,6 +16,7 @@ from app.services.order_status import (
     auto_confirm_at,
     payment_status,
 )
+from app.services.produce_freshness import is_expired
 
 
 def _to_int(value: Any, default: int = 0) -> int:
@@ -33,6 +34,38 @@ def merchant_takes_orders(merchant: Merchant | None) -> bool:
         and merchant.suspended_at is None
         and (merchant.user is None or not merchant.user.is_suspended)
     )
+
+
+# CF-0042: why place-order would refuse a cart line. Same checks as
+# place_order_from_cart, so the cart warns before checkout does.
+CartIssue = Literal[
+    "unavailable",  # listing deleted or hidden by an admin
+    "expired",  # past its best-before date
+    "farm_unavailable",  # farm closed, suspended, or owner banned
+    "own_listing",  # the buyer's own farm (CF-0040)
+    "below_minimum",  # quantity under the listing's minimum order
+    "exceeds_stock",  # quantity over the stock left
+]
+
+
+def cart_line_issue(
+    produce: Produce | None, quantity: int, buyer_id: int, today: date
+) -> CartIssue | None:
+    """The first reason checkout would refuse this line, or None."""
+    if produce is None or produce.hidden_at is not None:
+        return "unavailable"
+    if is_expired(produce, today):
+        return "expired"
+    merchant = produce.merchant
+    if not merchant_takes_orders(merchant):
+        return "farm_unavailable"
+    if merchant is not None and merchant.user_id == buyer_id:
+        return "own_listing"
+    if quantity < (produce.min_order_qty or 1):
+        return "below_minimum"
+    if (produce.stock_quantity or 0) < quantity:
+        return "exceeds_stock"
+    return None
 
 
 def cart_line(produce: Produce, quantity: int, unit_price: int) -> dict[str, Any]:

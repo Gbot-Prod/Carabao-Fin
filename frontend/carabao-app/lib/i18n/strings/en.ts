@@ -174,6 +174,15 @@ const en = {
     addProducts: 'Add Products',
     proceed: 'Proceed to Checkout',
     continueShopping: 'Continue Shopping',
+    // CF-0042: why checkout would refuse a line.
+    issueUnavailable: 'No longer available. Remove it to continue.',
+    issueExpired: 'Past its best-before date. Remove it to continue.',
+    issueFarmUnavailable: 'This farm is not taking orders now. Remove it to continue.',
+    issueOwnListing: 'This is from your own farm. Remove it to continue.',
+    issueBelowMinimum: 'Below the minimum order of {qty}. Raise the quantity to continue.',
+    issueExceedsStock: 'Only {qty} left. Lower the quantity to continue.',
+    priceChanged: 'Price changed from PHP {old}.',
+    fixIssues: 'Fix the items marked in your cart to continue.',
   },
   checkout: {
     title: 'Checkout',

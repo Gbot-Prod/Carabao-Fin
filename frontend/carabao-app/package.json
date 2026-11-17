@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test util/navigation.test.ts lib/blocked-auth-paths.test.ts lib/phone.test.ts lib/admin-two-factor.test.ts lib/next-path.test.ts lib/urls.test.ts lib/merchant-links.test.ts lib/otp-cooldown.test.ts lib/structured-data.test.ts lib/order-history.test.ts lib/saved-produce.test.ts lib/sitemap.test.ts",
+    "test": "node --test util/navigation.test.ts lib/blocked-auth-paths.test.ts lib/phone.test.ts lib/admin-two-factor.test.ts lib/next-path.test.ts lib/urls.test.ts lib/merchant-links.test.ts lib/otp-cooldown.test.ts lib/structured-data.test.ts lib/order-history.test.ts lib/saved-produce.test.ts lib/sitemap.test.ts lib/cart-issues.test.ts",
     "auth:migrate": "node scripts/better-auth-migrate.mjs",
     "auth:migrate:apply": "node scripts/better-auth-migrate.mjs --apply"
   },

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # A cart holds at most this many lines, each at most this many sale units.
@@ -46,6 +48,21 @@ class CartItem(BaseModel):
     stock_quantity: int = 0
     # The merchant's delivery fee for its order (C1).
     delivery_fee: int = 0
+    # CF-0042: set on every read from the live listing. `issue` is why
+    # checkout would refuse the line; `previous_price` is the price the line
+    # had when it was saved, when the listing's price has changed since.
+    issue: (
+        Literal[
+            "unavailable",
+            "expired",
+            "farm_unavailable",
+            "own_listing",
+            "below_minimum",
+            "exceeds_stock",
+        ]
+        | None
+    ) = None
+    previous_price: int | None = None
 
 
 class CartResponse(BaseModel):

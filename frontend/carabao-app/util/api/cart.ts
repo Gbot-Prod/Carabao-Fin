@@ -1,3 +1,4 @@
+import type { CartIssue } from '@/lib/cart-issues';
 import { apiClient } from './client';
 
 export type CartItem = {
@@ -15,7 +16,12 @@ export type CartItem = {
   min_order_qty?: number;
   merchant_id?: number | null;
   delivery_fee?: number | null;
+  // CF-0042: read live from the listing on every GET/PUT.
+  issue?: CartIssue | null;
+  previous_price?: number | null;
 };
+
+
 
 export type Cart = {
   id: number;

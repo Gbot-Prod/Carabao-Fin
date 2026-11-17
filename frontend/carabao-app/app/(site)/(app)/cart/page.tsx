@@ -9,6 +9,7 @@ import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt, plural } from "@/lib/i18n/format";
 import { useAuth } from "@/hooks/useAuth";
+import { blockingLineCount, cartIssueMessage, type CartIssue } from "@/lib/cart-issues";
 
 type CartItem = {
   id: string;
@@ -21,7 +22,32 @@ type CartItem = {
   min_order_qty?: number;
   merchant_id?: number | null;
   delivery_fee?: number | null;
+  issue?: CartIssue | null;
+  previous_price?: number | null;
 };
+
+// Fields only the server knows (CF-0042): live stock, price, and why checkout
+// would refuse the line.
+type ServerLine = {
+  price: number;
+  min_order_qty?: number;
+  merchant_id?: number | null;
+  delivery_fee?: number | null;
+  farm: string;
+  stock_quantity?: number;
+  issue?: CartIssue | null;
+  previous_price?: number | null;
+};
+
+const serverFields = (s: ServerLine) => ({
+  price: Number(s.price) || 0,
+  min_order_qty: s.min_order_qty,
+  merchant_id: s.merchant_id,
+  delivery_fee: s.delivery_fee,
+  stock_quantity: s.stock_quantity,
+  issue: s.issue ?? null,
+  previous_price: s.previous_price ?? null,
+});
 
 export default function CartPage() {
   const { t } = useLanguage();
@@ -42,10 +68,7 @@ export default function CartPage() {
               produce: item.produce,
               unit: item.unit,
               quantity: Number(item.quantity) || 0,
-              price: Number(item.price) || 0,
-              min_order_qty: item.min_order_qty,
-              merchant_id: item.merchant_id,
-              delivery_fee: item.delivery_fee,
+              ...serverFields(item),
             })),
           );
         }
@@ -82,7 +105,10 @@ export default function CartPage() {
               s.min_order_qty !== item.min_order_qty ||
               (s.merchant_id ?? null) !== (item.merchant_id ?? null) ||
               (s.delivery_fee ?? null) !== (item.delivery_fee ?? null) ||
-              s.farm !== item.farm)
+              s.farm !== item.farm ||
+              s.stock_quantity !== item.stock_quantity ||
+              (s.issue ?? null) !== (item.issue ?? null) ||
+              (s.previous_price ?? null) !== (item.previous_price ?? null))
           );
         });
         if (changed) {
@@ -90,14 +116,7 @@ export default function CartPage() {
             prev.map((item) => {
               const s = fromServer.get(item.id);
               return s
-                ? {
-                    ...item,
-                    price: Number(s.price) || 0,
-                    min_order_qty: s.min_order_qty,
-                    merchant_id: s.merchant_id,
-                    delivery_fee: s.delivery_fee,
-                    farm: s.farm || item.farm,
-                  }
+                ? { ...item, ...serverFields(s), farm: s.farm || item.farm }
                 : item;
             }),
           );
@@ -113,6 +132,8 @@ export default function CartPage() {
   // One order per farm at checkout (C1), each with its own delivery fee.
   const groups = useMemo(() => groupCartByMerchant(items), [items]);
   const { itemTotal, deliveryTotal, grandTotal } = cartTotals(groups);
+  // Place-order refuses the whole cart while any line has an issue (CF-0042).
+  const blocked = blockingLineCount(items) > 0;
 
   const updateQuantity = (id: string, nextQuantity: number) => {
     if (nextQuantity < 1) return;
@@ -179,6 +200,16 @@ export default function CartPage() {
                           <p className={styles.priceLine}>
                             PHP {item.price.toFixed(2)} / {item.unit}
                           </p>
+                          {item.previous_price != null && item.previous_price !== item.price && (
+                            <p className={styles.priceChanged}>
+                              {fmt(t.cart.priceChanged, { old: item.previous_price.toFixed(2) })}
+                            </p>
+                          )}
+                          {item.issue && (
+                            <p className={styles.lineIssue} role="alert">
+                              {cartIssueMessage(item, t.cart)}
+                            </p>
+                          )}
                         </div>
 
                         <div className={styles.itemActions}>
@@ -247,13 +278,20 @@ export default function CartPage() {
             <strong>PHP {grandTotal.toFixed(2)}</strong>
           </div>
 
+          {blocked && <p className={styles.lineIssue}>{t.cart.fixIssues}</p>}
           <div className={styles.summaryActions}>
-            <Link
-              href={items.length === 0 ? "/order" : "/checkout"}
-              className={styles.primaryButton}
-            >
-              {items.length === 0 ? t.cart.addProducts : t.cart.proceed}
-            </Link>
+            {blocked ? (
+              <span className={styles.primaryButton} aria-disabled="true" data-disabled="true">
+                {t.cart.proceed}
+              </span>
+            ) : (
+              <Link
+                href={items.length === 0 ? "/order" : "/checkout"}
+                className={styles.primaryButton}
+              >
+                {items.length === 0 ? t.cart.addProducts : t.cart.proceed}
+              </Link>
+            )}
             <Link href="/order" className={styles.secondaryButton}>
               {t.cart.continueShopping}
             </Link>

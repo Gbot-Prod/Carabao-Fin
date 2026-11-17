@@ -183,6 +183,15 @@ const fil: Strings = {
     addProducts: 'Magdagdag ng produkto',
     proceed: 'Magpatuloy sa Checkout',
     continueShopping: 'Magpatuloy sa pamimili',
+    // CF-0042
+    issueUnavailable: 'Hindi na ito available. Alisin ito para makapagpatuloy.',
+    issueExpired: 'Lampas na sa best-before date. Alisin ito para makapagpatuloy.',
+    issueFarmUnavailable: 'Hindi tumatanggap ng order ang bukid na ito ngayon. Alisin ito para makapagpatuloy.',
+    issueOwnListing: 'Galing ito sa sarili mong bukid. Alisin ito para makapagpatuloy.',
+    issueBelowMinimum: 'Kulang sa pinakamababang order na {qty}. Dagdagan ang dami para makapagpatuloy.',
+    issueExceedsStock: '{qty} na lang ang natitira. Bawasan ang dami para makapagpatuloy.',
+    priceChanged: 'Nagbago ang presyo mula PHP {old}.',
+    fixIssues: 'Ayusin ang mga item na may marka sa cart para makapagpatuloy.',
   },
   checkout: {
     title: 'Checkout',

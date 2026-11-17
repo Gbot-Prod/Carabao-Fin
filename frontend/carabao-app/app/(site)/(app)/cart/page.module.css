@@ -292,3 +292,22 @@
   line-height: 1.45;
   color: var(--text-subtle);
 }
+
+/* CF-0042: line problems from the server. */
+.lineIssue {
+  margin: 0.4rem 0 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.priceChanged {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.primaryButton[data-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
