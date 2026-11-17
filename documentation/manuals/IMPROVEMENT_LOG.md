@@ -1,11 +1,11 @@
 # Improvement Log
-branch: improve/loop    push: no    iteration: 4
+branch: improve/loop    push: no    iteration: 5
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-FEATURE 1/#4 · STRENGTHEN 1/#2 · SECURITY 1/#3 · AUDIT 1/#1
+FEATURE 1/#4 · STRENGTHEN 2/#5 · SECURITY 1/#3 · AUDIT 1/#1
 
 ## Needs human
 - Push policy: header says `push: no`. Change to `yes` if the loop should push `improve/loop`.
@@ -15,7 +15,6 @@ FEATURE 1/#4 · STRENGTHEN 1/#2 · SECURITY 1/#3 · AUDIT 1/#1
 |----|------|------|--------|--------|------|------|------------------------|
 | B02 | SECURITY | M | 4 | 2 | produce schemas | | `ProduceBase.unit_quantity` has no bounds (0 or negative accepted → divide-by-zero / negative per-unit math); `name`/`description` have no `max_length`; schemas lack `extra="forbid"`. Add bounds + forbid on produce, review, shop page, shipment, payment schemas — test: `unit_quantity=0` → 422, 10k-char name → 422, unknown field → 422. |
 | B03 | SECURITY | M | 4 | 2 | rate limits | | No rate limit on review create/update, order chat send, support chat send, or `/produce/search` (only OTP/SMS/onboarding/merchant phone use `services/rate_limit.py`). Add per-user (per-IP for search) limits — test: N+1th request → 429 with standard error body. |
-| B04 | STRENGTHEN | M | 4 | 2 | orders API + profile UI | | `GET /orders/me/history` loads every order and sorts in Python, no pagination. Move to SQL `ORDER BY ordered_at DESC` with `Page[...]` (limit/offset, status filter, search by order ref) + UI pager — test: 25 orders, page_size=10 → 3 pages in order. |
 | B05 | FEATURE | L | 5 | 4 | checkout/money | promos | Voucher/promo codes: model + Alembic, admin CRUD, server-side validation in checkout pricing via `services/money.py` (percent/fixed, min spend, usage cap, expiry, merchant- or platform-scoped). Slice 1: model + validation service + apply at place-order with tests. |
 | B06 | FEATURE | M | 4 | 3 | discovery | wishlist | Saved produce (wishlist): `saved_produce` table + Alembic, `POST/DELETE/GET /me/saved-produce`, heart button on produce cards, saved list on profile — test: save, list, unsave; hidden listings excluded. |
 | B08 | FEATURE | M | 3 | 2 | SEO | seo | Extend `app/sitemap.ts` beyond `/` and `/farms/:id`: category/search landing pages and help pages; add lastModified from farm `updated_at` — test: pure sitemap builder unit test. |
@@ -43,9 +42,13 @@ FEATURE 1/#4 · STRENGTHEN 1/#2 · SECURITY 1/#3 · AUDIT 1/#1
 | B31 | SECURITY | S | 3 | 1 | data | | Image URLs stored before CF-0034 may point off-site; a one-off check script listing produce/shop rows whose image URLs don't start with `CLOUDFLARE_R2_PUBLIC_URL` (report only, no auto-delete) — test: script unit test on a seeded SQLite db. Batch with B02. |
 | B32 | FEATURE | S | 2 | 1 | SEO | seo | Validate the farm page JSON-LD with Google's Rich Results Test on a deployed farm, and add `BreadcrumbList` (Home › Farms › farm) — test: builder unit test. Batch with B08. |
 | B33 | FEATURE | S | 2 | 1 | mobile | parity | Mobile has no SEO surface; no parity needed for B07 (log only). |
+| B34 | FEATURE | S | 2 | 2 | mobile | parity | Mobile HistoryScreen still loads the whole list; switch to `/orders/me/history/page` with infinite scroll, then retire the unpaged route — test: screen loads page 2 on scroll. |
+| B35 | STRENGTHEN | S | 2 | 1 | web orders | | Keep history page/filter/search in the URL (`?tab=history&page=2&status=delivered`) so back/refresh keep the view — test: pure parse/serialize helper. Batch with other order-page polish. |
 | B29 | SECURITY | M | 4 | 2 | deps | | `npm audit --omit=dev` 13 vulns (2 critical): apply patch/minor upgrades (sharp etc.), log majors — test: audit count drops, build passes. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #5 — STRENGTHEN — buyer order history (API + web) — CF-0036 — M
+What: new `GET /orders/me/history/page` (`Page[OrderItemResponse]`): newest first in SQL (`ordered_at DESC NULLS LAST, id DESC`), `status` group filter (`active` / `delivered` / `cancelled` incl. payment_mismatch), `q` = order reference (`CB-2026-0042`, `#42`, `42`) or farm name (ILIKE, `%`/`_` escaped), `page` ≤ 10 000, `page_size` ≤ 50 (default 10). The old `/orders/me/history` list stays for the mobile app but is now sorted by SQL instead of Python. Web orders page History tab: status select, search form, "No matching orders" empty state, pager. Moved the admin `Pagination` component to `components/Pagination/` (6 admin imports updated) so the buyer site can use it. Pure helpers `lib/order-history.ts` (params, page after a delete). Why: B04 — the whole history was loaded and sorted in Python on every visit. Tests: backend `tests/test_order_history_page.py` (9: paging + total, past-the-end, own orders only, filter groups + 422 on unknown, ref search 4 forms, ref search can't reach another buyer's order, farm search with wildcards literal, bounds 422, plain list still newest-first); web `lib/order-history.test.ts` (4). Checks: pytest 685 passed; ruff 142 / mypy 2348 (unchanged, pre-existing; new code typed); web test 63/63, lint, tsc pass. No build this iteration (not FEATURE, not 4th). Not checked in a browser. Follow-ups: B34, B35.
 ### #4 — FEATURE — web SEO (farm pages) — CF-0035 — M
 What: farm pages (`/farms/[id]`) now render a schema.org JSON-LD `@graph`: the farm as `LocalBusiness` (name/description/banner from the shop page, locality/province/postal code/PH only — no street, pin or contact, on purpose), `AggregateRating` only when `rating_count > 0` (rounded to 1 dp), and each listed produce item (max 30, named and priced) as a `Product` with a PHP `Offer` (InStock/OutOfStock, `UnitPriceSpecification` with KGM/LBR) whose seller is the farm. Pure builder `lib/structured-data.ts`; page reuses the cached `getPublicFarm` from `generateMetadata` (no extra API call). `serializeJsonLd` escapes `<`, `>`, `&`, U+2028/2029 so merchant text can't close the `<script>`. Added `rating_count` to the web `Merchant` type (API already sends it). Why: B07, rich results for farm/produce searches. Tests: `lib/structured-data.test.ts` (8, registered in `npm test`): address privacy, shop page overrides, rating rules, Product/Offer shape, out-of-stock/lbs/invalid items, cap, non-http images dropped, script-breakout escape round-trip. Checks: web test 59/59, lint, tsc, `npm run build` pass; backend pytest 676 passed, ruff 142 / mypy 2348 (unchanged, pre-existing). Docs: SYSTEM_REFERENCE §2 key files. Follow-ups: B32, B33.
 ### #3 — SECURITY — produce + shop page API — CF-0034 — M

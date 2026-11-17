@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Query, Session, selectinload
 
 from app.models.cart import Cart
 from app.models.merchant import Merchant
@@ -92,13 +92,17 @@ def get_or_create_cart(db: Session, user_id: int) -> Cart:
     return cart
 
 
-def get_buyer_orders(db: Session, user_id: int) -> list[Order]:
+def buyer_orders_query(db: Session, user_id: int) -> Query[Order]:
+    """The buyer's orders, newest first, sorted by the database (CF-0036)."""
     return (
         db.query(Order)
-        .options(*order_item_load())
         .filter(Order.user_id == user_id)
-        .all()
+        .order_by(Order.ordered_at.desc().nulls_last(), Order.id.desc())
     )
+
+
+def get_buyer_orders(db: Session, user_id: int) -> list[Order]:
+    return buyer_orders_query(db, user_id).options(*order_item_load()).all()
 
 
 def order_item_load() -> tuple:

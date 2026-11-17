@@ -2,6 +2,7 @@ import { apiClient } from './client';
 import type { CartItem } from './cart';
 import type { Review } from './reviews';
 import type { OrderStatus, PaymentStatus } from './statuses';
+import { historyParams, type HistoryQuery } from '@/lib/order-history';
 
 export type OrderHistoryItem = {
   id: number;
@@ -79,6 +80,21 @@ export type PlaceOrderResponse = {
 
 export const fetchOrderHistory = async (): Promise<OrderHistoryItem[]> => {
   const response = await apiClient.get<OrderHistoryItem[]>('/orders/me/history');
+  return response.data;
+};
+
+export type OrderHistoryPage = {
+  items: OrderHistoryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+// CF-0036: one page, newest first, optionally filtered by status group or search.
+export const fetchOrderHistoryPage = async (query: HistoryQuery): Promise<OrderHistoryPage> => {
+  const response = await apiClient.get<OrderHistoryPage>('/orders/me/history/page', {
+    params: historyParams(query),
+  });
   return response.data;
 };
 
