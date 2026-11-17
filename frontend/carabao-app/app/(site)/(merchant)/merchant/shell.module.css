@@ -360,7 +360,7 @@
   }
 }
 
-/* Gate: signed out, no merchant profile, load error */
+/* Gate: a centred loading state before the shell (signed out, application status) */
 .gate {
   min-height: 100vh;
   display: flex;
@@ -368,45 +368,6 @@
   justify-content: center;
   padding: 16px;
   background: var(--bg-primary);
-}
-
-.gateCard {
-  width: min(460px, 100%);
-  padding: 28px;
-  border-radius: var(--radius-md);
-  background: var(--bg-white);
-  box-shadow: 0 8px 24px var(--color-shadow);
-}
-
-.gateCard h1 {
-  margin: 0 0 8px;
-  font-size: 20px;
-  color: var(--green-900);
-}
-
-.gateCard p {
-  margin: 0 0 20px;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--text-muted);
-}
-
-.gateButton {
-  display: inline-block;
-  border: none;
-  font: inherit;
-  cursor: pointer;
-  padding: 10px 18px;
-  border-radius: var(--radius-sm);
-  background: var(--green-600);
-  color: var(--bg-white);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.gateButton:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
 }
 
 /* ── Merchant additions ──────────────────────── */
@@ -455,28 +416,6 @@
 
 .mainPad {
   padding: 28px 32px;
-}
-
-.gateActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.gateButtonSecondary {
-  display: inline-block;
-  padding: 10px 18px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--green-border);
-  background: var(--bg-white);
-  color: var(--text-strong);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.gateButtonSecondary:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
 }
 
 @media (max-width: 768px) {

@@ -31,13 +31,32 @@ PAYLOAD = {
     "address": "12 Rizal St",
     "postal_code": "3000",
     "available_days": ["Mon"],
+    "gov_id_type": "Passport",
 }
+
+
+def onboarding_files() -> dict:
+    """The two documents the submit needs (RSBSA and a government ID)."""
+    return {
+        "rsbsa_file": ("rsbsa.pdf", pdf_bytes(), "application/pdf"),
+        "gov_id_file": ("id.pdf", pdf_bytes(), "application/pdf"),
+    }
+
+
+def patch_uploads(monkeypatch) -> None:
+    uploads = {
+        "upload_rsbsa_document": "rsbsa/x.pdf",
+        "upload_gov_id_document": "gov-id/x.pdf",
+        "delete_private_document": None,
+    }
+    for name, result in uploads.items():
+        monkeypatch.setattr(r2_service, name, lambda *a, _r=result, **k: _r)
 
 
 @pytest.fixture(autouse=True)
 def _env(monkeypatch):
     monkeypatch.setenv("AUTH_SYNC_SHARED_SECRET", "test-secret")
-    monkeypatch.setattr(r2_service, "upload_rsbsa_document", lambda *a, **k: "rsbsa/x.pdf")
+    patch_uploads(monkeypatch)
 
 
 def _apply(db, user, **overrides):  # noqa: F811
@@ -47,8 +66,14 @@ def _apply(db, user, **overrides):  # noqa: F811
     app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app).post(
         "/merchant-onboarding/me",
-        data={"payload": json.dumps({**PAYLOAD, **overrides})},
-        files={"rsbsa_file": ("rsbsa.pdf", pdf_bytes(), "application/pdf")},
+        # The account's own verified email needs no code (email tests:
+        # test_merchant_onboarding_email.py).
+        data={
+            "payload": json.dumps(
+                {**PAYLOAD, "contact_email": user.email, **overrides}
+            )
+        },
+        files=onboarding_files(),
     )
 
 

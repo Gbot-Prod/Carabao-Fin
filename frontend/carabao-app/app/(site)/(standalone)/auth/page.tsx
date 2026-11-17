@@ -1,43 +1,15 @@
 "use client";
 
-import { isValidPhone, sendPhoneCode, signIn, signUpWithPhone, socialErrorMessage } from "@/lib/auth-client";
-import { safeNextPath } from "@/lib/next-path";
 import { formatPhMobile, normalizePhMobile } from "@/lib/phone";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { MIN_PASSWORD, useAuthForm } from "@/hooks/useAuthForm";
+import { FacebookIcon, GoogleIcon } from "@/components/SocialIcons";
 import Logo from "@/public/images/icons/carabaoLogo.png";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import "./page.css";
 import { appUrl } from "@/lib/urls";
-
-const MIN_PASSWORD = 8;
-
-type Provider = "google" | "facebook";
-
-function FacebookIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <circle cx="12" cy="12" r="12" fill="#1877F2" />
-      <path
-        fill="#fff"
-        d="M15.12 15.47 15.65 12H12.3V9.75c0-.95.47-1.88 1.97-1.88h1.52V4.92s-1.38-.24-2.7-.24c-2.76 0-4.56 1.67-4.56 4.69V12H5.48v3.47h3.05V24a12.1 12.1 0 0 0 3.77 0v-8.53h2.82Z"
-      />
-    </svg>
-  );
-}
-
-function GoogleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.46a5.52 5.52 0 0 1-2.4 3.62v3h3.88c2.27-2.09 3.58-5.17 3.58-8.81Z" />
-      <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.94-2.91l-3.88-3.01c-1.07.72-2.45 1.15-4.06 1.15-3.13 0-5.78-2.11-6.72-4.95H1.27v3.11A12 12 0 0 0 12 24Z" />
-      <path fill="#FBBC05" d="M5.28 14.28a7.2 7.2 0 0 1 0-4.56V6.61H1.27a12 12 0 0 0 0 10.78l4.01-3.11Z" />
-      <path fill="#EA4335" d="M12 4.77c1.76 0 3.34.61 4.59 1.8l3.44-3.44A11.97 11.97 0 0 0 1.27 6.61l4.01 3.11C6.22 6.88 8.87 4.77 12 4.77Z" />
-    </svg>
-  );
-}
 
 /**
  * Log in with a mobile number (or a verified email) and password, or with
@@ -48,121 +20,26 @@ function GoogleIcon() {
 export default function AuthPage() {
   const router = useRouter();
   const { t } = useLanguage();
-  const [authMode, setMode] = useState<"signin" | "signup">("signin");
-  const [step, setStep] = useState<"phone" | "details" | "code">("phone");
-  const [form, setForm] = useState({
-    identifier: "",
-    phoneNumber: "",
-    name: "",
-    code: "",
-    password: "",
-    confirmPassword: "",
-  });
-  const [rememberMe, setRememberMe] = useState(true);
-  const [phoneInvalid, setPhoneInvalid] = useState(false);
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [socialLoading, setSocialLoading] = useState<Provider | null>(null);
-  const [idleNotice, setIdleNotice] = useState(false);
-  // ?next= is where to go after sign-in, e.g. the admin setup link (CF-0018).
-  const [nextPath, setNextPath] = useState("/");
-
-  // "Create an account" links (E4) open the page on sign-up; ?reason=idle (E5)
-  // explains an automatic sign-out; ?error= is a failed Google/Facebook sign-in.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    queueMicrotask(() => {
-      setNextPath(safeNextPath(params.get("next")));
-      if (params.get("mode") === "signup") setMode("signup");
-      if (params.get("reason") === "idle") setIdleNotice(true);
-      const socialError = params.get("error");
-      if (socialError) setError(socialErrorMessage(socialError));
-    });
-  }, []);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.name === "phoneNumber") setPhoneInvalid(false);
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const switchMode = (mode: "signin" | "signup") => {
-    setMode(mode);
-    setStep("phone");
-    setForm((f) => ({ ...f, code: "" }));
-    setPhoneInvalid(false);
-    setError("");
-  };
-
-  const sendCode = async () => {
-    setError("");
-    setIsLoading(true);
-    try {
-      await sendPhoneCode(form.phoneNumber);
-      setForm((f) => ({ ...f, code: "" }));
-      setStep("code");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.auth.genericError);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const continueWith = async (provider: Provider) => {
-    setError("");
-    setSocialLoading(provider);
-    try {
-      await signIn.social(provider, nextPath);
-      // The browser is on its way to the provider; leave the buttons disabled.
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.auth.genericError);
-      setSocialLoading(null);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    if (authMode === "signup" && step === "phone") {
-      if (!isValidPhone(form.phoneNumber)) return setPhoneInvalid(true);
-      return setStep("details");
-    }
-    if (authMode === "signup" && step === "details") {
-      if (form.password.length < MIN_PASSWORD) return setError(t.auth.passwordTooShort);
-      if (form.password !== form.confirmPassword) return setError(t.auth.passwordMismatch);
-      return sendCode();
-    }
-    if (authMode === "signup" && !/^\d{6}$/.test(form.code.trim())) return setError(t.auth.codeInvalid);
-
-    setIsLoading(true);
-    try {
-      if (authMode === "signin") {
-        const identifier = form.identifier.trim();
-        const credentials = { password: form.password, rememberMe };
-        const result = identifier.includes("@")
-          ? await signIn.email({ email: identifier, ...credentials })
-          : await signIn.phone({ phoneNumber: identifier, ...credentials });
-        // Two-step verification: the client plugin opens /two-factor (E8b).
-        if ("twoFactorRedirect" in result && result.twoFactorRedirect) return;
-      } else {
-        await signUpWithPhone({
-          phoneNumber: form.phoneNumber,
-          code: form.code,
-          name: form.name,
-          password: form.password,
-        });
-      }
-      router.push(nextPath);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.auth.genericError);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const busy = isLoading || socialLoading !== null;
-  const isSignup = authMode === "signup";
-  const showSocial = !isSignup || step === "phone";
+  const {
+    isSignup,
+    step,
+    setStep,
+    form,
+    handleChange,
+    switchMode,
+    sendCode,
+    continueWith,
+    handleSubmit,
+    rememberMe,
+    setRememberMe,
+    phoneInvalid,
+    error,
+    isLoading,
+    socialLoading,
+    idleNotice,
+    busy,
+    showSocial,
+  } = useAuthForm({ defaultNext: "/", onSuccess: (_mode, next) => router.push(next) });
 
   return (
     <div className="auth-page">

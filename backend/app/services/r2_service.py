@@ -78,10 +78,23 @@ def _private_bucket() -> str:
     return _PRIVATE_BUCKET
 
 
-def upload_rsbsa_document(user_id: int, file: CheckedFile) -> str:
-    """Store the document privately and return its object key (not a URL)."""
-    key = _new_key(f"rsbsa/{user_id}", file.extension)
+def _put_private(prefix: str, file: CheckedFile) -> str:
+    """Store an identity document privately; return its object key (not a URL)."""
+    key = _new_key(prefix, file.extension)
     return _put_object(_private_bucket(), key, file.data, file.content_type)
+
+
+def upload_rsbsa_document(user_id: int, file: CheckedFile) -> str:
+    return _put_private(f"rsbsa/{user_id}", file)
+
+
+def upload_gov_id_document(user_id: int, file: CheckedFile) -> str:
+    return _put_private(f"gov-id/{user_id}", file)
+
+
+def delete_private_document(stored_path: str) -> None:
+    """Remove a document that was uploaded for a submit that then failed."""
+    _client().delete_object(Bucket=_private_bucket(), Key=_object_key(stored_path))
 
 
 def _object_key(stored_path: str) -> str:
@@ -93,7 +106,7 @@ def _object_key(stored_path: str) -> str:
     )
 
 
-def create_rsbsa_document_url(
+def create_private_document_url(
     stored_path: str,
     content_type: str | None = None,
 ) -> str:
@@ -107,3 +120,8 @@ def create_rsbsa_document_url(
         },
         ExpiresIn=_SIGNED_URL_SECONDS,
     )
+
+
+# The RSBSA and government ID documents are in the same private bucket.
+create_rsbsa_document_url = create_private_document_url
+create_gov_id_document_url = create_private_document_url

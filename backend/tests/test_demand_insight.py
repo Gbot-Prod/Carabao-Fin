@@ -39,6 +39,8 @@ def _other_farm(db, province):  # noqa: F811
         operating_hours={},
         business_type="individual",
         rsbsa_document_path="rsbsa/2.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
     )
     db.add(farm)
     db.commit()

@@ -34,6 +34,8 @@ def test_pending_work_counts(db, merchant):
                 contact_email="applicant@example.com",
                 contact_number="639170000001",
                 rsbsa_document_path="rsbsa/3.pdf",
+                gov_id_type="Passport",
+                gov_id_document_path="gov-id/x.pdf",
                 region="Region III",
                 province="Bulacan",
                 city="Malolos",

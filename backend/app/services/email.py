@@ -105,3 +105,22 @@ def send_payout_change_email(to: str, *, old: str, new: str) -> None:
             """,
         }
     )
+
+
+def send_contact_email_code(to: str, code: str) -> None:
+    """The code that proves a merchant applicant's contact email."""
+    resend.Emails.send(
+        {
+            "from": FROM_ADDRESS,
+            "to": [to],
+            "subject": f"Your Carabao verification code is {code}",
+            "html": f"""
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#f7fcf8;border-radius:12px">
+                  <h2 style="color:#173d25;margin:0 0 8px">Confirm your contact email</h2>
+                  <p style="color:#4a5e4d;margin:0 0 16px">Enter this code in your Carabao merchant application:</p>
+                  <p style="font-size:28px;letter-spacing:6px;font-weight:700;color:#173d25;margin:0 0 24px">{escape(code)}</p>
+                  <p style="color:#8a9a8c;font-size:12px;margin:0">The code expires in 10 minutes. Do not share it. If you did not apply as a merchant, you can ignore this email.</p>
+                </div>
+            """,
+        }
+    )

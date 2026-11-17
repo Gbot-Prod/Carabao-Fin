@@ -9,11 +9,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db, require_verified_phone
+from app.api.routes.email_otp import MERCHANT_EMAIL_PURPOSE
 from app.core.errors import upstream_error
 from app.core.field_crypto import blind_index
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
-from app.models.user import User
+from app.models.user import User, normalize_email
 from app.schemas.merchant_application import (
     MerchantApplicationResponse,
     MerchantOnboardingPayload,
@@ -82,6 +83,15 @@ def _reject_duplicate_identifiers(
             )
 
 
+def _discard_uploads(*paths: str) -> None:
+    """Remove documents uploaded for a submit that failed (no orphan files)."""
+    for path in paths:
+        try:
+            r2_service.delete_private_document(path)
+        except Exception:  # noqa: BLE001 - the original error matters more
+            logger.warning("R2 cleanup failed for an onboarding document")
+
+
 @router.get("/merchant-applications/me", response_model=MerchantApplicationResponse)
 def get_my_merchant_application_route(
     db: Session = Depends(get_db),
@@ -101,6 +111,7 @@ def get_my_merchant_application_route(
 def submit_my_merchant_onboarding_route(
     payload: str = Form(...),
     rsbsa_file: UploadFile = File(...),
+    gov_id_file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_verified_phone),
 ):
@@ -133,6 +144,24 @@ def submit_my_merchant_onboarding_route(
             status_code=400, detail="Please verify your contact number first"
         )
 
+    # The same for the contact email: the account's own verified email, or a
+    # code sent to it (/email/otp/verify).
+    contact_email = normalize_email(str(data.contact_email))
+    account_email = current_user.verified_email
+    email_token = read_token(data.email_verification_token)
+    email_verified = (
+        account_email is not None and normalize_email(account_email) == contact_email
+    ) or (
+        email_token is not None
+        and email_token.get("purpose") == MERCHANT_EMAIL_PURPOSE
+        and email_token.get("user_id") == current_user.id
+        and email_token.get("email") == contact_email
+    )
+    if not email_verified:
+        raise HTTPException(
+            status_code=400, detail="Please verify your contact email first"
+        )
+
     has_active_merchant = get_active_merchant(db, current_user.id) is not None
     if has_active_merchant:
         raise HTTPException(
@@ -150,12 +179,23 @@ def submit_my_merchant_onboarding_route(
 
     _reject_duplicate_identifiers(db, current_user.id, data.tin, data.rsbsa_number)
 
+    # Both files are checked before either is uploaded.
     checked = upload_validation.check_document_upload(rsbsa_file, "RSBSA document")
+    checked_gov_id = upload_validation.check_document_upload(
+        gov_id_file, "Government ID"
+    )
     try:
         saved_path = r2_service.upload_rsbsa_document(current_user.id, checked)
     except Exception as exc:
         raise upstream_error(
             502, "Document upload failed", log="R2 RSBSA upload failed", exc=exc
+        ) from exc
+    try:
+        gov_id_path = r2_service.upload_gov_id_document(current_user.id, checked_gov_id)
+    except Exception as exc:
+        _discard_uploads(saved_path)
+        raise upstream_error(
+            502, "Document upload failed", log="R2 government ID upload failed", exc=exc
         ) from exc
 
     if application is None:
@@ -171,7 +211,7 @@ def submit_my_merchant_onboarding_route(
     application.tin = data.tin
     application.registration_type = data.registration_type
     application.registration_number = data.registration_number or None
-    application.contact_email = str(data.contact_email).lower()
+    application.contact_email = contact_email
     # The +639XXXXXXXXX form that was verified above (CF-0011).
     application.contact_number = f"+{contact}"
 
@@ -192,6 +232,12 @@ def submit_my_merchant_onboarding_route(
     )
     # The type the server found, not the type the client declared.
     application.rsbsa_document_content_type = checked.content_type
+    application.gov_id_type = data.gov_id_type
+    application.gov_id_document_path = gov_id_path
+    application.gov_id_document_original_name = upload_validation.safe_filename(
+        gov_id_file.filename
+    )
+    application.gov_id_document_content_type = checked_gov_id.content_type
 
     try:
         db.commit()
@@ -199,6 +245,7 @@ def submit_my_merchant_onboarding_route(
         return application
     except IntegrityError as exc:
         db.rollback()
+        _discard_uploads(saved_path, gov_id_path)
         constraint = str(getattr(exc, "orig", exc))
         if "uq_merchant_applications_" in constraint and "_hmac" in constraint:
             raise HTTPException(
@@ -208,3 +255,7 @@ def submit_my_merchant_onboarding_route(
         raise HTTPException(
             status_code=400, detail="Merchant application could not be saved"
         ) from exc
+    except Exception:
+        db.rollback()
+        _discard_uploads(saved_path, gov_id_path)
+        raise

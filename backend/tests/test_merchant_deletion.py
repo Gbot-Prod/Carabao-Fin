@@ -62,6 +62,8 @@ def seller(db):
         operating_hours={},
         business_type="individual",
         rsbsa_document_path="rsbsa/1.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
     )
     db.add(merchant)
     db.flush()
@@ -226,6 +228,8 @@ def test_delete_soft_deletes_and_keeps_financial_records(db, seller, buyer):
             contact_email="farmer@example.com",
             contact_number="639171234567",
             rsbsa_document_path="rsbsa/1.pdf",
+            gov_id_type="Passport",
+            gov_id_document_path="gov-id/x.pdf",
             region="Region III",
             province="Bulacan",
             city="Malolos",
@@ -311,6 +315,8 @@ def test_reapproved_application_reactivates_deleted_merchant(db, seller):
         contact_email="farmer@example.com",
         contact_number="639179999999",
         rsbsa_document_path="rsbsa/2.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
         region="Region III",
         province="Bulacan",
         city="Malolos",

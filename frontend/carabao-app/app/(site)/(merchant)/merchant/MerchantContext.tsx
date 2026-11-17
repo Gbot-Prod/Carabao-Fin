@@ -32,7 +32,7 @@ type MerchantContextValue = {
   /**
    * For status "not-merchant": the application status ("submitted",
    * "clarification", "rejected", "suspended", "approved"), null when there is
-   * no application, undefined while it loads or when it could not load.
+   * no application or when it could not load, undefined while it loads.
    */
   applicationStatus: string | null | undefined;
   userName: string;
@@ -131,7 +131,9 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
     let live = true;
     fetchMyMerchantApplication()
       .then((a) => live && setApplicationStatus(a ? a.status : null))
-      .catch(() => {});
+      // Not known: show the welcome page. The backend refuses a second
+      // application, so a wrong "Start Registration" does no harm.
+      .catch(() => live && setApplicationStatus(null));
     return () => {
       live = false;
     };

@@ -129,12 +129,14 @@ export const signIn = {
   },
   // Google or Facebook: leaves the page and comes back signed in, creating the
   // account on first use. Failures return to /auth?error=<code>. `next` is a
-  // path on this site (lib/next-path.ts), e.g. the admin setup link.
-  social: async (provider: "google" | "facebook", next = "/") => {
+  // path on this site (lib/next-path.ts), e.g. the admin setup link. The
+  // merchant login page gives full URLs on merchant.<root>, and its own page
+  // as `errorURL`; both must be trusted origins (lib/auth.ts).
+  social: async (provider: "google" | "facebook", next = "/", errorURL?: string) => {
     const { error } = await authClient.signIn.social({
       provider,
       callbackURL: next,
-      errorCallbackURL: next === "/" ? "/auth" : `/auth?next=${encodeURIComponent(next)}`,
+      errorCallbackURL: errorURL ?? (next === "/" ? "/auth" : `/auth?next=${encodeURIComponent(next)}`),
     });
     if (error) throw new Error(getErrorMessage(error, "We couldn't reach that sign-in service."));
   },

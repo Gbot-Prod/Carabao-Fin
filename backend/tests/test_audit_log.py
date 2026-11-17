@@ -83,6 +83,8 @@ def test_application_review_is_logged(db, merchant):
         contact_email="applicant@example.com",
         contact_number="639170000001",
         rsbsa_document_path="rsbsa/3.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
         region="Region III",
         province="Bulacan",
         city="Malolos",
@@ -148,3 +150,47 @@ def test_log_endpoint_is_admin_only_newest_first_and_filterable(db, merchant):
 
     non_admin = _client(db, _buyer(db, email="nosy@example.com")[0])
     assert non_admin.get("/admin/audit-log").status_code == 403
+
+
+def test_approval_records_the_admin_and_copies_the_gov_id(db, merchant):
+    from app.models.merchant import Merchant
+
+    staff = _staff(db)
+    applicant, _ = _buyer(db, email="approved@example.com")
+    application = MerchantApplication(
+        user_id=applicant.id,
+        status="submitted",
+        merchant_name="Approved Farm",
+        legal_business_name="Approved Farm",
+        barangay="Santo Rosario",
+        business_type="Farmer",
+        contact_email="approved@example.com",
+        contact_number="+639170000009",
+        rsbsa_document_path="rsbsa/9.pdf",
+        gov_id_type="UMID",
+        gov_id_document_path="gov-id/9.pdf",
+        gov_id_document_original_name="umid.pdf",
+        gov_id_document_content_type="application/pdf",
+        region="Region III",
+        province="Bulacan",
+        city="Malolos",
+        address="Purok 4",
+        postal_code="3000",
+        available_days=["Mon"],
+    )
+    db.add(application)
+    db.commit()
+    res = _client(db, staff).patch(
+        f"/admin/merchant-applications/{application.id}",
+        json={"status": "approved"},
+    )
+    assert res.status_code == 200, res.text
+    db.refresh(application)
+    assert application.reviewed_by_user_id == staff.id
+    assert application.reviewed_at is not None
+    shop = db.get(Merchant, application.merchant_id)
+    assert shop.gov_id_type == "UMID"
+    assert shop.gov_id_document_path == "gov-id/9.pdf"
+    assert shop.gov_id_document_original_name == "umid.pdf"
+    assert shop.verified_by_user_id == staff.id
+    assert shop.verified_at is not None

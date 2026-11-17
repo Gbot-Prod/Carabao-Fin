@@ -94,7 +94,12 @@ class User(Base):
         lazy="selectin",
     )
     merchant = relationship(
-        "Merchant", back_populates="user", uselist=False, cascade="all, delete-orphan"
+        "Merchant",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        # merchants.verified_by_user_id is a second key to this table.
+        foreign_keys="Merchant.user_id",
     )
     cart = relationship(
         "Cart", back_populates="user", uselist=False, cascade="all, delete-orphan"

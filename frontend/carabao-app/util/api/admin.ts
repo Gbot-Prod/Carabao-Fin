@@ -27,7 +27,11 @@ export type MerchantApplication = {
   rsbsa_number: string | null;
   rsbsa_document_original_name: string | null;
   rsbsa_document_content_type: string | null;
+  gov_id_type: string;
+  gov_id_document_original_name: string | null;
+  gov_id_document_content_type: string | null;
   admin_note: string | null;
+  reviewed_at: string | null;
 };
 
 export type RsbsaDocumentUrl = {
@@ -187,6 +191,16 @@ export const fetchRsbsaDocumentUrl = async (
 ): Promise<RsbsaDocumentUrl> => {
   const response = await apiClient.get<RsbsaDocumentUrl>(
     `/admin/merchant-applications/${applicationId}/rsbsa-document`,
+  );
+
+  return response.data;
+};
+
+export const fetchGovIdDocumentUrl = async (
+  applicationId: number,
+): Promise<RsbsaDocumentUrl> => {
+  const response = await apiClient.get<RsbsaDocumentUrl>(
+    `/admin/merchant-applications/${applicationId}/gov-id-document`,
   );
 
   return response.data;

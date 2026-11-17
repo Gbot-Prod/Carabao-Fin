@@ -72,6 +72,8 @@ def merchant(db):
         operating_hours={},
         business_type="individual",
         rsbsa_document_path="rsbsa/1.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
     )
     db.add(merchant)
     db.commit()

@@ -93,6 +93,8 @@ def _add_merchants(session, count):
                 operating_hours={},
                 business_type="individual",
                 rsbsa_document_path="x.pdf",
+                gov_id_type="Passport",
+                gov_id_document_path="gov-id/x.pdf",
             )
         )
         session.add(ShopPage(merchant_id=i, title=f"Farm {i}", slug=f"farm-{i}"))

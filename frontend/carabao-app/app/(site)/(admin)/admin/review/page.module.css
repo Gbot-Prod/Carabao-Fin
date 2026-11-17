@@ -176,6 +176,12 @@
   margin-top: 4px;
 }
 
+.documentRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .documentName {
   font-size: 12px;
   color: var(--text-subtle);

@@ -62,6 +62,8 @@ def _merchant(db, user):
         operating_hours={},
         business_type="individual",
         rsbsa_document_path="rsbsa/1.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
     )
     db.add(merchant)
     db.flush()
@@ -198,6 +200,8 @@ def test_account_delete_succeeds_for_merchant_without_sales(db, seller):
             contact_email="farmer@example.com",
             contact_number="639171234567",
             rsbsa_document_path="rsbsa/1.pdf",
+            gov_id_type="Passport",
+            gov_id_document_path="gov-id/x.pdf",
             region="Region III",
             province="Bulacan",
             city="Malolos",

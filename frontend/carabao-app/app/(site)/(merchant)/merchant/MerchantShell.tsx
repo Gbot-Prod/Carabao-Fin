@@ -24,8 +24,10 @@ import NotificationBell from "@/components/NotificationBell/NotificationBell";
 import SkeletonList, { LoadError } from "@/components/Skeleton/Skeleton";
 import { signOut } from "@/lib/auth-client";
 import { MERCHANT_PAGES as P } from "@/lib/merchant-links";
-import { appUrl, helpUrl, merchantUrl, signInPath } from "@/lib/urls";
+import { appUrl, helpUrl, merchantUrl } from "@/lib/urls";
+import { merchantLoginUrl } from "./lib/signIn";
 import { useMerchant } from "./MerchantContext";
+import MerchantWelcome from "./MerchantWelcome";
 import styles from "./shell.module.css";
 
 type Icon = ComponentType<{ size?: number; strokeWidth?: number }>;
@@ -62,69 +64,6 @@ function initials(name: string) {
   return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
 }
 
-function Gate({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className={styles.gate}>
-      <div className={styles.gateCard} role="alert">
-        <h1>{title}</h1>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-/** No merchant profile: the text depends on the application (backend application_review.py). */
-function NoMerchantGate({ applicationStatus }: { applicationStatus: string | null | undefined }) {
-  const back = (
-    <a className={styles.gateButtonSecondary} href={appUrl("/profile")}>Back to profile</a>
-  );
-  const apply = (label: string) => (
-    <Link className={styles.gateButton} href={merchantUrl(P.onboarding)}>{label}</Link>
-  );
-
-  switch (applicationStatus) {
-    case "submitted":
-      return (
-        <Gate title="Application under review">
-          <p>We are checking your merchant application. We will tell you by email and in your notifications when we approve it.</p>
-          <div className={styles.gateActions}>{back}</div>
-        </Gate>
-      );
-    case "clarification":
-      return (
-        <Gate title="More information needed">
-          <p>We need more information about your application. Open the application, change the details and send it again.</p>
-          <div className={styles.gateActions}>{apply("Update application")}{back}</div>
-        </Gate>
-      );
-    case "rejected":
-      return (
-        <Gate title="Application not approved">
-          <p>We did not approve your merchant application. You can correct it and send it again.</p>
-          <div className={styles.gateActions}>{apply("Apply again")}{back}</div>
-        </Gate>
-      );
-    case "suspended":
-      return (
-        <Gate title="Merchant account suspended">
-          <p>This merchant account is suspended. Contact Carabao support for help.</p>
-          <div className={styles.gateActions}>
-            <a className={styles.gateButton} href={helpUrl("/contact")}>Contact support</a>
-            {back}
-          </div>
-        </Gate>
-      );
-    default:
-      // No application, a closed merchant ("approved" with no profile), or not known.
-      return (
-        <Gate title="No merchant profile">
-          <p>This account does not have a merchant profile. Apply to become a merchant and start to sell your produce.</p>
-          <div className={styles.gateActions}>{apply("Apply as merchant")}{back}</div>
-        </Gate>
-      );
-  }
-}
-
 export default function MerchantShell({ children }: { children: ReactNode }) {
   const pathname = cleanPath(usePathname() ?? "/");
   const {
@@ -153,30 +92,39 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", handleEscape);
   }, []);
 
+  // Signed out: the Merchant Centre login, then back to this page.
+  useEffect(() => {
+    if (status !== "signed-out") return;
+    const { pathname: here, search } = window.location;
+    window.location.replace(merchantLoginUrl(here + search));
+  }, [status]);
+
   if (status === "signed-out") {
+    // The effect above opens the merchant login page.
     return (
-      <Gate title="Sign in to continue">
-        <p>Sign in with your Carabao account to open the merchant dashboard.</p>
-        <button
-          type="button"
-          className={styles.gateButton}
-          onClick={() => window.location.assign(signInPath(window.location.pathname))}
-        >
-          Sign in
-        </button>
-      </Gate>
+      <div className={styles.gate}>
+        <SkeletonList label="Opening the merchant login…" rows={2} />
+      </div>
     );
   }
 
   if (status === "not-merchant") {
-    return <NoMerchantGate applicationStatus={applicationStatus} />;
+    // undefined: the application status is still loading.
+    if (applicationStatus === undefined) {
+      return (
+        <div className={styles.gate}>
+          <SkeletonList label="Loading…" rows={2} />
+        </div>
+      );
+    }
+    return <MerchantWelcome applicationStatus={applicationStatus} />;
   }
 
   const handleSignOut = async () => {
     setSigningOut(true);
     try {
       await signOut();
-      window.location.assign(appUrl("/"));
+      window.location.assign(merchantLoginUrl());
     } catch {
       setSigningOut(false);
     }

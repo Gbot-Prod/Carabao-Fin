@@ -1,0 +1,206 @@
+/* Merchant Centre top bar (MerchantTopBar): login, welcome, onboarding. */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #fff;
+  box-shadow: 0 1px 6px rgba(19, 46, 29, 0.08);
+}
+
+.inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  height: 64px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #133520;
+  text-decoration: none;
+  min-width: 0;
+}
+
+.logoMark {
+  width: 38px;
+  height: 38px;
+  padding: 5px;
+  border-radius: 10px;
+  background: #1d7a46;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.brandName {
+  font-size: 21px;
+  font-weight: 800;
+  color: #1d7a46;
+}
+
+.brandDivider {
+  width: 1px;
+  height: 22px;
+  background: #dfe5e0;
+}
+
+.brandCentre {
+  font-size: 19px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.help {
+  color: #1d7a46;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.help:hover {
+  text-decoration: underline;
+}
+
+/* ── User menu ───────────────────────────────── */
+
+.user {
+  position: relative;
+  min-width: 0;
+}
+
+.userButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  padding: 4px 6px 4px 4px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.userButton:hover {
+  background: #f1f5f2;
+}
+
+.userButton:focus-visible,
+.menuItem:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.avatar {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #133520;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.userName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 180px;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(19, 46, 29, 0.14);
+  display: flex;
+  flex-direction: column;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.menuItem:hover {
+  background: #f1f5f2;
+}
+
+.menuItem:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+  .inner {
+    height: 58px;
+    padding: 0 16px;
+  }
+
+  .logoMark {
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    border-radius: 8px;
+  }
+
+  .brandName {
+    font-size: 18px;
+  }
+
+  .brandCentre {
+    font-size: 15px;
+  }
+
+  /* The name moves into the avatar only. */
+  .userName {
+    display: none;
+  }
+}
+
+@media (max-width: 400px) {
+  .brandName,
+  .brandDivider {
+    display: none;
+  }
+}

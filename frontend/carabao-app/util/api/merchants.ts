@@ -50,8 +50,26 @@ export type MerchantOnboardingPayload = {
   lng?: number | null;
   available_days: string[];
   rsbsa_number?: string;
+  gov_id_type: GovIdType;
   phone_verification_token?: string;
+  email_verification_token?: string;
 };
+
+/** Valid government IDs (backend GovIdType). RSBSA is a separate upload. */
+export const GOV_ID_TYPES = [
+  "PhilSys National ID",
+  "Passport",
+  "Driver's License",
+  "UMID",
+  "SSS",
+  "PRC",
+  "Postal ID",
+  "Voter's ID",
+  "PhilHealth",
+  "Senior Citizen ID",
+  "PWD ID",
+] as const;
+export type GovIdType = (typeof GOV_ID_TYPES)[number];
 
 export type ShopPage = {
   id: number;
@@ -115,10 +133,12 @@ export const updateMyMerchant = async (payload: MerchantUpdatePayload): Promise<
 export const submitMyMerchantOnboarding = async (
   payload: MerchantOnboardingPayload,
   rsbsaFile: File,
+  govIdFile: File,
 ): Promise<MerchantApplication> => {
   const formData = new FormData();
   formData.append('payload', JSON.stringify(payload));
   formData.append('rsbsa_file', rsbsaFile);
+  formData.append('gov_id_file', govIdFile);
   const response = await apiClient.post<MerchantApplication>('/merchant-onboarding/me', formData);
   return response.data;
 };

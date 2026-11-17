@@ -17,10 +17,12 @@ from app.schemas.merchant_application import (
     AdminMerchantApplicationResponse,
     MerchantApplicationResponse,
 )
-from app.services import r2_service
 from tests.better_auth import make_user
-from tests.files import pdf_bytes
-from tests.test_merchant_onboarding_phone import PAYLOAD
+from tests.test_merchant_onboarding_phone import (
+    PAYLOAD,
+    onboarding_files,
+    patch_uploads,
+)
 from tests.test_reviews import db  # noqa: F401 - fixture
 
 # The same TIN as the first account, written without dashes.
@@ -124,6 +126,8 @@ def _application(db, user, tin="123-456-789-000", rsbsa="03-69-04-012-34567"):  
         contact_number="09171234567",
         rsbsa_number=rsbsa,
         rsbsa_document_path="rsbsa/x.pdf",
+        gov_id_type="Passport",
+        gov_id_document_path="gov-id/x.pdf",
         region="Region III (Central Luzon)",
         province="Bulacan",
         city="Malolos",
@@ -168,9 +172,7 @@ def test_owner_sees_masked_admin_sees_full(db):  # noqa: F811
 
 def test_onboarding_rejects_a_tin_used_by_another_account(db, monkeypatch):  # noqa: F811
     monkeypatch.setenv("AUTH_SYNC_SHARED_SECRET", "test-secret")
-    monkeypatch.setattr(
-        r2_service, "upload_rsbsa_document", lambda *a, **k: "rsbsa/x.pdf"
-    )
+    patch_uploads(monkeypatch)
     first = make_user(db, "a@example.com", phone_number="+639170000001")
     _application(db, first, tin="123-456-789")
     second = make_user(db, "b@example.com", phone_number="+639171234567")
@@ -182,8 +184,8 @@ def test_onboarding_rejects_a_tin_used_by_another_account(db, monkeypatch):  # n
     api.dependency_overrides[get_current_user] = lambda: second
     res = TestClient(api).post(
         "/merchant-onboarding/me",
-        data={"payload": json.dumps(VALID_PAYLOAD)},
-        files={"rsbsa_file": ("r.pdf", pdf_bytes(), "application/pdf")},
+        data={"payload": json.dumps({**VALID_PAYLOAD, "contact_email": second.email})},
+        files=onboarding_files(),
     )
     assert res.status_code == 409, res.text
     assert "TIN" in res.json()["detail"]

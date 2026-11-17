@@ -94,13 +94,23 @@ class Merchant(Base):
     rsbsa_document_path = Column(String, nullable=False)
     rsbsa_document_original_name = Column(String, nullable=True)
     rsbsa_document_content_type = Column(String, nullable=True)
+    # Copied from the approved application (R2 keys, not the files).
+    gov_id_type = Column(String, nullable=False)
+    gov_id_document_path = Column(String, nullable=False)
+    gov_id_document_original_name = Column(String, nullable=True)
+    gov_id_document_content_type = Column(String, nullable=True)
+    # The admin who approved the application, and when.
+    verified_by_user_id = Column(
+        Integer, ForeignKey("backend_users.id", ondelete="SET NULL"), nullable=True
+    )
+    verified_at = Column(DateTime(timezone=True), nullable=True)
 
     # i dont fucking know
     user_id = Column(
         Integer, ForeignKey("backend_users.id"), index=True, nullable=False, unique=True
     )
 
-    user = relationship("User", back_populates="merchant")
+    user = relationship("User", back_populates="merchant", foreign_keys=[user_id])
     shop_page = relationship(
         "ShopPage",
         back_populates="merchant",

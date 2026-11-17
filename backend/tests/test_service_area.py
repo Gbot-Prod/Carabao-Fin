@@ -130,11 +130,15 @@ def test_onboarding_outside_luzon_is_rejected(db, buyer):  # noqa: F811
         "address": "12 Rizal St",
         "postal_code": "6000",
         "available_days": ["Mon"],
+        "gov_id_type": "Passport",
     }
     resp = _client(db, buyer[0]).post(
         "/merchant-onboarding/me",
         data={"payload": json.dumps(payload)},
-        files={"rsbsa_file": ("rsbsa.pdf", b"%PDF-1.4", "application/pdf")},
+        files={
+            "rsbsa_file": ("rsbsa.pdf", b"%PDF-1.4", "application/pdf"),
+            "gov_id_file": ("id.pdf", b"%PDF-1.4", "application/pdf"),
+        },
     )
     assert resp.status_code == 400
     assert "Luzon" in resp.json()["detail"]
