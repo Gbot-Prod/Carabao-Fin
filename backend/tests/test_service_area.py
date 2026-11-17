@@ -14,7 +14,6 @@ from app.models.produce import Produce
 from app.models.user import User
 from app.services.service_area import address_in_luzon, in_luzon_bbox, is_luzon_region
 from app.utils import geocoding
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 
 @pytest.mark.parametrize(

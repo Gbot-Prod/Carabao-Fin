@@ -27,6 +27,8 @@ export type Merchant = {
   delivery_price: number | null;
   delivery_time: number | null;
   rating: number | null;
+  // Number of reviews behind `rating` (public GET /merchants/{id}).
+  rating_count?: number;
   produces: Produce[];
 };
 

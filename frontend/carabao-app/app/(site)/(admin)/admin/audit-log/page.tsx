@@ -8,7 +8,7 @@ import {
   fetchAuditLog,
   type AuditLogEntry,
 } from "@/util/api/admin";
-import Pagination from "../../Pagination";
+import Pagination from "@/components/Pagination/Pagination";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import own from "./page.module.css";

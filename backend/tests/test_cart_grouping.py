@@ -7,7 +7,6 @@ from app.api.dependencies import get_current_user, get_db
 from app.api.routes import carts
 from app.models.produce import Produce
 from tests.test_merchant_listings import _other_merchant
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 
 def test_saved_cart_lines_carry_merchant_and_delivery_fee(db, merchant, buyer):  # noqa: F811

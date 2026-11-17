@@ -12,7 +12,7 @@ import {
 } from "@/util/api/admin";
 import { getApiErrorDetail } from "@/util/errorHelper";
 import { defaultAddress } from "@/util/api/users";
-import Pagination from "../../Pagination";
+import Pagination from "@/components/Pagination/Pagination";
 import SuspendControl from "../../SuspendControl";
 import styles from "./page.module.css";
 import PageHeader from "../../PageHeader";

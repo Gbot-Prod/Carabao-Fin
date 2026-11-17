@@ -18,7 +18,6 @@ from app.services import notifications, order_status, refund_service
 from app.services.order_reservations import settle_checkout_payment
 from app.services.paymongo import PaidPayment
 from tests.better_auth import make_user, set_identity
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 
 def _client(db, user, *routers) -> TestClient:  # noqa: F811

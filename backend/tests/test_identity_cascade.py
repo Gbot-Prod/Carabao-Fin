@@ -10,7 +10,6 @@ from app.models.cart import Cart
 from app.models.user import User
 from tests.better_auth import make_user
 from tests.test_buyer_deletion import _merchant
-from tests.test_reviews import db  # noqa: F401 - fixture with foreign keys on
 
 
 def _delete_identity(db, user):  # noqa: F811

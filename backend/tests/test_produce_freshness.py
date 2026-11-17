@@ -13,7 +13,6 @@ from app.models.order import Order
 from app.models.produce import Produce
 from app.models.user import User
 from app.services.produce_freshness import ph_today
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 TODAY = ph_today()
 

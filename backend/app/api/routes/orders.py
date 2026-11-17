@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
+from typing import Any, Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db, require_verified_phone
@@ -21,6 +23,7 @@ from app.schemas.order import (
     PlaceOrderRequest,
     PlaceOrderResponse,
 )
+from app.schemas.pagination import Page
 from app.services import notifications
 from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
@@ -52,6 +55,7 @@ from app.services.service_area import (
 from ._order_helpers import (
     _extract_item_int,
     _to_int,
+    buyer_orders_query,
     get_buyer_orders,
     get_or_create_cart,
     merchant_takes_orders,
@@ -245,12 +249,70 @@ def get_my_order_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    orders = sorted(
-        get_buyer_orders(db, current_user.id),
-        key=lambda order: order.ordered_at or datetime.min,
-        reverse=True,
-    )
+    """Every order, newest first. Kept as a plain list for the mobile app;
+    the web uses the paged ``/orders/me/history/page``."""
+    orders = get_buyer_orders(db, current_user.id)
     return [to_order_history_item(order) for order in orders]
+
+
+# CF-0036: filter groups the history page offers.
+HistoryFilter = Literal["active", "delivered", "cancelled"]
+_HISTORY_FILTER_STATUSES: dict[str, frozenset[OrderStatus]] = {
+    "active": ACTIVE_ORDER_STATUSES,
+    "delivered": frozenset({OrderStatus.DELIVERED}),
+    # A payment mismatch is closed without delivery; the buyer sees it here.
+    "cancelled": frozenset({OrderStatus.CANCELLED, OrderStatus.PAYMENT_MISMATCH}),
+}
+# "CB-2026-0042", "cb-2026-42", "#42" or "42": the order id.
+_ORDER_REF = re.compile(r"^(?:cb-\d{4}-)?#?0*(\d{1,9})$", re.IGNORECASE)
+
+
+def _like(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+    return f"%{escaped}%"
+
+
+@router.get("/orders/me/history/page", response_model=Page[OrderItemResponse])
+def get_my_order_history_page(
+    status: HistoryFilter | None = None,
+    q: str | None = Query(None, max_length=100),
+    page: int = Query(1, ge=1, le=10_000),
+    page_size: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """One page of the buyer's orders, newest first (CF-0036).
+
+    ``q`` matches an order reference or the farm name. Sorting, filtering
+    and paging happen in SQL, so a long history is not loaded at once.
+    """
+    # Legacy Column-typed model: the loaded attribute is an int.
+    query = buyer_orders_query(db, cast(int, current_user.id))
+    if status is not None:
+        query = query.filter(Order.status.in_(_HISTORY_FILTER_STATUSES[status]))
+    term = (q or "").strip()
+    if term:
+        ref = _ORDER_REF.match(term)
+        if ref:
+            query = query.filter(Order.id == int(ref.group(1)))
+        else:
+            query = query.outerjoin(Merchant, Order.merchant_id == Merchant.id).filter(
+                Merchant.merchant_name.ilike(_like(term), escape="\\")
+            )
+
+    total = query.order_by(None).count()
+    orders = (
+        query.options(*order_item_load())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "items": [to_order_history_item(order) for order in orders],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @router.delete("/orders/me/history/{order_id}", status_code=204)

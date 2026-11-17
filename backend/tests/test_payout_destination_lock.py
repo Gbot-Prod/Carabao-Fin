@@ -22,7 +22,6 @@ from tests.test_payouts import (  # noqa: F401 - fixtures
     _env,
     transfers,
 )
-from tests.test_reviews import buyer, db, merchant  # noqa: F401 - fixtures
 
 MAYA = {**GCASH, "payout_type": "maya", "ewallet_number": "09998887777"}
 

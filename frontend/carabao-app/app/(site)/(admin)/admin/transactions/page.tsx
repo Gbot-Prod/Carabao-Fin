@@ -14,7 +14,7 @@ import {
   type Merchant,
 } from "@/util/api/admin";
 import type { TransactionStatus } from "@/util/api/statuses";
-import Pagination from "../../Pagination";
+import Pagination from "@/components/Pagination/Pagination";
 import base from "../orders/page.module.css";
 import styles from "./page.module.css";
 import PageHeader from "../../PageHeader";

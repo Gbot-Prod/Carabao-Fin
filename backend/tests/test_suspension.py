@@ -10,7 +10,6 @@ from app.api.routes import admin, auth, merchants, users
 from app.models.produce import Produce
 from app.models.user import User
 from tests.better_auth import make_user
-from tests.test_reviews import db, merchant  # noqa: F401 - fixtures
 from tests.tokens import bearer, trust_test_key
 
 

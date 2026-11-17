@@ -10,7 +10,7 @@ from app.api.dependencies import ensure_phone_verified, get_current_user, get_db
 from app.models.chat import ChatMessage
 from app.models.order import Order
 from app.models.user import User
-from app.services import chat
+from app.services import chat, rate_limit
 
 router = APIRouter(tags=["chat"])
 
@@ -85,6 +85,7 @@ def send_message(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    rate_limit.enforce_action(db, "order_chat_send", str(current_user.id))
     order = db.get(Order, order_id)
     role = chat.require_role(order, current_user)
     if role == "buyer":

@@ -12,7 +12,7 @@ from app.models.search_log import SearchLog
 from app.models.user import User
 from tests.better_auth import make_user
 from tests.test_merchant_sales import _order
-from tests.test_reviews import _buyer, buyer, db, merchant  # noqa: F401 - fixtures
+from tests.test_reviews import _buyer
 
 
 def _client(db, user) -> TestClient:  # noqa: F811
