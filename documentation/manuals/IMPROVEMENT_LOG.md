@@ -1,5 +1,5 @@
 # Improvement Log
-branch: improve/loop    push: no    iteration: 8
+branch: improve/loop    push: no    iteration: 8    target: 20
 
 ## In progress
 (none)
