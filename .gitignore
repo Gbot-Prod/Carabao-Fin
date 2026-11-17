@@ -40,5 +40,4 @@ CLAUDE.md
 
 documentation/*
 !documentation/manuals/
-documentation/manuals/*
-!documentation/manuals/SUBDOMAINS.md
+
