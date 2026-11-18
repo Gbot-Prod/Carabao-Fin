@@ -24,6 +24,7 @@ from app.schemas.order import (
     PlaceOrderResponse,
 )
 from app.schemas.pagination import Page
+from app.schemas.receipt import ReceiptResponse
 from app.services import notifications, rate_limit
 from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
@@ -42,6 +43,7 @@ from app.services.order_status import (
 from app.services.pinned_location import validate_pin
 from app.services.produce_freshness import is_expired, ph_today
 from app.services.produce_pricing import unit_price_for
+from app.services.receipts import build_receipt, receipt_payment
 from app.services.review_service import (
     can_review,
     review_deadline,
@@ -419,6 +421,29 @@ def get_my_order(
         can_review=review is None and can_review(order),
         review_deadline=review_deadline(order),
     )
+
+
+@router.get("/orders/me/{order_id}/receipt", response_model=ReceiptResponse)
+def get_my_order_receipt(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ReceiptResponse:
+    """CF-0049: the buyer's receipt for a paid order (also after a refund)."""
+    order = (
+        db.query(Order)
+        .options(selectinload(Order.merchant), selectinload(Order.user))
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
+        .first()
+    )
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    payment = receipt_payment(db, order)
+    if payment is None:
+        raise HTTPException(
+            status_code=409, detail="This order has no payment yet, so no receipt."
+        )
+    return build_receipt(order, payment)
 
 
 @router.post(

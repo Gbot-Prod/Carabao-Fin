@@ -130,6 +130,42 @@ export const fetchOrder = async (orderId: number): Promise<OrderDetail> => {
   return response.data;
 };
 
+// CF-0049: the buyer's receipt for a paid order (backend schemas/receipt.py).
+export type ReceiptLine = {
+  name: string;
+  unit: string | null;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+};
+
+export type OrderReceipt = {
+  receipt_number: string;
+  order_id: number;
+  order_status: OrderStatus;
+  ordered_at: string | null;
+  paid_at: string | null;
+  payment_status: 'paid' | 'refund_pending' | 'refunded';
+  payment_reference: string | null;
+  buyer_name: string | null;
+  farm_name: string | null;
+  farm_town: string | null;
+  farm_contact_number: string | null;
+  delivery_address: string | null;
+  requested_delivery_date: string | null;
+  delivery_window: string | null;
+  lines: ReceiptLine[];
+  subtotal: number;
+  delivery_fee: number;
+  total: number;
+};
+
+/** 404: not the caller's order; 409: no payment yet. */
+export const fetchOrderReceipt = async (orderId: number): Promise<OrderReceipt> => {
+  const response = await apiClient.get<OrderReceipt>(`/orders/me/${orderId}/receipt`);
+  return response.data;
+};
+
 // "Buy again" (U3): refills the cart with what is still available.
 export type ReorderResult = {
   added: { produce_id: number; name: string; quantity: number; price: number; reduced_from: number | null }[];

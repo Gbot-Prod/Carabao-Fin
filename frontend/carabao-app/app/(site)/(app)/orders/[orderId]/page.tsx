@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import OrderChat from "@/components/OrderChat/OrderChat";
+import { hasReceipt } from "@/lib/receipt";
 import {
   confirmOrderReceived,
   createOrderReview,
@@ -370,6 +371,13 @@ export default function OrderDetailPage() {
             <dt className={styles.totalRow}>Total</dt><dd className={styles.totalRow}>{peso(total)}</dd>
             <dt>Payment</dt><dd>{PAYMENT_STATUS_LABELS[order.payment_status]}</dd>
           </dl>
+          {hasReceipt(order.payment_status) && (
+            <div className={styles.actions}>
+              <Link href={`/orders/${order.order_id}/receipt`} className={styles.secondaryBtn}>
+                View receipt
+              </Link>
+            </div>
+          )}
         </section>
 
         <section className={styles.card}>
