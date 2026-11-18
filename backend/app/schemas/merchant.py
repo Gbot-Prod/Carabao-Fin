@@ -103,7 +103,43 @@ class AdminMerchantResponse(MerchantResponse):
     owner_suspension_reason: str | None = None
 
 
-class MerchantDetailResponse(MerchantResponse):
-    """Public merchant profile, plus the owning user's name for transparency."""
+class PublicMerchantResponse(BaseModel):
+    """A farm as anyone browsing sees it (CF-0048, B45).
+
+    Leaves out what can locate the owner's home or isn't for the public:
+    street ``address``, ``barangay``, the map pin ``lat``/``lng``,
+    ``legal_business_name`` and the owner's ``user_id``. Many farms are
+    someone's home (same rule as the web JSON-LD in lib/structured-data.ts).
+    The contact number and email stay: the farm page and the mobile farm
+    screen show them so buyers can reach the farm. The owner reads the full
+    profile from ``GET /merchants/me``.
+    """
+
+    id: int
+    merchant_name: str
+    contact_email: EmailStr | None = None
+    contact_number: str | None = None
+
+    region: str
+    province: str
+    city: str | None = None
+    postal_code: str
+
+    available_days: list[str]
+    operating_hours: Any
+    delivery_price: int | None = None
+    delivery_time: int | None = None
+    rating: float | None = None
+    rating_count: int = 0
+    updated_at: datetime | None = None
+
+    shop_page: MerchantShopResponse | None = None
+    produces: list[ProduceResponse] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PublicMerchantDetailResponse(PublicMerchantResponse):
+    """Public farm profile plus the owning user's name for transparency."""
 
     owner_name: str | None = None

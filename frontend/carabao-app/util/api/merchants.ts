@@ -5,17 +5,20 @@ import type { OrderStatus, PaymentStatus, PayoutStatus, TransactionStatus } from
 
 export type Merchant = {
   id: number;
-  user_id: number;
+  // Owner only (GET /merchants/me): the public routes leave these out, since
+  // many farms are someone's home (CF-0048).
+  user_id?: number;
+  barangay?: string | null;
+  address?: string | null;
+  // Farm map pin (U1).
+  lat?: number | null;
+  lng?: number | null;
+  legal_business_name?: string | null;
   merchant_name: string;
   region: string | null;
   province: string | null;
   city: string | null;
-  barangay: string | null;
-  address: string | null;
   postal_code: string | null;
-  // Farm map pin (U1).
-  lat?: number | null;
-  lng?: number | null;
   category: string | null;
   contact_number: string;
   contact_email?: string | null;
@@ -108,6 +111,12 @@ export const fetchMerchants = async (): Promise<Merchant[]> => {
 
 export const fetchMerchantById = async (merchantId: number): Promise<Merchant> => {
   const response = await apiClient.get<Merchant>(`/merchants/${merchantId}`);
+  return response.data;
+};
+
+/** The signed-in merchant's own full profile, with address and pin (CF-0048). */
+export const fetchMyMerchant = async (): Promise<Merchant> => {
+  const response = await apiClient.get<Merchant>('/merchants/me');
   return response.data;
 };
 

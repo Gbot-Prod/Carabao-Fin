@@ -109,6 +109,7 @@ The web app never sends SMS or email itself. It asks the API.
 | Status values | `backend/app/models/statuses.py` | `frontend/.../util/api/statuses.ts` |
 | Review reply max length 1000 (CF-0043) | `REPLY_MAX_LENGTH` in `backend/app/schemas/review.py` | `REPLY_MAX_LENGTH` in `frontend/.../lib/review-reply.ts` |
 | Cart line `issue` values (CF-0042) | `CartIssue` in `backend/app/api/routes/_order_helpers.py` and `schemas/cart.py` | `frontend/.../lib/cart-issues.ts` (unknown values show no message but still block checkout) |
+| Public farm fields (CF-0048): no `address`, `barangay`, `lat`/`lng`, `legal_business_name`, `user_id` on `GET /merchants` and `/merchants/{id}`; the owner reads them from `GET /merchants/me` | `PublicMerchantResponse` in `backend/app/schemas/merchant.py` | owner-only fields in `Merchant` (`frontend/.../util/api/merchants.ts`), merchant site `MerchantContext` (`fetchMyMerchant`), `lib/structured-data.ts` (also leaves them out) |
 | Postgres TLS rules | `lib/db-ssl.mjs` | `app/core/database_url.py` |
 | Mobile app scheme `carabaomobile://` | `lib/auth.ts`, `lib/admin-two-factor.ts` | mobile `app.json` |
 

@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  fetchMerchantById,
+  fetchMyMerchant,
   fetchMerchantShopPage,
   fetchMyMerchantApplication,
   fetchMyMerchantPerformance,
@@ -113,7 +113,8 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
         const [produceRes, shopPageRes, merchantRes] = await Promise.allSettled([
           fetchMyProduce(),
           fetchMerchantShopPage(merchantId),
-          fetchMerchantById(merchantId),
+          // Own profile: the public /merchants/{id} leaves out address and pin.
+          fetchMyMerchant(),
         ]);
         if (produceRes.status === "fulfilled") setProduces(produceRes.value);
         if (shopPageRes.status === "fulfilled") setShopPage(shopPageRes.value);

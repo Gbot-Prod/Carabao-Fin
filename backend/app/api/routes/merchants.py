@@ -1,6 +1,7 @@
 import logging
 import os
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import requests as _requests
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -28,9 +29,10 @@ from app.models.user import User
 from app.routing.service import compute_route
 from app.routing.state import Stop
 from app.schemas.merchant import (
-    MerchantDetailResponse,
     MerchantResponse,
     MerchantUpdate,
+    PublicMerchantDetailResponse,
+    PublicMerchantResponse,
 )
 from app.schemas.merchant_performance import MerchantPerformanceResponse
 from app.schemas.payout import (
@@ -236,11 +238,11 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
     logger.info("route: stored for order %s, %s stops", order.id, len(ordered_stops))
 
 
-@router.get("/merchants", response_model=list[MerchantResponse])
+@router.get("/merchants", response_model=list[PublicMerchantResponse])
 def list_merchants(db: Session = Depends(get_db)):
     return (
         db.query(Merchant)
-        # MerchantResponse includes both; without this each merchant costs 2 queries.
+        # The response includes both; without this each merchant costs 2 queries.
         .options(
             selectinload(Merchant.shop_page),
             selectinload(Merchant.produces.and_(is_listed(ph_today()))),
@@ -258,7 +260,20 @@ def list_merchants(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/merchants/{merchant_id}", response_model=MerchantDetailResponse)
+# Declared before /merchants/{merchant_id}, which would read "me" as an id.
+@router.get("/merchants/me", response_model=MerchantResponse)
+def get_my_merchant(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Merchant:
+    """The caller's own full farm profile (CF-0048): address, pin, legal name."""
+    merchant = get_active_merchant(db, cast(int, current_user.id))
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    return merchant
+
+
+@router.get("/merchants/{merchant_id}", response_model=PublicMerchantDetailResponse)
 def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
     merchant = (
         db.query(Merchant)
@@ -272,7 +287,7 @@ def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant not found")
 
-    response = MerchantDetailResponse.model_validate(merchant)
+    response = PublicMerchantDetailResponse.model_validate(merchant)
     owner = merchant.user
     if owner is not None:
         response.owner_name = (owner.name or "").strip() or None

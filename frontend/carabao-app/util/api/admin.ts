@@ -122,7 +122,9 @@ export const fetchAdminUsers = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Pro
   return res.data;
 };
 
+// The admin API sends the full profile (AdminMerchantResponse), owner id included.
 export type AdminMerchant = Merchant & {
+  user_id: number;
   owner_is_suspended: boolean;
   owner_suspension_reason: string | null;
 };

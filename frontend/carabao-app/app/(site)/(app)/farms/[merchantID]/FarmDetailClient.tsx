@@ -53,9 +53,8 @@ export default function FarmDetailClient() {
   const [merchant, setMerchant] = useState<Merchant | undefined>(undefined);
   const [shopPage, setShopPage] = useState<ShopPage | null>(null);
   const [error, setError] = useState<string | null>(hasValidMerchantId ? null : 'Invalid merchant ID.');
+  // Town level only: the public API has no street or barangay (CF-0048).
   const merchantLocation = [
-    merchant?.address,
-    merchant?.barangay,
     merchant?.city,
     merchant?.province,
     merchant?.region,
