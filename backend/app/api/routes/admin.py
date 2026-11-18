@@ -649,6 +649,16 @@ def refresh_payout_batch(
     admin: User = Depends(_require_admin),
 ):
     """Ask PayMongo for the transfer's current status."""
+    # CF-0054 (B53): a refresh can move a batch to released or failed (which
+    # frees its orders for another payout), so a change is audited.
+    before_status: str | None = (
+        db.query(PayoutBatch.status).filter(PayoutBatch.id == batch_id).scalar()
+    )
+    before_reason: str | None = (
+        db.query(PayoutBatch.failure_reason)
+        .filter(PayoutBatch.id == batch_id)
+        .scalar()
+    )
     try:
         batch = refresh_payout(db, batch_id)
     except PayoutError as exc:
@@ -660,6 +670,17 @@ def refresh_payout_batch(
             log=f"PayMongo payout refresh failed for batch {batch_id}",
             exc=exc,
         ) from exc
+    if before_status is not None and before_status != batch.status:
+        audit_log.record_admin_action(
+            db,
+            admin=admin,
+            action=audit_log.PAYOUT_REFRESH,
+            target_type="payout_batch",
+            target_id=batch_id,
+            before={"status": before_status, "failure_reason": before_reason},
+            after={"status": batch.status, "failure_reason": batch.failure_reason},
+        )
+        db.commit()
     return _admin_batch_response(db, batch)
 
 

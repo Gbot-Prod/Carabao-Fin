@@ -8,9 +8,14 @@ from app.api.dependencies import get_current_user, get_db
 from app.models.farm_follow import FarmFollow
 from app.models.merchant import Merchant
 from app.models.user import User
+from app.services import rate_limit
 from app.services.account_suspension import merchant_is_public
 
 router = APIRouter(tags=["follows"])
+
+# CF-0054 (B52): farms one buyer may follow (saved produce caps at 200,
+# addresses at 10). Unfollowing frees a place.
+MAX_FOLLOWS = 500
 
 
 @router.get("/users/me/follows", response_model=list[int])
@@ -34,6 +39,7 @@ def follow_farm(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    rate_limit.enforce_action(db, "farm_follow", str(current_user.id))
     merchant = (
         db.query(Merchant)
         .filter(Merchant.id == merchant_id, merchant_is_public())
@@ -51,6 +57,19 @@ def follow_farm(
         .first()
     )
     if exists is None:
+        count = (
+            db.query(FarmFollow.id)
+            .filter(FarmFollow.user_id == current_user.id)
+            .count()
+        )
+        if count >= MAX_FOLLOWS:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"You can follow up to {MAX_FOLLOWS} farms. "
+                    "Unfollow some first."
+                ),
+            )
         db.add(FarmFollow(user_id=current_user.id, merchant_id=merchant_id))
         try:
             db.commit()
@@ -64,6 +83,7 @@ def unfollow_farm(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    rate_limit.enforce_action(db, "farm_follow", str(current_user.id))
     db.query(FarmFollow).filter(
         FarmFollow.user_id == current_user.id, FarmFollow.merchant_id == merchant_id
     ).delete(synchronize_session=False)

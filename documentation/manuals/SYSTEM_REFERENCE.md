@@ -406,6 +406,7 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
     - `produce_search`: 120 `/produce/search` calls per IP per minute (needs `RATE_LIMIT_TRUST_PROXY=true` behind a proxy)
     - `order_place`: 20 `POST /orders/me/place` calls per user per hour, refused ones included (CF-0045)
     - `payment_checkout`: 30 `POST /payments/checkout/{order_id}` calls per user per hour (CF-0045)
+    - `farm_follow`: 60 follow + unfollow calls per user per hour (CF-0054); a buyer follows at most 500 farms (`MAX_FOLLOWS`, 409 above)
   - Open unpaid orders: a buyer with `MAX_OPEN_PENDING_ORDERS` (10, `services/order_reservations.py`) PENDING orders gets 409 from place-order until they pay, cancel, or the reservation TTL releases them (CF-0045)
 - Better Auth admin plugin HTTP endpoints are blocked (404). Server-side `auth.api.*` calls still work.
 

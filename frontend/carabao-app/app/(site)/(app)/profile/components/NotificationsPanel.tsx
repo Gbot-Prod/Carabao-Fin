@@ -25,7 +25,14 @@ export default function NotificationsPanel({ profile, onSaved }: { profile: User
   }, [profile]);
 
   const toggle = async (key: keyof NotificationPrefs) => {
-    const next = { ...prefs, [key]: !prefs[key] };
+    // CF-0054: only the known keys; the API refuses others (an old stored
+    // key would otherwise be sent back with every toggle).
+    const next: NotificationPrefs = {
+      order_updates: prefs.order_updates,
+      promotions: prefs.promotions,
+      email_alerts: prefs.email_alerts,
+      [key]: !prefs[key],
+    };
     setPrefs(next);
     setSaving(key);
     try {

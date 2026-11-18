@@ -34,6 +34,8 @@ def update_current_user_profile(
 ):
     # Name, email and phone are BetterAuth's; clients change them through its
     # client (updateUser, changeEmail, phoneNumber.verify).
+    # Nested models dump only the keys sent (exclude_unset), so the stored
+    # preferences hold exactly what the client chose (CF-0054).
     updates = user_update.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(current_user, field, value)

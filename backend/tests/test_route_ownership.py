@@ -188,7 +188,7 @@ def test_profile_update_changes_only_the_caller(
     db: Session, two_buyers: tuple[User, User]
 ) -> None:
     owner, other = two_buyers
-    prefs = {"sms": False}
+    prefs = {"order_updates": False}
 
     resp = _client(db, owner, users.router).patch(
         "/users/me", json={"notifications_preferences": prefs}

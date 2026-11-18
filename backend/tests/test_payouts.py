@@ -10,19 +10,24 @@ import hmac
 import json
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import admin
 from app.api.webhooks import paymongo as paymongo_webhook
+from app.models.admin_audit_log import AdminAuditLog
+from app.models.merchant import Merchant
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
 from app.models.payout_batch import PayoutBatch
 from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
+from app.models.user import User
 from app.services import paymongo, payout_service
 from tests.better_auth import make_user
 from tests.payout_codes import save_payout_info
@@ -475,3 +480,54 @@ def test_wallet_balance_error_is_a_502(db, monkeypatch):  # noqa: F811
 
     monkeypatch.setattr(paymongo, "get_wallet_balance", boom)
     assert _admin_client(db).get("/admin/wallet").status_code == 502
+
+
+# CF-0054 (B53): a refresh that changes the batch is in the audit log.
+def _refresh_audits(db: Session) -> list[AdminAuditLog]:  # noqa: F811
+    return (
+        db.query(AdminAuditLog)
+        .filter(AdminAuditLog.action == "payout.refresh")
+        .all()
+    )
+
+
+def test_refresh_that_changes_status_is_audited(
+    db: Session,  # noqa: F811
+    merchant: Merchant,  # noqa: F811
+    buyer: tuple[User, None],  # noqa: F811
+    transfers: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    batch = _requested_batch(db, merchant, buyer)
+    client = _admin_client(db)
+    client.patch(f"/admin/batches/{batch['id']}/release")
+    monkeypatch.setattr(
+        paymongo, "get_transfer", lambda _id: {"id": "tr_1", "status": "succeeded"}
+    )
+
+    client.post(f"/admin/batches/{batch['id']}/refresh")
+    client.post(f"/admin/batches/{batch['id']}/refresh")  # no change the 2nd time
+
+    (row,) = _refresh_audits(db)
+    assert row.target_type == "payout_batch" and row.target_id == batch["id"]
+    assert row.before["status"] == PayoutStatus.PROCESSING
+    assert row.after["status"] == PayoutStatus.RELEASED
+    assert row.admin_email == "admin@example.com"
+
+
+def test_refresh_without_a_change_writes_no_audit(
+    db: Session,  # noqa: F811
+    merchant: Merchant,  # noqa: F811
+    buyer: tuple[User, None],  # noqa: F811
+    transfers: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    batch = _requested_batch(db, merchant, buyer)
+    client = _admin_client(db)
+    client.patch(f"/admin/batches/{batch['id']}/release")
+    monkeypatch.setattr(
+        paymongo, "get_transfer", lambda _id: {"id": "tr_1", "status": "pending"}
+    )
+
+    assert client.post(f"/admin/batches/{batch['id']}/refresh").status_code == 200
+    assert _refresh_audits(db) == []

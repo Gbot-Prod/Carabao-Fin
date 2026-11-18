@@ -21,6 +21,7 @@ SUSPEND = "user.suspend"
 REINSTATE = "user.reinstate"
 APPLICATION_REVIEW = "merchant_application.review"
 PAYOUT_RELEASE = "payout.release"
+PAYOUT_REFRESH = "payout.refresh"  # only when the status changed (CF-0054)
 REFUND = "transaction.refund"
 PRODUCE_HIDE = "produce.hide"
 PRODUCE_UNHIDE = "produce.unhide"

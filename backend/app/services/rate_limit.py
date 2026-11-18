@@ -79,6 +79,8 @@ ACTION_LIMITS: dict[str, Limit] = {
     # retrying a failed payment stays well under these.
     "order_place": Limit(20, 3600),
     "payment_checkout": Limit(30, 3600),
+    # CF-0054 (B52): follow + unfollow; a person browses a few farms at a time.
+    "farm_follow": Limit(60, 3600),
 }
 
 

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StrictBool
 
 from app.schemas.user_address import UserAddressResponse
 
@@ -19,13 +19,28 @@ class UserBase(BaseModel):
     notifications_preferences: dict | None = None
 
 
+class NotificationPreferences(BaseModel):
+    """CF-0054 (B49): the channels a buyer can turn off (services/notifications.py).
+
+    ``order_updates`` gates SMS, ``email_alerts`` gates email, ``promotions`` is
+    kept for the web toggle. Unknown keys and non-bool values are refused.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Strict: JSON true/false only ("no", 0 and 1 are refused, not coerced).
+    order_updates: StrictBool | None = None
+    email_alerts: StrictBool | None = None
+    promotions: StrictBool | None = None
+
+
 class UserUpdate(BaseModel):
     # Name, email and phone belong to BetterAuth and change through its client.
     # Addresses have their own endpoints (/users/me/addresses). Unknown fields
     # are rejected so they can't be smuggled in.
     model_config = ConfigDict(extra="forbid")
 
-    notifications_preferences: dict | None = None
+    notifications_preferences: NotificationPreferences | None = None
 
 
 class UserMerchantInfo(BaseModel):
