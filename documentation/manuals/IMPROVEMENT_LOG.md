@@ -1,11 +1,11 @@
 # Improvement Log
-branch: improve/loop    push: no    iteration: 29    target: 30
+branch: improve/loop    push: no    iteration: 30    target: 30
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-FEATURE 8/#28 · STRENGTHEN 9/#29 · SECURITY 8/#27 · AUDIT 4/#24
+FEATURE 8/#28 · STRENGTHEN 9/#29 · SECURITY 9/#30 · AUDIT 4/#24
 
 ## Needs human
 - Deploy also needs `alembic upgrade head` for #14 (`a3c5e7f9b1d2`, adds 2 nullable columns to `reviews`); not run against Postgres by the loop.
@@ -14,6 +14,7 @@ FEATURE 8/#28 · STRENGTHEN 9/#29 · SECURITY 8/#27 · AUDIT 4/#24
 - B36 needs a fact: does the Railway (and Vercel) proxy overwrite or append `X-Forwarded-For`?
 - B56 needs a product decision: public `GET /merchants/{id}` still sends `owner_name`, the owner's **full** name ("for transparency"), while reviews show only first name + initial. Keep, shorten to first name + initial, or drop? (#20)
 - Target raised 20 → 30 at #21: the 2026-11-18 session was asked to run the loop for 4 hours (until 13:05). Lower it if that was not wanted.
+- Run `uv run python scripts/check_image_urls.py` against the production database once (report only; exit 1 means it found URLs outside R2) and decide what to do with any rows it lists (CF-0057, #30).
 - Push policy: header says `push: no`. Change to `yes` if the loop should push `improve/loop`.
 
 ## Backlog (highest impact÷effort first)
@@ -21,7 +22,6 @@ FEATURE 8/#28 · STRENGTHEN 9/#29 · SECURITY 8/#27 · AUDIT 4/#24
 |----|------|------|--------|--------|------|------|------------------------|
 | B46 | STRENGTHEN | M | 3 | 2 | web lint | deps | **New (#13).** `eslint-config-next` 16.1.6 → 16.4.6 (and `eslint-plugin-react-hooks` 7.0.1 → 7.1.1) adds `set-state-in-effect` errors in 6 files (checkout page, NotificationsPanel, ReviewsTab, ShipmentsTab, useMerchantOrders, ContactCodeField) and 4 `no-location-assign-relative-destination` warnings. Kept at 16.1.6 / 7.0.1 in #13; upgrade and fix the effects (derive state, or move into event handlers) — test: lint 0 with the new config. Dev audit (14 high, `picomatch` via dev tools) needs `--force`; recheck after. |
 | B47 | SECURITY | S | 3 | 1 | mobile deps | deps | **New (#13).** `mobile/CarabaoMobile` still has `better-auth` / `@better-auth/core` / `@better-auth/expo` ^1.6.5 while the web server is 1.7.25. Bump to 1.7.25 and run the mobile sign-in, phone OTP and Google flows on a device — test: mobile typecheck passes; sign-in works against the 1.7 server. |
-| B31 | SECURITY | S | 3 | 1 | data | | Image URLs stored before CF-0034 may point off-site; a one-off check script listing produce/shop rows whose image URLs don't start with `CLOUDFLARE_R2_PUBLIC_URL` (report only, no auto-delete) — test: script unit test on a seeded SQLite db. Batch with B02. |
 | B61 | STRENGTHEN | S | 2 | 1 | admin support | | **New (#24); scoped (#29).** Real paging needs the sort keys in SQL: the route runs 4 queries per conversation (last message, read mark, last admin reply, unread count) and sorts in Python. Move them to subqueries / a window, then page. `GET /admin/support` returns every conversation as one list (no paging; the admin page polls it every 30 s, CF-0047). Page it like the other admin tables (`Page[...]`, page_size ≤ 100, unanswered first) — test: page 2 has the rest. |
 | B35 | STRENGTHEN | S | 2 | 1 | web orders | | Keep history page/filter/search in the URL (`?tab=history&page=2&status=delivered`) so back/refresh keep the view — test: pure parse/serialize helper. Batch with other order-page polish. |
 | B20 | STRENGTHEN | M | 3 | 2 | web tests | | Web pure-logic test coverage: 86 tests in `npm test` at #24 (75 at #16) (was 8 files at #1). Add tests for `util/errorHelper.ts`, `lib/seo`, status helpers — registered in `npm test`. |
@@ -43,9 +43,11 @@ FEATURE 8/#28 · STRENGTHEN 9/#29 · SECURITY 8/#27 · AUDIT 4/#24
 | B57 | STRENGTHEN | S | 1 | 1 | dead code | | **New (#21), blocked (#22).** `backend/app/models/receipt.py` is an empty file, but `scripts/seed_demo.py` imports `app.models.receipt` (line ~55) — also in the user's uncommitted `seed_demo.py` on `main`. Remove the import from the seed script first (after that work is committed), then the file — test: pytest + mypy, seed script imports. |
 | B24 | STRENGTHEN | M | 2 | 3 | web refactor | | Largest files are refactor candidates: `api/routes/merchants.py` (1191 lines), `api/routes/admin.py` (775), `lib/auth.ts` (772), merchant onboarding page (705), `orders/page.tsx` (602). Split merchants.py into produce / shop page / payouts modules without behaviour change. |
 
-Retired/merged at audit #8: B26 (→ B34 + promos epic), B33 (log-only), B21→B05, B32→B08, B42→B41, B38→B34, B16→B15, B28→B27, B44 → Needs human. Done: B00, B01, B03, B04, B06, B07. Audit #24: nothing retired (B36, B46, B47 rechecked: still open; B58 widened). Audit #16: nothing retired (B02, B10, B43, B45 rechecked in the code: still open). Done since: B40, B41 (#9), B39 (#10), B08 (#11), B14 (#12), B29 (#13), B11 (#14), B15 (#15), B50 (#17), B48 (#18), B43 (#19), B45 (#20), B09 (#21), B55 + B30 + B51 (#22), B02 (#23), B37 + B19 (#25), B58 (#26), B49 + B52 + B53 (#27), B12 (#28), B59 + B62 (#29).
+Retired/merged at audit #8: B26 (→ B34 + promos epic), B33 (log-only), B21→B05, B32→B08, B42→B41, B38→B34, B16→B15, B28→B27, B44 → Needs human. Done: B00, B01, B03, B04, B06, B07. Audit #24: nothing retired (B36, B46, B47 rechecked: still open; B58 widened). Audit #16: nothing retired (B02, B10, B43, B45 rechecked in the code: still open). Done since: B40, B41 (#9), B39 (#10), B08 (#11), B14 (#12), B29 (#13), B11 (#14), B15 (#15), B50 (#17), B48 (#18), B43 (#19), B45 (#20), B09 (#21), B55 + B30 + B51 (#22), B02 (#23), B37 + B19 (#25), B58 (#26), B49 + B52 + B53 (#27), B12 (#28), B59 + B62 (#29), B31 (#30).
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #30 — SECURITY — report stored image URLs outside R2 — CF-0057 — S (alone; see note)
+What: new `services/image_audit.py`: `is_own_url()` (under `CLOUDFLARE_R2_PUBLIC_URL` with a path boundary, so `https://pub-x.r2.dev.evil.example` and `http://` don't match) and `find_offsite_images()` over `produces.image_url`, `shop_pages.banner_image_url` / `logo_url`, `backend_users.profile_picture_url`, `orders.image` (non-empty only; ordered; refuses an empty bucket URL). New `scripts/check_image_urls.py`: prints `table	id	column	url` per hit, a count on stderr, exit 1 when any are found, 2 when the bucket URL is unset; changes nothing. Running it on production is under Needs human (the loop has no prod access by design). Why: B31 — rows saved before CF-0034 may point at trackers or other sites. Size note: S alone, under the §1 floor; the other SECURITY items need a device (B47) or a proxy fact (B36), and the session stops at 13:05. Tests: new `tests/test_image_audit.py` (3: URL boundary cases; report lists only off-site URLs across tables and changes nothing; empty bucket URL refused); script loaded and run with no bucket URL (exit 2). Checks: pytest 808 passed; ruff 141; mypy 2236 (unchanged); web test 98/98, lint 0, tsc 0 (no web change). Not pushed.
 ### #29 — STRENGTHEN — fewer requests, bounded tables (batch) — CF-0056 — M
 What: (B59) the browse page (`/order`) no longer calls `GET /merchants/{id}/shoppage` once per farm after `GET /merchants`: the list already has `shop_page`; new pure `lib/farm-images.ts` reads logo/banner from it, and the web `Merchant` type now declares `shop_page`. One request instead of 1 + N per visit. (B62) new `services/retention.py` `purge_old_rows()` deletes `search_log` rows older than 90 days (demand insight reads 30) and notifications *read* more than 180 days ago (unread ones are kept); runs in the `main.py` cleanup loop with the OTP / rate-limit purge (one commit, one log line). (B61) not done: looked at it — real paging needs the 4 per-conversation queries moved into SQL first; B61 updated with that. Batch is 2 S items + the B61 finding, not the 4 the size floor asks for: cut at a working slice (§4) because the session stops at 13:05. Tests: backend `tests/test_retention.py` (2: old rows go, recent and unread stay, second run deletes nothing; 90 > demand window); web `lib/farm-images.test.ts` (2). Checks: pytest 805 passed; ruff 141; mypy 2236 (unchanged; typed the purge filters); web test 98/98, lint 0, tsc 0. No build (last at #28). Docs: SYSTEM_REFERENCE §7.8. Not checked in a browser. Not pushed.
 ### #28 — FEATURE — merchant sales CSV export (API → web) — CF-0055 — M
