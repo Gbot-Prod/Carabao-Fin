@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/util/api/client";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import styles from "./NotificationBell.module.css";
 import { merchantUrl, resolveStoredLink } from "@/lib/urls";
@@ -45,14 +46,8 @@ export default function NotificationBell({ placement = "up" }: { placement?: "up
     }
   }, []);
 
-  useEffect(() => {
-    const first = window.setTimeout(() => void load(), 0);
-    const timer = window.setInterval(() => void load(), POLL_MS);
-    return () => {
-      window.clearTimeout(first);
-      window.clearInterval(timer);
-    };
-  }, [load]);
+  // CF-0047: paused while the tab is hidden, one poll when it is shown again.
+  useVisibleInterval(load, POLL_MS);
 
   useEffect(() => {
     if (!open) return;

@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fetchNotifications, markNotificationRead, type AppNotification } from "@/util/api/notifications";
 import { notificationTarget, openNotificationTarget } from "@/lib/notification-links";
@@ -63,15 +64,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    if (!isBackendAuthenticated) return;
-    const first = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(() => void refresh(), POLL_MS);
-    return () => {
-      window.clearTimeout(first);
-      window.clearInterval(timer);
-    };
-  }, [isBackendAuthenticated, refresh]);
+  // CF-0047: paused while the tab is hidden, one poll when it is shown again.
+  useVisibleInterval(refresh, POLL_MS, isBackendAuthenticated);
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.filter((n) => n.id !== id));

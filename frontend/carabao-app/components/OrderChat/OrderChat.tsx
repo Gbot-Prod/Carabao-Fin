@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 import { apiClient } from "@/util/api/client";
 import getApiErrorMessage, { isPhoneVerificationRequired } from "@/util/errorHelper";
 import PhoneVerifyDialog from "@/components/PhoneVerifyDialog/PhoneVerifyDialog";
@@ -48,13 +49,16 @@ export default function OrderChat({
   const listRef = useRef<HTMLOListElement | null>(null);
 
   const poll = useCallback(async () => {
+    // From the start (first poll, or a new thread): replace, don't append.
+    const fromStart = lastId.current === 0;
     try {
       const res = await apiClient.get<Thread>(url, {
         params: { after_id: lastId.current },
       });
       const fresh = res.data.messages;
-      if (fresh.length) {
-        lastId.current = fresh[fresh.length - 1].id;
+      if (fresh.length) lastId.current = fresh[fresh.length - 1].id;
+      if (fromStart) setMessages(fresh);
+      else if (fresh.length) {
         setMessages((prev) => [...prev, ...fresh.filter((m) => !prev.some((p) => p.id === m.id))]);
       }
       setClosed(res.data.closed);
@@ -66,18 +70,13 @@ export default function OrderChat({
     }
   }, [url]);
 
+  // A new thread starts from the first message (declared before the poll, so
+  // it runs first).
   useEffect(() => {
     lastId.current = 0;
-    const first = window.setTimeout(() => {
-      setMessages([]);
-      void poll();
-    }, 0);
-    const timer = window.setInterval(() => void poll(), POLL_MS);
-    return () => {
-      window.clearTimeout(first);
-      window.clearInterval(timer);
-    };
-  }, [poll]);
+  }, [url]);
+  // CF-0047: paused while the tab is hidden, one poll when it is shown again.
+  useVisibleInterval(poll, POLL_MS);
 
   useEffect(() => {
     listRef.current?.lastElementChild?.scrollIntoView({ block: "nearest" });

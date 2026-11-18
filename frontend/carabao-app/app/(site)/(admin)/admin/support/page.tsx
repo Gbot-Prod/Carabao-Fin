@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 import { apiClient } from "@/util/api/client";
 import getApiErrorMessage from "@/util/errorHelper";
 import OrderChat from "@/components/OrderChat/OrderChat";
@@ -36,14 +37,8 @@ export default function AdminSupportPage() {
     }
   }, []);
 
-  useEffect(() => {
-    const first = window.setTimeout(() => void load(), 0);
-    const timer = window.setInterval(() => void load(), 30_000);
-    return () => {
-      window.clearTimeout(first);
-      window.clearInterval(timer);
-    };
-  }, [load]);
+  // CF-0047: paused while the tab is hidden, one poll when it is shown again.
+  useVisibleInterval(load, 30_000);
 
   if (rows === null) return <PageLoader />;
   const current = rows.find((r) => r.conversation_id === selected) ?? null;
