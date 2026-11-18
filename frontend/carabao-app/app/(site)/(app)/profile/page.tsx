@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react';
+import getApiErrorMessage from "@/util/errorHelper";
 import styles from './page.module.css';
 import {
   createMyAddress,
@@ -256,6 +257,7 @@ export default function Profile() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EditForm>({ name: '', email: '' });
@@ -282,10 +284,12 @@ export default function Profile() {
 
   const handleAvatarUpload = async (file: File) => {
     setAvatarUploading(true);
+    setAvatarError(null);
     try {
       setProfile(await uploadProfilePicture(file));
-    } catch {
-      // silently fail — avatar stays as-is
+    } catch (err) {
+      // CF-0053: the avatar stays as it was; say why (type, size, upload).
+      setAvatarError(getApiErrorMessage(err, "The photo could not be uploaded."));
     } finally {
       setAvatarUploading(false);
     }
@@ -346,6 +350,7 @@ export default function Profile() {
               uploading={avatarUploading}
               onUpload={(file) => void handleAvatarUpload(file)}
             />
+            {avatarError && <p role="alert" className={styles.saveError}>{avatarError}</p>}
 
             <div className={styles.nameBlock}>
               <h2 className={styles.name}>{fullName ?? '—'}</h2>

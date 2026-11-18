@@ -346,3 +346,12 @@
   background: var(--green-600);
   color: var(--bg-white);
 }
+
+/* CF-0053: add-to-cart refusal on the farm page. */
+.cartError {
+  margin: 0.5rem 2rem 0;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid #b42318;
+  background: #fef3f2;
+  color: #b42318;
+}

@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import FarmReviews from '@/components/FarmReviews/FarmReviews';
+import getApiErrorMessage from '@/util/errorHelper';
 import { recordFarmVisit } from '@/components/RecentFarms/RecentFarms';
 import SaveProduceButton from '@/components/SaveProduceButton/SaveProduceButton';
 import { useSavedProduce } from '@/components/SaveProduceButton/useSavedProduce';
@@ -101,6 +102,7 @@ export default function FarmDetailClient() {
 
   const [addingId, setAddingId] = useState<number | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  const [cartError, setCartError] = useState<string | null>(null);
   const addingRef = useRef(false);
   
 
@@ -113,6 +115,7 @@ export default function FarmDetailClient() {
     }
     addingRef.current = true;
     setAddingId(produce.id);
+    setCartError(null);
 
     try {
       const cart = await fetchMyCart();
@@ -142,8 +145,9 @@ export default function FarmDetailClient() {
       await replaceMyCart(updated);
       setNotification(produce.name ?? 'Item');
       setTimeout(() => setNotification(null), 2500);
-    } catch {
-      // silently fail — cart page will show current state
+    } catch (err) {
+      // CF-0053: e.g. over the stock or the per-item limit; the cart is unchanged.
+      setCartError(getApiErrorMessage(err, t.shop.addFailed));
     } finally {
       addingRef.current = false;
       setAddingId(null);
@@ -165,6 +169,7 @@ export default function FarmDetailClient() {
         </div>
       )}
 
+      {cartError && <p role="alert" className={styles.cartError}>{cartError}</p>}
       {error && <p>{error}</p>}
 
       {merchant && (

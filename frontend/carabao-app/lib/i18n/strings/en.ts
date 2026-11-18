@@ -148,6 +148,7 @@ const en = {
     farmReply: 'Reply from {farm}',
     showMoreReviews: 'Show more reviews',
     loadingMore: 'Loading…',
+    addFailed: 'This item could not be added to your cart. Try again.',
   },
   reference: {
     marketReference: 'Market reference',

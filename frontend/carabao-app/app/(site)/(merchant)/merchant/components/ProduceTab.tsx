@@ -1,6 +1,7 @@
 import { useState, type ChangeEvent, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import styles from "../page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
+import getApiErrorMessage from "@/util/errorHelper";
 import { createProduce, deleteProduce, updateProduce, uploadProduceImage, type Produce } from "@/util/api";
 import ProduceFormFields, { emptyProduceForm, formToPayload, produceToForm, type ProduceFormState } from "./ProduceFormFields";
 import { formatRequestedDate, todayInManila } from "../lib/format";
@@ -20,6 +21,8 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<ProduceFormState>(emptyProduceForm);
   const [saving, setSaving] = useState(false);
+  // CF-0053: API refusals (422 limits, 400 image rules, failed upload) are shown.
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const replace = (updated: Produce) => setProduces((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
 
@@ -32,11 +35,12 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingIds((prev) => new Set(prev).add(produceId));
+    setActionError(null);
     try {
       const updated = await uploadProduceImage(produceId, file);
       replace(updated);
       if (editingId === produceId) setEditForm((prev) => ({ ...prev, image_url: updated.image_url ?? "" }));
-    } catch { /* silently fail */ }
+    } catch (err) { setActionError(getApiErrorMessage(err, "The photo could not be uploaded.")); }
     finally {
       setUploadingIds((prev) => { const n = new Set(prev); n.delete(produceId); return n; });
       e.target.value = "";
@@ -46,12 +50,13 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setActionError(null);
     try {
       const created = await createProduce(formToPayload(addForm));
       setProduces((prev) => [...prev, created]);
       setShowAddForm(false);
       setAddForm(emptyProduceForm);
-    } catch { /* silently fail */ }
+    } catch (err) { setActionError(getApiErrorMessage(err, "The produce could not be added.")); }
     finally { setSaving(false); }
   };
 
@@ -59,23 +64,26 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
     e.preventDefault();
     if (editingId === null) return;
     setSaving(true);
+    setActionError(null);
     try {
       replace(await updateProduce(editingId, formToPayload(editForm)));
       setEditingId(null);
-    } catch { /* silently fail */ }
+    } catch (err) { setActionError(getApiErrorMessage(err, "The changes could not be saved.")); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("Delete this produce item?")) return;
+    setActionError(null);
     try { await deleteProduce(id); setProduces((prev) => prev.filter((p) => p.id !== id)); }
-    catch { /* silently fail */ }
+    catch (err) { setActionError(getApiErrorMessage(err, "The produce could not be deleted.")); }
   };
 
   return (
     <div className={styles.produceLayout}>
       <div className={styles.produceSectionHeader}>
         <h2 className={styles.sectionTitle}>Your Produce</h2>
+        {actionError && <p role="alert" className={styles.errorText}>{actionError}</p>}
         {!showAddForm && (
           <button className={styles.primaryBtn} onClick={() => { setShowAddForm(true); setEditingId(null); }}>
             + Add Produce

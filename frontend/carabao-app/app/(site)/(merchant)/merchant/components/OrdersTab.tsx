@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import styles from "../page.module.css";
 import s from "./orders.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
+import getApiErrorMessage from "@/util/errorHelper";
 import { ORDER_STATUS_LABELS, updateMerchantOrderStatus, type OrderStatus } from "@/util/api";
 import { todayInManila } from "../lib/format";
 import type { MerchantOrdersState } from "../hooks/useMerchantOrders";
@@ -25,6 +26,8 @@ export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOp
 
   const [filter, setFilter] = useState<OrderFilter>("all");
   const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
+  // CF-0053: a refused status change (e.g. 409 payment in progress) is shown.
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (focusOrderId == null || !loaded) return;
@@ -41,10 +44,12 @@ export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOp
 
   const handleUpdateStatus = async (orderId: number, status: OrderStatus) => {
     setUpdatingOrderId(orderId);
+    setActionError(null);
     try {
       replaceOrder(await updateMerchantOrderStatus(orderId, status));
-    } catch { /* silently fail */ }
-    finally { setUpdatingOrderId(null); }
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, "The order status could not be changed. Try again."));
+    } finally { setUpdatingOrderId(null); }
   };
 
   // A focused order must be visible whatever filter was last used.
@@ -55,6 +60,7 @@ export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOp
     <div className={styles.ordersLayout}>
       <div className={styles.ordersHeader}>
         <h2 className={`${styles.sectionTitle} ${styles.flush}`}>Customer Orders</h2>
+        {actionError && <p role="alert" className={styles.errorText}>{actionError}</p>}
         <div className={styles.orderFilterRow}>
           {ORDER_FILTERS.map((f) => (
             <button

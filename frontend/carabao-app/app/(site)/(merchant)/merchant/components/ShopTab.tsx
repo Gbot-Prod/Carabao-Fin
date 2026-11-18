@@ -1,6 +1,8 @@
 import { useState, type ChangeEvent } from "react";
 import { SHOP_DESCRIPTION_MAX, SHOP_TITLE_MAX } from "@/lib/input-limits";
 import styles from "../page.module.css";
+import getApiErrorMessage from "@/util/errorHelper";
+import { shopSlug } from "@/lib/shop-slug";
 import {
   createMyShopPage,
   updateMyShopPage,
@@ -28,21 +30,27 @@ export default function ShopTab({ shopPage, onShopPageChange }: Props) {
 function ShopPageCreateForm({ onCreated }: { onCreated: (page: ShopPage) => void }) {
   const [draft, setDraft] = useState({ title: "", description: "" });
   const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleCreate = async () => {
     if (!draft.title.trim()) return;
     setCreating(true);
-    const slug = draft.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    setError(null);
+    // CF-0053: never empty (titles with no ASCII letters), always API-valid.
+    const slug = shopSlug(draft.title, Date.now().toString(36));
     try {
       onCreated(await createMyShopPage({ title: draft.title.trim(), slug, description: draft.description.trim() || null }));
       setDraft({ title: "", description: "" });
-    } catch { /* silently fail */ }
+    } catch (err) {
+      setError(getApiErrorMessage(err, "The shop page could not be created."));
+    }
     finally { setCreating(false); }
   };
 
   return (
     <div className={styles.shopCreateForm}>
       <p className={`${styles.emptyText} ${styles.spaceBelow}`}>Set up your public shop page so customers can find you.</p>
+      {error && <p role="alert" className={styles.errorText}>{error}</p>}
       <label className={styles.formLabel}>Title *<input className={styles.formInput} maxLength={SHOP_TITLE_MAX} value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="e.g. Dela Cruz Farm" /></label>
       <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} maxLength={SHOP_DESCRIPTION_MAX} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Short description shown on your shop page" /></label>
       <div className={`${styles.formActions} ${styles.spaceAboveLg}`}>
@@ -58,6 +66,7 @@ function ShopPageEditor({ shopPage, onChange }: { shopPage: ShopPage; onChange: 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ title: "", description: "" });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const upload = async (
     e: ChangeEvent<HTMLInputElement>,
@@ -67,22 +76,27 @@ function ShopPageEditor({ shopPage, onChange }: { shopPage: ShopPage; onChange: 
     const file = e.target.files?.[0];
     if (!file) return;
     setBusy(true);
+    setError(null);
     try { onChange(await send(file)); }
-    catch { /* silently fail */ }
+    catch (err) { setError(getApiErrorMessage(err, "The image could not be uploaded.")); }
     finally { setBusy(false); e.target.value = ""; }
   };
 
   const handleSave = async () => {
     setSaving(true);
+    setError(null);
     try {
       onChange(await updateMyShopPage({ title: draft.title.trim() || undefined, description: draft.description.trim() || null }));
       setEditing(false);
-    } catch { /* silently fail */ }
+    } catch (err) {
+      setError(getApiErrorMessage(err, "The changes could not be saved."));
+    }
     finally { setSaving(false); }
   };
 
   return (
     <div className={styles.shopEditor}>
+      {error && <p role="alert" className={styles.errorText}>{error}</p>}
       <label className={styles.shopBannerWrap} title="Click to change banner">
         {bannerUploading ? (
           <div className={styles.shopBannerEmpty}>Uploading…</div>

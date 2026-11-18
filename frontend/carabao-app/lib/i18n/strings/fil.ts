@@ -157,6 +157,7 @@ const fil: Strings = {
     farmReply: 'Sagot ng {farm}',
     showMoreReviews: 'Ipakita ang iba pang review',
     loadingMore: 'Kinukuha…',
+    addFailed: 'Hindi maidagdag sa basket ang item na ito. Subukan muli.',
   },
   reference: {
     marketReference: 'Presyo sa merkado',

@@ -33,6 +33,27 @@ export function getApiErrorDetail(error: unknown): string | undefined {
     return response.data;
   }
 
+  // CF-0053: FastAPI's 422 sends detail as a list of {loc, msg}. Show the first
+  // one ("name: String should have at most 100 characters") instead of the
+  // generic "Request failed with status code 422".
+  if (typeof response?.data === "object" && response.data !== null && "detail" in response.data) {
+    const detail = (response.data as { detail: unknown }).detail;
+    if (Array.isArray(detail)) return validationMessage(detail);
+  }
+
+  return undefined;
+}
+
+function validationMessage(items: unknown[]): string | undefined {
+  for (const item of items) {
+    if (typeof item !== "object" || item === null) continue;
+    const { loc, msg } = item as { loc?: unknown; msg?: unknown };
+    if (typeof msg !== "string" || !msg.trim()) continue;
+    // loc is ["body", "name"]; the last part names the field ("body" alone: none).
+    const field = Array.isArray(loc) ? loc[loc.length - 1] : undefined;
+    const name = typeof field === "string" && field !== "body" ? field.replace(/_/g, " ") : null;
+    return name ? `${name}: ${msg}` : msg;
+  }
   return undefined;
 }
 

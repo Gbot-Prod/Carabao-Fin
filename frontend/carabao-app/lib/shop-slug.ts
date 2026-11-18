@@ -1,0 +1,18 @@
+// CF-0053 (B58): the shop page slug the web builds from the title. The API
+// accepts ^[a-z0-9]+(?:-[a-z0-9]+)*$ (schemas/shopPage.py, CF-0051).
+
+/** "Dela Cruz Farm" -> "dela-cruz-farm". Accents are folded ("Niño" -> "nino");
+ *  a title with no letters or digits left gets `shop-<suffix>`. */
+export function shopSlug(title: string, suffix: string): string {
+  const base = title
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+    .replace(/-+$/g, "");
+  if (base) return base;
+  const tail = suffix.toLowerCase().replace(/[^a-z0-9]+/g, "") || "1";
+  return `shop-${tail}`;
+}
