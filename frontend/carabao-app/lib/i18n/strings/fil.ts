@@ -118,6 +118,8 @@ const fil: Strings = {
     freeDelivery: 'Libreng delivery',
     defaultCategory: 'Ani ng bukid',
     loading: 'Nilo-load ang mga tindahan…',
+    recentTitle: 'Mga bukid na binisita mo kamakailan',
+    recentClear: 'Burahin',
   },
   shop: {
     loading: 'Nilo-load ang tindahan…',

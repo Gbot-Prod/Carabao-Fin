@@ -6,6 +6,9 @@ import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import FarmReviews from '@/components/FarmReviews/FarmReviews';
+import { recordFarmVisit } from '@/components/RecentFarms/RecentFarms';
+import SaveProduceButton from '@/components/SaveProduceButton/SaveProduceButton';
+import { useSavedProduce } from '@/components/SaveProduceButton/useSavedProduce';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
 import { useAuth } from '@/hooks/useAuth';
 import { useAuthPrompt } from '@/components/AuthPrompt/AuthPromptContext';
@@ -74,6 +77,16 @@ export default function FarmDetailClient() {
         if (found.status === 'fulfilled') setMerchant(found.value);
         else { setError('Unable to load merchant profile right now.'); setMerchant(undefined); }
         if (page.status === 'fulfilled') setShopPage(page.value);
+        if (found.status === 'fulfilled') {
+          // CF-0052: remember the visit for "Recently viewed farms" (this browser only).
+          const m = found.value;
+          recordFarmVisit({
+            id: m.id,
+            name: m.merchant_name,
+            town: [m.city, m.province].filter(Boolean).join(', ') || null,
+            logo: page.status === 'fulfilled' ? page.value.logo_url ?? null : null,
+          });
+        }
       } catch {
         setError('Unable to load merchant profile right now.');
       }
@@ -83,6 +96,8 @@ export default function FarmDetailClient() {
   }, [hasValidMerchantId, merchantID]);
 
   const produces = merchant?.produces ?? [];
+  // CF-0052 (B37): save hearts on this farm's produce, as on the browse page.
+  const saved = useSavedProduce();
 
   const [addingId, setAddingId] = useState<number | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
@@ -236,6 +251,14 @@ export default function FarmDetailClient() {
               {produces.map((produce) => (
                 <article key={produce.id} className={styles.productCard}>
                   <div className={styles.productImage}>
+                    <div className={styles.saveSlot}>
+                      <SaveProduceButton
+                        produceName={produce.name}
+                        saved={saved.isSaved(produce.id)}
+                        busy={saved.isBusy(produce.id)}
+                        onToggle={() => void saved.toggle(produce.id)}
+                      />
+                    </div>
                     {produce.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={produce.image_url} alt={produce.name ? `Photo of ${produce.name}` : 'Produce photo'} />

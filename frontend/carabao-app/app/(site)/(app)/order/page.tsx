@@ -9,6 +9,7 @@ import PageLoader from '@/components/PageLoader/PageLoader';
 import { fetchMerchants, fetchMerchantShopPage, fetchMyCart } from '@/util/api';
 import { fetchMyFollows } from '@/util/api/merchants';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
+import RecentFarms from '@/components/RecentFarms/RecentFarms';
 import ProduceResults from './ProduceResults';
 import { fmt, plural } from '@/lib/i18n/format';
 import type { Strings } from '@/lib/i18n/strings/en';
@@ -229,6 +230,8 @@ function OrderContent() {
           {cartItemCount > 0 && <span className={styles.cartBadge}>{cartItemCount}</span>}
         </Link>
       </header>
+
+      <RecentFarms />
 
       <div className={styles.viewTabs} role="tablist">
         {(['shops', 'produce'] as const).map((v) => (

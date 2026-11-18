@@ -109,6 +109,8 @@ const en = {
     freeDelivery: 'Free delivery',
     defaultCategory: 'Farm Goods',
     loading: 'Loading shops…',
+    recentTitle: 'Recently viewed farms',
+    recentClear: 'Clear',
   },
   shop: {
     loading: 'Loading shop…',
