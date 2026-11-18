@@ -24,10 +24,12 @@ from app.schemas.order import (
     PlaceOrderResponse,
 )
 from app.schemas.pagination import Page
-from app.services import notifications
+from app.services import notifications, rate_limit
 from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
+    MAX_OPEN_PENDING_ORDERS,
     expire_stale_reservations,
+    open_pending_order_count,
     reservation_ttl_minutes,
 )
 from app.services.order_status import (
@@ -76,6 +78,7 @@ def place_order_from_cart(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_verified_phone),
 ):
+    rate_limit.enforce_action(db, "order_place", str(current_user.id))
     # Carabao delivers within Luzon only (B2).
     if payload.delivery_region is not None:
         if not is_luzon_region(payload.delivery_region):
@@ -86,6 +89,14 @@ def place_order_from_cart(
 
     # Release any elapsed checkout holds before checking availability.
     expire_stale_reservations(db, reservation_ttl_minutes())
+    if open_pending_order_count(db, current_user) >= MAX_OPEN_PENDING_ORDERS:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"You have {MAX_OPEN_PENDING_ORDERS} unpaid orders. Pay or cancel "
+                "them in My Orders before placing another."
+            ),
+        )
     cart = get_or_create_cart(db, current_user.id)
     cart_items = cart.items or []
     if not cart_items:

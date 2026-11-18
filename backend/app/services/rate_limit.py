@@ -74,6 +74,11 @@ ACTION_LIMITS: dict[str, Limit] = {
     "support_chat_send": Limit(20, 60),
     # Every search also writes a search_log row (demand insight).
     "produce_search": Limit(120, 60),
+    # CF-0045 (B50): each place locks stock rows and holds stock for the
+    # reservation TTL; each checkout call can open a PayMongo session. A buyer
+    # retrying a failed payment stays well under these.
+    "order_place": Limit(20, 3600),
+    "payment_checkout": Limit(30, 3600),
 }
 
 

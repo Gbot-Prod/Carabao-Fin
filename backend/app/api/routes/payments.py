@@ -14,7 +14,7 @@ from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.payment import CheckoutResponse, TransactionResponse
-from app.services import money
+from app.services import money, rate_limit
 from app.services.order_reservations import (
     close_checkout_sessions,
     expire_stale_reservations,
@@ -71,6 +71,7 @@ def create_payment_checkout(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_verified_phone),
 ):
+    rate_limit.enforce_action(db, "payment_checkout", str(current_user.id))
     expire_stale_reservations(db, reservation_ttl_minutes())
     order = (
         db.query(Order)

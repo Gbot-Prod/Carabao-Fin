@@ -401,6 +401,9 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
     - `order_chat_send`: 30 order chat messages per user per minute
     - `support_chat_send`: 20 support messages per user per minute
     - `produce_search`: 120 `/produce/search` calls per IP per minute (needs `RATE_LIMIT_TRUST_PROXY=true` behind a proxy)
+    - `order_place`: 20 `POST /orders/me/place` calls per user per hour, refused ones included (CF-0045)
+    - `payment_checkout`: 30 `POST /payments/checkout/{order_id}` calls per user per hour (CF-0045)
+  - Open unpaid orders: a buyer with `MAX_OPEN_PENDING_ORDERS` (10, `services/order_reservations.py`) PENDING orders gets 409 from place-order until they pay, cancel, or the reservation TTL releases them (CF-0045)
 - Better Auth admin plugin HTTP endpoints are blocked (404). Server-side `auth.api.*` calls still work.
 
 ### 7.2 Tokens

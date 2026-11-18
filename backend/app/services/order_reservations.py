@@ -11,6 +11,7 @@ from app.models.order import Order
 from app.models.produce import Produce
 from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
+from app.models.user import User
 from app.services import notifications
 from app.services.paymongo import (
     PaidPayment,
@@ -20,6 +21,21 @@ from app.services.paymongo import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# CF-0045 (B50): unpaid (PENDING) orders one buyer may hold at once. Each one
+# keeps its stock reserved until paid, cancelled, or the TTL runs out, so
+# without a cap one account could keep a farm's stock unavailable to others.
+# A multi-farm cart places one order per farm; the cart size bounds that.
+MAX_OPEN_PENDING_ORDERS = 10
+
+
+def open_pending_order_count(db: Session, user: User) -> int:
+    return (
+        db.query(Order.id)
+        .filter(Order.user_id == user.id, Order.status == OrderStatus.PENDING)
+        .count()
+    )
 
 
 def reservation_ttl_minutes() -> int:
