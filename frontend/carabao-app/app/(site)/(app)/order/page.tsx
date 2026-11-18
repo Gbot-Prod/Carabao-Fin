@@ -6,7 +6,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Clock, Search, ShoppingCart, Star, Store, Truck, X } from 'lucide-react';
 import styles from './page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
-import { fetchMerchants, fetchMerchantShopPage, fetchMyCart } from '@/util/api';
+import { fetchMerchants, fetchMyCart } from '@/util/api';
+import { farmImages } from '@/lib/farm-images';
 import { fetchMyFollows } from '@/util/api/merchants';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
 import RecentFarms from '@/components/RecentFarms/RecentFarms';
@@ -47,8 +48,7 @@ const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]
   deliveryTimeDays: merchant.delivery_time ?? null,
   category: merchant.category ?? null,
   deliveryFee: merchant.delivery_price ?? 0,
-  logoUrl: null,
-  bannerUrl: null,
+  ...farmImages(merchant),
 });
 
 const formatDeliveryTime = (days: number | null, t: Strings) =>
@@ -87,29 +87,6 @@ function OrderContent() {
         if (cancelled) return;
         setFarmList(merchants.map(toFarmView));
         setIsLoading(false);
-
-        // Logos and banners load after the list renders so cards appear immediately.
-        const shopPages = await Promise.allSettled(
-          merchants.map((m) => fetchMerchantShopPage(m.id))
-        );
-        if (cancelled) return;
-        const images = new Map<number, { logo: string | null; banner: string | null }>();
-        shopPages.forEach((result, i) => {
-          if (result.status === 'fulfilled') {
-            images.set(merchants[i].id, {
-              logo: result.value.logo_url,
-              banner: result.value.banner_image_url,
-            });
-          }
-        });
-        setFarmList((prev) =>
-          prev.map((farm) => {
-            const found = images.get(farm.merchantId);
-            return found
-              ? { ...farm, logoUrl: found.logo ?? farm.logoUrl, bannerUrl: found.banner ?? farm.bannerUrl }
-              : farm;
-          })
-        );
       } catch {
         if (!cancelled) {
           setLoadError(true);

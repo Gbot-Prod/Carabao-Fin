@@ -40,7 +40,7 @@ from app.models import (  # noqa: F401
     user_address,
 )
 from app.services import otp as otp_service
-from app.services import rate_limit
+from app.services import rate_limit, retention
 from app.services.chat import send_unread_merchant_sms
 from app.services.order_reservations import (
     expire_stale_reservations,
@@ -135,9 +135,18 @@ async def lifespan(_: FastAPI):
         try:
             codes = otp_service.purge_expired(db)
             hits = rate_limit.purge_expired(db)
+            # CF-0056: old searches and old read notifications.
+            searches, notes = retention.purge_old_rows(db)
             db.commit()
-            if codes or hits:
-                logger.info("Purged %s OTP code(s), %s rate-limit hit(s)", codes, hits)
+            if codes or hits or searches or notes:
+                logger.info(
+                    "Purged %s OTP code(s), %s rate-limit hit(s), %s search row(s), "
+                    "%s read notification(s)",
+                    codes,
+                    hits,
+                    searches,
+                    notes,
+                )
         except Exception:
             db.rollback()
             logger.exception("Could not purge OTP codes and rate-limit hits")

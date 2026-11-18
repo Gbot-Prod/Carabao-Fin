@@ -513,7 +513,7 @@ Routing and fees:
 1. `expire_stale_reservations` releases stock, settles late payments, and sends merchant SMS for orders that turn out paid.
 2. `auto_confirm_delivered_orders`
 3. `send_unread_merchant_sms`
-4. `otp.purge_expired` + `rate_limit.purge_expired`
+4. `otp.purge_expired` + `rate_limit.purge_expired` + `retention.purge_old_rows` (CF-0056: `search_log` rows older than 90 days, read notifications read more than 180 days ago; unread ones are kept)
 
 Startup runs `_check_field_encryption_keys`:
 - It loads the keys and does a round trip.

@@ -34,6 +34,8 @@ export type Merchant = {
   rating_count?: number;
   /** Last change to the farm row (CF-0041, sitemap lastModified). */
   updated_at?: string | null;
+  /** The public list and detail include the shop page (CF-0056). */
+  shop_page?: Pick<ShopPage, 'logo_url' | 'banner_image_url'> | null;
   produces: Produce[];
 };
 
