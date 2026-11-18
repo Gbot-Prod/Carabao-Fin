@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_db
 from app.api.routes.admin import _require_admin
+from app.core.sql import ilike_contains
 from app.models.produce import Produce
 from app.models.user import User
 from app.schemas.pagination import Page
@@ -57,7 +58,7 @@ def list_all_produce(
     elif hidden is False:
         query = query.filter(Produce.hidden_at.is_(None))
     if q and q.strip():
-        query = query.filter(Produce.name.ilike(f"%{q.strip()}%"))
+        query = query.filter(ilike_contains(Produce.name, q.strip()))
     total = query.count()
     rows = (
         query.options(joinedload(Produce.merchant))

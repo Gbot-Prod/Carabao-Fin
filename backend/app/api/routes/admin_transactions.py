@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
 from app.api.routes.admin import _require_admin
+from app.core.sql import ilike_contains
 from app.models.merchant import Merchant
 from app.models.statuses import TransactionStatus
 from app.models.transaction import Transaction
@@ -85,12 +86,11 @@ def _filtered(db: Session, f: TransactionFilters) -> SAQuery:
         end = ph_day_start(f.date_to + timedelta(days=1))
         q = q.filter(Transaction.created_at < end)
     if f.q is not None:
-        like = f"%{f.q}%"
         clauses = [
-            Transaction.paymongo_payment_id.ilike(like),
-            Transaction.paymongo_session_id.ilike(like),
-            Transaction.refund_reference.ilike(like),
-            User.email.ilike(like),
+            ilike_contains(Transaction.paymongo_payment_id, f.q),
+            ilike_contains(Transaction.paymongo_session_id, f.q),
+            ilike_contains(Transaction.refund_reference, f.q),
+            ilike_contains(User.email, f.q),
         ]
         term = f.q.lstrip("#")
         if term.isdigit():

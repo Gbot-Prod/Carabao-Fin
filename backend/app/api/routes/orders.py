@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db, require_verified_phone
+from app.core.sql import ilike_contains
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.produce import Produce
@@ -292,11 +293,6 @@ _HISTORY_FILTER_STATUSES: dict[str, frozenset[OrderStatus]] = {
 _ORDER_REF = re.compile(r"^(?:cb-\d{4}-)?#?0*(\d{1,9})$", re.IGNORECASE)
 
 
-def _like(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-    return f"%{escaped}%"
-
-
 @router.get("/orders/me/history/page", response_model=Page[OrderItemResponse])
 def get_my_order_history_page(
     status: HistoryFilter | None = None,
@@ -322,7 +318,7 @@ def get_my_order_history_page(
             query = query.filter(Order.id == int(ref.group(1)))
         else:
             query = query.outerjoin(Merchant, Order.merchant_id == Merchant.id).filter(
-                Merchant.merchant_name.ilike(_like(term), escape="\\")
+                ilike_contains(Merchant.merchant_name, term)
             )
 
     total = query.order_by(None).count()

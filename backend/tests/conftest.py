@@ -3,14 +3,46 @@ import importlib
 import os
 import pkgutil
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+# CF-0050 (B55): every test uses its own SQLite engine, but app.core.database
+# refuses to import without DATABASE_URL. Set a harmless default first, so a
+# clean checkout or worktree with no .env can run the suite. load_dotenv()
+# never overrides a set variable, so a local .env can't point tests at Postgres.
+os.environ.setdefault("DATABASE_URL", "sqlite://")
 
-import app.models
-from app.core import field_crypto
-from app.models.otp import OtpCode, RateLimitHit
+import app.core.database  # noqa: E402,F401  runs load_dotenv() once
+
+# CF-0050 (B30): load_dotenv() copies a developer's .env into os.environ, and
+# some of these are read when a module is first imported (rate_limit LIMITS),
+# so a per-test monkeypatch is too late. Drop the values that change test
+# outcomes, and the service keys, so a test that forgets a mock can't reach a
+# real service. Tests that need one set it with monkeypatch.
+_DOTENV_LEAKS = (
+    "ACCOUNT_OTP_PER_HOUR",
+    "ORDER_AUTO_CONFIRM_DAYS",
+    "ORDER_RESERVATION_TTL_MINUTES",
+    "PAYOUT_TRANSFER_FEE",
+    "RATE_LIMIT_TRUST_PROXY",
+    "REVIEW_WINDOW_DAYS",
+    "PAYMONGO_SECRET_KEY",
+    "PAYMONGO_SECRET_TEST_KEY",
+    "PAYMONGO_WEBHOOK_SECRET",
+    "SEMAPHORE_KEY",
+    "RESEND_KEY",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "MAPBOX_ACCESS_TOKEN",
+)
+for _name in _DOTENV_LEAKS:
+    os.environ.pop(_name, None)
+
+import pytest  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+import app.models  # noqa: E402
+from app.core import field_crypto  # noqa: E402
+from app.models.otp import OtpCode, RateLimitHit  # noqa: E402
 
 # CF-0033: shared db / merchant / buyer fixtures for every test module.
 pytest_plugins = ["tests.shared_fixtures"]

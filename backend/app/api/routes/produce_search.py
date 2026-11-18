@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, or_
@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_db
+from app.core.sql import ilike_contains
 from app.models.merchant import Merchant
 from app.models.produce import Produce
 from app.models.search_log import SearchLog
@@ -30,11 +31,6 @@ class ProduceSearchResult(ProduceResponse):
     merchant_name: str
     merchant_province: str | None = None
     merchant_city: str | None = None
-
-
-def _like(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
 
 
 @router.get("/produce/search", response_model=Page[ProduceSearchResult])
@@ -67,12 +63,11 @@ def search_produce(
     )
     text = (q or "").strip()
     if text:
-        pattern = _like(text)
         query = query.filter(
             or_(
-                Produce.name.ilike(pattern, escape="\\"),
-                Produce.category.ilike(pattern, escape="\\"),
-                Merchant.merchant_name.ilike(pattern, escape="\\"),
+                ilike_contains(Produce.name, text),
+                ilike_contains(Produce.category, text),
+                ilike_contains(Merchant.merchant_name, text),
             )
         )
     if category:
@@ -90,6 +85,7 @@ def search_produce(
             Produce.best_before.isnot(None), Produce.best_before >= today
         )
 
+    order: list[Any]
     if sort == "price_asc":
         order = [Produce.price.asc(), Produce.id.asc()]
     elif sort == "price_desc":
@@ -101,7 +97,7 @@ def search_produce(
     else:  # relevance: name matches first, then in stock, then newest
         order = []
         if text:
-            order.append(Produce.name.ilike(_like(text), escape="\\").desc())
+            order.append(ilike_contains(Produce.name, text).desc())
         order += [(Produce.stock_quantity > 0).desc(), Produce.id.desc()]
 
     total = query.count()
