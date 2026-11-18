@@ -209,6 +209,21 @@ export type MerchantSales = {
   top_products: { produce_id: number | null; name: string; quantity: number; revenue: number }[];
 };
 
+/** CF-0055: CSV of the merchant's sales lines; through apiClient so the Bearer token is sent. */
+export const downloadMySalesCsv = async (days: 7 | 30 | 90): Promise<void> => {
+  const res = await apiClient.get<Blob>('/merchants/me/sales/export', { params: { days }, responseType: 'blob' });
+  const disposition = String(res.headers['content-disposition'] ?? '');
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `sales-${days}d.csv`;
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
 export const fetchMySales = async (days: 30 | 90): Promise<MerchantSales> => {
   const response = await apiClient.get<MerchantSales>('/merchants/me/sales', { params: { days } });
   return response.data;

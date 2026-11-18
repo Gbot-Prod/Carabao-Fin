@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import getApiErrorMessage from "@/util/errorHelper";
 import Link from "next/link";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -26,6 +27,7 @@ import {
   ORDER_STATUS_LABELS,
   fetchMyAvailablePayout,
   fetchMyPayouts,
+  downloadMySalesCsv,
   fetchMySales,
   fetchMyStockAlerts,
   type AvailablePayout,
@@ -169,6 +171,20 @@ export default function MerchantDashboardPage() {
   const [payouts, setPayouts] = useState<MerchantPayoutBatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<Range>(30);
+  // CF-0055: CSV export of the selected range.
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportCsv = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      await downloadMySalesCsv(range);
+    } catch (err) {
+      setExportError(getApiErrorMessage(err, "The sales file could not be downloaded."));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     let live = true;
@@ -371,7 +387,17 @@ export default function MerchantDashboardPage() {
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              className={styles.btnSecondary}
+              onClick={() => void exportCsv()}
+              disabled={exporting}
+              title={`Download the last ${range} days as a CSV file`}
+            >
+              {exporting ? "Preparing…" : "Export CSV"}
+            </button>
           </div>
+          {exportError && <p role="alert" className={styles.errorText}>{exportError}</p>}
           {!sales ? (
             <p className={styles.emptyText}>We could not load your sales. Refresh the page to try again.</p>
           ) : rangeRevenue === 0 ? (

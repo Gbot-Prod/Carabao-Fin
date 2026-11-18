@@ -1,7 +1,5 @@
 """Admin ledger of every transaction (checkout attempt), with CSV export."""
 
-import csv
-import io
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
 
@@ -13,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
 from app.api.routes.admin import _require_admin
+from app.core.csv_export import csv_lines
 from app.core.sql import ilike_contains
 from app.models.merchant import Merchant
 from app.models.statuses import TransactionStatus
@@ -161,55 +160,29 @@ def list_transactions(
     )
 
 
-def _csv_cell(value) -> str:
-    """Stringify a value, neutralising spreadsheet formula injection."""
-    if value is None:
-        return ""
-    if isinstance(value, datetime):
-        return value.isoformat()
-    text = str(value)
-    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
-        return "'" + text
-    return text
-
-
-def _csv_lines(rows: list[AdminTransactionRow]) -> Iterator[str]:
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(CSV_COLUMNS)
+def _csv_rows(rows: list[AdminTransactionRow]) -> Iterator[list[object]]:
     for r in rows:
-        writer.writerow(
-            [
-                _csv_cell(v)
-                for v in (
-                    r.id,
-                    r.order_id,
-                    r.status.value,
-                    r.amount,
-                    r.platform_fee,
-                    r.merchant_amount,
-                    r.created_at,
-                    r.paid_at,
-                    r.merchant_id,
-                    r.merchant_name,
-                    r.buyer_id,
-                    r.buyer_name,
-                    r.buyer_email,
-                    r.paymongo_payment_id,
-                    r.paymongo_session_id,
-                    r.refund_method,
-                    r.refund_reference,
-                    r.refunded_at,
-                    r.description,
-                )
-            ]
-        )
-        yield buf.getvalue()
-        buf.seek(0)
-        buf.truncate(0)
-    tail = buf.getvalue()
-    if tail:
-        yield tail
+        yield [
+            r.id,
+            r.order_id,
+            r.status.value,
+            r.amount,
+            r.platform_fee,
+            r.merchant_amount,
+            r.created_at,
+            r.paid_at,
+            r.merchant_id,
+            r.merchant_name,
+            r.buyer_id,
+            r.buyer_name,
+            r.buyer_email,
+            r.paymongo_payment_id,
+            r.paymongo_session_id,
+            r.refund_method,
+            r.refund_reference,
+            r.refunded_at,
+            r.description,
+        ]
 
 
 @router.get("/admin/transactions/export")
@@ -223,7 +196,7 @@ def export_transactions(
     rows = [_row(*r) for r in _ordered(_filtered(db, filters)).all()]
     stamp = datetime.now(UTC).astimezone(PH_TZ).strftime("%Y%m%d-%H%M")
     return StreamingResponse(
-        _csv_lines(rows),
+        csv_lines(CSV_COLUMNS, _csv_rows(rows)),
         media_type="text/csv; charset=utf-8",
         headers={
             "Content-Disposition": f'attachment; filename="transactions-{stamp}.csv"'

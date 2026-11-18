@@ -691,3 +691,9 @@
     display: none;
   }
 }
+
+/* CF-0055: sales export failure. */
+.errorText {
+  margin: 0.5rem 0 0;
+  color: var(--danger, #b42318);
+}

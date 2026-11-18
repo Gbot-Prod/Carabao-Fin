@@ -1,12 +1,15 @@
 """F2: merchant sales charts (daily revenue/orders, top products)."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import merchant_sales
+from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.statuses import TransactionStatus
 from app.models.transaction import Transaction
@@ -22,7 +25,16 @@ def _client(db, user) -> TestClient:  # noqa: F811
     return TestClient(app)
 
 
-def _order(db, merchant, buyer, total, items, days_ago, status="delivered", paid=True):  # noqa: F811
+def _order(  # noqa: F811
+    db: Session,
+    merchant: Merchant,
+    buyer: tuple[User, Any],
+    total: int,
+    items: list[dict[str, Any]],
+    days_ago: int,
+    status: str = "delivered",
+    paid: bool = True,
+) -> Order:
     user, _ = buyer
     order = Order(
         user_id=user.id,
