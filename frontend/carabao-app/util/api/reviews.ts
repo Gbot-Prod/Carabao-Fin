@@ -29,6 +29,7 @@ export type MerchantReviews = {
   merchant_id: number;
   rating: number | null;
   rating_count: number; // 0 → show "No reviews yet"
+  total?: number; // all reviews of the farm, for paging (CF-0046)
   reviews: PublicReview[];
   limit: number;
   offset: number;

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import styles from '../page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
+import FarmReviews from '@/components/FarmReviews/FarmReviews';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
 import { useAuth } from '@/hooks/useAuth';
 import { useAuthPrompt } from '@/components/AuthPrompt/AuthPromptContext';
@@ -279,6 +280,8 @@ export default function FarmDetailClient() {
               ))}
             </div>
           </section>
+
+          <FarmReviews merchantId={merchant.id} farmName={merchant.merchant_name} />
         </>
       )}
     </div>

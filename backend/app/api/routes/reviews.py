@@ -222,10 +222,9 @@ def list_merchant_reviews(
     if merchant is None:
         raise HTTPException(status_code=404, detail="Merchant not found")
 
+    mine = db.query(Review).filter(Review.merchant_id == merchant_id)
     reviews = (
-        db.query(Review)
-        .options(selectinload(Review.user))
-        .filter(Review.merchant_id == merchant_id)
+        mine.options(selectinload(Review.user))
         .order_by(Review.created_at.desc(), Review.id.desc())
         .offset(offset)
         .limit(limit)
@@ -235,6 +234,7 @@ def list_merchant_reviews(
         merchant_id=merchant.id,
         rating=merchant.rating,
         rating_count=merchant.rating_count or 0,
+        total=mine.count(),
         reviews=[to_public_review_response(review) for review in reviews],
         limit=limit,
         offset=offset,
@@ -285,7 +285,22 @@ def set_review_reply(
     """The reviewed merchant writes or edits their one public reply."""
     rate_limit.enforce_action(db, "review_reply", str(current_user.id))
     review = _my_farm_review(db, current_user, review_id)
+    first_reply = review.merchant_reply is None
     _set_reply(db, review, payload.reply)
+    if first_reply:
+        # CF-0046: tell the buyer once; edits to the reply don't notify again.
+        farm = review.merchant.merchant_name if review.merchant else "The farm"
+        order_id = getattr(review, "order_id", None)
+        reply: str = getattr(review, "merchant_reply", None) or ""
+        notifications.notify(
+            db,
+            notifications.buyer_id(review),
+            notifications.REVIEW_REPLY,
+            f"{farm} replied to your review",
+            reply[:200] or None,
+            f"/orders/{order_id}" if order_id else None,
+        )
+        db.commit()
     return to_review_response(review)
 
 

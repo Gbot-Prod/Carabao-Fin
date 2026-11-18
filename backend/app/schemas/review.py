@@ -64,6 +64,9 @@ class MerchantReviewsResponse(BaseModel):
     merchant_id: int
     rating: float | None = None
     rating_count: int = 0
+    # All reviews of the farm, for paging (CF-0046). Can differ from
+    # rating_count, which is the cached value on the merchant row.
+    total: int = 0
     reviews: list[PublicReviewResponse]
     limit: int
     offset: int

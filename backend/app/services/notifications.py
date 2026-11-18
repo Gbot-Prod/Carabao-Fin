@@ -24,6 +24,7 @@ ORDER_SHIPPED = "order_shipped"
 ORDER_OUT_FOR_DELIVERY = "order_out_for_delivery"
 ORDER_DELIVERED = "order_delivered"
 REVIEW_RECEIVED = "review_received"
+REVIEW_REPLY = "review_reply"  # to the buyer, first reply only (CF-0046)
 PAYOUT_RELEASED = "payout_released"
 REFUND = "refund"
 PAYMENT_MISMATCH = "payment_mismatch"  # to admins (CF-0005)
