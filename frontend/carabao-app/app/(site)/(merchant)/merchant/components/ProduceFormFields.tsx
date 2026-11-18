@@ -1,4 +1,5 @@
 import styles from "../page.module.css";
+import { PRODUCE_DESCRIPTION_MAX, PRODUCE_NAME_MAX } from "@/lib/input-limits";
 import type { PriceTier, Produce, ProduceCreatePayload } from "@/util/api";
 import { todayInManila } from "../lib/format";
 import ReferencePriceHint from "@/components/ReferencePrice/ReferencePriceHint";
@@ -163,7 +164,7 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
       <div className={styles.formGrid}>
         <label className={styles.formLabel}>
           {t.listing.name}
-          <input className={styles.formInput} required value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} />
+          <input className={styles.formInput} required maxLength={PRODUCE_NAME_MAX} value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} />
         </label>
         <label className={styles.formLabel}>
           {t.listing.stock}
@@ -242,7 +243,7 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
 
       <label className={styles.formLabelFull}>
         {t.listing.description}
-        <textarea className={styles.formInput} rows={2} value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} />
+        <textarea className={styles.formInput} rows={2} maxLength={PRODUCE_DESCRIPTION_MAX} value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} />
       </label>
     </>
   );

@@ -21,12 +21,16 @@ class ReviewCreate(BaseModel):
 
     _clean = field_validator("comment")(_clean_comment)
 
+    model_config = ConfigDict(extra="forbid")  # CF-0051
+
 
 class ReviewUpdate(BaseModel):
     rating: int | None = Field(default=None, ge=1, le=5)
     comment: str | None = Field(default=None, max_length=COMMENT_MAX_LENGTH)
 
     _clean = field_validator("comment")(_clean_comment)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0051
 
 
 class ReviewReplyIn(BaseModel):

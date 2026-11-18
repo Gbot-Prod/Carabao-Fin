@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from "react";
+import { SHOP_DESCRIPTION_MAX, SHOP_TITLE_MAX } from "@/lib/input-limits";
 import styles from "../page.module.css";
 import {
   createMyShopPage,
@@ -42,8 +43,8 @@ function ShopPageCreateForm({ onCreated }: { onCreated: (page: ShopPage) => void
   return (
     <div className={styles.shopCreateForm}>
       <p className={`${styles.emptyText} ${styles.spaceBelow}`}>Set up your public shop page so customers can find you.</p>
-      <label className={styles.formLabel}>Title *<input className={styles.formInput} value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="e.g. Dela Cruz Farm" /></label>
-      <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Short description shown on your shop page" /></label>
+      <label className={styles.formLabel}>Title *<input className={styles.formInput} maxLength={SHOP_TITLE_MAX} value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="e.g. Dela Cruz Farm" /></label>
+      <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} maxLength={SHOP_DESCRIPTION_MAX} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Short description shown on your shop page" /></label>
       <div className={`${styles.formActions} ${styles.spaceAboveLg}`}>
         <button className={styles.primaryBtn} disabled={creating || !draft.title.trim()} onClick={() => void handleCreate()}>{creating ? "Creating…" : "Create Shop Page"}</button>
       </div>
@@ -110,8 +111,8 @@ function ShopPageEditor({ shopPage, onChange }: { shopPage: ShopPage; onChange: 
 
         {editing ? (
           <div className={styles.shopInfoForm}>
-            <label className={styles.formLabel}>Title<input className={styles.formInput} value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} /></label>
-            <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} /></label>
+            <label className={styles.formLabel}>Title<input className={styles.formInput} maxLength={SHOP_TITLE_MAX} value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} /></label>
+            <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} maxLength={SHOP_DESCRIPTION_MAX} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} /></label>
             <div className={`${styles.formActions} ${styles.spaceAbove}`}>
               <button className={styles.primaryBtn} disabled={saving} onClick={() => void handleSave()}>{saving ? "Saving…" : "Save"}</button>
               <button className={styles.secondaryBtn} onClick={() => setEditing(false)}>Cancel</button>

@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 TrackingState = Literal["estimated", "waiting_for_shipment"]
 
@@ -59,3 +59,5 @@ MAX_SHIPMENT_ORDERS = 20
 
 class CreateShipmentRequest(BaseModel):
     order_ids: list[int] = Field(min_length=1, max_length=MAX_SHIPMENT_ORDERS)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0051
