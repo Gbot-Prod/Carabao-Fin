@@ -2,15 +2,17 @@
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import ensure_phone_verified, get_current_user, get_db
-from app.models.chat import ChatMessage
+from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.order import Order
 from app.models.user import User
-from app.services import chat, rate_limit
+from app.services import chat, notifications, rate_limit
+from app.services.merchant_service import get_active_merchant
 
 router = APIRouter(tags=["chat"])
 
@@ -94,3 +96,94 @@ def send_message(
     db.commit()
     db.refresh(message)
     return _out(message, current_user)
+
+
+class ChatSummary(BaseModel):
+    order_id: int
+    order_ref: str
+    order_status: str
+    buyer_name: str | None
+    closed: bool
+    last_body: str
+    last_sender_role: str
+    last_mine: bool
+    last_at: datetime
+    unread: int
+
+
+@router.get("/merchants/me/chats", response_model=list[ChatSummary])
+def my_merchant_chats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The farm's order chats that have messages, newest message first.
+
+    Read markers do not change here; opening a thread marks it read.
+    """
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+
+    rows = (
+        db.query(Conversation, Order, User)
+        .join(Order, Order.id == Conversation.order_id)
+        .outerjoin(User, User.id == Order.user_id)
+        .filter(Conversation.kind == "order", Order.merchant_id == merchant.id)
+        .all()
+    )
+    conv_ids = [conv.id for conv, _, _ in rows]
+    if not conv_ids:
+        return []
+
+    last_ids = dict(
+        db.query(ChatMessage.conversation_id, func.max(ChatMessage.id))
+        .filter(ChatMessage.conversation_id.in_(conv_ids))
+        .group_by(ChatMessage.conversation_id)
+        .all()
+    )
+    last_msgs = {
+        m.conversation_id: m
+        for m in db.query(ChatMessage).filter(ChatMessage.id.in_(last_ids.values()))
+    }
+    unread = dict(
+        db.query(ChatMessage.conversation_id, func.count(ChatMessage.id))
+        .outerjoin(
+            ConversationRead,
+            and_(
+                ConversationRead.conversation_id == ChatMessage.conversation_id,
+                ConversationRead.user_id == current_user.id,
+            ),
+        )
+        .filter(
+            ChatMessage.conversation_id.in_(conv_ids),
+            or_(
+                ChatMessage.sender_id.is_(None),
+                ChatMessage.sender_id != current_user.id,
+            ),
+            ChatMessage.id > func.coalesce(ConversationRead.last_read_message_id, 0),
+        )
+        .group_by(ChatMessage.conversation_id)
+        .all()
+    )
+
+    out: list[ChatSummary] = []
+    for conv, order, buyer in rows:
+        last = last_msgs.get(conv.id)
+        if last is None:
+            continue
+        out.append(
+            ChatSummary(
+                order_id=order.id,
+                order_ref=notifications.order_ref(order),
+                order_status=order.status,
+                buyer_name=(buyer.name or None) if buyer else None,
+                closed=chat.is_closed(order),
+                last_body=last.body,
+                last_sender_role=last.sender_role,
+                last_mine=last.sender_id == current_user.id,
+                last_at=last.created_at,
+                unread=unread.get(conv.id, 0),
+            )
+        )
+    out.sort(key=lambda s: s.last_at, reverse=True)
+    return out

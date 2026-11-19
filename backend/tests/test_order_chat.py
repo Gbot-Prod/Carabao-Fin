@@ -173,3 +173,30 @@ def test_admin_without_two_factor_cannot_read_chat(db, buyer, order, monkeypatch
     # Finishing setup gives a new session that did (mfa=true in the token).
     admin.mfa_session = True
     assert _client(db, admin).get(f"/orders/{order.id}/messages").status_code == 200
+
+
+def test_merchant_chat_list_shows_last_message_and_unread(db, merchant, buyer, order):  # noqa: F811
+    farmer = db.get(User, merchant.user_id)
+    farm = _client(db, farmer)
+    shopper = _client(db, buyer[0])
+
+    # No messages yet: no chat in the list.
+    assert farm.get("/merchants/me/chats").json() == []
+
+    _post(shopper, order.id, "Is the talong fresh?")
+    _post(shopper, order.id, "And the okra?")
+    chats = farm.get("/merchants/me/chats").json()
+    assert len(chats) == 1
+    assert chats[0]["order_id"] == order.id
+    assert chats[0]["last_body"] == "And the okra?"
+    assert chats[0]["last_mine"] is False
+    assert chats[0]["unread"] == 2
+
+    # Opening the thread marks it read; the farm's own reply is not unread.
+    farm.get(f"/orders/{order.id}/messages")
+    _post(farm, order.id, "Both harvested today.")
+    chats = farm.get("/merchants/me/chats").json()
+    assert chats[0]["unread"] == 0 and chats[0]["last_mine"] is True
+
+    # A buyer has no farm, so the list is not theirs to read.
+    assert shopper.get("/merchants/me/chats").status_code == 404

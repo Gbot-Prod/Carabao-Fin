@@ -122,9 +122,28 @@ export const fetchAdminUsers = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Pro
   return res.data;
 };
 
+export type AdminMerchantShop = {
+  id: number;
+  title: string;
+  slug: string;
+  banner_image_url: string | null;
+  logo_url: string | null;
+  description: string | null;
+};
+
 export type AdminMerchant = Merchant & {
   owner_is_suspended: boolean;
   owner_suspension_reason: string | null;
+  owner_name: string | null;
+  legal_business_name: string | null;
+  business_type: string | null;
+  registration_type: string | null;
+  registration_number: string | null;
+  low_stock_threshold: number | null;
+  created_at: string | null;
+  verified_at: string | null;
+  deleted_at: string | null;
+  shop_page: AdminMerchantShop | null;
 };
 
 export const fetchAdminMerchantsPage = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Promise<Paginated<AdminMerchant>> => {

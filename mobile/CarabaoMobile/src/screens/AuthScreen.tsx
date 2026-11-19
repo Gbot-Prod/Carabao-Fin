@@ -11,6 +11,7 @@ import { requirePhone, TwoFactorRequiredError, useAuth } from '../lib/AuthContex
 import { WEB_BASE } from '../lib/api';
 import { formatPhMobile } from '../lib/phone';
 import { PasswordResetSheet } from '../components/PasswordResetSheet';
+import { PASSWORD_RULE_MESSAGE, isStrongPassword } from '../lib/passwordPolicy';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 const { width } = Dimensions.get('window');
@@ -101,12 +102,9 @@ export default function AuthScreen() {
       setError('Please fill in all required fields');
       return;
     }
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
-    if (form.password.length > 128) {
-      setError('Password must be 128 characters or fewer');
+    // Only a new password must obey the rule; sign-in only compares it.
+    if (mode === 'signup' && !isStrongPassword(form.password)) {
+      setError(PASSWORD_RULE_MESSAGE);
       return;
     }
     if (mode === 'signup' && form.password !== form.confirmPassword) {

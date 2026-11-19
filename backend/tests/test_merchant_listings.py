@@ -11,6 +11,7 @@ from app.models.merchant import Merchant
 from app.models.produce import Produce
 from app.models.user import User
 from tests.better_auth import make_user
+from tests.shared_fixtures import publish_shop_page
 
 # Every listing needs both dates (services/produce_freshness.py).
 HARVEST = date.today()
@@ -47,6 +48,8 @@ def _other_merchant(db) -> Merchant:
         gov_id_document_path="gov-id/x.pdf",
     )
     db.add(other)
+    db.flush()
+    publish_shop_page(db, other)
     db.commit()
     return other
 

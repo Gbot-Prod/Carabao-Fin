@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi import FastAPI
@@ -68,7 +68,14 @@ def seller(db):
     db.add(merchant)
     db.flush()
     db.add(Produce(merchant_id=merchant.id, name="Tomato", price=50, stock_quantity=5))
-    db.add(ShopPage(merchant_id=merchant.id, title="Dela Cruz", slug="dela-cruz"))
+    db.add(
+        ShopPage(
+            merchant_id=merchant.id,
+            title="Dela Cruz",
+            slug="dela-cruz",
+            published_at=datetime.now(UTC),
+        )
+    )
     db.add(MerchantPayoutInfo(merchant_id=merchant.id, payout_type="gcash"))
     db.commit()
     return user, merchant

@@ -43,6 +43,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+from sqlalchemy import insert  # noqa: E402
+
 from app.core.database import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402,F401
     cart,
@@ -256,8 +258,10 @@ def wipe(db, hub_email: str | None) -> None:
 
 def add_identity(db, identity_id, *, email, name, phone_number) -> None:
     """A BetterAuth user, as BetterAuth would write it (no password)."""
+    # ORM insert, so the Python attribute names map to BetterAuth's camelCase
+    # columns (emailVerified, phoneNumber, ...).
     db.execute(
-        AuthIdentity.__table__.insert().values(
+        insert(AuthIdentity).values(
             id=identity_id,
             name=name,
             email=email,
@@ -556,7 +560,6 @@ def seed(db, hub_email: str, n_ready: int, n_history: int) -> None:
         gov_id_document_path="gov-id/x.pdf",
         region="Central Luzon", province="Tarlac", city="Capas",
         barangay="Sta. Lucia", address="Sitio Sta. Lucia", postal_code="2315",
-        delivery_time=2, delivery_price=90,
         available_days=WEEKDAYS,
     ))
 

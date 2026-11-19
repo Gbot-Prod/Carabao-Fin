@@ -1,17 +1,24 @@
 /* ── Merchant tokens ────────────────────────────────
-   Re-scoped for every merchant page: a darker pale page with pure-white cards so
-   panels stand off the background. Pages keep using --bg-white/--green-border. */
+   Re-scoped for every merchant page. The admin area uses a dark green sidebar
+   on a cool grey-green page; the merchant area is light and warm (a market
+   stall, not a control room): sand page, light sidebar, filled green active
+   item. Pages keep using --bg-white/--green-border. */
 .shell {
-  --bg-primary: #e8ece7;
+  --bg-primary: #f1ede4;
   --bg-white: #ffffff;
-  --green-border: #d9e1db;
-  --green-50: #f6f8f6;
-  --card-shadow: 0 1px 2px rgba(19, 46, 29, 0.06), 0 4px 12px rgba(19, 46, 29, 0.04);
-  --sidebar-bg: #133520;
-  --sidebar-bg-raised: #1a4129;
-  --sidebar-text: #bcd0c2;
-  --sidebar-text-faint: #7f9a87;
-  --sidebar-accent: #5ccf8a;
+  --green-border: #e3ddd0;
+  --green-50: #f8f5ee;
+  --card-shadow: 0 1px 2px rgba(74, 56, 24, 0.06), 0 4px 12px rgba(74, 56, 24, 0.04);
+  --sidebar-bg: #fbf9f4;
+  --sidebar-bg-raised: #e2f1e6;
+  --sidebar-border: #e3ddd0;
+  --sidebar-hover: #f1ede4;
+  --sidebar-text: #4b5a50;
+  --sidebar-text-strong: #17301f;
+  --sidebar-text-faint: #9a917f;
+  --sidebar-accent: #2f9e5f;
+  --sidebar-accent-text: #166534;
+  --merchant-warm: #c2410c;
 
   min-height: 100vh;
   display: flex;
@@ -30,6 +37,7 @@
   position: sticky;
   top: 0;
   height: 100vh;
+  border-right: 1px solid var(--sidebar-border);
 }
 
 .brandRow {
@@ -38,7 +46,7 @@
   gap: 10px;
   height: 60px;
   padding: 0 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--sidebar-border);
   flex-shrink: 0;
 }
 
@@ -58,13 +66,13 @@
 .brand {
   font-size: 16px;
   font-weight: 700;
-  color: #fff;
+  color: var(--sidebar-text-strong);
   letter-spacing: -0.01em;
 }
 
 .brandSub {
-  font-weight: 500;
-  color: var(--sidebar-text-faint);
+  font-weight: 600;
+  color: var(--merchant-warm);
 }
 
 /* ── Nav ─────────────────────────────────────── */
@@ -114,8 +122,8 @@
 }
 
 .navLink:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text-strong);
 }
 
 .navLink:focus-visible {
@@ -125,8 +133,13 @@
 
 .navLinkActive {
   background: var(--sidebar-bg-raised);
-  color: #fff;
+  color: var(--sidebar-accent-text);
   font-weight: 600;
+}
+
+.navLinkActive:hover {
+  background: var(--sidebar-bg-raised);
+  color: var(--sidebar-accent-text);
 }
 
 .navLinkActive svg {
@@ -152,7 +165,7 @@
   align-items: center;
   gap: 10px;
   padding: 14px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid var(--sidebar-border);
   flex-shrink: 0;
 }
 
@@ -186,7 +199,7 @@
 .userName {
   font-size: 13px;
   font-weight: 600;
-  color: #fff;
+  color: var(--sidebar-text-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -213,8 +226,8 @@
 }
 
 .signOutBtn:hover:not(:disabled) {
-  background: rgba(248, 113, 113, 0.14);
-  color: #fecaca;
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .signOutBtn:focus-visible {
@@ -300,7 +313,7 @@
     height: 100dvh;
     transform: translateX(-100%);
     transition: transform 0.25s ease;
-    box-shadow: 12px 0 30px rgba(0, 0, 0, 0.2);
+    box-shadow: 12px 0 30px rgba(74, 56, 24, 0.18);
   }
 
   .sidebarOpen {
@@ -335,8 +348,8 @@
     justify-content: center;
     border: none;
     border-radius: var(--radius-sm);
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    background: var(--sidebar-hover);
+    color: var(--sidebar-text-strong);
     cursor: pointer;
   }
 
@@ -385,8 +398,8 @@
   min-width: 22px;
   padding: 1px 7px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text-strong);
   font-size: 11px;
   font-weight: 700;
   text-align: center;
@@ -394,6 +407,7 @@
 
 .navCountAlert {
   background: #d97706;
+  color: #fff;
 }
 
 .topbarProfile {

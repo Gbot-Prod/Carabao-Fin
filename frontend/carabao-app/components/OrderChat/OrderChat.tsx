@@ -23,11 +23,14 @@ export default function OrderChat({
   endpoint,
   title,
   emptyText,
+  fill = false,
 }: {
   orderId?: number;
   endpoint?: string;
   title?: string;
   emptyText?: string;
+  /** Fill the parent's height; the message list grows instead of stopping at 320px. */
+  fill?: boolean;
 }) {
   const { t } = useLanguage();
   const c = t.chat;
@@ -106,7 +109,7 @@ export default function OrderChat({
   const who = (role: string) => c.roles[role as keyof typeof c.roles] ?? role;
 
   return (
-    <section className={styles.chat} aria-label={title ?? c.title}>
+    <section className={`${styles.chat} ${fill ? styles.fill : ""}`} aria-label={title ?? c.title}>
       <h3 className={styles.title}>{title ?? c.title}</h3>
       {!loaded ? (
         <p className={styles.note}>{c.loading}</p>

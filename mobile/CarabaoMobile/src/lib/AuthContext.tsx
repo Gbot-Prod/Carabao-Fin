@@ -82,15 +82,24 @@ function buildUser(me: MeResponse): User {
 
 type BetterAuthError = { code?: string; message?: string; status?: number } | null | undefined;
 
+const WRONG_CREDENTIALS_MESSAGE = "That number, email or password doesn't match our records.";
+
 function signInMessage(error: BetterAuthError): string {
   switch (error?.code) {
+    // One message for a wrong number, a wrong email and a wrong password, so a
+    // failed sign-in does not tell which accounts exist.
     case 'INVALID_EMAIL_OR_PASSWORD':
     case 'INVALID_PHONE_NUMBER_OR_PASSWORD':
-      return 'Wrong number, email or password. Use "Forgot password?" to set a new one.';
+    case 'INVALID_EMAIL':
+    case 'INVALID_PASSWORD':
+    case 'USER_NOT_FOUND':
+    case 'CREDENTIAL_ACCOUNT_NOT_FOUND':
+      return WRONG_CREDENTIALS_MESSAGE;
     case 'BANNED_USER':
       return 'This account has been suspended. Contact Carabao support.';
     default:
       if (error?.status === 429) return 'Too many attempts. Wait a few minutes and try again.';
+      if (error?.status === 401) return WRONG_CREDENTIALS_MESSAGE;
       return error?.message || 'Sign-in failed. Please try again.';
   }
 }
