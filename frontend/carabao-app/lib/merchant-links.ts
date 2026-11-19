@@ -37,6 +37,7 @@ export const MERCHANT_PAGES = {
   produce: "/produce",
   inventory: "/inventory",
   shop: "/shop",
+  vouchers: "/vouchers",
   settings: "/settings",
   onboarding: "/onboarding",
   // Same path as the buyer sign-in: each site signs in at /auth.

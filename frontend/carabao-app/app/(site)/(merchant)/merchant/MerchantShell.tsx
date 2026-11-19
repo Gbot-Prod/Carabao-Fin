@@ -17,6 +17,7 @@ import {
   ShoppingCart,
   Star,
   Store,
+  Ticket,
   Truck,
   X,
 } from "lucide-react";
@@ -151,6 +152,7 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
         { path: P.produce, label: "Produce", icon: Package, count: productCount || undefined },
         { path: P.inventory, label: "Inventory", icon: Boxes },
         { path: P.shop, label: "Shop page", icon: Store },
+        { path: P.vouchers, label: "Vouchers", icon: Ticket },
         { path: P.settings, label: "Settings", icon: Settings },
       ],
     },

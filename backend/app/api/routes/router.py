@@ -16,6 +16,7 @@ from .email_otp import router as email_otp_router
 from .follows import router as follows_router
 from .merchant_onboarding import router as merchant_onboarding_router
 from .merchant_sales import router as merchant_sales_router
+from .merchant_vouchers import router as merchant_vouchers_router
 from .merchants import router as merchants_router
 from .notifications import router as notifications_router
 from .orders import router as orders_router
@@ -40,6 +41,7 @@ router.include_router(produce_search_router)
 router.include_router(reorder_router)
 router.include_router(follows_router)
 router.include_router(saved_produce_router)
+router.include_router(merchant_vouchers_router)
 router.include_router(notifications_router)
 router.include_router(chat_router)
 router.include_router(support_chat_router)

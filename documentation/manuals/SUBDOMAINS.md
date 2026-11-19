@@ -165,6 +165,7 @@ The merchant pages do not use the buyer layout. `(merchant)/merchant/(shell)/lay
 | `/produce` | Produce listings |
 | `/inventory` | Stock, stock alerts and threshold, demand insight |
 | `/shop` | Public shop page (logo, banner, title) |
+| `/vouchers` | Farm voucher codes: create, turn on/off, delete unused ones (CF-0061) |
 | `/settings` | Store details (address, pickup pin, delivery days and price, contact number), delete merchant profile |
 | `/onboarding` | Merchant application (no shell) |
 | `/auth` | Merchant Centre login (no shell). Same accounts as the buyer site. Was `/login`, which now redirects here. |

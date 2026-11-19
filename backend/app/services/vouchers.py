@@ -54,6 +54,37 @@ def compute_discount(voucher: Voucher, subtotal: int) -> int:
     return max(0, min(discount, subtotal))
 
 
+def uses_count(db: Session, voucher_id: int, user_id: int | None = None) -> int:
+    """Uses that count toward the caps (orders not cancelled)."""
+    return _uses(db, voucher_id, user_id)
+
+
+# CF-0061: rules over two or more fields, checked on the final values of a
+# create or an edit. Single-field bounds are in schemas/voucher.py.
+MAX_PERCENT = 90
+
+
+def check_rules(values: dict[str, Any]) -> None:
+    """Raise 422 when the combined voucher fields break a rule."""
+    kind = values.get("kind")
+    value = int(values.get("value") or 0)
+    if kind == "percent" and not 1 <= value <= MAX_PERCENT:
+        raise HTTPException(
+            status_code=422, detail=f"A percent voucher is 1 to {MAX_PERCENT} %."
+        )
+    if kind == "fixed" and values.get("max_discount") is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="A maximum discount is only for percent vouchers.",
+        )
+    starts_at = _aware(values.get("starts_at"))
+    expires_at = _aware(values.get("expires_at"))
+    if starts_at is not None and expires_at is not None and expires_at <= starts_at:
+        raise HTTPException(
+            status_code=422, detail="The end date must be after the start date."
+        )
+
+
 def _uses(db: Session, voucher_id: int, user_id: int | None = None) -> int:
     query = (
         db.query(func.count(VoucherRedemption.id))
