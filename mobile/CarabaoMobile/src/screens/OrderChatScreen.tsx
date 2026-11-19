@@ -2,7 +2,7 @@
 // Order chat on mobile (CH1c): same thread as the web. Polls every 10 seconds
 // while this screen is open. With `support=1` it shows the user's support
 // chat with the admins instead (CH2).
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -10,6 +10,9 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { api, type ApiChatMessage } from '../lib/api';
+import { chatTitle, parseOrderId } from '../lib/orderDetail';
+import { usePolling } from '../lib/usePolling';
+import { CHAT_BODY_MAX } from '../lib/inputLimits';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { isPhoneVerificationRequired, PhoneVerifySheet } from '../components/PhoneVerifySheet';
@@ -26,7 +29,9 @@ function OrderChatContent() {
     support?: string;
   }>();
   const isSupport = support === '1';
-  const id = Number(orderId);
+  // CF-0114: route values can come from a deep link: checked before use.
+  const id = parseOrderId(orderId);
+  const headerTitle = chatTitle(title, isSupport, id);
   const [messages, setMessages] = useState<ApiChatMessage[]>([]);
   const [closed, setClosed] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -40,11 +45,11 @@ function OrderChatContent() {
   const listRef = useRef<FlatList<ApiChatMessage>>(null);
 
   const poll = useCallback(async () => {
-    if (!token || (!isSupport && !Number.isFinite(id))) return;
+    if (!token || (!isSupport && id === null)) return;
     try {
       const thread = isSupport
         ? await api.support.thread(token, lastId.current)
-        : await api.chat.thread(token, id, lastId.current);
+        : await api.chat.thread(token, id as number, lastId.current);
       if (thread.messages.length) {
         lastId.current = thread.messages[thread.messages.length - 1].id;
         setMessages((prev) => [...prev, ...thread.messages.filter((m) => !prev.some((p) => p.id === m.id))]);
@@ -58,21 +63,18 @@ function OrderChatContent() {
     }
   }, [token, id, isSupport]);
 
-  useEffect(() => {
-    void poll();
-    const timer = setInterval(() => void poll(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [poll]);
+  // CF-0117: only while this chat is in view and the app is in the foreground.
+  usePolling(poll, POLL_MS, isSupport || id !== null);
 
   const send = async () => {
     const body = draft.trim();
-    if (!body || !token) return;
+    if (!body || !token || (!isSupport && id === null)) return;
     setSending(true);
     setVerified(false);
     try {
       const message = isSupport
         ? await api.support.send(token, body)
-        : await api.chat.send(token, id, body);
+        : await api.chat.send(token, id as number, body);
       lastId.current = Math.max(lastId.current, message.id);
       setMessages((prev) => [...prev, message]);
       setDraft('');
@@ -92,9 +94,14 @@ function OrderChatContent() {
         <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Back">
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.navTitle} numberOfLines={1}>{title ?? (isSupport ? 'Carabao support' : `Order #${orderId}`)}</Text>
+        <Text style={styles.navTitle} numberOfLines={1}>{headerTitle}</Text>
         <View style={{ width: 22 }} />
       </View>
+      {!isSupport && id === null ? (
+        <Text style={{ margin: 40, textAlign: 'center', color: Colors.textMuted }}>
+          Chat not found. The link may be wrong.
+        </Text>
+      ) : (
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {!loaded ? (
           <ActivityIndicator style={{ marginTop: 40 }} color={Colors.primary} />
@@ -132,7 +139,7 @@ function OrderChatContent() {
               placeholder="Write a message"
               placeholderTextColor={Colors.textLight}
               multiline
-              maxLength={2000}
+              maxLength={CHAT_BODY_MAX}
             />
             <TouchableOpacity
               style={[styles.sendBtn, (!draft.trim() || sending) && styles.disabled]}
@@ -144,6 +151,7 @@ function OrderChatContent() {
           </View>
         )}
       </KeyboardAvoidingView>
+      )}
       <PhoneVerifySheet
         visible={needsPhone}
         reason="Verify your mobile number to message the farm."

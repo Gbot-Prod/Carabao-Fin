@@ -1,5 +1,5 @@
 // src/screens/OrderScreen.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, StyleSheet,
   TouchableOpacity, ScrollView, SafeAreaView,
@@ -10,10 +10,11 @@ import FarmCard from '../components/FarmCard';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
 import { api, merchantLocation, type ApiMerchant, type ApiProduceSearchResult } from '../lib/api';
-import { type Farm } from '../lib/mockData';
+import { type Farm } from '../lib/farms';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { SkeletonList, LoadError } from '../components/Skeleton';
-const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
+import { SaveHeart } from '../components/SaveHeart';
+import { usePolling } from '../lib/usePolling';
 
 function merchantToFarm(m: ApiMerchant): Farm {
   const firstCategory = m.produces.find((p) => p.category)?.category;
@@ -23,12 +24,12 @@ function merchantToFarm(m: ApiMerchant): Farm {
     category: firstCategory ?? 'Farm Goods',
     location: merchantLocation(m),
     description: m.shop_page?.description ?? '',
-    rating: m.rating ?? 0,
-    time: m.delivery_time ? `${m.delivery_time} day${m.delivery_time > 1 ? 's' : ''}` : 'N/A',
-    deliveryFee: m.delivery_price ?? 0,
+    rating: m.rating ?? null,
+    deliveryDays: m.delivery_time ?? null,
+    deliveryFee: m.delivery_price ?? null,
     operatingHours: m.operating_hours ?? '',
-    contactInfo: m.contact_number,
-    image: m.shop_page?.banner_image_url ?? PLACEHOLDER_IMAGE,
+    contactInfo: m.contact_number ?? null,
+    image: m.shop_page?.banner_image_url ?? null,
   };
 }
 
@@ -42,17 +43,14 @@ function OrderScreenContent() {
   const [attempt, setAttempt] = useState(0);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  // U5: unread count for the bell, refreshed every minute.
+  // U5: unread count for the bell, every minute while this tab is in view and the app
+  // is in the foreground (CF-0117); only the count is fetched.
   const [unread, setUnread] = useState(0);
-  useEffect(() => {
-    if (!token) return;
-    let active = true;
-    const load = () =>
-      api.notifications.list(token).then((r) => { if (active) setUnread(r.unread); }).catch(() => {});
-    void load();
-    const timer = setInterval(load, 60_000);
-    return () => { active = false; clearInterval(timer); };
-  }, [token]);
+  const loadUnread = useCallback(
+    () => api.notifications.unreadCount(token).then(setUnread).catch(() => {}),
+    [token],
+  );
+  usePolling(loadUnread, 60_000, !!token);
 
   // U4: followed farms are listed first.
   const [followed, setFollowed] = useState<Set<string>>(new Set());
@@ -64,19 +62,17 @@ function OrderScreenContent() {
       .catch(() => setFollowed(new Set()));
   }, [token]);
   // U2: produce matching the search box, from the server (debounced).
-  const [produceHits, setProduceHits] = useState<ApiProduceSearchResult[]>([]);
+  const [hits, setHits] = useState<ApiProduceSearchResult[]>([]);
+  const produceHits = search.trim().length < 2 ? [] : hits;
   useEffect(() => {
     const q = search.trim();
-    if (q.length < 2) {
-      setProduceHits([]);
-      return;
-    }
+    if (q.length < 2) return;
     let active = true;
     const timer = setTimeout(() => {
       api.search
         .produce(token, q)
-        .then((res) => { if (active) setProduceHits(res.items); })
-        .catch(() => { if (active) setProduceHits([]); });
+        .then((res) => { if (active) setHits(res.items); })
+        .catch(() => { if (active) setHits([]); });
     }, 300);
     return () => { active = false; clearTimeout(timer); };
   }, [search, token]);
@@ -237,8 +233,16 @@ function OrderScreenContent() {
                       </Text>
                     </View>
                     <Text style={styles.hitPrice}>₱{p.price.toLocaleString()}/{p.unit}</Text>
+                    <SaveHeart produceId={p.id} name={p.name ?? 'produce'} size={20} />
                   </TouchableOpacity>
                 ))}
+                <TouchableOpacity
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                  onPress={() => router.push({ pathname: '/search', params: { q: search.trim() } })}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.hitsTitle, { color: Colors.primary }]}>See all produce results, filter and sort →</Text>
+                </TouchableOpacity>
                 <Text style={styles.hitsTitle}>Farms</Text>
               </View>
             ) : undefined

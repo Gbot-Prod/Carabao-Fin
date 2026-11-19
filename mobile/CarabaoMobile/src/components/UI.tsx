@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
-  StyleSheet, ViewStyle, TextStyle,
+  StyleSheet, ViewStyle,
 } from 'react-native';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 

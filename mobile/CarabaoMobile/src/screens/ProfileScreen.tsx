@@ -1,15 +1,16 @@
 // src/screens/ProfileScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, Alert, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { api, defaultAddress, type ApiUserProfile } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { DeleteAccountSheet } from '../components/DeleteAccountSheet';
 import { PhoneVerifySheet } from '../components/PhoneVerifySheet';
 import { AddEmailSheet } from '../components/AddEmailSheet';
 import { formatPhMobile } from '../lib/phone';
@@ -59,13 +60,15 @@ function ProfileScreenContent() {
   const [profile, setProfile] = useState<ApiUserProfile | null>(null);
   const [phoneSheetOpen, setPhoneSheetOpen] = useState(false);
   const [emailSheetOpen, setEmailSheetOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const loadProfile = React.useCallback(() => {
     if (!token) return;
     void api.users.me(token).then(setProfile).catch(() => { });
   }, [token]);
 
-  useEffect(loadProfile, [loadProfile]);
+  // Re-read on focus, so an address saved on the Addresses screen shows here (CF-0110).
+  useFocusEffect(loadProfile);
 
   const email = profile?.email ?? user?.email ?? '';
   const phone = profile?.phone_number ?? user?.phoneNumber ?? null;
@@ -148,8 +151,11 @@ function ProfileScreenContent() {
             <>
               <SectionHeader title="My shop" />
               <View style={styles.settingsGroup}>
+                <SettingItem icon="grid-outline" label="Dashboard" onPress={() => router.push('/merchant-dashboard')} />
                 <SettingItem icon="receipt-outline" label="Incoming orders" onPress={() => router.push('/merchant-orders')} />
                 <SettingItem icon="leaf-outline" label="My listings" onPress={() => router.push('/listings')} />
+                <SettingItem icon="chatbubbles-outline" label="Chats" onPress={() => router.push('/merchant-chats')} />
+                <SettingItem icon="star-outline" label="Reviews" onPress={() => router.push('/merchant-reviews')} />
               </View>
             </>
           ) : null}
@@ -169,9 +175,10 @@ function ProfileScreenContent() {
               value={phone ? `${formatPhMobile(phone)}${phoneVerified ? '' : ' (not verified)'}` : 'Add a mobile number'}
               onPress={() => setPhoneSheetOpen(true)}
             />
-            <SettingItem icon="location-outline" label="Address" value={address || 'Not set'} onPress={() => { }} />
+            <SettingItem icon="location-outline" label="Address" value={address || 'Not set'} onPress={() => router.push('/addresses')} />
             <SettingItem icon="card-outline" label="Payment Methods" value="No cards saved" onPress={() => { }} />
             <SettingItem icon="receipt-outline" label="Order History" onPress={() => router.push('/(tabs)/history')} />
+            <SettingItem icon="heart-outline" label="Saved produce" onPress={() => router.push('/saved')} />
             <SettingItem
               icon="chatbubbles-outline"
               label="Contact support"
@@ -234,6 +241,12 @@ function ProfileScreenContent() {
               onPress={handleSignOut}
               danger
             />
+            <SettingItem
+              icon="trash-outline"
+              label="Delete account"
+              onPress={() => setDeleteOpen(true)}
+              danger
+            />
           </View>
         </View>
 
@@ -247,6 +260,17 @@ function ProfileScreenContent() {
           setPhoneSheetOpen(false);
           loadProfile();
           void refreshUser();
+        }}
+      />
+      <DeleteAccountSheet
+        visible={deleteOpen}
+        token={token}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={async () => {
+          setDeleteOpen(false);
+          // Sign-out wipes the token, user, cart, saved ids and idle key (CF-0108 / CF-0120).
+          await signOut();
+          Alert.alert('Account deleted', 'Your Carabao account and its data are gone.');
         }}
       />
       <AddEmailSheet

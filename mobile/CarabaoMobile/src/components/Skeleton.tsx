@@ -1,7 +1,7 @@
 // src/components/Skeleton.tsx
 // Q1d: loading placeholders shaped like the list that is loading, and a load
 // error with a retry so an outage isn't shown as "nothing here".
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
@@ -9,7 +9,8 @@ import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 export function SkeletonList({
   label, rows = 3, grid = false,
 }: { label: string; rows?: number; grid?: boolean }) {
-  const pulse = useRef(new Animated.Value(0.5)).current;
+  // Lazy useState, not useRef().current: React 19 lint forbids reading refs in render.
+  const [pulse] = useState(() => new Animated.Value(0.5));
 
   useEffect(() => {
     let loop: Animated.CompositeAnimation | null = null;
@@ -56,7 +57,7 @@ export function LoadError({ message, onRetry }: { message: string; onRetry: () =
   return (
     <View style={s.error} accessibilityRole="alert">
       <Ionicons name="cloud-offline-outline" size={40} color={Colors.textLight} />
-      <Text style={s.errorTitle}>Couldn't load</Text>
+      <Text style={s.errorTitle}>Couldn’t load</Text>
       <Text style={s.errorText}>{message}</Text>
       <TouchableOpacity style={s.retry} onPress={onRetry} accessibilityRole="button">
         <Text style={s.retryText}>Try again</Text>

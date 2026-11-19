@@ -116,6 +116,8 @@ The web app never sends SMS or email itself. It asks the API.
 | Postgres TLS rules | `lib/db-ssl.mjs` | `app/core/database_url.py` |
 | Mobile app scheme `carabaomobile://` | `lib/auth.ts`, `lib/admin-two-factor.ts` | mobile `app.json` |
 
+The mobile app has copies of the status values and labels, the phone pattern, the password policy and the order-history limits (`mobile/CarabaoMobile/src/lib/`). `npm test` in `mobile/CarabaoMobile` (`src/lib/inStep.test.ts`) reads the web and backend files above and fails when a copy differs.
+
 ---
 
 ## 4. Environment variables
@@ -210,6 +212,8 @@ Perf-only (`backend/scripts/perf`): `PERF_DATABASE_URL`, `PERF_CLIENT_CSV`, `PER
 | `EXPO_PUBLIC_API_URL` | `http://<PC-LAN-IP>:8000` | on a device, localhost is the phone (default `http://localhost:8000`) |
 | `EXPO_PUBLIC_WEB_URL` | `http://<PC-LAN-IP>:3000` | Better Auth host |
 | `EXPO_PUBLIC_IDLE_TIMEOUT_MINUTES` | empty | optional |
+
+Both URLs are checked at app start (`src/lib/baseUrl.ts`): `scheme://host[:port][/path]` only (no `user@`, query or fragment). A production build (`__DEV__` false) must use `https` for both, or the app stops at launch with an error that names the setting.
 
 ### 4.4 Postgres TLS
 

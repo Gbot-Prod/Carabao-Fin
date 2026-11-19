@@ -4,13 +4,13 @@
 // (which, unlike the public list, includes expired and admin-hidden listings).
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, SafeAreaView,
+  View, Text, FlatList, StyleSheet, SafeAreaView, Alert,
   TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
-import { api, type ApiProduce, type ApiStockAlerts, type ProduceCreatePayload } from '../lib/api';
+import { api, ApiError, type ApiProduce, type ApiStockAlerts, type ProduceCreatePayload } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -44,7 +44,7 @@ function ListingRow({ item, alert, onPress }: { item: ApiProduce; alert: string 
         {alert ? <Text style={styles.rowAlert}>{alert}</Text> : null}
         {item.hidden_at ? (
           <Text style={styles.rowHidden}>
-            Hidden by Carabao admin: buyers can't see or order it.
+            Hidden by Carabao admin: buyers can’t see or order it.
             {item.hidden_reason ? ` Reason: ${item.hidden_reason}` : ''}
           </Text>
         ) : null}
@@ -56,6 +56,27 @@ function ListingRow({ item, alert, onPress }: { item: ApiProduce; alert: string 
       <Ionicons name="create-outline" size={18} color={Colors.textLight} />
     </TouchableOpacity>
   );
+}
+
+// CF-0101: fetch without touching state; the screen applies the result in a .then
+// callback (no state set synchronously inside an effect).
+type ListingsLoad =
+  | { kind: 'ok'; merchantName: string; produce: ApiProduce[]; alerts: ApiStockAlerts | null }
+  | { kind: 'notMerchant' }
+  | { kind: 'error'; message: string };
+
+async function fetchListings(token: string): Promise<ListingsLoad> {
+  try {
+    const profile = await api.users.me(token);
+    if (!profile.merchant) return { kind: 'notMerchant' };
+    const [produce, alerts] = await Promise.all([
+      api.merchants.myProduce(token),
+      api.merchants.stockAlerts(token).catch(() => null),
+    ]);
+    return { kind: 'ok', merchantName: profile.merchant.merchant_name, produce, alerts };
+  } catch (err) {
+    return { kind: 'error', message: err instanceof Error ? err.message : 'Could not load your listings' };
+  }
 }
 
 function ListingsScreenContent() {
@@ -72,16 +93,43 @@ function ListingsScreenContent() {
   const [editing, setEditing] = useState<ApiProduce | 'new' | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveFieldErrors, setSaveFieldErrors] = useState<Record<string, string>>({});
 
   const openEdit = (item: ApiProduce | 'new') => {
     setSaveError(null);
+    setSaveFieldErrors({});
     setEditing(item);
   };
+
+  // CF-0116: delete after a confirm; the list and stock alerts are updated.
+  const confirmDelete = (item: ApiProduce) =>
+    Alert.alert('Delete listing?', `"${item.name ?? 'This listing'}" will be removed. Buyers can no longer order it.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          if (!token) return;
+          setSaving(true);
+          try {
+            await api.produce.remove(token, item.id);
+            setItems((prev) => prev.filter((p) => p.id !== item.id));
+            setEditing(null);
+            api.merchants.stockAlerts(token).then(setAlerts).catch(() => {});
+          } catch (err) {
+            setSaveError(err instanceof Error ? err.message : 'Could not delete this listing');
+          } finally {
+            setSaving(false);
+          }
+        },
+      },
+    ]);
 
   const handleSave = async (payload: ProduceCreatePayload) => {
     if (!token || !editing) return;
     setSaving(true);
     setSaveError(null);
+    setSaveFieldErrors({});
     try {
       if (editing === 'new') {
         const created = await api.produce.create(token, payload);
@@ -93,32 +141,30 @@ function ListingsScreenContent() {
       setEditing(null);
       api.merchants.stockAlerts(token).then(setAlerts).catch(() => {});
     } catch (err) {
+      setSaveFieldErrors(err instanceof ApiError ? err.fieldErrors : {});
       setSaveError(err instanceof Error ? err.message : 'Could not save this listing');
     } finally {
       setSaving(false);
     }
   };
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    setError(null);
-    try {
-      const profile = await api.users.me(token);
-      if (!profile.merchant) {
-        setNotMerchant(true);
-        return;
-      }
-      setMerchantName(profile.merchant.merchant_name);
-      const [produce, stockAlerts] = await Promise.all([
-        api.merchants.myProduce(token),
-        api.merchants.stockAlerts(token).catch(() => null),
-      ]);
-      setItems(produce);
-      setAlerts(stockAlerts);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load your listings');
+  const apply = useCallback((r: ListingsLoad) => {
+    if (r.kind === 'notMerchant') {
+      setNotMerchant(true);
+    } else if (r.kind === 'error') {
+      setError(r.message);
+    } else {
+      setMerchantName(r.merchantName);
+      setItems(r.produce);
+      setAlerts(r.alerts);
+      setError(null);
     }
-  }, [token]);
+  }, []);
+
+  const load = useCallback(
+    () => (token ? fetchListings(token).then(apply) : Promise.resolve()),
+    [token, apply],
+  );
 
   useEffect(() => {
     void load().finally(() => setLoading(false));
@@ -207,8 +253,10 @@ function ListingsScreenContent() {
         produce={editing === 'new' ? null : editing}
         saving={saving}
         error={saveError}
+        fieldErrors={saveFieldErrors}
         onCancel={() => setEditing(null)}
         onSave={handleSave}
+        onDelete={editing && editing !== 'new' ? () => confirmDelete(editing) : undefined}
       />
     </SafeAreaView>
   );
@@ -216,7 +264,7 @@ function ListingsScreenContent() {
 
 export default function ListingsScreen() {
   return (
-    <ProtectedScreen>
+    <ProtectedScreen requiredRole="merchant">
       <ListingsScreenContent />
     </ProtectedScreen>
   );

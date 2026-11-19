@@ -1,16 +1,21 @@
 // src/screens/CheckoutScreen.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
+import { openCheckout } from '../lib/openCheckout';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
-import { api } from '../lib/api';
+import { api, ApiError, defaultAddress, type ApiUserAddress } from '../lib/api';
+import { defaultDeliveryDate, deliveryDateChoices, deliveryDateError, placeOrderFailure } from '../lib/checkoutOptions';
+import { phToday } from '../lib/listingForm';
+import { DELIVERY_ADDRESS_MAX, ORDER_NOTES_MAX } from '../lib/inputLimits';
+import { addressLine, addressSummary, deliveryFields } from '../lib/addresses';
 import { cartTotals, groupCartByFarm, type PendingOrder } from '../lib/cartGroups';
+import { blockerText, checkoutBlockers } from '../lib/cartSync';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Button, Divider, StatRow } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -28,11 +33,37 @@ const TIME_WINDOWS = [
 
 function CheckoutScreenContent() {
   const router = useRouter();
-  const { items, clearCart } = useCart();
+  const { items, reload: reloadCart } = useCart();
   const { token } = useAuth();
   const [payment, setPayment] = useState('online');
   const [timeWindow, setTimeWindow] = useState(TIME_WINDOWS[0]);
+  // CF-0115: the requested delivery day, as on the web (default tomorrow, PH time).
+  const [today] = useState(phToday);
+  const [deliveryDate, setDeliveryDate] = useState(() => defaultDeliveryDate(phToday()));
   const [address, setAddress] = useState('');
+  // CF-0110: saved addresses; the default fills the field. Editing the text unlinks it.
+  const [saved, setSaved] = useState<ApiUserAddress[]>([]);
+  const [selected, setSelected] = useState<ApiUserAddress | null>(null);
+  useEffect(() => {
+    let active = true;
+    api.addresses
+      .list(token)
+      .then((list) => {
+        if (!active) return;
+        setSaved(list);
+        const d = defaultAddress(list);
+        if (d) {
+          setSelected(d);
+          setAddress((typed) => typed || addressLine(d));
+        }
+      })
+      .catch(() => { /* type the address instead */ });
+    return () => { active = false; };
+  }, [token]);
+  const pick = (a: ApiUserAddress) => {
+    setSelected(a);
+    setAddress(addressLine(a));
+  };
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   // No verified mobile number yet (e.g. a Google sign-in): verify, then retry.
@@ -51,6 +82,16 @@ function CheckoutScreenContent() {
       Alert.alert('Cart Empty', 'Add some produce before checking out.');
       return;
     }
+    const dateProblem = deliveryDateError(deliveryDate, phToday());
+    if (dateProblem) {
+      Alert.alert('Delivery date', `${dateProblem}.`);
+      return;
+    }
+    const blocked = checkoutBlockers(items);
+    if (blocked.length > 0) {
+      Alert.alert('Check your cart', blocked.map(blockerText).join('\n'));
+      return;
+    }
     setLoading(true);
     try {
       // The backend places orders from the server-side cart, so sync the
@@ -60,7 +101,8 @@ function CheckoutScreenContent() {
         items.map((i) => ({ produce_id: i.produceId, quantity: i.quantity })),
       );
       const result = await api.orders.place(token, {
-        delivery_address: address.trim() || null,
+        ...deliveryFields(selected, address),
+        delivery_date: deliveryDate,
         delivery_time: timeWindow,
         notes: notes.trim() || null,
       });
@@ -74,14 +116,16 @@ function CheckoutScreenContent() {
         farm: o.merchant_name,
         total: o.total_price,
       }));
-      clearCart();
+      // Lines stay in the server cart until their order is paid (backend
+      // release_superseded_orders); read it again instead of emptying it here.
+      void reloadCart();
       // The order exists now, so go to confirmation even if PayMongo fails;
       // that screen polls the transaction and offers "Pay now" to retry.
       try {
         const checkout = await api.payments.checkout(token, first.order_id);
         // Resolves when the buyer closes the browser (PayMongo's redirect
         // lands on the web site, not the app).
-        await WebBrowser.openBrowserAsync(checkout.checkout_url);
+        await openCheckout(checkout.checkout_url);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Could not start payment';
         Alert.alert('Payment not started', message);
@@ -99,8 +143,14 @@ function CheckoutScreenContent() {
         setNeedsPhone(true);
         return;
       }
-      const message = err instanceof Error ? err.message : 'Failed to place order';
-      Alert.alert('Order Failed', message);
+      // CF-0115: the server's reason; on 400 / 409 the cart is read again so the
+      // changed lines show their warning.
+      const failure = placeOrderFailure(
+        err instanceof ApiError ? err.status : -1,
+        err instanceof Error ? err.message : null,
+      );
+      if (failure.reloadCart) void reloadCart();
+      Alert.alert('Order not placed', failure.text);
     } finally {
       setLoading(false);
     }
@@ -127,20 +177,60 @@ function CheckoutScreenContent() {
 
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Delivery Address</Text>
+            {saved.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
+                {saved.map((a) => {
+                  const on = selected?.id === a.id && address.trim() === addressLine(a);
+                  return (
+                    <TouchableOpacity
+                      key={a.id}
+                      style={[styles.timePill, on && styles.timePillActive]}
+                      onPress={() => pick(a)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text style={[styles.timePillText, on && styles.timePillTextActive]}>{addressSummary(a)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
             <TextInput
               style={[styles.input, styles.textArea]}
               value={address}
               onChangeText={setAddress}
+              maxLength={DELIVERY_ADDRESS_MAX}
               multiline
               numberOfLines={3}
               placeholder="Street, barangay, city, province"
               placeholderTextColor={Colors.textLight}
             />
+            <TouchableOpacity onPress={() => router.push('/addresses')} style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text style={styles.fieldHint}>Manage saved addresses</Text>
+            </TouchableOpacity>
             {/* The server checks the address is in Luzon (B2). */}
             <Text style={styles.fieldHint}>
               Carabao delivers within Luzon only. Include your province or Metro Manila city.
             </Text>
           </View>
+
+          <Text style={styles.fieldLabel}>Delivery Date</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
+            {deliveryDateChoices(today).map((d) => (
+              <TouchableOpacity
+                key={d.value}
+                style={[styles.timePill, deliveryDate === d.value && styles.timePillActive]}
+                onPress={() => setDeliveryDate(d.value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: deliveryDate === d.value }}
+                accessibilityLabel={`Deliver ${d.label}`}
+              >
+                <Text style={[styles.timePillText, deliveryDate === d.value && styles.timePillTextActive]}>
+                  {d.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
           <Text style={styles.fieldLabel}>Time Window</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
@@ -191,6 +281,7 @@ function CheckoutScreenContent() {
             style={[styles.input, styles.textArea]}
             value={notes}
             onChangeText={setNotes}
+            maxLength={ORDER_NOTES_MAX}
             placeholder="Gate instructions, handling requests, preferred contact method..."
             placeholderTextColor={Colors.textLight}
             multiline
@@ -228,7 +319,7 @@ function CheckoutScreenContent() {
           />
           {groups.length > 1 && (
             <Text style={styles.fieldHint}>
-              This creates {groups.length} orders, one per farm. You'll pay for each in turn.
+              This creates {groups.length} orders, one per farm. You’ll pay for each in turn.
             </Text>
           )}
           <Divider style={{ marginTop: Spacing.sm }} />

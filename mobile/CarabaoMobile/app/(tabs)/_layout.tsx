@@ -9,7 +9,6 @@ export default function TabLayout() {
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index" options={{ href: null }} />
-      <Tabs.Screen name="App" options={{ href: null }} />
       <Tabs.Screen name="order" />
       <Tabs.Screen name="cart" />
       <Tabs.Screen name="track" />

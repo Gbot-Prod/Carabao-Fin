@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { AppState } from 'react-native';
+import { onSessionExpired } from './sessionEvents';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiError, request } from './api';
 import { authClient, clearAccessToken, getAccessToken } from './authClient';
@@ -148,6 +149,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authClient.signOut().catch(() => {});
   }, [clearLocal]);
 
+  // CF-0120: the API client reports a session that no token refresh can save.
+  useEffect(() => onSessionExpired(() => { void signOut(); }), [signOut]);
+
   // Fetch a token for the current session and the backend profile it belongs to.
   // The first call also creates the backend row for a new account.
   const loadUser = useCallback(async () => {
@@ -200,7 +204,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // signs out, so the next protected screen sends the user to sign in.
   const leftAtRef = useRef<number | null>(null);
   const signedInRef = useRef(false);
-  signedInRef.current = !!user;
+  useEffect(() => {
+    signedInRef.current = !!user;
+  }, [user]);
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (!signedInRef.current) return;

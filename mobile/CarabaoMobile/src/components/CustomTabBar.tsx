@@ -3,7 +3,7 @@ import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import type { BottomTabBarProps } from 'expo-router/tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontSize, Shadow } from '../lib/theme';
+import { Colors, FontSize } from '../lib/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];

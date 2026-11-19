@@ -1,32 +1,27 @@
 import type { ApiReferencePrice } from './referencePrices';
 
 import { getAccessToken } from './authClient';
+import { emitSessionExpired, sessionGone } from './sessionEvents';
+import { parseErrorBody } from './apiErrors';
 import { API_BASE } from './config';
+import { historyQueryString, type HistoryQuery } from './orderHistory';
+import type { ServerCartLine } from './cartSync';
+import type { AddressPayload } from './addresses';
+import type { MerchantReviews, MyMerchantReviews } from './reviews';
+import type { DemandInsight, MerchantPerformance } from './dashboard';
+import type { ChatSummary } from './chatInbox';
+import { UNREAD_COUNT_QUERY } from './polling';
 
 export { API_BASE, WEB_BASE } from './config';
 
 const REQUEST_TIMEOUT_MS = 20000;
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  // CF-0123: message per form field from the server (src/lib/apiErrors.ts), {} when none.
+  constructor(message: string, public status: number, public fieldErrors: Record<string, string> = {}) {
     super(message);
     this.name = 'ApiError';
   }
-}
-
-// FastAPI returns `detail` as a string for HTTPException, but as a list of
-// {loc, msg} objects for 422 validation errors.
-function extractDetail(body: unknown): string | null {
-  if (!body || typeof body !== 'object') return null;
-  const detail = (body as { detail?: unknown }).detail;
-  if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail)) {
-    const msgs = detail
-      .map((d) => (d && typeof d === 'object' ? (d as { msg?: unknown }).msg : null))
-      .filter((m): m is string => typeof m === 'string');
-    if (msgs.length) return msgs.join('\n');
-  }
-  return null;
 }
 
 // `token` says whether the call is signed in (screens pass the one from useAuth).
@@ -43,8 +38,18 @@ export async function request<T>(
   } catch (err) {
     if (!(err instanceof ApiError && err.status === 401)) throw err;
     const fresh = await getAccessToken({ forceRefresh: true });
-    if (!fresh) throw err;
-    return send<T>(path, fresh, options);
+    // CF-0120: no new token, or a 401 again with a new one: the session is gone.
+    // Tell the auth layer once; it signs out and protected screens go to sign-in.
+    if (!fresh) {
+      emitSessionExpired();
+      throw err;
+    }
+    try {
+      return await send<T>(path, fresh, options);
+    } catch (again) {
+      if (again instanceof ApiError && sessionGone(again.status, true, true)) emitSessionExpired();
+      throw again;
+    }
   }
 }
 
@@ -93,7 +98,8 @@ async function send<T>(
     }
   }
   if (!res.ok) {
-    throw new ApiError(extractDetail(body) ?? `Request failed (${res.status})`, res.status);
+    const parsed = parseErrorBody(body);
+    throw new ApiError(parsed.message ?? `Request failed (${res.status})`, res.status, parsed.fields);
   }
   return body as T;
 }
@@ -118,6 +124,7 @@ export type ApiMerchant = {
     title: string;
     slug: string;
     banner_image_url: string | null;
+    logo_url?: string | null;
     description: string | null;
   } | null;
 };
@@ -157,6 +164,12 @@ export type ProduceCreatePayload = {
   unit_quantity?: number;
   stock_quantity?: number;
   image_url?: string | null;
+  // YYYY-MM-DD. Required by the backend on create and checked on every edit (CF-0107).
+  harvest_date?: string | null;
+  best_before?: string | null;
+  // CF-0116: backend checks these with produce_pricing.pricing_error.
+  min_order_qty?: number;
+  price_tiers?: { min_qty: number; unit_price: number }[];
 };
 
 export type ProduceUpdatePayload = Partial<{
@@ -185,6 +198,43 @@ export type ApiHistoryOrder = {
   order_date: string;
   status: string;
   items: ApiCartItem[];
+};
+
+// GET /orders/me/{id} (backend OrderDetailResponse). CF-0105.
+export type ApiOrderReview = {
+  id: number;
+  rating: number; // 1-5
+  comment: string | null;
+  reviewer_name: string;
+  created_at: string;
+  updated_at: string;
+  editable_until: string | null;
+};
+
+export type ApiOrderDetail = {
+  id: number;
+  order_id: number;
+  merchant: string;
+  merchant_id: number | null;
+  shipped: boolean;
+  date_bought: string;
+  time_of_arrival: string | null;
+  shipped_at: string | null;
+  auto_confirm_at: string | null;
+  delivery_fee: number;
+  status: string;
+  payment_status: string;
+  items: ApiCartItem[];
+  total_amount: number;
+  delivery_address: string | null;
+  requested_delivery_date: string | null;
+  delivery_window: string | null;
+  notes: string | null;
+  delivered_at: string | null;
+  delivery_confirmed_by: string | null;
+  review: ApiOrderReview | null;
+  can_review: boolean;
+  review_deadline: string | null;
 };
 
 export type ApiCartItem = {
@@ -232,23 +282,12 @@ export function defaultAddress(addresses: ApiUserAddress[] | null | undefined): 
   return addresses?.find((a) => a.is_default) ?? addresses?.[0] ?? null;
 }
 
-// Shape stored in the server-side cart (PUT /carts/me). /orders/me/place
-// reads this cart, not the request body, and needs produce_id on each item.
-export type ServerCartItem = {
-  id: string;
-  produce_id: number;
-  merchant_id?: number | null;
-  produce: string;
-  farm: string;
-  unit: string;
-  price: number;
-  quantity: number;
-};
-
+// The server-side cart (GET/PUT /carts/me). /orders/me/place reads this cart,
+// not the request body. Line shape: src/lib/cartSync.ts ServerCartLine (CF-0109).
 export type ApiCart = {
   id: number;
   user_id: number;
-  items: ServerCartItem[];
+  items: ServerCartLine[];
   total_items: number;
   total_price: number;
 };
@@ -258,7 +297,13 @@ export function merchantLocation(m: Pick<ApiMerchant, 'city' | 'province'>): str
 }
 
 export type PlaceOrderPayload = {
+  // YYYY-MM-DD, today .. +30 days (CF-0115); shown to the farm as the requested day.
+  delivery_date?: string | null;
   delivery_address?: string | null;
+  // From a saved address (CF-0110): the server checks the region is in Luzon.
+  delivery_region?: string;
+  delivery_lat?: number;
+  delivery_lng?: number;
   delivery_time?: string | null;
   notes?: string | null;
 };
@@ -352,6 +397,9 @@ export type ApiProduceSearchResult = ApiProduce & {
 
 export type ApiPage<T> = { items: T[]; total: number; page: number; page_size: number };
 
+// Saved produce (CF-0038 backend, CF-0104 mobile): backend SavedProduceResponse.
+export type ApiSavedProduce = ApiProduceSearchResult & { saved_at: string };
+
 // The notification centre (U5).
 export type ApiNotification = {
   id: number;
@@ -413,6 +461,14 @@ export const api = {
       request<ApiProduce[]>('/merchants/me/produce', token),
     myOrders: (token: string | null) =>
       request<ApiMerchantOrder[]>('/merchants/me/orders', token),
+    // CF-0127: the farm's order chats, newest message first.
+    chats: (token: string | null) => request<ChatSummary[]>('/merchants/me/chats', token),
+    // CF-0125: dashboard numbers and province demand.
+    performance: (token: string | null) => request<MerchantPerformance>('/merchants/me/performance', token),
+    demand: (token: string | null) => request<DemandInsight>('/merchants/me/demand', token),
+    // CF-0119: query from src/lib/reviews.ts myReviewsQuery.
+    myReviews: (token: string | null, query: string) =>
+      request<MyMerchantReviews>(`/merchants/me/reviews?${query}`, token),
     stockAlerts: (token: string | null) =>
       request<ApiStockAlerts>('/merchants/me/stock-alerts', token),
     updateOrderStatus: (token: string | null, orderId: number, status: MerchantOrderStatus) =>
@@ -436,6 +492,21 @@ export const api = {
       request<ApiCurrentOrder[]>('/orders/me/current', token),
     history: (token: string | null) =>
       request<ApiHistoryOrder[]>('/orders/me/history', token),
+    // CF-0102: one page, newest first, filtered by status group and/or search.
+    historyPage: (token: string | null, query: HistoryQuery) =>
+      request<ApiPage<ApiHistoryOrder>>(`/orders/me/history/page?${historyQueryString(query)}`, token),
+    detail: (token: string | null, orderId: number) =>
+      request<ApiOrderDetail>(`/orders/me/${orderId}`, token),
+    // Both return the order as /orders/me/current does; the screen re-reads the detail after.
+    cancel: (token: string | null, orderId: number) =>
+      request<ApiCurrentOrder>(`/orders/me/${orderId}/cancel`, token, { method: 'POST' }),
+    // CF-0113: the buyer's review of a delivered order.
+    createReview: (token: string | null, orderId: number, body: { rating: number; comment: string | null }) =>
+      request<ApiOrderReview>(`/orders/me/${orderId}/review`, token, { method: 'POST', body: JSON.stringify(body) }),
+    updateReview: (token: string | null, orderId: number, body: { rating: number; comment: string | null }) =>
+      request<ApiOrderReview>(`/orders/me/${orderId}/review`, token, { method: 'PATCH', body: JSON.stringify(body) }),
+    confirmReceived: (token: string | null, orderId: number) =>
+      request<ApiCurrentOrder>(`/orders/me/${orderId}/confirm-received`, token, { method: 'POST' }),
     place: (token: string | null, payload: PlaceOrderPayload) =>
       request<PlaceOrderResponse>('/orders/me/place', token, {
         method: 'POST',
@@ -453,8 +524,14 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(payload),
       }),
+    // CF-0116: the owner deletes a listing (backend DELETE /produce/{id}).
+    remove: (token: string | null, produceId: number) =>
+      request<null>(`/produce/${produceId}`, token, { method: 'DELETE' }),
   },
   payments: {
+    // CF-0124: give up an unpaid checkout; the server releases the held stock.
+    cancel: (token: string | null, orderId: number) =>
+      request<null>(`/payments/checkout/${orderId}/cancel`, token, { method: 'POST' }),
     checkout: (token: string | null, orderId: number) =>
       request<CheckoutSessionResponse>(`/payments/checkout/${orderId}`, token, {
         method: 'POST',
@@ -466,7 +543,23 @@ export const api = {
     forOrder: (token: string | null, orderId: number) =>
       request<ApiTracking>(`/tracking/${orderId}`, token),
   },
+  // Public farm reviews (CF-0112).
+  reviews: {
+    forMerchant: (merchantId: number, offset: number, limit: number) =>
+      request<MerchantReviews>(`/merchants/${merchantId}/reviews?limit=${limit}&offset=${offset}`, null),
+  },
+  saved: {
+    ids: (token: string | null) => request<number[]>('/users/me/saved-produce/ids', token),
+    list: (token: string | null) => request<ApiSavedProduce[]>('/users/me/saved-produce', token),
+    save: (token: string | null, produceId: number) =>
+      request<null>(`/produce/${produceId}/save`, token, { method: 'PUT' }),
+    unsave: (token: string | null, produceId: number) =>
+      request<null>(`/produce/${produceId}/save`, token, { method: 'DELETE' }),
+  },
   search: {
+    // CF-0118: one page with filters; query from src/lib/produceSearch.ts searchQuery.
+    page: (token: string | null, query: string) =>
+      request<ApiPage<ApiProduceSearchResult>>(`/produce/search?${query}`, token),
     produce: (token: string | null, q: string, pageSize = 10) =>
       request<ApiPage<ApiProduceSearchResult>>(
         `/produce/search?q=${encodeURIComponent(q)}&in_stock=true&page_size=${pageSize}`,
@@ -493,12 +586,23 @@ export const api = {
       }),
   },
   notifications: {
-    list: (token: string | null) =>
-      request<{ items: ApiNotification[]; unread: number }>('/users/me/notifications', token),
+    // CF-0117: the bell needs only the count; one unread row instead of the whole page.
+    unreadCount: (token: string | null) =>
+      request<{ items: ApiNotification[]; unread: number }>(`/users/me/notifications?${UNREAD_COUNT_QUERY}`, token)
+        .then((r) => r.unread),
     markRead: (token: string | null, id: number) =>
       request<null>(`/users/me/notifications/${id}/read`, token, { method: 'POST' }),
     markAllRead: (token: string | null) =>
       request<null>('/users/me/notifications/read-all', token, { method: 'POST' }),
+    // CF-0121: paging, unread filter, unread / delete (web util/api/notifications.ts).
+    page: (token: string | null, query: string) =>
+      request<{ items: ApiNotification[]; unread: number; total: number }>(`/users/me/notifications?${query}`, token),
+    markUnread: (token: string | null, id: number) =>
+      request<null>(`/users/me/notifications/${id}/unread`, token, { method: 'POST' }),
+    remove: (token: string | null, id: number) =>
+      request<null>(`/users/me/notifications/${id}`, token, { method: 'DELETE' }),
+    removeRead: (token: string | null) =>
+      request<null>('/users/me/notifications/read', token, { method: 'DELETE' }),
   },
   follows: {
     // Favourite farms (U4).
@@ -524,5 +628,20 @@ export const api = {
   users: {
     me: (token: string | null) =>
       request<ApiUserProfile>('/users/me', token),
+    // CF-0122: account deletion (texted code, then DELETE with the code).
+    deleteCode: (token: string | null, body: { password: string | null }) =>
+      request<{ sent_to: string }>('/users/me/delete-code', token, { method: 'POST', body: JSON.stringify(body) }),
+    deleteAccount: (token: string | null, code: string) =>
+      request<null>('/users/me', token, { method: 'DELETE', body: JSON.stringify({ code }) }),
+  },
+  // Address book (CF-0110). Bodies: src/lib/addresses.ts checkAddress (backend extra="forbid").
+  addresses: {
+    list: (token: string | null) => request<ApiUserAddress[]>('/users/me/addresses', token),
+    create: (token: string | null, body: AddressPayload & { is_default?: boolean }) =>
+      request<ApiUserAddress>('/users/me/addresses', token, { method: 'POST', body: JSON.stringify(body) }),
+    update: (token: string | null, id: number, body: Partial<AddressPayload> & { is_default?: true }) =>
+      request<ApiUserAddress>(`/users/me/addresses/${id}`, token, { method: 'PATCH', body: JSON.stringify(body) }),
+    remove: (token: string | null, id: number) =>
+      request<null>(`/users/me/addresses/${id}`, token, { method: 'DELETE' }),
   },
 };

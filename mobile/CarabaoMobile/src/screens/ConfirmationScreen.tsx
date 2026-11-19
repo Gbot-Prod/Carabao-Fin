@@ -1,16 +1,25 @@
 // src/screens/ConfirmationScreen.tsx
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
   TouchableOpacity, Animated, ScrollView, Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
+import { openCheckout } from '../lib/openCheckout';
+import { isOrderRef, parseOrderId } from '../lib/orderDetail';
+import { useCart } from '../lib/CartContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, type TransactionStatus } from '../lib/api';
 import { parsePendingOrders, type PendingOrder } from '../lib/cartGroups';
+
+// CF-0111: development builds only, and only the HTTP status and message: the raw
+// error can carry request URLs with order IDs.
+function logStatusError(what: string, err: unknown) {
+  if (!__DEV__) return;
+  console.warn(what, err instanceof ApiError ? `${err.status} ${err.message}` : err instanceof Error ? err.message : 'unknown error');
+}
 
 /** Another farm's order from the same checkout (C1): paid in its own PayMongo session. */
 function OtherOrderRow({ order, token }: { order: PendingOrder; token: string | null }) {
@@ -18,15 +27,19 @@ function OtherOrderRow({ order, token }: { order: PendingOrder; token: string | 
   const [paying, setPaying] = useState(false);
   const view = toPaymentView(status);
 
-  const refresh = useCallback(async () => {
-    if (!token) return;
-    try {
-      setStatus((await api.payments.transactionByOrder(token, order.id)).status);
-    } catch (err) {
-      // 404 = no checkout session yet: still unpaid.
-      if (!(err instanceof ApiError && err.status === 404)) console.warn('Status check failed', err);
-    }
-  }, [token, order.id]);
+  const refresh = useCallback(
+    () =>
+      token
+        ? api.payments
+            .transactionByOrder(token, order.id)
+            .then((tx) => setStatus(tx.status))
+            .catch((err: unknown) => {
+              // 404 = no checkout session yet: still unpaid.
+              if (!(err instanceof ApiError && err.status === 404)) logStatusError('Status check failed', err);
+            })
+        : Promise.resolve(),
+    [token, order.id],
+  );
 
   useEffect(() => {
     void refresh();
@@ -37,7 +50,7 @@ function OtherOrderRow({ order, token }: { order: PendingOrder; token: string | 
     setPaying(true);
     try {
       const checkout = await api.payments.checkout(token, order.id);
-      await WebBrowser.openBrowserAsync(checkout.checkout_url);
+      await openCheckout(checkout.checkout_url);
     } catch (err) {
       Alert.alert('Payment not started', err instanceof Error ? err.message : 'Please try again.');
     } finally {
@@ -103,7 +116,9 @@ function ConfirmationScreenContent() {
   const { orderId, orderRef, more } = useLocalSearchParams<{ orderId?: string; orderRef?: string; more?: string }>();
   const otherOrders = parsePendingOrders(more);
   const { token } = useAuth();
-  const numericOrderId = Number(orderId);
+  // CF-0114: checked; a bad id from a deep link never reaches a URL.
+  const numericOrderId = parseOrderId(orderId);
+  const shownRef = isOrderRef(orderRef) ? orderRef : numericOrderId !== null ? `#${numericOrderId}` : '—';
   const [txnStatus, setTxnStatus] = useState<TransactionStatus | null>(null);
   const [polls, setPolls] = useState(0);
   const [paying, setPaying] = useState(false);
@@ -111,14 +126,14 @@ function ConfirmationScreenContent() {
   const copy = PAYMENT_COPY[view];
 
   const checkStatus = useCallback(async () => {
-    if (!token || !Number.isFinite(numericOrderId)) return;
+    if (!token || numericOrderId === null) return;
     try {
       const txn = await api.payments.transactionByOrder(token, numericOrderId);
       setTxnStatus(txn.status);
     } catch (err) {
       // 404 = checkout session not created yet; keep showing pending.
       if (!(err instanceof ApiError && err.status === 404)) {
-        console.warn('Payment status check failed', err);
+        logStatusError('Payment status check failed', err);
       }
     }
   }, [token, numericOrderId]);
@@ -134,12 +149,40 @@ function ConfirmationScreenContent() {
     return () => clearTimeout(timer);
   }, [view, polls, checkStatus]);
 
+  // CF-0124: give up an unpaid order (web: PayMongo "back" calls the same route).
+  const [cancelled, setCancelled] = useState(false);
+  const { reload: reloadCart } = useCart();
+  const handleCancel = () => {
+    if (!token || numericOrderId === null) return;
+    Alert.alert('Cancel this order?', 'It is not paid yet. The produce goes back on sale; your cart keeps it.', [
+      { text: 'Keep order', style: 'cancel' },
+      {
+        text: 'Cancel order',
+        style: 'destructive',
+        onPress: async () => {
+          setPaying(true);
+          try {
+            await api.payments.cancel(token, numericOrderId);
+            setCancelled(true);
+            void reloadCart();
+          } catch (err) {
+            // e.g. 409 "Order has already been paid" / "A payment ... is already in progress".
+            Alert.alert('Not cancelled', err instanceof Error ? err.message : 'Please try again.');
+          } finally {
+            setPaying(false);
+            await checkStatus();
+          }
+        },
+      },
+    ]);
+  };
+
   const handlePayNow = async () => {
-    if (!token || !Number.isFinite(numericOrderId)) return;
+    if (!token || numericOrderId === null) return;
     setPaying(true);
     try {
       const checkout = await api.payments.checkout(token, numericOrderId);
-      await WebBrowser.openBrowserAsync(checkout.checkout_url);
+      await openCheckout(checkout.checkout_url);
       setPolls(0); // restart polling after the browser closes
     } catch (err) {
       Alert.alert('Payment not started', err instanceof Error ? err.message : 'Please try again.');
@@ -149,9 +192,9 @@ function ConfirmationScreenContent() {
     }
   };
 
-  const scale = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const slideY = useRef(new Animated.Value(30)).current;
+  const [scale] = useState(() => new Animated.Value(0));
+  const [opacity] = useState(() => new Animated.Value(0));
+  const [slideY] = useState(() => new Animated.Value(30));
 
   useEffect(() => {
     Animated.sequence([
@@ -161,7 +204,7 @@ function ConfirmationScreenContent() {
         Animated.timing(slideY, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]),
     ]).start();
-  }, []);
+  }, [scale, opacity, slideY]);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -184,7 +227,7 @@ function ConfirmationScreenContent() {
             <View style={styles.detailsGrid}>
               <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>Order Reference</Text>
-                <Text style={styles.detailValue}>{orderRef ?? orderId}</Text>
+                <Text style={styles.detailValue}>{shownRef}</Text>
               </View>
               <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>Estimated Delivery</Text>
@@ -199,13 +242,20 @@ function ConfirmationScreenContent() {
                 </View>
               </View>
             </View>
-            {view === 'pending' && (
+            {cancelled ? (
+              <Text style={styles.otherHint} accessibilityRole="alert">
+                Order cancelled. The produce is back on sale, and it is still in your cart.
+              </Text>
+            ) : view === 'pending' && (
               <View style={styles.payActions}>
                 <TouchableOpacity style={styles.primaryBtn} onPress={handlePayNow} disabled={paying}>
                   <Text style={styles.primaryBtnText}>{paying ? 'Opening…' : 'Pay now'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPolls(0)}>
                   <Text style={styles.secondaryBtnText}>Check again</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={handleCancel} disabled={paying} accessibilityRole="button">
+                  <Text style={[styles.secondaryBtnText, { color: Colors.error }]}>Cancel this order</Text>
                 </TouchableOpacity>
               </View>
             )}

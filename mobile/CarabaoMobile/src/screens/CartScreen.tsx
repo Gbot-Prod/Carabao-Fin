@@ -2,20 +2,24 @@
 import React from 'react';
 import {
   View, Text, SectionList, TouchableOpacity,
-  StyleSheet, SafeAreaView, Alert,
+  StyleSheet, SafeAreaView, Alert, RefreshControl,
 } from 'react-native';
+import { SkeletonList } from '../components/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { cartTotals, groupCartByFarm } from '../lib/cartGroups';
+import { checkoutBlockers } from '../lib/cartSync';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { StatRow, Divider, Button, EmptyState } from '../components/UI';
 
 function CartScreenContent() {
   const router = useRouter();
-  const { items, updateQuantity, removeItem, itemCount, clearCart } = useCart();
+  const { items, updateQuantity, removeItem, itemCount, clearCart, reload, loading } = useCart();
   const insets = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = React.useState(false);
+  const blocked = checkoutBlockers(items);
 
   // Checkout makes one order per farm (C1), each with that farm's delivery fee.
   const groups = groupCartByFarm(items);
@@ -23,9 +27,20 @@ function CartScreenContent() {
   const sections = groups.map((g) => ({ key: g.key, farm: g.farm, fee: g.deliveryFee, subtotal: g.total, data: g.items }));
 
   const handleCheckout = () => {
-    if (items.length === 0) return;
+    if (items.length === 0 || blocked.length > 0) return;
     router.push('/checkout');
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.root}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Your Cart</Text>
+        </View>
+        <SkeletonList label="Loading your cart" rows={3} />
+      </SafeAreaView>
+    );
+  }
 
   const handleRemove = (id: string, name: string) => {
     Alert.alert(
@@ -79,6 +94,27 @@ function CartScreenContent() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         stickySectionHeadersEnabled={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await reload();
+              setRefreshing(false);
+            }}
+          />
+        }
+        ListHeaderComponent={
+          blocked.length > 0 ? (
+            <View style={styles.blockedBanner} accessibilityRole="alert">
+              <Ionicons name="alert-circle" size={18} color={Colors.error} />
+              <Text style={styles.blockedText}>
+                {blocked.length === 1 ? 'One item' : `${blocked.length} items`} can’t be ordered now. Remove or change
+                {blocked.length === 1 ? ' it' : ' them'} to check out.
+              </Text>
+            </View>
+          ) : undefined
+        }
         renderSectionHeader={({ section }) => (
           <View style={styles.farmHeader}>
             <Text style={styles.itemFarm}>{section.farm}</Text>
@@ -95,6 +131,9 @@ function CartScreenContent() {
             <View style={styles.itemInfo}>
               <Text style={styles.itemName}>{item.produce}</Text>
               <Text style={styles.itemPrice}>₱{item.price.toLocaleString()} / {item.unit}</Text>
+              {item.unavailableReason ? (
+                <Text style={styles.itemIssue}>This item {item.unavailableReason}</Text>
+              ) : null}
             </View>
 
             <View style={styles.itemActions}>
@@ -148,8 +187,9 @@ function CartScreenContent() {
       {/* Bottom CTA — extra padding so it clears the floating tab bar */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 80 }]}>
         <Button
-          label={`Proceed to Checkout  ₱${grandTotal.toLocaleString()}`}
+          label={blocked.length > 0 ? 'Fix the marked items to check out' : `Proceed to Checkout  ₱${grandTotal.toLocaleString()}`}
           onPress={handleCheckout}
+          disabled={blocked.length > 0}
           fullWidth
         />
       </View>
@@ -162,6 +202,13 @@ export default function CartScreen() {
 }
 
 const styles = StyleSheet.create({
+  blockedBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, padding: Spacing.md,
+    marginBottom: Spacing.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.error,
+    backgroundColor: Colors.white,
+  },
+  blockedText: { flex: 1, fontSize: FontSize.sm, color: Colors.text, lineHeight: 20 },
+  itemIssue: { fontSize: FontSize.xs, color: Colors.error, fontWeight: '600', marginTop: 2 },
   root: { flex: 1, backgroundColor: Colors.offWhite },
 
   header: {
