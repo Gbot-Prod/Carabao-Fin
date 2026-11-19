@@ -201,7 +201,8 @@ def test_alert_reaches_numbers_replaced_in_the_last_3_days(
 
 
 def test_row_lock_is_taken_after_the_code_check(db, merchant, monkeypatch):  # noqa: F811
-    from app.api.routes import merchants as routes
+    # CF-0079: the payout routes moved out of routes/merchants.py.
+    from app.api.routes import merchant_payouts as routes
 
     calls: list[str] = []
     real_get = routes.get_active_merchant
