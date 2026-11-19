@@ -20,7 +20,9 @@ import {
   Store,
   Truck,
   Wallet,
+  CirclePause,
 } from "lucide-react";
+import { activePause, shortDay } from "@/lib/store-pause";
 import SkeletonList from "@/components/Skeleton/Skeleton";
 import { merchantUrl } from "@/lib/urls";
 import {
@@ -274,6 +276,8 @@ export default function MerchantDashboardPage() {
   const latestBatch = payouts[0];
   const payoutFailed = latestBatch?.status === "failed" ? 1 : 0;
   const setupMissing = (shopPage ? 0 : 1) + (merchant && (merchant.lat == null || merchant.lng == null) ? 1 : 0);
+  // CF-0078 (B89): holiday mode is easy to forget once it is on.
+  const pausedThrough = activePause(merchant?.paused_until);
 
   const attention: Attention[] = [
     { key: "ship", icon: Truck, tone: "amber", label: "Ready to ship", count: readyToShip, href: merchantUrl("/shipments"), action: "Paid orders to put on a route" },
@@ -282,6 +286,7 @@ export default function MerchantDashboardPage() {
     { key: "out", icon: PackageX, tone: "red", label: "Out of stock", count: outOfStock, href: merchantUrl("/inventory"), action: "Buyers cannot order these" },
     { key: "expiry", icon: AlertTriangle, tone: "red", label: "Best-before soon or past", count: expiring, href: merchantUrl("/inventory"), action: "Sell or remove these first" },
     { key: "payout", icon: Banknote, tone: "red", label: "Payout failed", count: payoutFailed, href: merchantUrl("/earnings"), action: "Check your payout details" },
+    { key: "paused", icon: CirclePause, tone: "amber", label: "Holiday mode", count: pausedThrough ? 1 : 0, href: merchantUrl("/settings"), action: pausedThrough ? `Orders are paused through ${shortDay(pausedThrough)}` : "Your store takes orders" },
     { key: "setup", icon: shopPage ? MapPin : Store, tone: "violet", label: "Shop setup", count: setupMissing, href: merchantUrl(shopPage ? "/settings" : "/shop"), action: shopPage ? "Set your farm pickup pin" : "Create your public shop page" },
   ];
   const openTotal = sum(attention.map((a) => a.count));

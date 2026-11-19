@@ -151,3 +151,39 @@ def test_bad_input_and_non_admins(db: Session, merchant: Any) -> None:
         )
     db.expire_all()
     assert db.get(Review, spam.id).hidden_at is None  # type: ignore[union-attr]
+
+
+def test_farm_cannot_reply_to_a_hidden_review(db: Session, merchant: Any) -> None:
+    """CF-0078 (B86)."""
+    _, spam = _two_reviews(db, merchant)
+    _admin_client(db, _admin(db)).post(
+        f"/admin/reviews/{spam.id}/hide", json={"reason": "abuse"}
+    )
+    owner: Any = db.get(User, merchant.user_id)
+    farm = _admin_client(db, owner)
+
+    put = farm.put(f"/merchants/me/reviews/{spam.id}/reply", json={"reply": "Hi!"})
+    gone = farm.delete(f"/merchants/me/reviews/{spam.id}/reply")
+
+    assert (put.status_code, gone.status_code) == (404, 404)
+    db.expire_all()
+    assert db.get(Review, spam.id).merchant_reply is None  # type: ignore[union-attr]
+
+
+def test_the_author_sees_that_the_review_is_hidden(db: Session, merchant: Any) -> None:
+    """CF-0078 (B87): a flag only; the admin's reason is not shown."""
+    buyer = _buyer(db, "author@example.com")
+    order = _order(db, merchant, buyer)
+    client = _buyer_client(db, buyer[0])
+    client.post(f"/orders/me/{order.id}/review", json={"rating": 1, "comment": "x"})
+    review = db.query(Review).filter(Review.order_id == order.id).one()
+    assert client.get(f"/orders/me/{order.id}/review").json()["hidden"] is False
+
+    _admin_client(db, _admin(db)).post(
+        f"/admin/reviews/{review.id}/hide", json={"reason": "secret note"}
+    )
+
+    mine = client.get(f"/orders/me/{order.id}/review")
+    assert mine.json()["hidden"] is True
+    assert "secret note" not in mine.text
+    assert "hidden_reason" not in mine.json()

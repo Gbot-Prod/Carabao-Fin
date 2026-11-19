@@ -18,6 +18,8 @@ export type PublicReview = {
 export type Review = PublicReview & {
   order_id: number | null;
   editable_until: string | null;
+  /** CF-0078: an admin hid it from the farm page; shown to its author only. */
+  hidden?: boolean;
 };
 
 export type ReviewPayload = {

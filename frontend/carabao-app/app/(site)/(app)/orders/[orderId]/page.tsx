@@ -214,6 +214,12 @@ function ReviewSection({
         <Stars value={existing.rating} />
         {existing.comment && <p className={styles.reviewComment}>{existing.comment}</p>}
         <p className={styles.muted}>Reviewed {formatDate(existing.created_at)}</p>
+        {existing.hidden && (
+          <p className={styles.muted} role="status">
+            After a check by Carabao, this review is not shown on the farm page and does not count in its rating.
+            Contact support if you think this is a mistake.
+          </p>
+        )}
         {editable && (
           <button type="button" className={styles.linkBtn} onClick={() => setEditing(true)}>
             Edit review

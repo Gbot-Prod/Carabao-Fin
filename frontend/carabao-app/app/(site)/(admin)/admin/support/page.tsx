@@ -20,22 +20,30 @@ type SupportConversation = {
   unread: number;
 };
 
+// Same as SUPPORT_LIST_DEFAULT in backend/app/api/routes/support_chat.py.
+const SUPPORT_PAGE = 100;
+
 /** CH2: admins read and answer support conversations (unanswered first). */
 export default function AdminSupportPage() {
   const [rows, setRows] = useState<SupportConversation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  // CF-0078 (B88): the API sends SUPPORT_PAGE at a time (CF-0076); the poll
+  // reloads the page the admin is on.
+  const [page, setPage] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const res = await apiClient.get<SupportConversation[]>("/admin/support");
+      const res = await apiClient.get<SupportConversation[]>("/admin/support", {
+        params: { limit: SUPPORT_PAGE, offset: page * SUPPORT_PAGE },
+      });
       setRows(res.data);
       setError(null);
     } catch (err) {
       setError(getApiErrorMessage(err) ?? "Could not load support conversations.");
       setRows((prev) => prev ?? []);
     }
-  }, []);
+  }, [page]);
 
   // CF-0047: paused while the tab is hidden, one poll when it is shown again.
   useVisibleInterval(load, 30_000);
@@ -53,7 +61,7 @@ export default function AdminSupportPage() {
       />
       {error && <p role="alert" className={styles.stateError}>{error}</p>}
       {rows.length === 0 ? (
-        <div className={styles.state}>No support conversations yet.</div>
+        <div className={styles.state}>{page > 0 ? "No older conversations." : "No support conversations yet."}</div>
       ) : (
         <div className={styles.tableWrap}>
           <table className={styles.table}>
@@ -81,6 +89,18 @@ export default function AdminSupportPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {(page > 0 || rows.length >= SUPPORT_PAGE) && (
+        <div className={styles.filters}>
+          <button type="button" className={styles.clear} disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+            Newer
+          </button>
+          <span className={styles.mono}>Page {page + 1}</span>
+          <button type="button" className={styles.clear} disabled={rows.length < SUPPORT_PAGE} onClick={() => setPage((p) => p + 1)}>
+            Older
+          </button>
         </div>
       )}
 

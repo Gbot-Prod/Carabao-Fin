@@ -110,6 +110,7 @@ def to_review_response(review: Review, order=None) -> ReviewResponse:
         merchant_reply=review.merchant_reply,
         merchant_replied_at=review.merchant_replied_at,
         editable_until=review_deadline(order) if order is not None else None,
+        hidden=review.hidden_at is not None,
     )
 
 

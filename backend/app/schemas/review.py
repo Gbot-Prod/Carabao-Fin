@@ -62,6 +62,9 @@ class ReviewResponse(PublicReviewResponse):
 
     order_id: int | None = None
     editable_until: datetime | None = None
+    # CF-0078 (B87): an admin hid it from the farm page (CF-0075). The reason
+    # stays with the admins; the author only learns that it is not shown.
+    hidden: bool = False
 
 
 class MerchantReviewsResponse(BaseModel):

@@ -262,7 +262,12 @@ def _my_farm_review(db: Session, user: User, review_id: int) -> Review:
     review = (
         db.query(Review)
         .options(selectinload(Review.user))
-        .filter(Review.id == review_id, Review.merchant_id == merchant.id)
+        .filter(
+            Review.id == review_id,
+            Review.merchant_id == merchant.id,
+            # CF-0078 (B86): a review an admin hid cannot be answered either.
+            Review.hidden_at.is_(None),
+        )
         .first()
     )
     if review is None:
