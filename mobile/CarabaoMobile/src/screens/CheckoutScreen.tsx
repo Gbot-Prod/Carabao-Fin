@@ -1,5 +1,5 @@
 // src/screens/CheckoutScreen.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, Alert,
@@ -9,7 +9,8 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
-import { api } from '../lib/api';
+import { api, defaultAddress, type ApiUserAddress } from '../lib/api';
+import { addressLine, addressSummary, deliveryFields } from '../lib/addresses';
 import { cartTotals, groupCartByFarm, type PendingOrder } from '../lib/cartGroups';
 import { blockerText, checkoutBlockers } from '../lib/cartSync';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
@@ -34,6 +35,29 @@ function CheckoutScreenContent() {
   const [payment, setPayment] = useState('online');
   const [timeWindow, setTimeWindow] = useState(TIME_WINDOWS[0]);
   const [address, setAddress] = useState('');
+  // CF-0110: saved addresses; the default fills the field. Editing the text unlinks it.
+  const [saved, setSaved] = useState<ApiUserAddress[]>([]);
+  const [selected, setSelected] = useState<ApiUserAddress | null>(null);
+  useEffect(() => {
+    let active = true;
+    api.addresses
+      .list(token)
+      .then((list) => {
+        if (!active) return;
+        setSaved(list);
+        const d = defaultAddress(list);
+        if (d) {
+          setSelected(d);
+          setAddress((typed) => typed || addressLine(d));
+        }
+      })
+      .catch(() => { /* type the address instead */ });
+    return () => { active = false; };
+  }, [token]);
+  const pick = (a: ApiUserAddress) => {
+    setSelected(a);
+    setAddress(addressLine(a));
+  };
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   // No verified mobile number yet (e.g. a Google sign-in): verify, then retry.
@@ -66,7 +90,7 @@ function CheckoutScreenContent() {
         items.map((i) => ({ produce_id: i.produceId, quantity: i.quantity })),
       );
       const result = await api.orders.place(token, {
-        delivery_address: address.trim() || null,
+        ...deliveryFields(selected, address),
         delivery_time: timeWindow,
         notes: notes.trim() || null,
       });
@@ -135,6 +159,24 @@ function CheckoutScreenContent() {
 
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Delivery Address</Text>
+            {saved.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
+                {saved.map((a) => {
+                  const on = selected?.id === a.id && address.trim() === addressLine(a);
+                  return (
+                    <TouchableOpacity
+                      key={a.id}
+                      style={[styles.timePill, on && styles.timePillActive]}
+                      onPress={() => pick(a)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text style={[styles.timePillText, on && styles.timePillTextActive]}>{addressSummary(a)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
             <TextInput
               style={[styles.input, styles.textArea]}
               value={address}
@@ -144,6 +186,9 @@ function CheckoutScreenContent() {
               placeholder="Street, barangay, city, province"
               placeholderTextColor={Colors.textLight}
             />
+            <TouchableOpacity onPress={() => router.push('/addresses')} style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text style={styles.fieldHint}>Manage saved addresses</Text>
+            </TouchableOpacity>
             {/* The server checks the address is in Luzon (B2). */}
             <Text style={styles.fieldHint}>
               Carabao delivers within Luzon only. Include your province or Metro Manila city.

@@ -4,6 +4,7 @@ import { getAccessToken } from './authClient';
 import { API_BASE } from './config';
 import { historyQueryString, type HistoryQuery } from './orderHistory';
 import type { ServerCartLine } from './cartSync';
+import type { AddressPayload } from './addresses';
 
 export { API_BASE, WEB_BASE } from './config';
 
@@ -290,6 +291,10 @@ export function merchantLocation(m: Pick<ApiMerchant, 'city' | 'province'>): str
 
 export type PlaceOrderPayload = {
   delivery_address?: string | null;
+  // From a saved address (CF-0110): the server checks the region is in Luzon.
+  delivery_region?: string;
+  delivery_lat?: number;
+  delivery_lng?: number;
   delivery_time?: string | null;
   notes?: string | null;
 };
@@ -576,5 +581,15 @@ export const api = {
   users: {
     me: (token: string | null) =>
       request<ApiUserProfile>('/users/me', token),
+  },
+  // Address book (CF-0110). Bodies: src/lib/addresses.ts checkAddress (backend extra="forbid").
+  addresses: {
+    list: (token: string | null) => request<ApiUserAddress[]>('/users/me/addresses', token),
+    create: (token: string | null, body: AddressPayload & { is_default?: boolean }) =>
+      request<ApiUserAddress>('/users/me/addresses', token, { method: 'POST', body: JSON.stringify(body) }),
+    update: (token: string | null, id: number, body: Partial<AddressPayload> & { is_default?: true }) =>
+      request<ApiUserAddress>(`/users/me/addresses/${id}`, token, { method: 'PATCH', body: JSON.stringify(body) }),
+    remove: (token: string | null, id: number) =>
+      request<null>(`/users/me/addresses/${id}`, token, { method: 'DELETE' }),
   },
 };

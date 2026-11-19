@@ -36,6 +36,7 @@ export default function RootLayout() {
                   <Stack.Screen name="order-chat" options={{ headerShown: false }} />
                   <Stack.Screen name="saved" options={{ headerShown: false }} />
                   <Stack.Screen name="order-detail" options={{ headerShown: false }} />
+                  <Stack.Screen name="addresses" options={{ headerShown: false }} />
                   <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
                 </Stack>
                 <StatusBar style="auto" />

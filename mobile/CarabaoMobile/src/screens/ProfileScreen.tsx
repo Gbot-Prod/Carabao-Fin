@@ -1,12 +1,12 @@
 // src/screens/ProfileScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, Alert, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { api, defaultAddress, type ApiUserProfile } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -65,7 +65,8 @@ function ProfileScreenContent() {
     void api.users.me(token).then(setProfile).catch(() => { });
   }, [token]);
 
-  useEffect(loadProfile, [loadProfile]);
+  // Re-read on focus, so an address saved on the Addresses screen shows here (CF-0110).
+  useFocusEffect(loadProfile);
 
   const email = profile?.email ?? user?.email ?? '';
   const phone = profile?.phone_number ?? user?.phoneNumber ?? null;
@@ -169,7 +170,7 @@ function ProfileScreenContent() {
               value={phone ? `${formatPhMobile(phone)}${phoneVerified ? '' : ' (not verified)'}` : 'Add a mobile number'}
               onPress={() => setPhoneSheetOpen(true)}
             />
-            <SettingItem icon="location-outline" label="Address" value={address || 'Not set'} onPress={() => { }} />
+            <SettingItem icon="location-outline" label="Address" value={address || 'Not set'} onPress={() => router.push('/addresses')} />
             <SettingItem icon="card-outline" label="Payment Methods" value="No cards saved" onPress={() => { }} />
             <SettingItem icon="receipt-outline" label="Order History" onPress={() => router.push('/(tabs)/history')} />
             <SettingItem icon="heart-outline" label="Saved produce" onPress={() => router.push('/saved')} />
