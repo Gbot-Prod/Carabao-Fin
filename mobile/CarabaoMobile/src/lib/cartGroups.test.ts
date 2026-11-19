@@ -35,6 +35,18 @@ test('an empty cart has no groups and zero totals', () => {
   assert.deepEqual(cartTotals([]), { itemTotal: 0, deliveryTotal: 0, grandTotal: 0 });
 });
 
+test('pending orders param: only well-formed rows are kept (CF-0114)', () => {
+  const ok = { id: 4, ref: 'CB-2026-0004', farm: ' A ', total: 90 };
+  const bad = [
+    { ...ok, id: 0 }, { ...ok, id: 1.5 }, { ...ok, id: '4' },
+    { ...ok, ref: 'Pay now at evil.example' }, { ...ok, farm: '' }, { ...ok, farm: 'x'.repeat(101) },
+    { ...ok, total: -1 }, { ...ok, total: 1.5 }, { ...ok, total: 10_000_001 },
+  ];
+  assert.deepEqual(parsePendingOrders(JSON.stringify([ok, ...bad])), [{ ...ok, farm: 'A' }]);
+  assert.equal(parsePendingOrders(JSON.stringify(Array.from({ length: 30 }, (_, i) => ({ ...ok, id: i + 1 })))).length, 20);
+  assert.deepEqual(parsePendingOrders('x'.repeat(10_001)), []);
+});
+
 test('pending orders param: bad JSON or rows without a numeric id are dropped', () => {
   const ok = { id: 4, ref: 'CB-2026-0004', farm: 'A', total: 90 };
   assert.deepEqual(parsePendingOrders(JSON.stringify([ok, { id: 'x' }, null])), [ok]);

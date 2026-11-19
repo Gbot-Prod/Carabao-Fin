@@ -5,7 +5,8 @@ import {
   TouchableOpacity, Animated, ScrollView, Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
+import { openCheckout } from '../lib/openCheckout';
+import { isOrderRef, parseOrderId } from '../lib/orderDetail';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { useAuth } from '../lib/AuthContext';
@@ -48,7 +49,7 @@ function OtherOrderRow({ order, token }: { order: PendingOrder; token: string | 
     setPaying(true);
     try {
       const checkout = await api.payments.checkout(token, order.id);
-      await WebBrowser.openBrowserAsync(checkout.checkout_url);
+      await openCheckout(checkout.checkout_url);
     } catch (err) {
       Alert.alert('Payment not started', err instanceof Error ? err.message : 'Please try again.');
     } finally {
@@ -114,7 +115,9 @@ function ConfirmationScreenContent() {
   const { orderId, orderRef, more } = useLocalSearchParams<{ orderId?: string; orderRef?: string; more?: string }>();
   const otherOrders = parsePendingOrders(more);
   const { token } = useAuth();
-  const numericOrderId = Number(orderId);
+  // CF-0114: checked; a bad id from a deep link never reaches a URL.
+  const numericOrderId = parseOrderId(orderId);
+  const shownRef = isOrderRef(orderRef) ? orderRef : numericOrderId !== null ? `#${numericOrderId}` : '—';
   const [txnStatus, setTxnStatus] = useState<TransactionStatus | null>(null);
   const [polls, setPolls] = useState(0);
   const [paying, setPaying] = useState(false);
@@ -122,7 +125,7 @@ function ConfirmationScreenContent() {
   const copy = PAYMENT_COPY[view];
 
   const checkStatus = useCallback(async () => {
-    if (!token || !Number.isFinite(numericOrderId)) return;
+    if (!token || numericOrderId === null) return;
     try {
       const txn = await api.payments.transactionByOrder(token, numericOrderId);
       setTxnStatus(txn.status);
@@ -146,11 +149,11 @@ function ConfirmationScreenContent() {
   }, [view, polls, checkStatus]);
 
   const handlePayNow = async () => {
-    if (!token || !Number.isFinite(numericOrderId)) return;
+    if (!token || numericOrderId === null) return;
     setPaying(true);
     try {
       const checkout = await api.payments.checkout(token, numericOrderId);
-      await WebBrowser.openBrowserAsync(checkout.checkout_url);
+      await openCheckout(checkout.checkout_url);
       setPolls(0); // restart polling after the browser closes
     } catch (err) {
       Alert.alert('Payment not started', err instanceof Error ? err.message : 'Please try again.');
@@ -195,7 +198,7 @@ function ConfirmationScreenContent() {
             <View style={styles.detailsGrid}>
               <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>Order Reference</Text>
-                <Text style={styles.detailValue}>{orderRef ?? orderId}</Text>
+                <Text style={styles.detailValue}>{shownRef}</Text>
               </View>
               <View style={styles.detailItem}>
                 <Text style={styles.detailLabel}>Estimated Delivery</Text>

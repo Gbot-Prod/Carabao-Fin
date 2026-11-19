@@ -19,6 +19,22 @@ export function orderRef(orderId: number, orderedAt: string | null | undefined):
   return `CB-${year}-${String(orderId).padStart(4, '0')}`;
 }
 
+/** True for a reference in the backend's form ("CB-2026-0042"); route values are checked with it. */
+export function isOrderRef(value: unknown): value is string {
+  return typeof value === 'string' && /^CB-(\d{4}|XXXX)-\d{4,10}$/.test(value);
+}
+
+/**
+ * The chat screen's header. The app passes "Chat with <farm>"; any other value from a
+ * route (a deep link can set it) is replaced, so a link cannot make an order chat look
+ * like "Carabao support" or carry a message. CF-0114.
+ */
+export function chatTitle(raw: string | string[] | undefined, isSupport: boolean, orderId: number | null): string {
+  if (isSupport) return 'Carabao support';
+  if (typeof raw === 'string' && /^Chat with [^\n\r]{1,80}$/.test(raw) && !/support/i.test(raw)) return raw;
+  return orderId === null ? 'Order chat' : `Order #${orderId}`;
+}
+
 /**
  * The order ID from a route or deep-link parameter, or null. Only a plain positive
  * whole number is accepted, so "1e3", "0x10", " 7", "7/../x" or arrays never reach a URL.

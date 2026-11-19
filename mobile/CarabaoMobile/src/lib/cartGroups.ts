@@ -47,12 +47,29 @@ export function cartTotals(groups: CartGroup[]) {
 // Orders still to pay after a multi-farm checkout, passed to the confirmation screen.
 export type PendingOrder = { id: number; ref: string; farm: string; total: number };
 
+// CF-0114: this list arrives as a route parameter, which a deep link can set. Only
+// well-formed rows are kept, so a crafted link cannot show made-up farms or amounts.
+// (What is charged always comes from the server's checkout for that order id.)
+const MAX_PENDING = 20;
+const MAX_TOTAL = 10_000_000;
+
+function isPendingOrder(o: unknown): o is PendingOrder {
+  if (typeof o !== 'object' || o === null) return false;
+  const r = o as Record<string, unknown>;
+  return (
+    typeof r.id === 'number' && Number.isSafeInteger(r.id) && r.id > 0 &&
+    typeof r.ref === 'string' && /^CB-(\d{4}|XXXX)-\d{4,10}$/.test(r.ref) &&
+    typeof r.farm === 'string' && r.farm.trim().length > 0 && r.farm.length <= 100 &&
+    typeof r.total === 'number' && Number.isInteger(r.total) && r.total >= 0 && r.total <= MAX_TOTAL
+  );
+}
+
 export function parsePendingOrders(raw: string | undefined): PendingOrder[] {
-  if (!raw) return [];
+  if (!raw || raw.length > 10_000) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed)
-      ? (parsed as PendingOrder[]).filter((o) => Number.isFinite(o?.id))
+      ? parsed.filter(isPendingOrder).slice(0, MAX_PENDING).map((o) => ({ id: o.id, ref: o.ref, farm: o.farm.trim(), total: o.total }))
       : [];
   } catch {
     return [];

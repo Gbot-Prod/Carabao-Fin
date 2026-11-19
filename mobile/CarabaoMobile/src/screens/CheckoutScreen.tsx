@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
+import { openCheckout } from '../lib/openCheckout';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
 import { api, defaultAddress, type ApiUserAddress } from '../lib/api';
@@ -113,7 +113,7 @@ function CheckoutScreenContent() {
         const checkout = await api.payments.checkout(token, first.order_id);
         // Resolves when the buyer closes the browser (PayMongo's redirect
         // lands on the web site, not the app).
-        await WebBrowser.openBrowserAsync(checkout.checkout_url);
+        await openCheckout(checkout.checkout_url);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Could not start payment';
         Alert.alert('Payment not started', message);
