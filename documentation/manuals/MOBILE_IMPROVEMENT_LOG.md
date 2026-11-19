@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 25    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
+branch: improve/mobile-loop    push: no    iteration: 26    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0121) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0122) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 12/#25 · STRENGTHEN 5/#20 · SECURITY 4/#23 · AUDIT 4/#24
+PARITY 13/#26 · STRENGTHEN 5/#20 · SECURITY 4/#23 · AUDIT 4/#24
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #53 at mobile #24) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -37,7 +37,7 @@ PARITY 12/#25 · STRENGTHEN 5/#20 · SECURITY 4/#23 · AUDIT 4/#24
 | `orders/[orderId]` order detail | `order-detail` → `OrderDetailScreen` | done | `/orders/me/:id`, `/cancel`, `/confirm-received`, `POST/PATCH /orders/me/:id/review` ✓ (since #15) | write and edit a review in the app; receipt is web-loop only (M35) |
 | `track` | `(tabs)/track` → `TrackScreen` | partial | `/tracking/:id` ✓; `/shipments/:id` not called | |
 | `notifications` | `notifications` → `NotificationsScreen` | done | list (paged, unread_only), read, unread, read-all, delete, delete read ✓ (since #25) | All / Unread tabs, long-press menu, Clear read; links open the matching screen, merchant ones by kind |
-| `profile` account | `(tabs)/profile` → `ProfileScreen`, `addresses` → `AddressesScreen` | partial | `/users/me`, `/users/me/addresses` CRUD ✓ (#12); `/users/me/avatar`, `/users/me/delete-code`, `/email/otp/*` not called | address book done; no avatar, account deletion (M23) |
+| `profile` account | `(tabs)/profile` → `ProfileScreen`, `addresses`, `DeleteAccountSheet` | partial | `/users/me`, `/users/me/addresses` CRUD, `/users/me/delete-code`, `DELETE /users/me` ✓ (#12, #26); `/users/me/avatar`, `/email/otp/*` not called | address book, account deletion; no avatar (M23), dead rows (M31), data export after the web merge (M35) |
 | order chat | `order-chat` → `OrderChatScreen` | done | `/orders/:id/messages`, `/support/messages` | |
 | `auth`, `forgot-password`, `reset-password` | `auth` → `AuthScreen` + `PasswordResetSheet`, `PhoneVerifySheet`, `AddEmailSheet` | done | Better Auth | |
 | `two-factor`, `two-factor/enrol` | — | n/a — web-only | | verify on next AUDIT whether non-admin users can enrol 2FA |
@@ -75,7 +75,7 @@ Parity score: 13 / 26 done (5 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | M19 | PARITY | L | 3 | 4 | merchant | merchant-earnings | Earnings and cash-out (payout info, available balance, request) honoring the payout destination lock — one slice per screen. |
 | M20 | PARITY | M | 2 | 2 | merchant | parity | Merchant sales history (`/merchants/me/sales`, `/transactions`) — test: list matches the web sales page. |
 | M22 | PARITY | M | 2 | 2 | merchant | parity | Merchant chats inbox (`/merchants/me/chats`) → opens the existing `OrderChatScreen` — test: inbox lists chats, unread first. |
-| M23 | PARITY | M | 2 | 2 | account | parity | Account deletion (`/users/me/delete-code`) + avatar upload on profile — test: deletion signs out and clears local data. |
+| M23 | PARITY | M | 2 | 2 | account | parity | Avatar on profile (`POST /users/me/avatar`): needs an image picker (expo-image-picker works in Expo Go; check first, log a note) — test: picked photo shows on Profile and on the web. Account deletion part done at #26. |
 | M25 | PARITY | M | 2 | 2 | checkout | parity | Cancel a pending payment (`/payments/checkout/:id/cancel`) from confirmation — test: cancel acts as on the web. |
 | M27 | STRENGTHEN | M | 2 | 2 | perf | — | `ScrollView` + `map` → `FlatList` with memo rows where lists are long (`MerchantScreen` produce, `OrderScreen` hits) — test: lint + manual scroll of 50 rows. |
 | M30 | STRENGTHEN | S | 2 | 1 | orders | — | Retire unpaged `GET /orders/me/history` (backend `orders.py:325`): no mobile screen calls it since #3; mobile wrapper `api.orders.history` and web fetcher `util/api/orders.ts:84` still exist — check web callers first. Do with the web loop — test: backend pytest passes, grep finds no caller. |
@@ -85,6 +85,8 @@ Parity score: 13 / 26 done (5 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #26 — PARITY — account — CF-0122 — M
+What: account deletion (M23 first part, web profile danger zone; also an App Store requirement for apps with sign-up). Profile → "Delete account" opens new `DeleteAccountSheet`: step 1 explains what is deleted, asks to type DELETE and the password (blank for Google / no-password accounts) → `POST /users/me/delete-code` (the server refuses first with 409 when open orders or payouts block it, or "Your password is not correct.", shown as the server says); step 2: "We sent a code to the number ending in 1234" → code (one-time-code autofill) → `DELETE /users/me` with `{code}` → `signOut()`, which wipes token, user, cart, saved ids and the idle key (CF-0108 / CF-0120) → "Account deleted". New `api.users.deleteCode / deleteAccount`. Pure `src/lib/accountDeletion.ts`: `codeRequestBody` (blank → null, ≤ 128), `checkDeleteCode` (digits, spaces removed, 4–10), `confirmed`, `sentToText`; a test reads the bounds from `schemas/user.py`. Avatar (needs an image picker) stays in M23. Why: account parity; store requirement. Tests: `accountDeletion.test.ts` 4. Manual check: test account → Delete account → button off until DELETE is typed → wrong password → server message → right password → SMS → code → signed out, sign-in with that number fails; an account with an open order → 409 message, no SMS. Checks: npm test 112/112, lint 0/0, tsc pass. Not run on a device.
 ### #25 — PARITY — notifications — CF-0121 — M
 What: notifications batch M24 + M50 (web notification centre). `NotificationsScreen`: All / "Unread (n)" tabs (`unread_only`), paging of 30 with infinite scroll (`total`), long press (and the a11y "More actions" action) → Mark as read / Mark as unread / Delete; header "Mark all read" (off when nothing is unread) and "Clear read" (deletes every read one, after a confirm). Every change shows at once (pure `applyNoteAction` / `unreadAfter`; in the Unread view a row that becomes read leaves the list, as the server would) and the list is read again if the server refuses. New `api.notifications.page / markUnread / remove / removeRead` (the unused `list` wrapper removed). M50: `appRoute(link, kind)` sends `review_received` to `merchant-reviews` and other `/merchantDashboard` links to `merchant-orders` (all merchant notifications use that one link). Pure `src/lib/notificationList.ts`: `notesQuery`, `applyNoteAction`, `unreadAfter`. Why: notification parity with the web; merchants landed on orders for a new review. Tests: `notificationList.test.ts` 4 (incl. the kind routing). Manual check: Unread tab → open one → it leaves the tab, count drops; long press a read one → Mark as unread → dot back; Clear read → only unread stay; tap a "New review" notification as a merchant → Reviews screen. Checks: npm test 108/108, lint 0/0, tsc pass. Not run on a device.
 ### #24 — AUDIT — all — (no CF ID) — M
@@ -137,7 +139,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #24)
-- Mobile tests: 108 in 25 files since #25 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
+- Mobile tests: 112 in 26 files since #26 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #24 `expo export --platform android` OK (5 MB) (next: #28).

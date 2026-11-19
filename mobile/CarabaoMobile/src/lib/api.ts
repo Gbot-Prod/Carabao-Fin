@@ -630,6 +630,11 @@ export const api = {
   users: {
     me: (token: string | null) =>
       request<ApiUserProfile>('/users/me', token),
+    // CF-0122: account deletion (texted code, then DELETE with the code).
+    deleteCode: (token: string | null, body: { password: string | null }) =>
+      request<{ sent_to: string }>('/users/me/delete-code', token, { method: 'POST', body: JSON.stringify(body) }),
+    deleteAccount: (token: string | null, code: string) =>
+      request<null>('/users/me', token, { method: 'DELETE', body: JSON.stringify({ code }) }),
   },
   // Address book (CF-0110). Bodies: src/lib/addresses.ts checkAddress (backend extra="forbid").
   addresses: {

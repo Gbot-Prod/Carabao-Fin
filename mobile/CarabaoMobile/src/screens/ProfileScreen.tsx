@@ -10,6 +10,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { api, defaultAddress, type ApiUserProfile } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
+import { DeleteAccountSheet } from '../components/DeleteAccountSheet';
 import { PhoneVerifySheet } from '../components/PhoneVerifySheet';
 import { AddEmailSheet } from '../components/AddEmailSheet';
 import { formatPhMobile } from '../lib/phone';
@@ -59,6 +60,7 @@ function ProfileScreenContent() {
   const [profile, setProfile] = useState<ApiUserProfile | null>(null);
   const [phoneSheetOpen, setPhoneSheetOpen] = useState(false);
   const [emailSheetOpen, setEmailSheetOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const loadProfile = React.useCallback(() => {
     if (!token) return;
@@ -237,6 +239,12 @@ function ProfileScreenContent() {
               onPress={handleSignOut}
               danger
             />
+            <SettingItem
+              icon="trash-outline"
+              label="Delete account"
+              onPress={() => setDeleteOpen(true)}
+              danger
+            />
           </View>
         </View>
 
@@ -250,6 +258,17 @@ function ProfileScreenContent() {
           setPhoneSheetOpen(false);
           loadProfile();
           void refreshUser();
+        }}
+      />
+      <DeleteAccountSheet
+        visible={deleteOpen}
+        token={token}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={async () => {
+          setDeleteOpen(false);
+          // Sign-out wipes the token, user, cart, saved ids and idle key (CF-0108 / CF-0120).
+          await signOut();
+          Alert.alert('Account deleted', 'Your Carabao account and its data are gone.');
         }}
       />
       <AddEmailSheet
