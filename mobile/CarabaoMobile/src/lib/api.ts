@@ -109,15 +109,20 @@ async function send<T>(
 export type ApiMerchant = {
   id: number;
   merchant_name: string;
-  address: string | null;
-  barangay: string | null;
+  // CF-0128 (M34): backend PublicMerchantResponse (CF-0048) leaves out the street
+  // address and barangay on the public farm routes, and the number can be null.
+  address?: string | null;
+  barangay?: string | null;
   city: string | null;
   province: string | null;
-  contact_number: string;
+  contact_number: string | null;
   operating_hours: string | null;
   delivery_price: number | null;
   delivery_time: number | null;
   rating: number | null;
+  // CF-0066 holiday mode (shown by M57).
+  paused_until?: string | null;
+  pause_message?: string | null;
   produces: ApiProduce[];
   shop_page: {
     id: number;
@@ -209,6 +214,10 @@ export type ApiOrderReview = {
   created_at: string;
   updated_at: string;
   editable_until: string | null;
+  // CF-0128 (M62): backend ReviewResponse. `hidden`: an admin hid it (CF-0078).
+  merchant_reply?: string | null;
+  merchant_replied_at?: string | null;
+  hidden?: boolean;
 };
 
 export type ApiOrderDetail = {
@@ -225,7 +234,10 @@ export type ApiOrderDetail = {
   status: string;
   payment_status: string;
   items: ApiCartItem[];
-  total_amount: number;
+  total_amount: number; // already net of the discount
+  // CF-0128 (M61): farm voucher on this order (backend CF-0064).
+  discount?: number;
+  voucher_code?: string | null;
   delivery_address: string | null;
   requested_delivery_date: string | null;
   delivery_window: string | null;

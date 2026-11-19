@@ -14,7 +14,7 @@ import { Badge } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
-import { orderActions, orderRef, parseOrderId } from '../lib/orderDetail';
+import { HIDDEN_REVIEW_NOTICE, orderActions, orderRef, parseOrderId, voucherLine } from '../lib/orderDetail';
 import { canEditReview } from '../lib/reviewForm';
 import { OrderReviewForm } from '../components/OrderReviewForm';
 
@@ -137,6 +137,7 @@ function OrderDetailContent() {
   const actions = orderActions(order.status);
   const ref = orderRef(order.order_id, order.date_bought);
   const schedule = [order.requested_delivery_date, order.delivery_window].filter(Boolean).join(' · ');
+  const voucher = voucherLine(order.discount, order.voucher_code);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -193,6 +194,7 @@ function OrderDetailContent() {
           ))}
           <View style={styles.divider} />
           <Row label="Delivery fee" value={peso(order.delivery_fee)} />
+          {voucher ? <Row label={voucher.label} value={`−${peso(voucher.amount)}`} /> : null}
           <View style={styles.row}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{peso(order.total_amount)}</Text>
@@ -215,6 +217,12 @@ function OrderDetailContent() {
               {'★'.repeat(order.review.rating)}{'☆'.repeat(Math.max(0, 5 - order.review.rating))}
             </Text>
             {order.review.comment ? <Text style={styles.reviewText}>{order.review.comment}</Text> : null}
+            {order.review.hidden ? (
+              <Text style={styles.note} accessibilityRole="text">{HIDDEN_REVIEW_NOTICE}</Text>
+            ) : null}
+            {order.review.merchant_reply ? (
+              <Text style={styles.note}>Reply from the farm: {order.review.merchant_reply}</Text>
+            ) : null}
             {canEditReview(order.review.editable_until) && (
               <TouchableOpacity style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => setEditingReview(true)}>
                 <Text style={styles.editLink}>

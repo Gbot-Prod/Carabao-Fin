@@ -11,6 +11,8 @@ import { ORDER_STATUSES, ORDER_STATUS_LABELS } from './orderStatus.ts';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, PASSWORD_RULE_MESSAGE } from './passwordPolicy.ts';
 import { PH_MOBILE_PATTERN } from './phone.ts';
 import { HISTORY_PAGE_SIZE, HISTORY_SEARCH_MAX } from './orderHistory.ts';
+import { HIDDEN_REVIEW_NOTICE } from './orderDetail.ts';
+import { placeOrderFailure } from './checkoutOptions.ts';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 // Line ends differ between checkouts (CRLF on Windows): compare text with LF only.
@@ -56,4 +58,17 @@ test('order history limits = web lib/order-history.ts and backend q max_length',
   const py = read('backend/app/api/routes/orders.py');
   const route = py.slice(py.indexOf('"/orders/me/history/page"'));
   assert.match(route.slice(0, 1500), new RegExp(`max_length=${HISTORY_SEARCH_MAX}\\b`));
+});
+
+test('CF-0128 hidden review notice = web order page text (M62)', () => {
+  const web = read('frontend/carabao-app/app/(site)/(app)/orders/[orderId]/page.tsx').replace(/\s+/g, ' ');
+  assert.ok(web.includes(HIDDEN_REVIEW_NOTICE), 'web notice text changed');
+});
+
+test('CF-0128 holiday farm refusal: backend 400 text is shown as is (M63)', () => {
+  const route = read('backend/app/api/routes/orders.py');
+  assert.match(route, /status_code=400, detail=store_pause\.pause_detail\(merchant\)/);
+  assert.match(read('backend/app/services/store_pause.py'), /is on a break and takes orders again after/);
+  const text = 'Mang Ben Farm is on a break and takes orders again after Dec 3. Remove their items from your cart to continue.';
+  assert.deepEqual(placeOrderFailure(400, text), { text, reloadCart: true });
 });
