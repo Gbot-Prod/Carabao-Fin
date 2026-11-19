@@ -4,6 +4,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import styles from "../page.module.css";
 import { formatDate } from "../lib/format";
 import getApiErrorMessage from "@/util/errorHelper";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { fmt } from "@/lib/i18n/format";
 import {
   createMyVoucher,
   deleteMyVoucher,
@@ -18,6 +20,7 @@ const lastDay = (expiresAt: string) => new Date(Date.parse(expiresAt) - 1).toISO
 
 /** CF-0061: the farm's voucher codes. The farm pays for each discount. */
 export default function VouchersTab() {
+  const { t } = useLanguage();
   const [vouchers, setVouchers] = useState<Voucher[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<VoucherDraft>(EMPTY_DRAFT);
@@ -73,7 +76,7 @@ export default function VouchersTab() {
   };
 
   const remove = async (v: Voucher) => {
-    if (!window.confirm(`Delete voucher ${v.code}?`)) return;
+    if (!window.confirm(fmt(t.merchantConfirm.deleteVoucher, { code: v.code }))) return;
     setRowError(null);
     try {
       await deleteMyVoucher(v.id);

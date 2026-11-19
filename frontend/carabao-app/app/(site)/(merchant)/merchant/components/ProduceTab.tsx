@@ -91,7 +91,7 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm("Delete this produce item?")) return;
+    if (!window.confirm(t.merchantConfirm.deleteProduce)) return;
     setActionError(null);
     try { await deleteProduce(id); setProduces((prev) => prev.filter((p) => p.id !== id)); }
     catch (err) { setActionError(getApiErrorMessage(err, "The produce could not be deleted.")); }

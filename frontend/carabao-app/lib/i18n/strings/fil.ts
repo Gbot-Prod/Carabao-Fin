@@ -539,6 +539,15 @@ const fil: Strings = {
     openRouting: 'Buksan ang ruta →',
     routingButton: 'Ruta',
   },
+  merchantConfirm: {
+    deleteProduce: 'Burahin ang produktong ito?',
+    deleteReply: 'Burahin ang iyong sagot? Hindi na ito makikita ng mga mamimili.',
+    discardDraft:
+      'Itapon ang mga pagbabago sa draft? Babalik ang draft sa kasalukuyang live na pahina.',
+    unpublishShop:
+      'I-unpublish ang iyong shop? Hindi mahahanap ng mga mamimili ang iyong farm o makakapag-order dito hanggang mag-publish ka ulit. Tuloy pa rin ang mga bukas na order.',
+    deleteVoucher: 'Burahin ang voucher {code}?',
+  },
   trackOrder: {
     title: 'Subaybayan ang order',
     yourStop: 'Ang iyong hintuan',

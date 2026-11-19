@@ -10,6 +10,7 @@ import {
   type Review,
 } from "@/util/api";
 import getApiErrorMessage from "@/util/errorHelper";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { REPLY_MAX_LENGTH, replyProblem } from "@/lib/review-reply";
 import { formatDate } from "../lib/format";
 
@@ -41,6 +42,7 @@ type Props = {
 };
 
 export default function ReviewsTab({ onViewOrder }: Props) {
+  const { t } = useLanguage();
   const [summary, setSummary] = useState<MyMerchantReviews | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [filter, setFilter] = useState<ReviewFilter>("all");
@@ -89,7 +91,7 @@ export default function ReviewsTab({ onViewOrder }: Props) {
   };
 
   const removeReply = async (review: Review) => {
-    if (!window.confirm("Delete your reply? Buyers will no longer see it.")) return;
+    if (!window.confirm(t.merchantConfirm.deleteReply)) return;
     setReplyBusy(true);
     setReplyError(null);
     try {

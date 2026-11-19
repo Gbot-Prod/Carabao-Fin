@@ -4,6 +4,7 @@ import styles from "../page.module.css";
 import t from "./ShopTab.module.css";
 import farm from "@/app/(site)/(app)/farms/page.module.css";
 import getApiErrorMessage from "@/util/errorHelper";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { shopSlug } from "@/lib/shop-slug";
 import {
   createMyShopPage,
@@ -104,6 +105,7 @@ const FAIL_MESSAGE: Record<Action, string> = {
 };
 
 function PublishBar({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (page: MyShopPage) => void }) {
+  const { t: text } = useLanguage();
   const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,8 +113,8 @@ function PublishBar({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (p
   const live = shopPage.is_published;
 
   const run = async (kind: Action, send: () => Promise<MyShopPage>) => {
-    if (kind === "discard" && !window.confirm("Discard your draft changes? The draft goes back to the live page.")) return;
-    if (kind === "unpublish" && !window.confirm("Unpublish your shop? Buyers cannot find your farm or order from it until you publish again. Open orders continue.")) return;
+    if (kind === "discard" && !window.confirm(text.merchantConfirm.discardDraft)) return;
+    if (kind === "unpublish" && !window.confirm(text.merchantConfirm.unpublishShop)) return;
     setBusy(kind);
     setError(null);
     try {
