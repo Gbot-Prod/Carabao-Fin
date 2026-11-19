@@ -25,6 +25,8 @@ PAYOUT_REFRESH = "payout.refresh"  # only when the status changed (CF-0054)
 REFUND = "transaction.refund"
 PRODUCE_HIDE = "produce.hide"
 PRODUCE_UNHIDE = "produce.unhide"
+REVIEW_HIDE = "review.hide"  # CF-0075
+REVIEW_UNHIDE = "review.unhide"
 
 ACTIONS = (
     ROLE_CHANGE,
@@ -36,6 +38,8 @@ ACTIONS = (
     REFUND,
     PRODUCE_HIDE,
     PRODUCE_UNHIDE,
+    REVIEW_HIDE,
+    REVIEW_UNHIDE,
 )
 
 

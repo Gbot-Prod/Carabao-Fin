@@ -5,6 +5,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     SmallInteger,
+    String,
     Text,
 )
 from sqlalchemy.orm import relationship
@@ -49,6 +50,13 @@ class Review(Base):
     # touch ``updated_at``, which marks the buyer's own edits.
     merchant_reply = Column(Text, nullable=True)
     merchant_replied_at = Column(DateTime(timezone=True), nullable=True)
+    # CF-0075 (B22): hidden by an admin (abuse, fake, off-topic). A hidden
+    # review is left out of every public list, the farm's lists and its rating.
+    hidden_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    hidden_reason = Column(String(500), nullable=True)
+    hidden_by = Column(
+        Integer, ForeignKey("backend_users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -63,5 +71,6 @@ class Review(Base):
         CheckConstraint("rating BETWEEN 1 AND 5", name="ck_reviews_rating_range"),
     )
 
-    user = relationship("User")
+    # The author; hidden_by (CF-0075) is a second key to the same table.
+    user = relationship("User", foreign_keys=[user_id])
     merchant = relationship("Merchant", back_populates="reviews")

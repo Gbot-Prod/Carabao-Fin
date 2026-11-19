@@ -170,19 +170,26 @@ def list_my_merchant_reviews(
     breakdown = dict.fromkeys(range(1, 6), 0)
     for stars, count in (
         db.query(Review.rating, func.count(Review.id))
-        .filter(Review.merchant_id == merchant.id)
+        .filter(Review.merchant_id == merchant.id, Review.hidden_at.is_(None))
         .group_by(Review.rating)
         .all()
     ):
         breakdown[int(stars)] = int(count)
     with_comment_count = (
         db.query(func.count(Review.id))
-        .filter(Review.merchant_id == merchant.id, Review.comment.isnot(None))
+        .filter(
+            Review.merchant_id == merchant.id,
+            Review.comment.isnot(None),
+            Review.hidden_at.is_(None),
+        )
         .scalar()
         or 0
     )
 
-    query = db.query(Review).filter(Review.merchant_id == merchant.id)
+    # CF-0075: reviews an admin hid are not shown to the farm either.
+    query = db.query(Review).filter(
+        Review.merchant_id == merchant.id, Review.hidden_at.is_(None)
+    )
     if rating:
         query = query.filter(Review.rating.in_(rating))
     if has_comment is True:
@@ -223,7 +230,9 @@ def list_merchant_reviews(
     if merchant is None:
         raise HTTPException(status_code=404, detail="Merchant not found")
 
-    mine = db.query(Review).filter(Review.merchant_id == merchant_id)
+    mine = db.query(Review).filter(
+        Review.merchant_id == merchant_id, Review.hidden_at.is_(None)
+    )
     reviews = (
         mine.options(selectinload(Review.user))
         .order_by(Review.created_at.desc(), Review.id.desc())

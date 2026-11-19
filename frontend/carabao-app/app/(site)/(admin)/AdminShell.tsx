@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   Package,
+  Star,
   ScrollText,
   ShoppingBag,
   Store,
@@ -45,6 +46,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/merchants", label: "Merchants", icon: Store },
       { href: "/admin/review", label: "Applications", icon: ClipboardCheck },
       { href: "/admin/listings", label: "Listings", icon: Package },
+      { href: "/admin/reviews", label: "Reviews", icon: Star },
     ],
   },
   {

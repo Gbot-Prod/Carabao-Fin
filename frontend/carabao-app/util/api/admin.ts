@@ -494,3 +494,39 @@ export const unhideProduce = async (produceId: number): Promise<AdminProduce> =>
   const res = await apiClient.post<AdminProduce>(`/admin/produce/${produceId}/unhide`);
   return res.data;
 };
+
+/** CF-0075: review moderation. */
+export type AdminReview = {
+  id: number;
+  order_id: number | null;
+  merchant_id: number;
+  merchant_name: string | null;
+  reviewer_name: string;
+  rating: number;
+  comment: string | null;
+  merchant_reply: string | null;
+  created_at: string;
+  hidden_at: string | null;
+  hidden_reason: string | null;
+};
+
+export const fetchAdminReviews = async (
+  filters: { hidden?: boolean; max_rating?: number; q?: string; merchant_id?: number },
+  page = 1,
+  pageSize = ADMIN_PAGE_SIZE,
+): Promise<Paginated<AdminReview>> => {
+  const res = await apiClient.get<Paginated<AdminReview>>('/admin/reviews', {
+    params: { ...filters, page, page_size: pageSize },
+  });
+  return res.data;
+};
+
+export const hideReview = async (reviewId: number, reason: string): Promise<AdminReview> => {
+  const res = await apiClient.post<AdminReview>(`/admin/reviews/${reviewId}/hide`, { reason });
+  return res.data;
+};
+
+export const unhideReview = async (reviewId: number): Promise<AdminReview> => {
+  const res = await apiClient.post<AdminReview>(`/admin/reviews/${reviewId}/unhide`);
+  return res.data;
+};

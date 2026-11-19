@@ -6,6 +6,7 @@ from .admin import router as admin_router
 from .admin_audit import router as admin_audit_router
 from .admin_orders import router as admin_orders_router
 from .admin_produce import router as admin_produce_router
+from .admin_reviews import router as admin_reviews_router
 from .admin_transactions import router as admin_transactions_router
 from .auth import router as auth_router
 from .carts import router as carts_router
@@ -53,6 +54,7 @@ router.include_router(admin_orders_router)
 router.include_router(admin_transactions_router)
 router.include_router(admin_audit_router)
 router.include_router(admin_produce_router)
+router.include_router(admin_reviews_router)
 router.include_router(email_router)
 router.include_router(email_otp_router)
 router.include_router(merchant_onboarding_router)

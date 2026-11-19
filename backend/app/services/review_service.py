@@ -79,7 +79,8 @@ def recompute_merchant_rating(db: Session, merchant_id: int) -> Merchant | None:
     db.flush()
     average, count = (
         db.query(func.avg(Review.rating), func.count(Review.id))
-        .filter(Review.merchant_id == merchant_id)
+        # CF-0075: hidden reviews do not count.
+        .filter(Review.merchant_id == merchant_id, Review.hidden_at.is_(None))
         .one()
     )
     merchant.rating = round(float(average), 2) if count else None
