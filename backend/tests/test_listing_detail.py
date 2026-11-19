@@ -84,3 +84,33 @@ def test_search_route_still_wins_over_the_id_route(db: Session, merchant: Any) -
     res = _client(db).get("/produce/search", params={"q": "talong"})
     assert res.status_code == 200
     assert res.json()["total"] == 1
+
+
+def test_our_web_server_is_not_rate_limited(
+    db: Session, merchant: Any, monkeypatch: Any
+) -> None:
+    """CF-0084: page renders all come from one IP; only they skip the limit."""
+    from app.services import rate_limit
+
+    monkeypatch.setitem(
+        rate_limit.ACTION_LIMITS, "produce_search", rate_limit.Limit(1, 60)
+    )
+    monkeypatch.setenv("AUTH_SYNC_SHARED_SECRET", "s3cret")
+    item = _item(db, merchant, "Talong", 60)
+    client = _client(db)
+    url = f"/produce/{item.id}"
+
+    assert client.get(url).status_code == 200
+    assert client.get(url).status_code == 429  # a normal visitor is limited
+    ours = {"X-Internal-Auth-Sync-Secret": "s3cret"}
+    for _ in range(3):
+        assert client.get(url, headers=ours).status_code == 200
+    wrong = {"X-Internal-Auth-Sync-Secret": "guess"}
+    assert client.get(url, headers=wrong).status_code == 429
+    # A non-ASCII value is a wrong secret, not a server error.
+    odd = {b"X-Internal-Auth-Sync-Secret": "s3crét".encode("latin-1")}
+    assert client.get(url, headers=odd).status_code == 429
+    monkeypatch.delenv("AUTH_SYNC_SHARED_SECRET")
+    assert (
+        client.get(url, headers={"X-Internal-Auth-Sync-Secret": ""}).status_code == 429
+    )

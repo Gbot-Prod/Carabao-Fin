@@ -1,7 +1,7 @@
 import hmac
 import os
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.database import SessionLocal
@@ -35,8 +35,24 @@ def require_internal_secret(
         raise HTTPException(
             status_code=500, detail="AUTH_SYNC_SHARED_SECRET is not configured"
         )
-    if not hmac.compare_digest(x_internal_auth_sync_secret or "", expected):
+    if not _same_secret(x_internal_auth_sync_secret, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _same_secret(sent: str | None, expected: str) -> bool:
+    # CF-0084: compare bytes. compare_digest raises TypeError on a non-ASCII
+    # str, and header values can hold any latin-1 character.
+    return hmac.compare_digest((sent or "").encode(), expected.encode())
+
+
+def is_internal_request(request: Request) -> bool:
+    """CF-0084: the call comes from our own web server (it holds the shared
+    secret), e.g. a server-rendered page. Never raises; False without a secret.
+    """
+    expected = os.getenv("AUTH_SYNC_SHARED_SECRET")
+    if not expected:
+        return False
+    return _same_secret(request.headers.get("X-Internal-Auth-Sync-Secret"), expected)
 
 
 def get_current_user(

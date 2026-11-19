@@ -12,7 +12,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.dependencies import get_db
+from app.api.dependencies import get_db, is_internal_request
 from app.core.sql import ilike_contains
 from app.models.merchant import Merchant
 from app.models.produce import Produce
@@ -194,7 +194,12 @@ def get_listing(
     as a missing one.
     """
     # Same per-IP limit as search: both are public reads of the catalogue.
-    rate_limit.enforce_action(db, "produce_search", rate_limit.client_ip(request))
+    # CF-0084: not for our web server's own page renders (metadata, JSON-LD):
+    # they all come from one IP, and a 429 there would mark the page missing.
+    if not is_internal_request(request):
+        rate_limit.enforce_action(
+            db, "produce_search", rate_limit.client_ip(request)
+        )
     today = ph_today()
     listed = (
         db.query(Produce)
