@@ -1,7 +1,7 @@
 // Run with `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EMPTY_DRAFT, describeVoucher, draftToInput, voucherStatus } from './vouchers.ts';
+import { EMPTY_DRAFT, describeVoucher, draftToInput, normalizeBuyerCode, voucherStatus } from './vouchers.ts';
 import type { Voucher } from '../util/api/vouchers.ts';
 
 const base: Voucher = {
@@ -55,5 +55,13 @@ test('bad drafts give a message, not a body', () => {
   ]) {
     const r = draftToInput({ ...EMPTY_DRAFT, ...d });
     assert.ok('error' in r, JSON.stringify(d));
+  }
+});
+
+test('a typed buyer code is normalised or refused before any request', () => {
+  assert.equal(normalizeBuyerCode('  save10 '), 'SAVE10');
+  assert.equal(normalizeBuyerCode('harvest-25'), 'HARVEST-25');
+  for (const bad of ['', 'ab', 'bad code', '-START', 'x'.repeat(33), '<script>']) {
+    assert.equal(normalizeBuyerCode(bad), null, bad);
   }
 });

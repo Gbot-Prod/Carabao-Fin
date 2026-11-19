@@ -7,6 +7,12 @@ import type { Voucher, VoucherInput, VoucherKind } from '../util/api/vouchers.ts
 export const CODE_PATTERN = /^[A-Z0-9][A-Z0-9-]{2,31}$/;
 export const MAX_PERCENT = 90;
 
+/** A buyer's typed code, trimmed and upper-cased, or null if it can't be one. */
+export function normalizeBuyerCode(raw: string): string | null {
+  const code = raw.trim().toUpperCase();
+  return CODE_PATTERN.test(code) ? code : null;
+}
+
 export type VoucherDraft = {
   code: string;
   kind: VoucherKind;

@@ -269,8 +269,11 @@ export default function OrderDetailPage() {
 
   const awaitingConfirmation = isInTransit(order.status);
   const subtotal = order.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+  const discount = order.discount ?? 0;
   const total = order.total_amount ?? subtotal;
-  const deliveryFee = Math.max(total - subtotal, 0);
+  // CF-0064: the stored fee; total − subtotal is wrong once a voucher took
+  // something off. Old rows without the field fall back to that difference.
+  const deliveryFee = order.delivery_fee ?? Math.max(total - subtotal + discount, 0);
   const schedule = order.requested_delivery_date
     ? [formatCalendarDate(order.requested_delivery_date), order.delivery_window].filter(Boolean).join(", ")
     : order.delivery_window ?? null;
@@ -368,6 +371,12 @@ export default function OrderDetailPage() {
           <dl className={styles.totals}>
             <dt>Subtotal</dt><dd>{peso(subtotal)}</dd>
             <dt>Delivery</dt><dd>{peso(deliveryFee)}</dd>
+            {discount > 0 && (
+              <>
+                <dt>Voucher{order.voucher_code ? ` (${order.voucher_code})` : ""}</dt>
+                <dd>−{peso(discount)}</dd>
+              </>
+            )}
             <dt className={styles.totalRow}>Total</dt><dd className={styles.totalRow}>{peso(total)}</dd>
             <dt>Payment</dt><dd>{PAYMENT_STATUS_LABELS[order.payment_status]}</dd>
           </dl>

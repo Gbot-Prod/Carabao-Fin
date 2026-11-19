@@ -24,6 +24,8 @@ from app.schemas.order import (
     PlacedOrder,
     PlaceOrderRequest,
     PlaceOrderResponse,
+    VoucherPreviewRequest,
+    VoucherPreviewResponse,
 )
 from app.schemas.pagination import Page
 from app.schemas.receipt import ReceiptResponse
@@ -287,6 +289,64 @@ def place_order_from_cart(
         status=first.status,
         orders=placed,
     )
+
+
+@router.post("/orders/me/voucher-preview", response_model=VoucherPreviewResponse)
+def preview_voucher(
+    payload: VoucherPreviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> VoucherPreviewResponse:
+    """CF-0064: the discount a code would give on the buyer's cart now.
+
+    Reads the cart and listings like place-order but holds no stock and
+    records nothing. Lines place-order would refuse (hidden, expired, own
+    farm, unknown) are left out of the subtotal; place-order still refuses
+    them. Limited per buyer, since each call tests a code.
+    """
+    rate_limit.enforce_action(db, "voucher_preview", str(current_user.id))
+    cart = get_or_create_cart(db, cast(int, current_user.id))
+    own_merchant_id = (
+        db.query(Merchant.id).filter(Merchant.user_id == current_user.id).scalar()
+    )
+    today = ph_today()
+    lines: dict[int, int] = {}
+    cart_items: list[Any] = list(cast(Any, cart.items) or [])
+    for item in cart_items:
+        if not isinstance(item, dict):
+            continue
+        produce_id = _extract_item_int(item, "produce_id", "produceId", "id")
+        quantity = max(_to_int(item.get("quantity"), 0), 0)
+        if produce_id is not None and quantity > 0:
+            lines[produce_id] = lines.get(produce_id, 0) + quantity
+    subtotal_by_merchant: dict[int, int] = {}
+    if lines:
+        for produce in db.query(Produce).filter(Produce.id.in_(list(lines))).all():
+            merchant_id = cast(int, produce.merchant_id)
+            if (
+                produce.hidden_at is not None
+                or is_expired(produce, today)
+                or merchant_id == own_merchant_id
+            ):
+                continue
+            quantity = lines[cast(int, produce.id)]
+            subtotal_by_merchant[merchant_id] = subtotal_by_merchant.get(
+                merchant_id, 0
+            ) + unit_price_for(produce, quantity) * quantity
+    if not subtotal_by_merchant:
+        raise HTTPException(status_code=400, detail="Cart is empty")
+    voucher, discount = vouchers.claim(
+        db, payload.voucher_code, subtotal_by_merchant, cast(int, current_user.id)
+    )
+    merchant = db.get(Merchant, voucher.merchant_id)
+    response = VoucherPreviewResponse(
+        code=cast(str, voucher.code),
+        merchant_id=cast(int, voucher.merchant_id),
+        merchant_name=merchant.merchant_name if merchant is not None else "",
+        discount=discount,
+    )
+    db.rollback()  # release the voucher row lock; nothing was changed
+    return response
 
 
 @router.get("/orders/me/history", response_model=list[OrderItemResponse])

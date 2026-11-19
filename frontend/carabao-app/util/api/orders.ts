@@ -40,6 +40,9 @@ export type CurrentOrderItem = {
   payment_status: PaymentStatus;
   items: CartItem[];
   total_amount?: number;
+  /** Farm voucher on this order (CF-0064); total_amount is already net of it. */
+  discount?: number;
+  voucher_code?: string | null;
   delivery_address?: string | null;
   requested_delivery_date?: string | null; // YYYY-MM-DD
   delivery_window?: string | null;
@@ -58,6 +61,8 @@ export type PlaceOrderPayload = {
   // The server refuses unknown fields; items, prices and fees come from the
   // server-side cart and listings.
   notes?: string | null;
+  /** One farm voucher code (CF-0064); the server works out the discount. */
+  voucher_code?: string | null;
 };
 
 export type PlacedOrder = {
@@ -68,6 +73,23 @@ export type PlacedOrder = {
   merchant_name: string;
   total_price: number;
   delivery_fee: number;
+  discount?: number;
+  voucher_code?: string | null;
+};
+
+/** What a code would take off the current cart (CF-0064); nothing is held. */
+export type VoucherPreview = {
+  code: string;
+  merchant_id: number;
+  merchant_name: string;
+  discount: number;
+};
+
+export const previewVoucher = async (voucherCode: string): Promise<VoucherPreview> => {
+  const response = await apiClient.post<VoucherPreview>('/orders/me/voucher-preview', {
+    voucher_code: voucherCode,
+  });
+  return response.data;
 };
 
 export type PlaceOrderResponse = {

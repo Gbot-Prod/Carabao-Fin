@@ -280,6 +280,8 @@ def to_current_order_item(order: Order) -> dict[str, Any]:
         "payment_status": payment_status(order),
         "items": items,
         "total_amount": order.total_price,
+        "discount": order.discount or 0,
+        "voucher_code": order.voucher_code,
         **_schedule_fields(order),
     }
 

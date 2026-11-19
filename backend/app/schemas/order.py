@@ -47,6 +47,9 @@ class CurrentOrderResponse(BaseModel):
     payment_status: PaymentStatus
     items: list[dict[str, Any]] = []
     total_amount: int = 0
+    # CF-0064: farm voucher on this order (total_amount is already net of it).
+    discount: int = 0
+    voucher_code: str | None = None
     delivery_address: str | None = None
     requested_delivery_date: date | None = None
     delivery_window: str | None = None
@@ -84,6 +87,22 @@ class PlaceOrderRequest(BaseModel):
     voucher_code: str | None = Field(default=None, max_length=40)
 
     model_config = ConfigDict(extra="forbid")
+
+
+class VoucherPreviewRequest(BaseModel):
+    voucher_code: str = Field(min_length=1, max_length=40)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class VoucherPreviewResponse(BaseModel):
+    """What the code would take off the current cart (CF-0064). Checked
+    again, from stored rows, when the order is placed."""
+
+    code: str
+    merchant_id: int
+    merchant_name: str
+    discount: int
 
 
 class PlacedOrder(BaseModel):
