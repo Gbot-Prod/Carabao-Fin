@@ -27,6 +27,12 @@ ALWAYS: tuple[tuple[bytes, bytes], ...] = (
 # Swagger UI and ReDoc (development only, CF-0015) load scripts and styles.
 DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
 
+# CF-0077 (B78): only on HTTPS. Browsers ignore HSTS on plain HTTP, so a
+# forwarded-proto header someone sets on an HTTP request changes nothing.
+# No includeSubDomains here: the web app (next.config.ts) sets that on the
+# root domain; the API should not decide for names under it.
+HSTS = b"max-age=63072000"
+
 # Requests that identify a person: their answers are for that person only.
 _AUTH_HEADERS = (b"authorization", b"x-internal-auth-sync-secret")
 
@@ -42,8 +48,11 @@ class SecurityHeadersMiddleware:
 
         path: str = scope.get("path", "")
         is_docs = path.startswith(DOCS_PATHS)
-        request_headers = {k.lower() for k, _ in scope.get("headers", [])}
+        raw_headers = dict(scope.get("headers", []))
+        request_headers = {k.lower() for k in raw_headers}
         personal = any(h in request_headers for h in _AUTH_HEADERS)
+        forwarded = raw_headers.get(b"x-forwarded-proto", b"").split(b",")[0].strip()
+        secure = scope.get("scheme") == "https" or forwarded.lower() == b"https"
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
@@ -54,6 +63,8 @@ class SecurityHeadersMiddleware:
                     extra.append((b"content-security-policy", API_CSP.encode()))
                 if personal:
                     extra.append((b"cache-control", b"no-store"))
+                if secure:
+                    extra.append((b"strict-transport-security", HSTS))
                 headers.extend((k, v) for k, v in extra if k not in present)
                 message["headers"] = headers
             await send(message)

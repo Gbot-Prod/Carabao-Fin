@@ -69,3 +69,18 @@ def test_real_app_uses_it_and_dev_docs_keep_working() -> None:
     docs = client.get("/docs")
     if docs.status_code == 200:  # docs are on only in development (CF-0015)
         assert "content-security-policy" not in docs.headers
+
+
+def test_hsts_only_over_https() -> None:
+    """CF-0077 (B78): browsers ignore HSTS on plain HTTP, so it is sent only
+    when the request came over HTTPS (directly or through the proxy)."""
+    client = _client()
+    assert "strict-transport-security" not in client.get("/public").headers
+    via_proxy = client.get("/public", headers={"X-Forwarded-Proto": "https"})
+    assert via_proxy.headers["strict-transport-security"] == "max-age=63072000"
+    chained = client.get("/public", headers={"X-Forwarded-Proto": "https, http"})
+    assert "strict-transport-security" in chained.headers
+    plain = client.get("/public", headers={"X-Forwarded-Proto": "http"})
+    assert "strict-transport-security" not in plain.headers
+    direct = TestClient(client.app, base_url="https://testserver").get("/public")
+    assert direct.headers["strict-transport-security"] == "max-age=63072000"

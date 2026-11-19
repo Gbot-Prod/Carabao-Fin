@@ -91,6 +91,9 @@ ACTION_LIMITS: dict[str, Limit] = {
     "voucher_preview": Limit(30, 3600),
     # CF-0069: a data export reads every order, message and review of a person.
     "data_export": Limit(5, 3600),
+    # CF-0077: each merchant application submit scans two documents of up to
+    # 20 MB (PDF object walk or image re-encode) and writes them to R2.
+    "onboarding_submit": Limit(10, 3600),
 }
 
 

@@ -20,7 +20,7 @@ from app.schemas.merchant_application import (
     MerchantApplicationResponse,
     MerchantOnboardingPayload,
 )
-from app.services import r2_service, upload_validation
+from app.services import r2_service, rate_limit, upload_validation
 from app.services.application_review import check_can_resubmit
 from app.services.merchant_service import get_active_merchant
 from app.services.phone_verification import normalize_ph_mobile, read_token
@@ -203,6 +203,8 @@ def submit_my_merchant_onboarding_route(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_verified_phone),
 ):
+    # CF-0077: first, before the documents are scanned, re-encoded and stored.
+    rate_limit.enforce_action(db, "onboarding_submit", str(current_user.id))
     try:
         parsed = json.loads(payload)
     # RecursionError: deeply nested JSON, e.g. "[[[[...]]]]".
