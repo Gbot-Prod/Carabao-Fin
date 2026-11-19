@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.chat import ChatMessage, Conversation
 from app.models.farm_follow import FarmFollow
 from app.models.merchant import Merchant
+from app.models.notification import Notification
 from app.models.order import Order
 from app.models.produce import Produce
 from app.models.review import Review
@@ -203,6 +204,14 @@ def build_export(db: Session, user: User) -> dict[str, Any]:
         for r in message_rows
     ]
 
+    # CF-0073 (B82): in-app notifications are messages to this person.
+    notifications = [
+        _row(n, ("kind", "title", "body", "link", "created_at", "read_at"))
+        for n in db.query(Notification)
+        .filter(Notification.user_id == user_id)
+        .order_by(Notification.id)
+    ]
+
     farm = None
     merchant = db.query(Merchant).filter(Merchant.user_id == user_id).first()
     if merchant is not None:
@@ -218,5 +227,6 @@ def build_export(db: Session, user: User) -> dict[str, Any]:
         "following": following,
         "saved_produce": saved,
         "messages_sent": messages,
+        "notifications": notifications,
         "farm": farm,
     }

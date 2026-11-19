@@ -39,6 +39,8 @@ _get_duration_matrix = mapbox_routing.duration_matrix
 GEOCODE_WORKERS = 8
 
 SHIPPABLE_ORDER_STATUSES = frozenset({OrderStatus.PROCESSING})
+# CF-0073: finished shipments listed for the merchant (open ones: all).
+SHIPMENTS_SHOWN = 100
 # A stop is finished once its order is in CLOSED_ORDER_STATUSES.
 
 
@@ -401,11 +403,26 @@ def list_my_shipments(
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
-    rows = (
-        db.query(Shipment)
-        .filter(Shipment.merchant_id == merchant.id)
-        .order_by(Shipment.created_at.desc())
+    # CF-0073 (B84): every shipment with an order still on its way, however
+    # old, plus the newest SHIPMENTS_SHOWN others; was every shipment ever.
+    has_open_order = (
+        db.query(Order.id)
+        .filter(
+            Order.shipment_id == Shipment.id,
+            Order.status.notin_([s.value for s in CLOSED_ORDER_STATUSES]),
+        )
+        .exists()
+    )
+    mine = db.query(Shipment).filter(Shipment.merchant_id == merchant.id)
+    open_rows = mine.filter(has_open_order).all()
+    recent = (
+        mine.filter(~has_open_order)
+        .order_by(Shipment.created_at.desc(), Shipment.id.desc())
+        .limit(SHIPMENTS_SHOWN)
         .all()
+    )
+    rows = sorted(
+        open_rows + recent, key=lambda s: (s.created_at, s.id), reverse=True
     )
 
     # Shipment.status is never advanced after creation, so the merchant's

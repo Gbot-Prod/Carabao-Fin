@@ -528,3 +528,11 @@
   padding-left: 18px;
   color: var(--text-muted);
 }
+
+/* CF-0073: a failed "remove from history" */
+.removeError {
+  margin: 0.5rem 0 0;
+  color: #ba2f2f;
+  font-weight: 600;
+  font-size: 0.9rem;
+}

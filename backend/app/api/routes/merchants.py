@@ -1,6 +1,6 @@
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Any, cast
 
 from fastapi import (
     APIRouter,
@@ -74,6 +74,7 @@ from app.services.merchant_service import (
 )
 from app.services.order_status import (
     ACTIVE_ORDER_STATUSES,
+    CLOSED_ORDER_STATUSES,
     SHIPPED_STATUSES,
     InvalidTransition,
     PaymentInProgress,
@@ -112,6 +113,8 @@ router = APIRouter(tags=["merchants"])
 _get_leg_durations = mapbox_routing.leg_durations
 
 
+# CF-0073: closed orders shown in the merchant Orders tab (open ones: all).
+MERCHANT_CLOSED_ORDERS_SHOWN = 200
 # CF-0062: largest window of GET /merchants?limit=.
 MAX_PUBLIC_FARMS_PAGE = 500
 
@@ -1174,19 +1177,32 @@ def get_my_merchant_orders(
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
     # Unpaid checkouts stay with the buyer until a payment lands on them.
-    rows = (
-        db.query(Order, User)
-        .options(selectinload(Order.transactions))
-        .outerjoin(User, User.id == Order.user_id)
-        .filter(Order.merchant_id == merchant.id, money_received_clause())
-        .order_by(Order.ordered_at.desc())
-        .limit(200)
+    def paid_orders() -> Any:
+        return (
+            db.query(Order, User)
+            .options(selectinload(Order.transactions))
+            .outerjoin(User, User.id == Order.user_id)
+            .filter(Order.merchant_id == merchant.id, money_received_clause())
+        )
+
+    closed = [s.value for s in CLOSED_ORDER_STATUSES]
+    # CF-0073 (B80): every order the farm still has to pack, ship or deliver,
+    # however old, plus the newest closed ones. A single "newest 200" let 200
+    # newer delivered orders push an open one out of the tab.
+    open_rows = paid_orders().filter(Order.status.notin_(closed)).all()
+    closed_rows = (
+        paid_orders()
+        .filter(Order.status.in_(closed))
+        .order_by(Order.ordered_at.desc(), Order.id.desc())
+        .limit(MERCHANT_CLOSED_ORDERS_SHOWN)
         .all()
     )
-
-    return [
-        _to_merchant_order_response(order, user) for order, user in rows
-    ]
+    rows = sorted(
+        open_rows + closed_rows,
+        key=lambda r: (r[0].ordered_at or datetime.min.replace(tzinfo=UTC), r[0].id),
+        reverse=True,
+    )
+    return [_to_merchant_order_response(order, user) for order, user in rows]
 
 
 @router.patch(

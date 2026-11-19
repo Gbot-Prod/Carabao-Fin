@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import styles from "./page.module.css";
+import getApiErrorMessage from "@/util/errorHelper";
 import SkeletonList, { LoadError } from "@/components/Skeleton/Skeleton";
 import Pagination from "@/components/Pagination/Pagination";
 import {
@@ -270,6 +271,8 @@ function PastOrderCard({
 }) {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // CF-0073 (B79): a failed remove says so instead of only resetting the buttons.
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const merchantHref = order.merchant_id ? `/farms/${order.merchant_id}` : null;
   // "Buy again" (U3)
   const [reordering, setReordering] = useState(false);
@@ -290,10 +293,12 @@ function PastOrderCard({
 
   const handleConfirm = async () => {
     setDeleting(true);
+    setRemoveError(null);
     try {
       await deleteOrderFromHistory(order.order_id);
       onDelete(order.id);
-    } catch {
+    } catch (err) {
+      setRemoveError(getApiErrorMessage(err) ?? "Could not remove this order. Try again.");
       setDeleting(false);
       setConfirming(false);
     }
@@ -372,6 +377,10 @@ function PastOrderCard({
             </>
           )}
         </div>
+      )}
+
+      {removeError && (
+        <p className={styles.removeError} role="alert">{removeError}</p>
       )}
 
       {confirming && (
