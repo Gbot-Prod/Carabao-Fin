@@ -1,10 +1,11 @@
 """Support chat (CH2): any user talks to the admins. Same tables as order chat."""
 
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -12,6 +13,7 @@ from app.api.routes.admin import _require_admin
 from app.api.routes.chat import ChatMessageOut, _out
 from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.user import User
+from app.schemas.pagination import MAX_OFFSET
 from app.services import chat, notifications, rate_limit
 
 router = APIRouter(tags=["support"])
@@ -142,65 +144,98 @@ def write_to_support(
 # ── The admins' side ────────────────────────────────────────────────────────
 
 
+# CF-0076 (B61): window of the admin support list (unanswered first).
+SUPPORT_LIST_DEFAULT = 100
+SUPPORT_LIST_MAX = 200
+
+
 @router.get("/admin/support", response_model=list[SupportConversationSummary])
 def list_support_conversations(
+    limit: int = Query(SUPPORT_LIST_DEFAULT, ge=1, le=SUPPORT_LIST_MAX),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     db: Session = Depends(get_db),
     admin: User = Depends(_require_admin),
-):
-    convs = db.query(Conversation).filter(Conversation.kind == "support").all()
+) -> list[SupportConversationSummary]:
+    """Unanswered first, then most recent; a fixed number of queries.
+
+    CF-0076: was 4 queries per conversation and a sort in Python over every
+    conversation, on a page the admins poll every 30 s.
+    """
+    of_conv: Any = ChatMessage.conversation_id == Conversation.id
+    last_id = (
+        select(func.max(ChatMessage.id)).where(of_conv).correlate(Conversation)
+    ).scalar_subquery()
     # What this admin has read; any admin's reply also counts as handled.
+    read_to = (
+        select(func.coalesce(func.max(ConversationRead.last_read_message_id), 0))
+        .where(
+            ConversationRead.conversation_id == Conversation.id,
+            ConversationRead.user_id == admin.id,
+        )
+        .correlate(Conversation)
+    ).scalar_subquery()
+    last_admin_reply = (
+        select(func.coalesce(func.max(ChatMessage.id), 0))
+        .where(of_conv, ChatMessage.sender_role == "admin")
+        .correlate(Conversation)
+    ).scalar_subquery()
+    seen = case((last_admin_reply > read_to, last_admin_reply), else_=read_to)
+    unread = (
+        select(func.count(ChatMessage.id))
+        .where(of_conv, ChatMessage.sender_role == "user", ChatMessage.id > seen)
+        .correlate(Conversation)
+    ).scalar_subquery()
+
+    rows = (
+        db.query(
+            Conversation.id,
+            Conversation.user_id,
+            last_id.label("last_id"),
+            unread.label("unread"),
+        )
+        .filter(Conversation.kind == "support")
+        # Message ids grow with time, so the last id orders by recency.
+        .order_by(
+            case((unread == 0, 1), else_=0),
+            last_id.desc().nulls_last(),
+            Conversation.id.desc(),
+        )
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    message_ids = [r.last_id for r in rows if r.last_id is not None]
+    # Two batch reads for the window: its last messages and its users.
+    last_messages = {
+        m.id: m
+        for m in (
+            db.query(ChatMessage).filter(ChatMessage.id.in_(message_ids)).all()
+            if message_ids
+            else []
+        )
+    }
+    user_ids = [r.user_id for r in rows if r.user_id is not None]
+    users = {
+        u.id: u
+        for u in (
+            db.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
+        )
+    }
     out = []
-    for conv in convs:
-        last = (
-            db.query(ChatMessage)
-            .filter(ChatMessage.conversation_id == conv.id)
-            .order_by(ChatMessage.id.desc())
-            .first()
-        )
-        read_to = (
-            db.query(ConversationRead.last_read_message_id)
-            .filter(
-                ConversationRead.conversation_id == conv.id,
-                ConversationRead.user_id == admin.id,
-            )
-            .scalar()
-            or 0
-        )
-        last_admin_reply = (
-            db.query(func.max(ChatMessage.id))
-            .filter(
-                ChatMessage.conversation_id == conv.id,
-                ChatMessage.sender_role == "admin",
-            )
-            .scalar()
-            or 0
-        )
-        unread = (
-            db.query(func.count(ChatMessage.id))
-            .filter(
-                ChatMessage.conversation_id == conv.id,
-                ChatMessage.sender_role == "user",
-                ChatMessage.id > max(read_to, last_admin_reply),
-            )
-            .scalar()
-            or 0
-        )
-        user = db.get(User, conv.user_id) if conv.user_id else None
+    for r in rows:
+        last = last_messages.get(r.last_id)
+        user = users.get(r.user_id)
         out.append(
             SupportConversationSummary(
-                conversation_id=conv.id,
-                user_id=conv.user_id,
+                conversation_id=r.id,
+                user_id=r.user_id,
                 user_name=(user.name or None) if user else None,
                 user_email=user.email if user else None,
                 last_message=last.body[:120] if last else None,
                 last_at=last.created_at if last else None,
-                unread=unread,
+                unread=int(r.unread or 0),
             )
         )
-    # Unanswered first, then most recent.
-    out.sort(
-        key=lambda c: (c.unread == 0, -(c.last_at.timestamp() if c.last_at else 0))
-    )
     return out
 
 
