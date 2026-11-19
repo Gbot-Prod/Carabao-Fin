@@ -588,8 +588,6 @@ export const api = {
       }),
   },
   notifications: {
-    list: (token: string | null) =>
-      request<{ items: ApiNotification[]; unread: number }>('/users/me/notifications', token),
     // CF-0117: the bell needs only the count; one unread row instead of the whole page.
     unreadCount: (token: string | null) =>
       request<{ items: ApiNotification[]; unread: number }>(`/users/me/notifications?${UNREAD_COUNT_QUERY}`, token)
@@ -598,6 +596,15 @@ export const api = {
       request<null>(`/users/me/notifications/${id}/read`, token, { method: 'POST' }),
     markAllRead: (token: string | null) =>
       request<null>('/users/me/notifications/read-all', token, { method: 'POST' }),
+    // CF-0121: paging, unread filter, unread / delete (web util/api/notifications.ts).
+    page: (token: string | null, query: string) =>
+      request<{ items: ApiNotification[]; unread: number; total: number }>(`/users/me/notifications?${query}`, token),
+    markUnread: (token: string | null, id: number) =>
+      request<null>(`/users/me/notifications/${id}/unread`, token, { method: 'POST' }),
+    remove: (token: string | null, id: number) =>
+      request<null>(`/users/me/notifications/${id}`, token, { method: 'DELETE' }),
+    removeRead: (token: string | null) =>
+      request<null>('/users/me/notifications/read', token, { method: 'DELETE' }),
   },
   follows: {
     // Favourite farms (U4).

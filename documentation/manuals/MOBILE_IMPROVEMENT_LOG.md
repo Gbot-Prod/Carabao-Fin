@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 24    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
+branch: improve/mobile-loop    push: no    iteration: 25    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0120) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0121) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 11/#22 · STRENGTHEN 5/#20 · SECURITY 4/#23 · AUDIT 4/#24
+PARITY 12/#25 · STRENGTHEN 5/#20 · SECURITY 4/#23 · AUDIT 4/#24
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #53 at mobile #24) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -36,7 +36,7 @@ PARITY 11/#22 · STRENGTHEN 5/#20 · SECURITY 4/#23 · AUDIT 4/#24
 | `orders` history | `(tabs)/history` → `HistoryScreen` | done | `/orders/me/history/page` ✓ (since #3) | status filter, search, infinite scroll; unpaged route now unused by mobile (M30) |
 | `orders/[orderId]` order detail | `order-detail` → `OrderDetailScreen` | done | `/orders/me/:id`, `/cancel`, `/confirm-received`, `POST/PATCH /orders/me/:id/review` ✓ (since #15) | write and edit a review in the app; receipt is web-loop only (M35) |
 | `track` | `(tabs)/track` → `TrackScreen` | partial | `/tracking/:id` ✓; `/shipments/:id` not called | |
-| `notifications` | `notifications` → `NotificationsScreen` | partial | list, read, read-all ✓; delete, unread, bulk read not called | |
+| `notifications` | `notifications` → `NotificationsScreen` | done | list (paged, unread_only), read, unread, read-all, delete, delete read ✓ (since #25) | All / Unread tabs, long-press menu, Clear read; links open the matching screen, merchant ones by kind |
 | `profile` account | `(tabs)/profile` → `ProfileScreen`, `addresses` → `AddressesScreen` | partial | `/users/me`, `/users/me/addresses` CRUD ✓ (#12); `/users/me/avatar`, `/users/me/delete-code`, `/email/otp/*` not called | address book done; no avatar, account deletion (M23) |
 | order chat | `order-chat` → `OrderChatScreen` | done | `/orders/:id/messages`, `/support/messages` | |
 | `auth`, `forgot-password`, `reset-password` | `auth` → `AuthScreen` + `PasswordResetSheet`, `PhoneVerifySheet`, `AddEmailSheet` | done | Better Auth | |
@@ -56,7 +56,7 @@ PARITY 11/#22 · STRENGTHEN 5/#20 · SECURITY 4/#23 · AUDIT 4/#24
 | merchant `shop` page | — | missing | `/merchants/me/shoppage` (+ banner, logo, publish, discard) exist | |
 | merchant `settings` | — | missing | `/merchants/me` exists | |
 
-Parity score: 12 / 26 done (6 partial, 8 missing; 3 rows n/a; 1 row blocked) since #22. #8: cart moved done → partial (memory-only cart, phone totals).
+Parity score: 13 / 26 done (5 partial, 8 missing; 3 rows n/a; 1 row blocked) since #25. #8: cart moved done → partial (memory-only cart, phone totals).
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
@@ -65,7 +65,6 @@ Parity score: 12 / 26 done (6 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | M48 | STRENGTHEN | M | 3 | 2 | forms | — | **New (#24).** The backend's `FieldErrors` answers `{detail, errors: {field: message}}` (`core/errors.py:86`), but `ApiError` keeps only `detail`, so the address, listing, review and checkout forms cannot mark the field at fault; FastAPI 422 `detail[]` messages also lose their field (`loc`). Keep `fieldErrors` on `ApiError` (pure parser with tests), show each message under its field in `AddressesScreen` and `ListingForm` — test: parser tests for both shapes; manual: save an address with a 300-char street via the API → message under Street. |
 | M46 | STRENGTHEN | S | 3 | 1 | track | — | **New (#24).** `TrackScreen` loads the tracking ETA once and never refreshes it while the buyer watches. Use `usePolling` (30 s, only in view and in the foreground); batch with M47 — test: manual: ETA changes without leaving the screen. |
 | M47 | STRENGTHEN | S | 2 | 1 | chat | — | **New (#24).** `OrderChatScreen` keeps polling every 10 s after the server says the thread is `closed` (7 days after delivery). Pass `enabled = !closed` to `usePolling`; batch with M46 — test: closed chat → no more requests. |
-| M50 | PARITY | S | 2 | 1 | notifications | parity | **New (#24).** Every merchant notification links to `/merchantDashboard`, so the app opens Merchant orders even for `review_received`. Route by `kind` too (`review_received` → `merchant-reviews`, `new_order` / `order_cancelled` → `merchant-orders`) in `notificationLinks.appRoute`; batch with M24 (unread / delete) — test: pure mapping tests. |
 | M49 | STRENGTHEN | M | 2 | 2 | refactor | — | **New (#24).** Largest screens: `AuthScreen` 457 lines, `MerchantScreen` 449, `CheckoutScreen` 431. Move their pure logic and sub-views out (e.g. `CheckoutScreen` address / date / payment sections into components, `MerchantScreen` hero + products into components); batch with M37 (`api.ts` 637 lines) — test: tsc, lint, npm test, android export pass, no behavior change. |
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 6 rows that do nothing on tap (Address fixed #12; `onPress={() => {}}`: Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target or remove it — test: every Profile row opens something or is gone. |
 | M15 | PARITY | M | 3 | 3 | merchant | parity | Merchant dashboard (performance + demand + stock alert counts) — test: totals match the web dashboard. |
@@ -79,7 +78,6 @@ Parity score: 12 / 26 done (6 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | M23 | PARITY | M | 2 | 2 | account | parity | Account deletion (`/users/me/delete-code`) + avatar upload on profile — test: deletion signs out and clears local data. |
 | M25 | PARITY | M | 2 | 2 | checkout | parity | Cancel a pending payment (`/payments/checkout/:id/cancel`) from confirmation — test: cancel acts as on the web. |
 | M27 | STRENGTHEN | M | 2 | 2 | perf | — | `ScrollView` + `map` → `FlatList` with memo rows where lists are long (`MerchantScreen` produce, `OrderScreen` hits) — test: lint + manual scroll of 50 rows. |
-| M24 | PARITY | S | 2 | 1 | notifications | parity | Notifications: mark unread, delete, bulk read (batch with other notification S items) — test: delete removes the row on the server. |
 | M30 | STRENGTHEN | S | 2 | 1 | orders | — | Retire unpaged `GET /orders/me/history` (backend `orders.py:325`): no mobile screen calls it since #3; mobile wrapper `api.orders.history` and web fetcher `util/api/orders.ts:84` still exist — check web callers first. Do with the web loop — test: backend pytest passes, grep finds no caller. |
 | M21 | PARITY | M | 2 | 3 | merchant | parity | Merchant shop page editor (details, banner, logo, publish / discard) — test: publish → buyer farm detail shows the new banner. |
 | M28 | PARITY | M | 2 | 3 | onboarding | parity | Native merchant application status (`/merchant-applications/me`) instead of only opening the web — test: pending applicant sees "under review". |
@@ -87,6 +85,8 @@ Parity score: 12 / 26 done (6 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #25 — PARITY — notifications — CF-0121 — M
+What: notifications batch M24 + M50 (web notification centre). `NotificationsScreen`: All / "Unread (n)" tabs (`unread_only`), paging of 30 with infinite scroll (`total`), long press (and the a11y "More actions" action) → Mark as read / Mark as unread / Delete; header "Mark all read" (off when nothing is unread) and "Clear read" (deletes every read one, after a confirm). Every change shows at once (pure `applyNoteAction` / `unreadAfter`; in the Unread view a row that becomes read leaves the list, as the server would) and the list is read again if the server refuses. New `api.notifications.page / markUnread / remove / removeRead` (the unused `list` wrapper removed). M50: `appRoute(link, kind)` sends `review_received` to `merchant-reviews` and other `/merchantDashboard` links to `merchant-orders` (all merchant notifications use that one link). Pure `src/lib/notificationList.ts`: `notesQuery`, `applyNoteAction`, `unreadAfter`. Why: notification parity with the web; merchants landed on orders for a new review. Tests: `notificationList.test.ts` 4 (incl. the kind routing). Manual check: Unread tab → open one → it leaves the tab, count drops; long press a read one → Mark as unread → dot back; Clear read → only unread stay; tap a "New review" notification as a merchant → Reviews screen. Checks: npm test 108/108, lint 0/0, tsc pass. Not run on a device.
 ### #24 — AUDIT — all — (no CF ID) — M
 What: re-survey after #17–#23. Web loop: `improve/loop` is at web #53 (CF-0070…0076), still not merged into `main` (`main` unchanged at a188d76). New loop-only features for mobile: hide orders from history (CF-0070), holiday badge on cards (CF-0072) → M35; review moderation (CF-0075) is filtered on the server, nothing to do on mobile; log hygiene (CF-0071/0074) is server-side. New from reading the code (not from §2): M48 backend field errors are dropped by `ApiError` (forms cannot mark the field); M46 tracking ETA never refreshes; M47 a closed chat still polls; M50 merchant notifications all open Merchant orders, also for new reviews (route by `kind`); M49 three screens > 430 lines. Backlog: 24 items. Parity 12 / 26 (46 %). Checks: npm test 104/104, lint 0/0, tsc pass, expo-doctor 20/20, android export OK (5 MB), npm audit 3 moderate (unchanged, Needs human). Next: #25 and #26 PARITY (M50 + M24 notifications batch, M23 account deletion, M15 dashboard), #27 non-parity (M48 or M46 + M47).
 ### #23 — SECURITY — auth — CF-0120 — M
@@ -137,7 +137,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #24)
-- Mobile tests: 104 in 24 files (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
+- Mobile tests: 108 in 25 files since #25 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #24 `expo export --platform android` OK (5 MB) (next: #28).

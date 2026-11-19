@@ -3,10 +3,12 @@
 import { parseOrderId } from './orderDetail.ts';
 
 export type AppRoute =
-  | { pathname: '/(tabs)/track' | '/(tabs)/history' | '/merchant-orders' }
+  | { pathname: '/(tabs)/track' | '/(tabs)/history' | '/merchant-orders' | '/merchant-reviews' }
   | { pathname: '/order-detail'; params: { orderId: string } };
 
-export function appRoute(link: string | null): AppRoute | null {
+// CF-0121 (M50): every merchant notification links to /merchantDashboard; the kind
+// says which merchant screen matches (backend services/notifications.py kinds).
+export function appRoute(link: string | null, kind?: string): AppRoute | null {
   if (!link) return null;
   const path = link.split(/[?#]/)[0];
   if (path.startsWith('/track')) return { pathname: '/(tabs)/track' };
@@ -17,6 +19,8 @@ export function appRoute(link: string | null): AppRoute | null {
     return id === null ? { pathname: '/(tabs)/history' } : { pathname: '/order-detail', params: { orderId: String(id) } };
   }
   if (path === '/orders' || path.startsWith('/orders/')) return { pathname: '/(tabs)/history' };
-  if (path.startsWith('/merchantDashboard')) return { pathname: '/merchant-orders' };
+  if (path.startsWith('/merchantDashboard')) {
+    return kind === 'review_received' ? { pathname: '/merchant-reviews' } : { pathname: '/merchant-orders' };
+  }
   return null;
 }
