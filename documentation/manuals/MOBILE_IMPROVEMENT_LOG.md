@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 19    target: 20
+branch: improve/mobile-loop    push: no    iteration: 20    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0116) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0117) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 9/#19 · STRENGTHEN 4/#13 · SECURITY 3/#17 · AUDIT 3/#16
+PARITY 9/#19 · STRENGTHEN 5/#20 · SECURITY 3/#17 · AUDIT 3/#16
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #45 at mobile #16) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -61,7 +61,6 @@ Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
-| M42 | STRENGTHEN | M | 3 | 2 | perf | — | **New (#16, web CF-0047).** Polling does not stop when the screen is out of view or the app is in the background: `OrderChatScreen` every 10 s (a stack screen stays mounted under the next one), the bell count in `OrderScreen` every 60 s (a tab stays mounted) and it downloads the whole notification list for the count. Pause on blur and on `AppState` background (one pure "should poll" helper with a test), read the count only — test: helper tests; manual: background the app 2 min → no requests in the API log. |
 | M34 | STRENGTHEN | S | 2 | 1 | types | — | **New (#8).** `ApiMerchant` types `address`, `barangay` as present and `contact_number` as `string`; after the web loop merge the public farm routes leave the first two out (CF-0048) and `contact_number` is nullable. No screen reads them, so only the types are wrong. Make them match `PublicMerchantResponse` — test: tsc passes; farm screen hides the contact row when null. |
 | M29 | SECURITY | M | 4 | 2 | auth | — | `ProtectedScreen` accepts `requiredRole` but never checks it (its doc comment says it does). Nothing passes it today, so merchant screens rely on the server 404 → "not a merchant" state. Implement the role check from the server profile, use it on merchant routes, test the pure decision — test: a buyer who opens `/listings` sees the not-allowed state with no merchant API call. |
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 6 rows that do nothing on tap (Address fixed #12; `onPress={() => {}}`: Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target or remove it — test: every Profile row opens something or is gone. |
@@ -87,6 +86,8 @@ Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #20 — STRENGTHEN — perf — CF-0117 — M
+What: M42 (web CF-0047 idea). New hook `src/lib/usePolling.ts`: runs a tick at once, then every N ms, only while the screen is in view (`useIsFocused` from expo-router) and the app is in the foreground (`AppState`); stops otherwise and fetches at once when it comes back. Decision in pure `src/lib/polling.ts` `shouldPoll` / `resumed`. Used by `OrderChatScreen` (10 s; a stack screen stays mounted under the next one, so it polled under other screens and in the background) and the bell in `OrderScreen` (60 s; a tab stays mounted). The bell now calls new `api.notifications.unreadCount` (`unread_only=true&limit=1`, the backend returns `unread` with any page) instead of downloading the whole notification page each minute. `ConfirmationScreen` polling is bounded (`MAX_POLLS`) and stays as is. Why: battery, data and API load. Tests: `polling.test.ts` 3. Manual check: open an order chat → API log shows a request every 10 s → open another screen on top or press Home → requests stop → come back → one request at once, then every 10 s; bell count still updates. Checks: npm test 92/92, lint 0/0, tsc pass, expo-doctor 20/20, android export OK (5 MB; 4th iteration). Not run on a device. Note: the log's first target (20 iterations) is reached; the loop continues as asked.
 ### #19 — PARITY — merchant — CF-0116 — M
 What: listings batch M45 + M39 (web produce page). `ListingForm` gets "Minimum order (sale units)" and "Bulk prices" (up to 5 rows: from quantity + ₱ per unit, add / remove, 44 pt targets, a11y labels), prefilled on edit from `min_order_qty` / `price_tiers`; and, in edit mode, "Delete listing" → confirm → `DELETE /produce/:id` (new `api.produce.remove`), the row leaves the list and stock alerts are read again. `checkListing` now returns `min_order_qty` and `price_tiers` (blank rows left out, sorted) and runs a word-for-word port of backend `produce_pricing.pricing_error` (`pricingError`: different quantities, first tier above the minimum order, each tier cheaper than the one before); tier bounds = backend `PriceTier` (min_qty ≥ 2, price 1…1 000 000) and `MAX_PRICE_TIERS` 5 (a test reads `schemas/produce.py`). The payload type gets the two fields. Why: merchant parity; merchants could not remove a listing or set bulk prices on the phone. Tests: `listingForm.test.ts` +2 (pricing rules, order independence) and the payload test now includes the new fields. Manual check: edit a listing → min order 2, bulk price "from 10, ₱100" → Save → buyer farm screen shows the listing; bulk price ₱130 above the ₱120 price → "must be cheaper"; Delete listing → confirm → gone after pull to refresh. Checks: npm test 89/89, lint 0/0, tsc pass. Not run on a device.
 ### #18 — PARITY — checkout — CF-0115 — M
@@ -127,10 +128,10 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #16)
-- Mobile tests: 89 in 21 files since #19 (`npm test` runs every `src/lib/**/*.test.ts`; 7 of them also read backend / web files to keep values in step).
+- Mobile tests: 92 in 22 files since #20 (`npm test` runs every `src/lib/**/*.test.ts`; 7 of them also read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
-- `expo-doctor`: 20/20. Last bundle check: #16 `expo export --platform android` OK (5 MB) (next: #20).
+- `expo-doctor`: 20/20. Last bundle check: #20 `expo export --platform android` OK (5 MB), expo-doctor 20/20 (next: #24).
 - Largest files: `src/lib/api.ts` 607 (M37), `AuthScreen` 457, `MerchantScreen` 449, `CheckoutScreen` 396, `ConfirmationScreen` 390.
 - Parity score: 11 / 26 done, 6 partial, 9 missing (42 %; was 31 % at #8). Buyer path: find ✓ (search partial, M09), cart ✓, checkout partial (no delivery date M44, no pin picker), pay ✓, track ✓, order detail ✓, review ✓. Merchant side: orders ✓, listings partial, everything else missing.
 - Web loop: web #45, not merged. Breaking-change check from #8 still holds; the new loop commits (CF-0064…0069) add fields and routes only.

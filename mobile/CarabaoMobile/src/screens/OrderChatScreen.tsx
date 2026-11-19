@@ -2,7 +2,7 @@
 // Order chat on mobile (CH1c): same thread as the web. Polls every 10 seconds
 // while this screen is open. With `support=1` it shows the user's support
 // chat with the admins instead (CH2).
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -11,6 +11,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { api, type ApiChatMessage } from '../lib/api';
 import { chatTitle, parseOrderId } from '../lib/orderDetail';
+import { usePolling } from '../lib/usePolling';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { isPhoneVerificationRequired, PhoneVerifySheet } from '../components/PhoneVerifySheet';
@@ -61,11 +62,8 @@ function OrderChatContent() {
     }
   }, [token, id, isSupport]);
 
-  useEffect(() => {
-    void poll();
-    const timer = setInterval(() => void poll(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [poll]);
+  // CF-0117: only while this chat is in view and the app is in the foreground.
+  usePolling(poll, POLL_MS, isSupport || id !== null);
 
   const send = async () => {
     const body = draft.trim();

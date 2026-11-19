@@ -6,6 +6,7 @@ import { historyQueryString, type HistoryQuery } from './orderHistory';
 import type { ServerCartLine } from './cartSync';
 import type { AddressPayload } from './addresses';
 import type { MerchantReviews } from './reviews';
+import { UNREAD_COUNT_QUERY } from './polling';
 
 export { API_BASE, WEB_BASE } from './config';
 
@@ -572,6 +573,10 @@ export const api = {
   notifications: {
     list: (token: string | null) =>
       request<{ items: ApiNotification[]; unread: number }>('/users/me/notifications', token),
+    // CF-0117: the bell needs only the count; one unread row instead of the whole page.
+    unreadCount: (token: string | null) =>
+      request<{ items: ApiNotification[]; unread: number }>(`/users/me/notifications?${UNREAD_COUNT_QUERY}`, token)
+        .then((r) => r.unread),
     markRead: (token: string | null, id: number) =>
       request<null>(`/users/me/notifications/${id}/read`, token, { method: 'POST' }),
     markAllRead: (token: string | null) =>

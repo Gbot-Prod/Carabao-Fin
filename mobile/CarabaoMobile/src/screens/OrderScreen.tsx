@@ -1,5 +1,5 @@
 // src/screens/OrderScreen.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, StyleSheet,
   TouchableOpacity, ScrollView, SafeAreaView,
@@ -14,6 +14,7 @@ import { type Farm } from '../lib/farms';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { SaveHeart } from '../components/SaveHeart';
+import { usePolling } from '../lib/usePolling';
 
 function merchantToFarm(m: ApiMerchant): Farm {
   const firstCategory = m.produces.find((p) => p.category)?.category;
@@ -42,17 +43,14 @@ function OrderScreenContent() {
   const [attempt, setAttempt] = useState(0);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  // U5: unread count for the bell, refreshed every minute.
+  // U5: unread count for the bell, every minute while this tab is in view and the app
+  // is in the foreground (CF-0117); only the count is fetched.
   const [unread, setUnread] = useState(0);
-  useEffect(() => {
-    if (!token) return;
-    let active = true;
-    const load = () =>
-      api.notifications.list(token).then((r) => { if (active) setUnread(r.unread); }).catch(() => {});
-    void load();
-    const timer = setInterval(load, 60_000);
-    return () => { active = false; clearInterval(timer); };
-  }, [token]);
+  const loadUnread = useCallback(
+    () => api.notifications.unreadCount(token).then(setUnread).catch(() => {}),
+    [token],
+  );
+  usePolling(loadUnread, 60_000, !!token);
 
   // U4: followed farms are listed first.
   const [followed, setFollowed] = useState<Set<string>>(new Set());
