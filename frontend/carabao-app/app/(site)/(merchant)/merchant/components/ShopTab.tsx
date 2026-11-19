@@ -7,6 +7,7 @@ import {
   createMyShopPage,
   discardMyShopPageDraft,
   publishMyShopPage,
+  unpublishMyShopPage,
   updateMyShopPage,
   uploadBannerImage,
   uploadShopLogo,
@@ -92,21 +93,30 @@ export default function ShopTab({ shopPage, merchant, onShopPageChange }: Props)
   );
 }
 
+type Action = "publish" | "unpublish" | "discard";
+
+const FAIL_MESSAGE: Record<Action, string> = {
+  publish: "Could not publish. Try again.",
+  unpublish: "Could not unpublish. Try again.",
+  discard: "Could not discard the draft. Try again.",
+};
+
 function PublishBar({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (page: MyShopPage) => void }) {
-  const [busy, setBusy] = useState<"publish" | "discard" | null>(null);
+  const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const canPublish = shopPage.draft_title.trim().length > 0 && shopPage.has_unpublished_changes;
   const live = shopPage.is_published;
 
-  const run = async (kind: "publish" | "discard", send: () => Promise<MyShopPage>) => {
+  const run = async (kind: Action, send: () => Promise<MyShopPage>) => {
     if (kind === "discard" && !window.confirm("Discard your draft changes? The draft goes back to the live page.")) return;
+    if (kind === "unpublish" && !window.confirm("Unpublish your shop? Buyers cannot find your farm or order from it until you publish again. Open orders continue.")) return;
     setBusy(kind);
     setError(null);
     try {
       onChange(await send());
     } catch (err) {
-      setError(getApiErrorMessage(err, kind === "publish" ? "Could not publish. Try again." : "Could not discard the draft. Try again."));
+      setError(getApiErrorMessage(err, FAIL_MESSAGE[kind]));
     } finally {
       setBusy(null);
     }
@@ -141,6 +151,11 @@ function PublishBar({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (p
         {error && <p className={`${styles.errorText} ${t.publishMsg}`}>{error}</p>}
       </div>
       <div className={t.publishActions}>
+        {live && (
+          <button type="button" className={styles.secondaryBtn} disabled={busy !== null} onClick={() => void run("unpublish", unpublishMyShopPage)}>
+            {busy === "unpublish" ? "Unpublishing…" : "Unpublish"}
+          </button>
+        )}
         {live && shopPage.has_unpublished_changes && (
           <button type="button" className={styles.secondaryBtn} disabled={busy !== null} onClick={() => void run("discard", discardMyShopPageDraft)}>
             {busy === "discard" ? "Discarding…" : "Discard changes"}

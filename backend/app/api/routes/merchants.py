@@ -641,7 +641,8 @@ def delete_produce(
 #
 # The merchant edits a draft (draft_* columns). Buyers see only the live
 # columns, and only after the first publish. POST .../publish copies the
-# draft to live; POST .../discard copies live back to the draft.
+# draft to live; POST .../unpublish hides the shop from buyers again;
+# POST .../discard copies live back to the draft.
 # ---------------------------------------------------------------------------
 
 
@@ -777,6 +778,22 @@ def publish_my_shoppage(
     for field in DRAFT_FIELDS:
         setattr(shop_page, field, getattr(shop_page, f"draft_{field}"))
     shop_page.published_at = datetime.now(UTC)
+    return _save(db, shop_page)
+
+
+@router.post("/merchants/me/shoppage/unpublish", response_model=ShopPageOwnerResponse)
+def unpublish_my_shoppage(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Hide the shop from buyers. The draft stays. Open orders continue.
+
+    Publish makes the shop public again.
+    """
+    _, shop_page = _my_shop_page(db, current_user, editable=True)
+    if not shop_page.is_published:
+        raise HTTPException(status_code=400, detail="The shop is not live.")
+    shop_page.published_at = None
     return _save(db, shop_page)
 
 

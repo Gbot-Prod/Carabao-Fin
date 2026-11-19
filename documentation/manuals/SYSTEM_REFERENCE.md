@@ -454,7 +454,7 @@ other moves: 409
 - **Body limits:** 12 MB by default; 42 MB for `/merchant-onboarding/me` (2 documents). Oversize → 413, with CORS headers.
 - **Shop page draft and publish** (`shop_pages`):
   - The merchant edits a draft (`draft_title`, `draft_description`, `draft_logo_url`, `draft_banner_image_url`). `PATCH /merchants/me/shoppage` and the logo and banner uploads change only the draft. Each upload gets a new R2 key, so the live image does not change.
-  - `POST /merchants/me/shoppage/publish` copies the draft to the live columns and sets `published_at`. A blank draft title → 422. `POST /merchants/me/shoppage/discard` copies the live columns back to the draft (400 if never published).
+  - `POST /merchants/me/shoppage/publish` copies the draft to the live columns and sets `published_at`. A blank draft title → 422. `POST /merchants/me/shoppage/discard` copies the live columns back to the draft (400 if never published). `POST /merchants/me/shoppage/unpublish` sets `published_at` to NULL, so the farm is hidden again (400 if not live). The draft stays. Open orders continue, because order routes do not use `merchant_is_public()`. Publish makes the farm public again.
   - A merchant is public only after the first publish: `merchant_is_public()` (`services/account_suspension.py`) requires a shop page with `published_at` set. Until then the farm is not in `/merchants`, search, follows or saved produce, and `/merchants/{id}` gives 404.
   - Owner reads: `GET /merchants/me` and `GET /merchants/me/shoppage` (live plus draft, `is_published`, `has_unpublished_changes`). The merchant dashboard uses these, not the public routes.
   - The slug is not part of the draft. A slug change applies at once.

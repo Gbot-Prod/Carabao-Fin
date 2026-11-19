@@ -135,3 +135,35 @@ def test_uploaded_image_goes_to_draft(db, merchant, monkeypatch):
     assert res.status_code == 200, res.text
     assert res.json()["draft_logo_url"] == "https://cdn.test/logo-2.png"
     assert res.json()["logo_url"] is None
+
+
+def test_unpublish_hides_the_shop_until_publish(db, merchant):
+    owner = _client(db, merchant.user_id)
+    buyer = _client(db, None)
+    owner.patch("/merchants/me/shoppage", json={"description": "Draft text"})
+
+    res = owner.post("/merchants/me/shoppage/unpublish")
+    assert res.status_code == 200, res.text
+    page = res.json()
+    assert page["is_published"] is False
+    assert page["published_at"] is None
+    # The draft stays.
+    assert page["draft_description"] == "Draft text"
+
+    # Buyers do not see the farm.
+    assert merchant.id not in _public_ids(buyer)
+    assert buyer.get(f"/merchants/{merchant.id}/shoppage").status_code == 404
+    # The owner still sees it.
+    assert owner.get("/merchants/me").json()["id"] == merchant.id
+
+    # A second unpublish is refused.
+    assert owner.post("/merchants/me/shoppage/unpublish").status_code == 400
+
+    res = owner.post("/merchants/me/shoppage/publish")
+    assert res.status_code == 200, res.text
+    assert res.json()["is_published"] is True
+    assert merchant.id in _public_ids(buyer)
+    assert (
+        buyer.get(f"/merchants/{merchant.id}/shoppage").json()["description"]
+        == "Draft text"
+    )

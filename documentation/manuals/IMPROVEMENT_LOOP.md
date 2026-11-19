@@ -81,7 +81,9 @@ stock alerts, refunds, receipts, notifications, chat, tracking, demand insight).
   dashboard KPI trend; CSV export on tables; user impersonation **not** allowed (security).
 - **Account:** order history filters and search; address book defaults; notification
   preferences per channel; data export (privacy).
-- **Mobile parity:** when a web feature lands, log a backlog item for `mobile/CarabaoMobile`.
+- **Mobile parity:** when a web feature lands, log a backlog item for `mobile/CarabaoMobile`
+  with area `mobile` and epic `parity`. The mobile loop (`MOBILE_IMPROVEMENT_LOOP.md`) takes
+  these items into its own log.
 
 ### 2B. Strengthening existing functions
 

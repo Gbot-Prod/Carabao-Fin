@@ -274,6 +274,12 @@ export const publishMyShopPage = async (): Promise<MyShopPage> => {
   return response.data;
 };
 
+/** Hide the shop from buyers. The draft stays. Publish shows it again. */
+export const unpublishMyShopPage = async (): Promise<MyShopPage> => {
+  const response = await apiClient.post<MyShopPage>('/merchants/me/shoppage/unpublish');
+  return response.data;
+};
+
 export const discardMyShopPageDraft = async (): Promise<MyShopPage> => {
   const response = await apiClient.post<MyShopPage>('/merchants/me/shoppage/discard');
   return response.data;
