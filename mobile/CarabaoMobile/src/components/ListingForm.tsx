@@ -2,6 +2,8 @@
 // Create/edit form for one produce listing, shown in a modal from My listings.
 // Field rules mirror backend ProduceUpdate (app/schemas/produce.py):
 // price and stock are whole numbers, unit is kg|lbs, category is Vegetables|Fruits.
+// CF-0107: harvest and best-before dates are required by the backend on create and
+// on every edit (services/produce_freshness.py); checks are in src/lib/listingForm.ts.
 import React, { useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,
@@ -9,6 +11,7 @@ import {
 } from 'react-native';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { Button } from './UI';
+import { addDays, checkListing, phToday } from '../lib/listingForm';
 import type {
   ApiProduce, ProduceCategory, ProduceCreatePayload, ProduceUnit,
 } from '../lib/api';
@@ -26,17 +29,14 @@ type Props = {
   onSave: (payload: ProduceCreatePayload) => void;
 };
 
-function parseWhole(value: string): number | null {
-  if (!/^\d+$/.test(value.trim())) return null;
-  return Number(value.trim());
-}
-
 export function ListingForm({ visible, produce, saving, error, onCancel, onSave }: Props) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('');
   const [unit, setUnit] = useState<ProduceUnit>('kg');
   const [category, setCategory] = useState<ProduceCategory | null>(null);
+  const [harvestDate, setHarvestDate] = useState('');
+  const [bestBefore, setBestBefore] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
   // CF-0101: reset the fields when the sheet opens or the listing changes. Done during
@@ -52,27 +52,33 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave 
       setCategory(
         produce?.category === 'Vegetables' || produce?.category === 'Fruits' ? produce.category : null,
       );
+      // A listing from before the dates existed has none: start from today / +7 days.
+      const today = phToday();
+      setHarvestDate(produce?.harvest_date ?? today);
+      setBestBefore(produce?.best_before ?? addDays(today, 7));
       setLocalError(null);
     }
   }
 
   const handleSave = () => {
-    const parsedPrice = parseWhole(price);
-    const parsedStock = parseWhole(stock);
-    if (!name.trim()) return setLocalError('Name is required.');
-    if (parsedPrice === null || parsedPrice <= 0) {
-      return setLocalError('Price must be a whole number of pesos above 0.');
-    }
-    if (parsedStock === null) return setLocalError('Stock must be a whole number (0 or more).');
+    const result = checkListing({ name, price, stock, harvestDate, bestBefore }, phToday());
+    if ('error' in result) return setLocalError(result.error);
     setLocalError(null);
-    onSave({
-      name: name.trim(),
-      price: parsedPrice,
-      stock_quantity: parsedStock,
-      unit,
-      category,
-    });
+    onSave({ ...result.ok, unit, category });
   };
+
+  const today = phToday();
+  const dateChip = (label: string, value: string, set: (v: string) => void, current: string) => (
+    <TouchableOpacity
+      key={label}
+      style={[styles.pill, current === value && styles.pillActive]}
+      onPress={() => set(value)}
+      accessibilityRole="button"
+      accessibilityState={{ selected: current === value }}
+    >
+      <Text style={[styles.pillText, current === value && styles.pillTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
 
   const shownError = localError ?? error;
 
@@ -105,6 +111,30 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave 
                 />
               </View>
             </View>
+
+            <Text style={styles.label}>Harvest date (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.input} value={harvestDate} onChangeText={setHarvestDate}
+              placeholder={today} placeholderTextColor={Colors.textLight}
+              autoCapitalize="none" autoCorrect={false} maxLength={10}
+              keyboardType="numbers-and-punctuation" accessibilityLabel="Harvest date, year-month-day"
+            />
+            <View style={[styles.pills, styles.chipRow]}>
+              {dateChip('Today', today, setHarvestDate, harvestDate)}
+              {dateChip('Yesterday', addDays(today, -1), setHarvestDate, harvestDate)}
+            </View>
+
+            <Text style={styles.label}>Best before (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.input} value={bestBefore} onChangeText={setBestBefore}
+              placeholder={addDays(today, 7)} placeholderTextColor={Colors.textLight}
+              autoCapitalize="none" autoCorrect={false} maxLength={10}
+              keyboardType="numbers-and-punctuation" accessibilityLabel="Best-before date, year-month-day"
+            />
+            <View style={[styles.pills, styles.chipRow]}>
+              {[3, 7, 14].map((n) => dateChip(`+${n} days`, addDays(today, n), setBestBefore, bestBefore))}
+            </View>
+            <Text style={styles.hint}>Buyers stop seeing the listing after its best-before date.</Text>
 
             <Text style={styles.label}>Unit</Text>
             <View style={styles.pills}>
@@ -171,6 +201,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: Colors.border,
   },
   pillActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipRow: { marginTop: Spacing.sm, flexWrap: 'wrap' },
+  hint: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: Spacing.xs },
   pillText: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '500' },
   pillTextActive: { color: Colors.white, fontWeight: '700' },
   error: { color: Colors.error, fontSize: FontSize.sm, marginTop: Spacing.md },

@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 8    target: 20
+branch: improve/mobile-loop    push: no    iteration: 9    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0106) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0107) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 3/#6 · STRENGTHEN 2/#7 · SECURITY 1/#4 · AUDIT 2/#8
+PARITY 3/#6 · STRENGTHEN 3/#9 · SECURITY 1/#4 · AUDIT 2/#8
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #37) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -45,7 +45,7 @@ PARITY 3/#6 · STRENGTHEN 2/#7 · SECURITY 1/#4 · AUDIT 2/#8
 | merchant `auth` | `AuthScreen` (shared) | done | Better Auth | |
 | merchant `onboarding` | `onboarding` → `OnboardingScreen` | partial | opens web `/merchantOnboarding` in browser; `/merchant-onboarding/me`, `/merchant-applications/me` not called | no native onboarding / application status |
 | merchant dashboard | — | missing | `/merchants/me/performance`, `/merchants/me/demand` exist | |
-| merchant `produce` | `listings` → `ListingsScreen` + `ListingForm` | partial | `/merchants/me/produce`, `/produce/:id` ✓; `POST /produce/` fails (422, M32); `/produce/:id/image` not called | create broken (no harvest / best-before), no photo upload |
+| merchant `produce` | `listings` → `ListingsScreen` + `ListingForm` | partial | `/merchants/me/produce`, `POST /produce/`, `PATCH /produce/:id` ✓ (create fixed #9); `/produce/:id/image` not called | no photo upload, no min order qty / price tiers |
 | merchant `inventory` / stock alerts | `ListingsScreen` | partial | `/merchants/me/stock-alerts` ✓ | alerts shown inline, no inventory view |
 | merchant `orders` | `merchant-orders` → `MerchantOrdersScreen` | done | `/merchants/me/orders`, `/merchants/me/orders/:id/status` | |
 | merchant `shipments`, `routing/[shipmentId]` | — | missing | `/merchants/me/shipments`, `/shipments/:id` exist | |
@@ -61,7 +61,6 @@ Parity score: 8 / 26 done (9 partial, 9 missing; 3 rows n/a; 1 row blocked). #8:
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
-| M32 | STRENGTHEN | M | 5 | 1 | merchant | — | **New (#8), broken now.** "New listing" on mobile always fails: backend `ProduceCreate` requires `harvest_date` and `best_before` (`schemas/produce.py:49-50`), `ListingForm` sends neither → 422. Add both date fields (+ `min_order_qty`) to `ListingForm` with the same bounds as the backend (best_before ≥ harvest_date, not in the past), show backend field errors — test: pure `listingForm.ts` validation tests; manual: create a listing on a device. |
 | M38 | SECURITY | S | 4 | 1 | auth | — | **New (#8).** Sign-out (and idle sign-out, and the 403 path in `loadUser`) does not clear `CartContext` (memory only): on a shared phone the next account sees and can check out the previous account's cart. Clear the cart (and future per-user state) on every sign-out path; one pure "on sign-out" list with a test — test: sign out with items → sign in as another user → cart empty. |
 | M12 | SECURITY | S | 3 | 1 | payments | — | Allow-list hosts before `WebBrowser.openBrowserAsync(checkout.checkout_url)` (PayMongo checkout host only; `CheckoutScreen:84`, `ConfirmationScreen:40,142`) — test: pure host check refuses off-list URLs. |
 | M34 | STRENGTHEN | S | 2 | 1 | types | — | **New (#8).** `ApiMerchant` types `address`, `barangay` as present and `contact_number` as `string`; after the web loop merge the public farm routes leave the first two out (CF-0048) and `contact_number` is nullable. No screen reads them, so only the types are wrong. Make them match `PublicMerchantResponse` — test: tsc passes; farm screen hides the contact row when null. |
@@ -76,6 +75,7 @@ Parity score: 8 / 26 done (9 partial, 9 missing; 3 rows n/a; 1 row blocked). #8:
 | M08 | PARITY | M | 3 | 3 | orders | parity | Leave / edit a review for a delivered order (`/orders/me/:id/review`) from `OrderDetailScreen` (replace the "review on the website" line; edit while `editable_until`) (web B54) — test: delivered order → write review → detail shows it. |
 | M09 | PARITY | M | 3 | 3 | discovery | parity | Produce search filters/sort/paging matching web `produceSearch.ts` — test: sort by price ascending, page 2 loads. |
 | M15 | PARITY | M | 3 | 3 | merchant | parity | Merchant dashboard (performance + demand + stock alert counts) — test: totals match the web dashboard. |
+| M39 | PARITY | S | 2 | 1 | merchant | parity | **New (#9).** Listing form has no `min_order_qty` and no `price_tiers` (bulk prices, max 5) although the backend and web support both — test: set min order 5 → buyer cannot add 4. Batch with M17. |
 | M17 | PARITY | M | 3 | 3 | merchant | parity | Listing photo upload via `/produce/:id/image` (expo-image-picker — check Expo Go support first) — test: new listing shows the uploaded photo. |
 | M35 | PARITY | M | 3 | 3 | checkout | after-web-merge | **New (#8). Blocked until `improve/loop` is merged.** Web-loop features with backend routes only on that branch: voucher code at checkout + discount on order/receipt (CF-0058/0061, web B70), order receipt (`GET /orders/me/{id}/receipt`, CF-0049, web B63), recently viewed farms (CF-0052). — test: place-order sends `voucher_code`; receipt opens from order detail. |
 | M36 | STRENGTHEN | S | 2 | 1 | checkout | — | **New (#8, web B63 part).** Check that checkout shows the backend's 409 (stock / limits, CF-0045) and 429 messages, not a generic error; batch with M25 — test: place an order above stock → the server's message shows. |
@@ -93,6 +93,8 @@ Parity score: 8 / 26 done (9 partial, 9 missing; 3 rows n/a; 1 row blocked). #8:
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #9 — STRENGTHEN — merchant — CF-0107 — M
+What: fixed M32 (broken): creating a listing on mobile always failed with 422, because backend `ProduceCreate` requires `harvest_date` and `best_before` and the form sent neither. The edit route also runs `freshness_error` on the merged listing, so editing a listing without dates failed too. `ListingForm` now has both dates (YYYY-MM-DD text fields, no new dependency; chips Today / Yesterday and +3 / +7 / +14 days; hint that buyers stop seeing it after best-before). Edit prefills the stored dates; a listing without dates starts at today / +7 days. All checks moved to pure `src/lib/listingForm.ts`: `phToday` (UTC+8, = backend `ph_today`), `parseYmd` (real dates only), `addDays`, `freshnessError` (backend messages word for word), `checkListing` (name ≤ 100, price 1…1 000 000, stock 0…10 000 000 = backend bounds; a test reads `schemas/produce.py` to keep them in step). `ProduceCreatePayload` gets the two date fields. Why: broken first (§1.1). Tests: `listingForm.test.ts` 6. Manual check: My listings → + → fill name / price / stock, tap "Today" and "+7 days" → Create → listing shows "Harvested …"; type 2026-02-30 → "must be a real date"; harvest tomorrow → "cannot be in the future"; edit an old listing → dates prefilled → Save works. Checks: npm test 53/53, lint 0/0, tsc pass. Not run on a device. Follow-ups: M39 (min order qty, price tiers).
 ### #8 — AUDIT — all — (no CF ID) — M
 What: re-survey after 7 iterations. Web loop: `improve/loop` is at web #37 (CF-0047…0063), not merged into `main`; read its log — mobile/parity items B47 (already done), B54, B63, B70, B34 (rest) copied as M07/M08, M35, M36, M33. Checked the web loop's backend changes that can break mobile after the merge: CF-0048 public farm fields (types only → M34), CF-0062 slim farm list (default keeps the full list), CF-0063 unknown fields refused (every mobile request body checked: OK). New from reading the code (not from §2): **M32 creating a listing always fails** (`ProduceCreate` requires `harvest_date` / `best_before`, the form sends neither); **M38 sign-out does not clear the in-memory cart**; M33 cart is memory only with phone-computed totals and a guessed ₱40 fee; M34 stale `ApiMerchant` types; M36 checkout error messages; M37 `api.ts` 587 lines. Merged M14 + M26 into M13. Backlog: 30 items. Matrix: cart done → partial, listings note, a "web loop only" blocked row. Parity score 8 / 26. Checks: npm test 47/47, lint 0/0, tsc pass, expo-doctor 20/20, npm audit 3 moderate (unchanged). Next: #9 must be M32 (broken first), then M38.
 ### #7 — STRENGTHEN — tests — CF-0106 — M
@@ -111,7 +113,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #8)
-- Mobile tests: 47 in 12 files (`npm test` runs every `src/lib/**/*.test.ts`).
+- Mobile tests: 53 in 13 files since #9 (`npm test` runs every `src/lib/**/*.test.ts`).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #6 `expo export --platform android` OK (next: #10 or #12).

@@ -158,6 +158,9 @@ export type ProduceCreatePayload = {
   unit_quantity?: number;
   stock_quantity?: number;
   image_url?: string | null;
+  // YYYY-MM-DD. Required by the backend on create and checked on every edit (CF-0107).
+  harvest_date?: string | null;
+  best_before?: string | null;
 };
 
 export type ProduceUpdatePayload = Partial<{
