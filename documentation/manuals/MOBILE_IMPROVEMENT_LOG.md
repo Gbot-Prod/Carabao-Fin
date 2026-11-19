@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 30    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
+branch: improve/mobile-loop    push: no    iteration: 31    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0126) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0127) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 15/#29 · STRENGTHEN 6/#27 · SECURITY 5/#30 · AUDIT 4/#24
+PARITY 16/#31 · STRENGTHEN 6/#27 · SECURITY 5/#30 · AUDIT 4/#24
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #53 at mobile #24) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -49,14 +49,14 @@ PARITY 15/#29 · STRENGTHEN 6/#27 · SECURITY 5/#30 · AUDIT 4/#24
 | merchant `inventory` / stock alerts | `ListingsScreen` | partial | `/merchants/me/stock-alerts` ✓ | alerts shown inline, no inventory view |
 | merchant `orders` | `merchant-orders` → `MerchantOrdersScreen` | done | `/merchants/me/orders`, `/merchants/me/orders/:id/status` | |
 | merchant `shipments`, `routing/[shipmentId]` | — | missing | `/merchants/me/shipments`, `/shipments/:id` exist | |
-| merchant `chats` | — | missing | `/merchants/me/chats` exists | per-order chat works, no inbox |
+| merchant `chats` | `merchant-chats` → `MerchantChatsScreen` → `order-chat` | done | `/merchants/me/chats` ✓ (since #31) | unread first, preview, order ref + status, closed mark, unread badge; refreshed every 30 s in view |
 | merchant `reviews` + replies | `merchant-reviews` → `MerchantReviewsScreen` | partial | `/merchants/me/reviews` (rating, has_comment, limit, offset) ✓ (since #22) | summary, star breakdown, star / comment filters, paging; replying needs the web loop merge (M35) |
 | merchant `sales` | — | missing | `/merchants/me/sales`, `/merchants/me/transactions` exist | |
 | merchant `earnings` / cash-out | — | missing | `/merchants/me/payouts*`, `/merchants/me/payout-info*`, `/merchants/me/payout-institutions` exist | payout destination lock rules apply |
 | merchant `shop` page | — | missing | `/merchants/me/shoppage` (+ banner, logo, publish, discard) exist | |
 | merchant `settings` | — | missing | `/merchants/me` exists | |
 
-Parity score: 15 / 26 done (4 partial, 7 missing; 3 rows n/a; 1 row blocked) since #29. #8: cart moved done → partial (memory-only cart, phone totals).
+Parity score: 16 / 26 done (4 partial, 6 missing; 3 rows n/a; 1 row blocked) since #31. #8: cart moved done → partial (memory-only cart, phone totals).
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
@@ -72,7 +72,6 @@ Parity score: 15 / 26 done (4 partial, 7 missing; 3 rows n/a; 1 row blocked) sin
 | M16 | PARITY | L | 4 | 4 | merchant | merchant-shipments | Merchant shipments list + shipment route view (`/merchants/me/shipments`, `/shipments/:id`) — slice 1: list; slice 2: map / stop order. |
 | M19 | PARITY | L | 3 | 4 | merchant | merchant-earnings | Earnings and cash-out (payout info, available balance, request) honoring the payout destination lock — one slice per screen. |
 | M20 | PARITY | M | 2 | 2 | merchant | parity | Merchant sales history (`/merchants/me/sales`, `/transactions`) — test: list matches the web sales page. |
-| M22 | PARITY | M | 2 | 2 | merchant | parity | Merchant chats inbox (`/merchants/me/chats`) → opens the existing `OrderChatScreen` — test: inbox lists chats, unread first. |
 | M23 | PARITY | M | 2 | 2 | account | parity | Avatar on profile (`POST /users/me/avatar`): needs an image picker (expo-image-picker works in Expo Go; check first, log a note) — test: picked photo shows on Profile and on the web. Account deletion part done at #26. |
 | M27 | STRENGTHEN | M | 2 | 2 | perf | — | `ScrollView` + `map` → `FlatList` with memo rows where lists are long (`MerchantScreen` produce, `OrderScreen` hits) — test: lint + manual scroll of 50 rows. |
 | M30 | STRENGTHEN | S | 2 | 1 | orders | — | Retire unpaged `GET /orders/me/history` (backend `orders.py:325`): no mobile screen calls it since #3; mobile wrapper `api.orders.history` and web fetcher `util/api/orders.ts:84` still exist — check web callers first. Do with the web loop — test: backend pytest passes, grep finds no caller. |
@@ -82,6 +81,8 @@ Parity score: 15 / 26 done (4 partial, 7 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #31 — PARITY — merchant — CF-0127 — M
+What: merchant chats inbox (M22, web merchant shell "chats"). New `merchant-chats` route → `MerchantChatsScreen` (`requiredRole="merchant"`; from Profile → "Chats" and the dashboard links): one row per order chat with messages — buyer name, time since the last message, order reference + status label (+ "closed"), a one-line preview ("You: …" for the farm's own last message), unread badge and bold row; unread first, then open before closed, then newest. A tap opens the existing `order-chat` with a "Chat with <buyer>" title that passes `chatTitle` (CF-0114). The list refreshes every 30 s while in view and on every return (`usePolling`, CF-0117), so a thread read in the chat loses its badge. New `api.merchants.chats`. Pure `src/lib/chatInbox.ts`: `sortInbox`, `preview`, `sinceLabel`, `inboxChatTitle`, `totalUnread`. Why: merchants could only reach a chat from one order; parity with the web inbox. Tests: `chatInbox.test.ts` 4 (incl. the title passing the chat screen's check). Manual check: buyer sends a message → merchant Chats shows it bold with a badge at the top within 30 s → open → back → badge gone. Checks: npm test 125/125, lint 0/0, tsc pass. Not run on a device.
 ### #30 — SECURITY — input / deep links — CF-0126 — M
 What: §2C sweep for "the same bounds as the backend on all inputs" and "validate every deep link parameter" (no SECURITY item was left in the backlog; found by checking every `useLocalSearchParams` and every free-text `TextInput`). Checkout delivery address and notes had no length limit (backend `PlaceOrderRequest` max 500 each → the server refused with a 422 after typing); they now stop at 500. Chat's hard-coded 2000 now uses the shared constant. The farm screen title used the route's `farmName` as given (a link could title a real farm page with any text until the data loaded); now it is only a placeholder while loading, and only when `routeText` accepts it (≤ 100 chars, trimmed, no control / line-separator / bidi-override characters — refused, not stripped). Remaining route params checked and fine: `auth?mode` (two values), `search?q` (sliced to 100), `order-detail` / `order-chat` / `confirmation` (CF-0105 / CF-0114), `merchant?farmId` (CF-0112). Token storage checked: Better Auth session in SecureStore (`authClient.ts`); AsyncStorage holds only the idle key; one log line, dev only. Pure `src/lib/inputLimits.ts` (`CHAT_BODY_MAX`, `ORDER_NOTES_MAX`, `DELIVERY_ADDRESS_MAX`, `routeText`); a test reads `services/chat.py` and `schemas/order.py`. Note: the file tool wrote ` `-style escapes as raw characters, which broke the regex; replaced with ASCII escapes. Security review of the diff (inline): only limits and stricter checks; no findings. Tests: `inputLimits.test.ts` 2. Manual check: paste 600 chars into checkout notes → stops at 500; `carabaomobile://merchant?farmId=3&farmName=%E2%80%AEevil` → title "Farm" then the real name. Checks: npm test 121/121, lint 0/0, tsc pass. Not run on a device.
 ### #29 — PARITY — merchant — CF-0125 — M
@@ -144,7 +145,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #24)
-- Mobile tests: 121 in 29 files since #30 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
+- Mobile tests: 125 in 30 files since #31 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #28 `expo export --platform android` OK (5 MB), expo-doctor 20/20 (next: #32).

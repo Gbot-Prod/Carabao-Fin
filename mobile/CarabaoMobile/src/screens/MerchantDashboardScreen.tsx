@@ -99,6 +99,7 @@ function Content() {
         <View style={styles.card}>
           {link('receipt-outline', 'Incoming orders', '/merchant-orders', perf.active_orders)}
           {link('leaf-outline', 'My listings', '/listings', counts.total)}
+          {link('chatbubbles-outline', 'Chats', '/merchant-chats')}
           {link('star-outline', 'Reviews', '/merchant-reviews')}
         </View>
 
