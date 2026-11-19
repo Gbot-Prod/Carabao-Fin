@@ -12,6 +12,13 @@ import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, type TransactionStatus } from '../lib/api';
 import { parsePendingOrders, type PendingOrder } from '../lib/cartGroups';
 
+// CF-0111: development builds only, and only the HTTP status and message: the raw
+// error can carry request URLs with order IDs.
+function logStatusError(what: string, err: unknown) {
+  if (!__DEV__) return;
+  console.warn(what, err instanceof ApiError ? `${err.status} ${err.message}` : err instanceof Error ? err.message : 'unknown error');
+}
+
 /** Another farm's order from the same checkout (C1): paid in its own PayMongo session. */
 function OtherOrderRow({ order, token }: { order: PendingOrder; token: string | null }) {
   const [status, setStatus] = useState<TransactionStatus | null>(null);
@@ -26,7 +33,7 @@ function OtherOrderRow({ order, token }: { order: PendingOrder; token: string | 
             .then((tx) => setStatus(tx.status))
             .catch((err: unknown) => {
               // 404 = no checkout session yet: still unpaid.
-              if (!(err instanceof ApiError && err.status === 404)) console.warn('Status check failed', err);
+              if (!(err instanceof ApiError && err.status === 404)) logStatusError('Status check failed', err);
             })
         : Promise.resolve(),
     [token, order.id],
@@ -122,7 +129,7 @@ function ConfirmationScreenContent() {
     } catch (err) {
       // 404 = checkout session not created yet; keep showing pending.
       if (!(err instanceof ApiError && err.status === 404)) {
-        console.warn('Payment status check failed', err);
+        logStatusError('Payment status check failed', err);
       }
     }
   }, [token, numericOrderId]);

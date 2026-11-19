@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 12    target: 20
+branch: improve/mobile-loop    push: no    iteration: 13    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0110) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0111) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 5/#12 · STRENGTHEN 3/#9 · SECURITY 2/#10 · AUDIT 2/#8
+PARITY 5/#12 · STRENGTHEN 4/#13 · SECURITY 2/#10 · AUDIT 2/#8
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #37) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -26,7 +26,7 @@ PARITY 5/#12 · STRENGTHEN 3/#9 · SECURITY 2/#10 · AUDIT 2/#8
 | web loop only (not on `main`) | — | blocked | vouchers, receipt, recently viewed (CF-0049/0052/0058/0061) | M35, after the web loop is merged |
 | web page / feature | mobile screen | status | backend routes | notes |
 |--------------------|---------------|--------|----------------|-------|
-| `farms` farm list (+ follow) | `(tabs)/index` → `OrderScreen` | done | `/merchants`, `/users/me/follows`, `/merchants/:id/follow` | farm type still imported from `mockData.ts` (M02) |
+| `farms` farm list (+ follow) | `(tabs)/index` → `OrderScreen` | done | `/merchants`, `/users/me/follows`, `/merchants/:id/follow` | real data only since #13 (`mockData.ts` deleted) |
 | `farms/[merchantID]` farm detail | `merchant` → `MerchantScreen` | partial | `/merchants/:id`, `/merchants/:id/produce` ✓; `/merchants/:id/reviews`, `/merchants/:id/shoppage` not called | no reviews list, no published shop page (banner/logo/about) |
 | `order` produce search | `OrderScreen` search | partial | `/produce/search` ✓ (only `q`, `in_stock`, `page_size`) | no category/price filters, no sort, no paging |
 | `saved` saved produce | `saved` → `SavedScreen` + `SaveHeart` | done | `/users/me/saved-produce`, `/users/me/saved-produce/ids`, `PUT/DELETE /produce/:id/save` ✓ (since #5) | hearts on farm produce rows and search hits; entry in Profile |
@@ -68,7 +68,6 @@ Parity score: 9 / 26 done (8 partial, 9 missing; 3 rows n/a; 1 row blocked) sinc
 | M07 | PARITY | M | 3 | 2 | discovery | parity | Farm detail: reviews list (`/merchants/:id/reviews`, with merchant replies) + published shop page (banner, logo, about) (web B54/B63 part) — test: farm with reviews shows them with stars and replies. |
 | M18 | PARITY | M | 3 | 2 | merchant | parity | Merchant reviews + reply (`/merchants/me/reviews`) — test: reply shows under the review on farm detail. |
 | M11 | SECURITY | S | 3 | 1 | auth | — | Verify a 401 that survives the token retry signs the user out cleanly (today `request` throws and the screen shows an error, the session stays). Storage half checked at #10: AsyncStorage holds only the idle timestamp (`LEFT_AT_KEY`), removed by `clearLocal`; cart and saved ids are wiped by owner (CF-0108) — test: an expired session → one sign-out, back to sign-in. |
-| M13 | STRENGTHEN | M | 3 | 2 | cleanup | — | Cleanup batch (merged M14, M26 at #8): remove Expo starter files (`app/modal.tsx` + its Stack entry, `app/(tabs)/App.tsx` — a stray route that duplicates providers, `hello-wave`, `parallax-scroll-view`, `external-link`, `collapsible`, themed-* if unused); merge `constants/theme.ts` into `src/lib/theme.ts`; move the `Farm` type out of `mockData.ts` and delete it; local placeholder instead of the hot-linked Unsplash image; "New" instead of "⭐ 0" for unrated farms; `ConfirmationScreen` logs only status/message in `__DEV__` — test: lint + tsc pass, app boots, grep finds no `mockData` / raw error logs. |
 | M08 | PARITY | M | 3 | 3 | orders | parity | Leave / edit a review for a delivered order (`/orders/me/:id/review`) from `OrderDetailScreen` (replace the "review on the website" line; edit while `editable_until`) (web B54) — test: delivered order → write review → detail shows it. |
 | M09 | PARITY | M | 3 | 3 | discovery | parity | Produce search filters/sort/paging matching web `produceSearch.ts` — test: sort by price ascending, page 2 loads. |
 | M15 | PARITY | M | 3 | 3 | merchant | parity | Merchant dashboard (performance + demand + stock alert counts) — test: totals match the web dashboard. |
@@ -88,9 +87,12 @@ Parity score: 9 / 26 done (8 partial, 9 missing; 3 rows n/a; 1 row blocked) sinc
 | M30 | STRENGTHEN | S | 2 | 1 | orders | — | Retire unpaged `GET /orders/me/history` (backend `orders.py:325`): no mobile screen calls it since #3; mobile wrapper `api.orders.history` and web fetcher `util/api/orders.ts:84` still exist — check web callers first. Do with the web loop — test: backend pytest passes, grep finds no caller. |
 | M21 | PARITY | M | 2 | 3 | merchant | parity | Merchant shop page editor (details, banner, logo, publish / discard) — test: publish → buyer farm detail shows the new banner. |
 | M28 | PARITY | M | 2 | 3 | onboarding | parity | Native merchant application status (`/merchant-applications/me`) instead of only opening the web — test: pending applicant sees "under review". |
+| M41 | STRENGTHEN | S | 1 | 1 | deps | — | **New (#13).** `expo-symbols` is now used by no file (its only user `icon-symbol.ios.tsx` was deleted in #13); check `react-native-web`, `react-dom`, `expo-haptics` too. Remove unused dependencies with `npx expo install --check` afterwards, batch with M37 — test: expo-doctor 20/20, android export OK. |
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #13 — STRENGTHEN — cleanup — CF-0111 — M
+What: cleanup batch M13 (with M14, M26). Deleted after checking every import (all were used only by each other): Expo starter `components/` (hello-wave, parallax-scroll-view, external-link, themed-text, themed-view, ui/collapsible, ui/icon-symbol(.ios)), `hooks/use-theme-color.ts`, `constants/theme.ts` (so no theme merge is needed: `src/lib/theme.ts` is the only theme), `app/modal.tsx` + its Stack entry, the stray route `app/(tabs)/App.tsx` (it duplicated all providers) + its `Tabs.Screen`, the unused React-Navigation `src/types.ts`, `src/lib/mockData.ts`, 4 React logo images, and `scripts/reset-project.js` + its npm script (it moves or deletes `app/`, `components/`, … when run). Kept `hooks/use-color-scheme(.web)` (used by `app/_layout.tsx`). Farm cards: `Farm` type moved to new pure `src/lib/farms.ts` with `ratingLabel` ("New" instead of "⭐ 0"), `deliveryTimeLabel` and `deliveryFeeLabel` (left out when unknown instead of "N/A" / a made-up "₱0 delivery"; 0 → "Free delivery"); no hot-linked Unsplash photo — a farm without a banner shows a leaf placeholder; `expo-image` and an a11y label on the card. `ConfirmationScreen` logs only status + message, and only in `__DEV__`. Why: dead code and mock data (§2B Cleanup); the stray route and the reset script were traps. Tests: `farms.test.ts` 3. Manual check: browse farms → a farm without reviews shows "New", without a fee shows no fee line, without a banner shows the leaf; app starts with no "missing route" warning. Checks: npm test 68/68, lint 0/0, tsc pass, android export OK (routes changed). Not run on a device. Follow-ups: M41 (unused dependencies).
 ### #12 — PARITY — checkout / account — CF-0110 — M
 What: address book (M05). New `addresses` route → `AddressesScreen` (list with Default badge, add / edit in a sheet, make default, delete with confirm, pull to refresh, empty state) on the existing `/users/me/addresses` routes (`api.addresses` list/create/update/remove). Profile "Address" row opens it (one of the 7 dead rows, M31) and Profile re-reads on focus so the default shows after a change. Checkout loads the saved addresses, pre-fills the default, shows each as a chip and has "Manage saved addresses"; a saved address that is sent unchanged also sends its `delivery_region` and map pin, as the web does; typed or edited text sends text only (the server then checks the province is in Luzon). Pure `src/lib/addresses.ts`: `addressLine` (web checkout's order of parts), `addressSummary`, `checkAddress` (street / city / province needed, bounds = backend `user_address.py`, 4-digit postal code; a test reads the schema), `deliveryFields`. Why: parity on the buyer "checkout" step; every order needed the address typed again. Tests: `addresses.test.ts` 5. Manual check: Profile → Address → Add → save → Default badge; add a second → Make default; Checkout → default pre-filled, tap the other chip → field changes; edit the text → chip unselected; place order → order detail shows the address. Checks: npm test 65/65, lint 0/0, tsc pass, expo-doctor 20/20, android export OK (4th iteration). Not run on a device. Found: M40 (stale pin after a mobile edit).
 ### #11 — PARITY — cart — CF-0109 — M
@@ -117,7 +119,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #8)
-- Mobile tests: 65 in 16 files since #12 (`npm test` runs every `src/lib/**/*.test.ts`).
+- Mobile tests: 68 in 17 files since #13 (`npm test` runs every `src/lib/**/*.test.ts`).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #12 `expo export --platform android` OK (5 MB), expo-doctor 20/20 (next: #16).

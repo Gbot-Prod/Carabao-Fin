@@ -10,11 +10,10 @@ import FarmCard from '../components/FarmCard';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
 import { api, merchantLocation, type ApiMerchant, type ApiProduceSearchResult } from '../lib/api';
-import { type Farm } from '../lib/mockData';
+import { type Farm } from '../lib/farms';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { SaveHeart } from '../components/SaveHeart';
-const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
 
 function merchantToFarm(m: ApiMerchant): Farm {
   const firstCategory = m.produces.find((p) => p.category)?.category;
@@ -24,12 +23,12 @@ function merchantToFarm(m: ApiMerchant): Farm {
     category: firstCategory ?? 'Farm Goods',
     location: merchantLocation(m),
     description: m.shop_page?.description ?? '',
-    rating: m.rating ?? 0,
-    time: m.delivery_time ? `${m.delivery_time} day${m.delivery_time > 1 ? 's' : ''}` : 'N/A',
-    deliveryFee: m.delivery_price ?? 0,
+    rating: m.rating ?? null,
+    deliveryDays: m.delivery_time ?? null,
+    deliveryFee: m.delivery_price ?? null,
     operatingHours: m.operating_hours ?? '',
-    contactInfo: m.contact_number,
-    image: m.shop_page?.banner_image_url ?? PLACEHOLDER_IMAGE,
+    contactInfo: m.contact_number ?? null,
+    image: m.shop_page?.banner_image_url ?? null,
   };
 }
 

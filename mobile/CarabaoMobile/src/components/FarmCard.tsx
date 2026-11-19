@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { Farm } from '../lib/mockData';
+import { deliveryFeeLabel, deliveryTimeLabel, ratingLabel, type Farm } from '../lib/farms';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 
 interface FarmCardProps {
@@ -10,25 +11,47 @@ interface FarmCardProps {
 }
 
 export default function FarmCard({ farm, onPress }: FarmCardProps) {
+  const time = deliveryTimeLabel(farm.deliveryDays);
+  const fee = deliveryFeeLabel(farm.deliveryFee);
+  const rating = ratingLabel(farm.rating);
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
-      <Image source={{ uri: farm.image }} style={styles.image} resizeMode="cover" />
+    <TouchableOpacity
+      style={styles.card}
+      onPress={onPress}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={`${farm.name}, ${farm.location || 'farm'}, rating ${rating}`}
+    >
+      {farm.image ? (
+        <Image source={{ uri: farm.image }} style={styles.image} contentFit="cover" />
+      ) : (
+        // CF-0111: no hot-linked stock photo for farms without a banner.
+        <View style={[styles.image, styles.placeholder]}>
+          <Ionicons name="leaf-outline" size={32} color={Colors.primary} />
+        </View>
+      )}
       <View style={styles.badge}>
         <Text style={styles.badgeText}>{farm.category}</Text>
       </View>
       <View style={styles.info}>
         <Text style={styles.name} numberOfLines={1}>{farm.name}</Text>
-        <View style={styles.locationRow}>
-          <Ionicons name="location-outline" size={11} color={Colors.textMuted} />
-          <Text style={styles.location} numberOfLines={1}> {farm.location}</Text>
-        </View>
+        {farm.location ? (
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={11} color={Colors.textMuted} />
+            <Text style={styles.location} numberOfLines={1}> {farm.location}</Text>
+          </View>
+        ) : null}
         <View style={styles.meta}>
-          <Ionicons name="star" size={11} color={Colors.warning} />
-          <Text style={styles.rating}> {farm.rating}</Text>
-          <Text style={styles.dot}>·</Text>
-          <Text style={styles.time}>{farm.time}</Text>
+          <Ionicons name={rating === 'New' ? 'sparkles-outline' : 'star'} size={11} color={Colors.warning} />
+          <Text style={styles.rating}> {rating}</Text>
+          {time ? (
+            <>
+              <Text style={styles.dot}>·</Text>
+              <Text style={styles.time}>{time}</Text>
+            </>
+          ) : null}
         </View>
-        <Text style={styles.fee}>₱{farm.deliveryFee} delivery</Text>
+        {fee ? <Text style={styles.fee}>{fee}</Text> : null}
       </View>
     </TouchableOpacity>
   );
@@ -41,6 +64,7 @@ const styles = StyleSheet.create({
     ...Shadow.sm,
   },
   image: { width: '100%', height: 110 },
+  placeholder: { backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   badge: {
     position: 'absolute', top: Spacing.sm, left: Spacing.sm,
     backgroundColor: Colors.primary, paddingHorizontal: 8,
