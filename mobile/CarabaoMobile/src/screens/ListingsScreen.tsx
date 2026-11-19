@@ -259,7 +259,7 @@ function ListingsScreenContent() {
 
 export default function ListingsScreen() {
   return (
-    <ProtectedScreen>
+    <ProtectedScreen requiredRole="merchant">
       <ListingsScreenContent />
     </ProtectedScreen>
   );

@@ -1,6 +1,7 @@
 import type { ApiReferencePrice } from './referencePrices';
 
 import { getAccessToken } from './authClient';
+import { emitSessionExpired, sessionGone } from './sessionEvents';
 import { API_BASE } from './config';
 import { historyQueryString, type HistoryQuery } from './orderHistory';
 import type { ServerCartLine } from './cartSync';
@@ -48,8 +49,18 @@ export async function request<T>(
   } catch (err) {
     if (!(err instanceof ApiError && err.status === 401)) throw err;
     const fresh = await getAccessToken({ forceRefresh: true });
-    if (!fresh) throw err;
-    return send<T>(path, fresh, options);
+    // CF-0120: no new token, or a 401 again with a new one: the session is gone.
+    // Tell the auth layer once; it signs out and protected screens go to sign-in.
+    if (!fresh) {
+      emitSessionExpired();
+      throw err;
+    }
+    try {
+      return await send<T>(path, fresh, options);
+    } catch (again) {
+      if (again instanceof ApiError && sessionGone(again.status, true, true)) emitSessionExpired();
+      throw again;
+    }
   }
 }
 

@@ -292,7 +292,7 @@ function MerchantOrdersContent() {
 
 export default function MerchantOrdersScreen() {
   return (
-    <ProtectedScreen>
+    <ProtectedScreen requiredRole="merchant">
       <MerchantOrdersContent />
     </ProtectedScreen>
   );

@@ -173,7 +173,7 @@ function Content() {
 
 export default function MerchantReviewsScreen() {
   return (
-    <ProtectedScreen>
+    <ProtectedScreen requiredRole="merchant">
       <Content />
     </ProtectedScreen>
   );
