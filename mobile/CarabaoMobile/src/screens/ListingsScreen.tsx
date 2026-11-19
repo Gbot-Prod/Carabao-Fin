@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
-import { api, type ApiProduce, type ApiStockAlerts, type ProduceCreatePayload } from '../lib/api';
+import { api, ApiError, type ApiProduce, type ApiStockAlerts, type ProduceCreatePayload } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -93,9 +93,11 @@ function ListingsScreenContent() {
   const [editing, setEditing] = useState<ApiProduce | 'new' | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveFieldErrors, setSaveFieldErrors] = useState<Record<string, string>>({});
 
   const openEdit = (item: ApiProduce | 'new') => {
     setSaveError(null);
+    setSaveFieldErrors({});
     setEditing(item);
   };
 
@@ -127,6 +129,7 @@ function ListingsScreenContent() {
     if (!token || !editing) return;
     setSaving(true);
     setSaveError(null);
+    setSaveFieldErrors({});
     try {
       if (editing === 'new') {
         const created = await api.produce.create(token, payload);
@@ -138,6 +141,7 @@ function ListingsScreenContent() {
       setEditing(null);
       api.merchants.stockAlerts(token).then(setAlerts).catch(() => {});
     } catch (err) {
+      setSaveFieldErrors(err instanceof ApiError ? err.fieldErrors : {});
       setSaveError(err instanceof Error ? err.message : 'Could not save this listing');
     } finally {
       setSaving(false);
@@ -249,6 +253,7 @@ function ListingsScreenContent() {
         produce={editing === 'new' ? null : editing}
         saving={saving}
         error={saveError}
+        fieldErrors={saveFieldErrors}
         onCancel={() => setEditing(null)}
         onSave={handleSave}
         onDelete={editing && editing !== 'new' ? () => confirmDelete(editing) : undefined}

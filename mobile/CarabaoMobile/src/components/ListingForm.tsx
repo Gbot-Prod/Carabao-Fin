@@ -29,9 +29,13 @@ type Props = {
   onSave: (payload: ProduceCreatePayload) => void;
   /** Edit mode only: delete the listing (asks first). CF-0116. */
   onDelete?: () => void;
+  /** CF-0123: the server's message per field (backend names), shown under the field. */
+  fieldErrors?: Record<string, string>;
 };
 
-export function ListingForm({ visible, produce, saving, error, onCancel, onSave, onDelete }: Props) {
+export function ListingForm({ visible, produce, saving, error, onCancel, onSave, onDelete, fieldErrors = {} }: Props) {
+  const fieldNote = (key: string) =>
+    fieldErrors[key] ? <Text style={styles.fieldError}>{fieldErrors[key]}</Text> : null;
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('');
@@ -100,6 +104,7 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave,
 
             <Text style={styles.label}>Name</Text>
             <TextInput style={styles.input} value={name} onChangeText={setName} />
+            {fieldNote('name')}
 
             <View style={styles.twoCol}>
               <View style={styles.col}>
@@ -108,6 +113,7 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave,
                   style={styles.input} value={price} onChangeText={setPrice}
                   keyboardType="number-pad"
                 />
+                {fieldNote('price')}
               </View>
               <View style={styles.col}>
                 <Text style={styles.label}>Stock</Text>
@@ -115,6 +121,7 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave,
                   style={styles.input} value={stock} onChangeText={setStock}
                   keyboardType="number-pad"
                 />
+                {fieldNote('stock_quantity')}
               </View>
             </View>
 
@@ -125,6 +132,7 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave,
               autoCapitalize="none" autoCorrect={false} maxLength={10}
               keyboardType="numbers-and-punctuation" accessibilityLabel="Harvest date, year-month-day"
             />
+            {fieldNote('harvest_date')}
             <View style={[styles.pills, styles.chipRow]}>
               {dateChip('Today', today, setHarvestDate, harvestDate)}
               {dateChip('Yesterday', addDays(today, -1), setHarvestDate, harvestDate)}
@@ -137,6 +145,7 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave,
               autoCapitalize="none" autoCorrect={false} maxLength={10}
               keyboardType="numbers-and-punctuation" accessibilityLabel="Best-before date, year-month-day"
             />
+            {fieldNote('best_before')}
             <View style={[styles.pills, styles.chipRow]}>
               {[3, 7, 14].map((n) => dateChip(`+${n} days`, addDays(today, n), setBestBefore, bestBefore))}
             </View>
@@ -147,6 +156,7 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave,
               style={styles.input} value={minOrderQty} onChangeText={setMinOrderQty}
               keyboardType="number-pad" accessibilityLabel="Minimum order quantity"
             />
+            {fieldNote('min_order_qty')}
 
             <Text style={styles.label}>Bulk prices (optional)</Text>
             <Text style={styles.hint}>A lower price per unit once a buyer orders this many or more.</Text>
@@ -174,6 +184,7 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave,
                 </TouchableOpacity>
               </View>
             ))}
+            {fieldNote('price_tiers')}
             {tiers.length < LISTING_TIERS_MAX && (
               <TouchableOpacity
                 style={styles.addTier}
@@ -266,6 +277,7 @@ const styles = StyleSheet.create({
   pillText: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '500' },
   pillTextActive: { color: Colors.white, fontWeight: '700' },
   error: { color: Colors.error, fontSize: FontSize.sm, marginTop: Spacing.md },
+  fieldError: { color: Colors.error, fontSize: FontSize.xs, marginTop: 4 },
   actions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.xl, alignItems: 'center' },
   cancelBtn: {
     flex: 1, paddingVertical: 13, alignItems: 'center', borderRadius: Radius.md,

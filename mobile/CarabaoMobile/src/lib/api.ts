@@ -2,6 +2,7 @@ import type { ApiReferencePrice } from './referencePrices';
 
 import { getAccessToken } from './authClient';
 import { emitSessionExpired, sessionGone } from './sessionEvents';
+import { parseErrorBody } from './apiErrors';
 import { API_BASE } from './config';
 import { historyQueryString, type HistoryQuery } from './orderHistory';
 import type { ServerCartLine } from './cartSync';
@@ -14,25 +15,11 @@ export { API_BASE, WEB_BASE } from './config';
 const REQUEST_TIMEOUT_MS = 20000;
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  // CF-0123: message per form field from the server (src/lib/apiErrors.ts), {} when none.
+  constructor(message: string, public status: number, public fieldErrors: Record<string, string> = {}) {
     super(message);
     this.name = 'ApiError';
   }
-}
-
-// FastAPI returns `detail` as a string for HTTPException, but as a list of
-// {loc, msg} objects for 422 validation errors.
-function extractDetail(body: unknown): string | null {
-  if (!body || typeof body !== 'object') return null;
-  const detail = (body as { detail?: unknown }).detail;
-  if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail)) {
-    const msgs = detail
-      .map((d) => (d && typeof d === 'object' ? (d as { msg?: unknown }).msg : null))
-      .filter((m): m is string => typeof m === 'string');
-    if (msgs.length) return msgs.join('\n');
-  }
-  return null;
 }
 
 // `token` says whether the call is signed in (screens pass the one from useAuth).
@@ -109,7 +96,8 @@ async function send<T>(
     }
   }
   if (!res.ok) {
-    throw new ApiError(extractDetail(body) ?? `Request failed (${res.status})`, res.status);
+    const parsed = parseErrorBody(body);
+    throw new ApiError(parsed.message ?? `Request failed (${res.status})`, res.status, parsed.fields);
   }
   return body as T;
 }

@@ -9,7 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
-import { api, type ApiUserAddress } from '../lib/api';
+import { api, ApiError, type ApiUserAddress } from '../lib/api';
 import { ADDRESS_LIMITS, addressLine, checkAddress, type AddressFields } from '../lib/addresses';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Button, Badge } from '../components/UI';
@@ -50,6 +50,8 @@ function AddressesContent() {
   const [editing, setEditing] = useState<ApiUserAddress | 'new' | null>(null);
   const [form, setForm] = useState<AddressFields>(EMPTY);
   const [formError, setFormError] = useState<string | null>(null);
+  // CF-0123: the server's message for each field, shown under it.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -63,6 +65,7 @@ function AddressesContent() {
   const open = (a: ApiUserAddress | 'new') => {
     setForm(fieldsOf(a === 'new' ? null : a));
     setFormError(null);
+    setFieldErrors({});
     setEditing(a);
   };
 
@@ -76,6 +79,7 @@ function AddressesContent() {
       setEditing(null);
       await reload();
     } catch (err) {
+      setFieldErrors(err instanceof ApiError ? err.fieldErrors : {});
       setFormError(err instanceof Error ? err.message : 'Could not save this address');
     } finally {
       setSaving(false);
@@ -167,13 +171,17 @@ function AddressesContent() {
                   <TextInput
                     style={styles.input}
                     value={form[f.key]}
-                    onChangeText={(v) => setForm((p) => ({ ...p, [f.key]: v }))}
+                    onChangeText={(v) => {
+                      setForm((p) => ({ ...p, [f.key]: v }));
+                      setFieldErrors(({ [f.key]: _gone, ...rest }) => rest);
+                    }}
                     placeholder={f.placeholder}
                     placeholderTextColor={Colors.textLight}
                     maxLength={ADDRESS_LIMITS[f.key]}
                     keyboardType={f.keyboard ?? 'default'}
                     accessibilityLabel={f.label}
                   />
+                  {fieldErrors[f.key] ? <Text style={styles.fieldError}>{fieldErrors[f.key]}</Text> : null}
                 </View>
               ))}
               {formError ? <Text style={styles.error}>{formError}</Text> : null}
@@ -233,6 +241,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11, fontSize: FontSize.sm, color: Colors.text, backgroundColor: Colors.surfaceAlt,
   },
   error: { color: Colors.error, fontSize: FontSize.sm, marginTop: Spacing.md },
+  fieldError: { color: Colors.error, fontSize: FontSize.xs, marginTop: 4 },
   sheetActions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.xl, alignItems: 'center' },
   cancelBtn: { flex: 1, paddingVertical: 13, alignItems: 'center', borderRadius: Radius.md, borderWidth: 1.5, borderColor: Colors.border },
   cancelText: { fontSize: FontSize.md, color: Colors.textMuted, fontWeight: '600' },

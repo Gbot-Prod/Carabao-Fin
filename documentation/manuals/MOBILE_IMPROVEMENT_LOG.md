@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 26    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
+branch: improve/mobile-loop    push: no    iteration: 27    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0122) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0123) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 13/#26 · STRENGTHEN 5/#20 · SECURITY 4/#23 · AUDIT 4/#24
+PARITY 13/#26 · STRENGTHEN 6/#27 · SECURITY 4/#23 · AUDIT 4/#24
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #53 at mobile #24) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -62,7 +62,6 @@ Parity score: 13 / 26 done (5 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
 | M34 | STRENGTHEN | S | 2 | 1 | types | — | **New (#8).** `ApiMerchant` types `address`, `barangay` as present and `contact_number` as `string`; after the web loop merge the public farm routes leave the first two out (CF-0048) and `contact_number` is nullable. No screen reads them, so only the types are wrong. Make them match `PublicMerchantResponse` — test: tsc passes; farm screen hides the contact row when null. |
-| M48 | STRENGTHEN | M | 3 | 2 | forms | — | **New (#24).** The backend's `FieldErrors` answers `{detail, errors: {field: message}}` (`core/errors.py:86`), but `ApiError` keeps only `detail`, so the address, listing, review and checkout forms cannot mark the field at fault; FastAPI 422 `detail[]` messages also lose their field (`loc`). Keep `fieldErrors` on `ApiError` (pure parser with tests), show each message under its field in `AddressesScreen` and `ListingForm` — test: parser tests for both shapes; manual: save an address with a 300-char street via the API → message under Street. |
 | M46 | STRENGTHEN | S | 3 | 1 | track | — | **New (#24).** `TrackScreen` loads the tracking ETA once and never refreshes it while the buyer watches. Use `usePolling` (30 s, only in view and in the foreground); batch with M47 — test: manual: ETA changes without leaving the screen. |
 | M47 | STRENGTHEN | S | 2 | 1 | chat | — | **New (#24).** `OrderChatScreen` keeps polling every 10 s after the server says the thread is `closed` (7 days after delivery). Pass `enabled = !closed` to `usePolling`; batch with M46 — test: closed chat → no more requests. |
 | M49 | STRENGTHEN | M | 2 | 2 | refactor | — | **New (#24).** Largest screens: `AuthScreen` 457 lines, `MerchantScreen` 449, `CheckoutScreen` 431. Move their pure logic and sub-views out (e.g. `CheckoutScreen` address / date / payment sections into components, `MerchantScreen` hero + products into components); batch with M37 (`api.ts` 637 lines) — test: tsc, lint, npm test, android export pass, no behavior change. |
@@ -85,6 +84,8 @@ Parity score: 13 / 26 done (5 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #27 — STRENGTHEN — forms — CF-0123 — M
+What: M48. New pure `src/lib/apiErrors.ts` `parseErrorBody` reads both backend error shapes: `FieldErrors` (`{detail, errors: {field: message}}`, `core/errors.py`) and FastAPI 422 (`detail: [{loc, msg}]` → the top-level body field from `loc`, e.g. `price_tiers.0.unit_price` → `price_tiers`; "Value error, " prefix removed; duplicate lines dropped). Keys are checked (identifier form, ≤ 60 chars, never `__proto__` / `constructor` / `prototype`) and texts capped. `ApiError` now carries `fieldErrors` (default `{}`); the old `extractDetail` is gone. `AddressesScreen` shows each server message under its field (cleared when that field is edited or the form reopens); `ListingForm` gets `fieldErrors` from `ListingsScreen` and shows them under name, price, stock, harvest date, best before, minimum order and bulk prices. The overall message still shows as before. Why: §2B "show the backend field errors"; before, a server refusal was one line at the bottom with no field. Tests: `apiErrors.test.ts` 3 (both shapes, junk / reserved keys). Manual check: save a listing whose name the server refuses → message under Name; address with a 300-char street via a changed limit → message under Street, typing in Street clears it. Checks: npm test 115/115, lint 0/0, tsc pass. Not run on a device.
 ### #26 — PARITY — account — CF-0122 — M
 What: account deletion (M23 first part, web profile danger zone; also an App Store requirement for apps with sign-up). Profile → "Delete account" opens new `DeleteAccountSheet`: step 1 explains what is deleted, asks to type DELETE and the password (blank for Google / no-password accounts) → `POST /users/me/delete-code` (the server refuses first with 409 when open orders or payouts block it, or "Your password is not correct.", shown as the server says); step 2: "We sent a code to the number ending in 1234" → code (one-time-code autofill) → `DELETE /users/me` with `{code}` → `signOut()`, which wipes token, user, cart, saved ids and the idle key (CF-0108 / CF-0120) → "Account deleted". New `api.users.deleteCode / deleteAccount`. Pure `src/lib/accountDeletion.ts`: `codeRequestBody` (blank → null, ≤ 128), `checkDeleteCode` (digits, spaces removed, 4–10), `confirmed`, `sentToText`; a test reads the bounds from `schemas/user.py`. Avatar (needs an image picker) stays in M23. Why: account parity; store requirement. Tests: `accountDeletion.test.ts` 4. Manual check: test account → Delete account → button off until DELETE is typed → wrong password → server message → right password → SMS → code → signed out, sign-in with that number fails; an account with an open order → 409 message, no SMS. Checks: npm test 112/112, lint 0/0, tsc pass. Not run on a device.
 ### #25 — PARITY — notifications — CF-0121 — M
@@ -139,7 +140,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #24)
-- Mobile tests: 112 in 26 files since #26 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
+- Mobile tests: 115 in 27 files since #27 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #24 `expo export --platform android` OK (5 MB) (next: #28).
