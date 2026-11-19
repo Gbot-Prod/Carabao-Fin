@@ -236,6 +236,13 @@ function OrderScreenContent() {
                     <SaveHeart produceId={p.id} name={p.name ?? 'produce'} size={20} />
                   </TouchableOpacity>
                 ))}
+                <TouchableOpacity
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                  onPress={() => router.push({ pathname: '/search', params: { q: search.trim() } })}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.hitsTitle, { color: Colors.primary }]}>See all produce results, filter and sort →</Text>
+                </TouchableOpacity>
                 <Text style={styles.hitsTitle}>Farms</Text>
               </View>
             ) : undefined

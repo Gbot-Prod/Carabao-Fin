@@ -545,6 +545,9 @@ export const api = {
       request<null>(`/produce/${produceId}/save`, token, { method: 'DELETE' }),
   },
   search: {
+    // CF-0118: one page with filters; query from src/lib/produceSearch.ts searchQuery.
+    page: (token: string | null, query: string) =>
+      request<ApiPage<ApiProduceSearchResult>>(`/produce/search?${query}`, token),
     produce: (token: string | null, q: string, pageSize = 10) =>
       request<ApiPage<ApiProduceSearchResult>>(
         `/produce/search?q=${encodeURIComponent(q)}&in_stock=true&page_size=${pageSize}`,

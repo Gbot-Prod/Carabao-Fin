@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 20    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
+branch: improve/mobile-loop    push: no    iteration: 21    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0117) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0118) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 9/#19 · STRENGTHEN 5/#20 · SECURITY 3/#17 · AUDIT 3/#16
+PARITY 10/#21 · STRENGTHEN 5/#20 · SECURITY 3/#17 · AUDIT 3/#16
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #45 at mobile #16) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -28,7 +28,7 @@ PARITY 9/#19 · STRENGTHEN 5/#20 · SECURITY 3/#17 · AUDIT 3/#16
 |--------------------|---------------|--------|----------------|-------|
 | `farms` farm list (+ follow) | `(tabs)/index` → `OrderScreen` | done | `/merchants`, `/users/me/follows`, `/merchants/:id/follow` | real data only since #13 (`mockData.ts` deleted) |
 | `farms/[merchantID]` farm detail | `merchant` → `MerchantScreen` + `FarmReviews` | done | `/merchants/:id`, `/merchants/:id/produce`, `/merchants/:id/reviews` ✓ (since #14) | banner, logo, about from the published shop page; reviews with summary and paging; merchant replies exist only on the web loop branch (M35) |
-| `order` produce search | `OrderScreen` search | partial | `/produce/search` ✓ (only `q`, `in_stock`, `page_size`) | no category/price filters, no sort, no paging |
+| `order` produce search | `search` → `SearchScreen` (+ top hits in `OrderScreen`) | done | `/produce/search` with q, category, min/max price, in_stock, fresh, sort, page ✓ (since #21) | same sorts and labels as web, 24 per page with infinite scroll |
 | `saved` saved produce | `saved` → `SavedScreen` + `SaveHeart` | done | `/users/me/saved-produce`, `/users/me/saved-produce/ids`, `PUT/DELETE /produce/:id/save` ✓ (since #5) | hearts on farm produce rows and search hits; entry in Profile |
 | `cart` | `(tabs)/cart` → `CartScreen` | done | `GET/PUT /carts/me` ✓ (since #11) | server cart: survives restart, same as web; `unavailable_reason` (CF-0052) per line blocks checkout; fees and prices from the server lines; owned by user ID, wiped on sign-out (#10). Loop-branch CF-0042 `issue` / `previous_price` after the web merge (M35) |
 | `checkout` | `checkout` → `CheckoutScreen` | partial | `/orders/me/place` (with `delivery_date` since #18), `/payments/checkout/:id`, `/users/me/addresses` ✓; `/payments/checkout/:id/cancel` not called | saved addresses, delivery date (14 chips, default tomorrow), server error messages + cart reload; no map pin picker, no cancel of pending payment (M25), vouchers after the web merge (M35) |
@@ -56,7 +56,7 @@ PARITY 9/#19 · STRENGTHEN 5/#20 · SECURITY 3/#17 · AUDIT 3/#16
 | merchant `shop` page | — | missing | `/merchants/me/shoppage` (+ banner, logo, publish, discard) exist | |
 | merchant `settings` | — | missing | `/merchants/me` exists | |
 
-Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) since #15. #8: cart moved done → partial (memory-only cart, phone totals).
+Parity score: 12 / 26 done (5 partial, 9 missing; 3 rows n/a; 1 row blocked) since #21. #8: cart moved done → partial (memory-only cart, phone totals).
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
@@ -66,7 +66,6 @@ Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 6 rows that do nothing on tap (Address fixed #12; `onPress={() => {}}`: Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target or remove it — test: every Profile row opens something or is gone. |
 | M18 | PARITY | M | 3 | 2 | merchant | parity | Merchant reviews list (`/merchants/me/reviews`, rating breakdown, filters) — the reply part (CF-0043, `merchant_reply`) exists only on the web loop branch: do it with M35 after the merge — test: merchant sees their reviews with the breakdown. |
 | M11 | SECURITY | S | 3 | 1 | auth | — | Verify a 401 that survives the token retry signs the user out cleanly (today `request` throws and the screen shows an error, the session stays). Storage half checked at #10: AsyncStorage holds only the idle timestamp (`LEFT_AT_KEY`), removed by `clearLocal`; cart and saved ids are wiped by owner (CF-0108) — test: an expired session → one sign-out, back to sign-in. |
-| M09 | PARITY | M | 3 | 3 | discovery | parity | Produce search filters/sort/paging matching web `produceSearch.ts` — test: sort by price ascending, page 2 loads. |
 | M15 | PARITY | M | 3 | 3 | merchant | parity | Merchant dashboard (performance + demand + stock alert counts) — test: totals match the web dashboard. |
 | M17 | PARITY | M | 3 | 3 | merchant | parity | Listing photo upload via `/produce/:id/image` (expo-image-picker — check Expo Go support first) — test: new listing shows the uploaded photo. |
 | M35 | PARITY | M | 3 | 3 | checkout | after-web-merge | **New (#8). Blocked until `improve/loop` is merged.** Web-loop features with backend routes only on that branch: review `merchant_reply` (show under each review in `FarmReviews`, reply from M18), cart line `issue` / `previous_price` (CF-0042, show in `CartScreen` next to `unavailable_reason`), holiday mode on the farm screen + pause switch for merchants (`paused_until`, `pause_message`, CF-0066, web B77), "download my data" on Profile (CF-0069), voucher code at checkout + discount on order/receipt (CF-0058/0061, web B70), order receipt (`GET /orders/me/{id}/receipt`, CF-0049, web B63), recently viewed farms (CF-0052). — test: place-order sends `voucher_code`; receipt opens from order detail. |
@@ -86,6 +85,8 @@ Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #21 — PARITY — discovery — CF-0118 — M
+What: full produce search (M09, web `order` page produce tab + `util/api/produceSearch.ts`). New `search` route → `SearchScreen`: query box (400 ms debounce, ≤ 100 chars), filter panel (sort: Best match / Price low–high / high–low / Most recently harvested / Newest listings; category All / Vegetables / Fruits; Min ₱ / Max ₱; In stock; Fresh), "Filters (n)" count, Reset, result count, 24 per page (web `PAGE_SIZE`) with infinite scroll (no duplicates across pages; a page that arrives after a filter change is dropped), heart per row, tap → farm, empty / error / loading states, 44 pt targets and a11y labels. `OrderScreen` hits get "See all produce results, filter and sort →" which opens the screen with the query. New `api.search.page`. Pure `src/lib/produceSearch.ts`: `SORTS`, `searchQuery` (empty values left out like the web; whole-peso prices; min ≤ max checked before a request), `activeFilterCount`, `NO_FILTERS`; a test reads backend `SortKey` (`produce_search.py`) and the web `en.ts` sort labels. Paging reuses `hasMoreHistory` / `mergeHistoryPage` (generic). Why: buyer "find" step; mobile showed only the first 10 in-stock hits. Tests: `produceSearch.test.ts` 5. Manual check: search "kale" on browse → See all → filters → Price low to high → prices rise; Min 300 / Max 100 → "Min ₱ is above max ₱." with no request; scroll past 24 → next page loads. Checks: npm test 97/97, lint 0/0, tsc pass. Not run on a device. Note: 5 cron firings came in while this iteration ran; they were not run in parallel (one iteration at a time on this tree).
 ### #20 — STRENGTHEN — perf — CF-0117 — M
 What: M42 (web CF-0047 idea). New hook `src/lib/usePolling.ts`: runs a tick at once, then every N ms, only while the screen is in view (`useIsFocused` from expo-router) and the app is in the foreground (`AppState`); stops otherwise and fetches at once when it comes back. Decision in pure `src/lib/polling.ts` `shouldPoll` / `resumed`. Used by `OrderChatScreen` (10 s; a stack screen stays mounted under the next one, so it polled under other screens and in the background) and the bell in `OrderScreen` (60 s; a tab stays mounted). The bell now calls new `api.notifications.unreadCount` (`unread_only=true&limit=1`, the backend returns `unread` with any page) instead of downloading the whole notification page each minute. `ConfirmationScreen` polling is bounded (`MAX_POLLS`) and stays as is. Why: battery, data and API load. Tests: `polling.test.ts` 3. Manual check: open an order chat → API log shows a request every 10 s → open another screen on top or press Home → requests stop → come back → one request at once, then every 10 s; bell count still updates. Checks: npm test 92/92, lint 0/0, tsc pass, expo-doctor 20/20, android export OK (5 MB; 4th iteration). Not run on a device. Note: the log's first target (20 iterations) is reached; the loop continues as asked.
 ### #19 — PARITY — merchant — CF-0116 — M
@@ -128,7 +129,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #16)
-- Mobile tests: 92 in 22 files since #20 (`npm test` runs every `src/lib/**/*.test.ts`; 7 of them also read backend / web files to keep values in step).
+- Mobile tests: 97 in 23 files since #21 (`npm test` runs every `src/lib/**/*.test.ts`; 7 of them also read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #20 `expo export --platform android` OK (5 MB), expo-doctor 20/20 (next: #24).
