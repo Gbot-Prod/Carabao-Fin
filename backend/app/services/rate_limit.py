@@ -81,6 +81,12 @@ ACTION_LIMITS: dict[str, Limit] = {
     "payment_checkout": Limit(30, 3600),
     # CF-0054 (B52): follow + unfollow; a person browses a few farms at a time.
     "farm_follow": Limit(60, 3600),
+    # CF-0060 (B66): each shipment create geocodes the stops and calls the
+    # Mapbox Matrix + Directions APIs, which are billed per request.
+    "shipment_create": Limit(30, 3600),
+    # CF-0060 (B67): avatar, shop logo/banner and produce photos together.
+    # Each upload decodes and re-encodes an image and writes to R2.
+    "image_upload": Limit(60, 3600),
 }
 
 

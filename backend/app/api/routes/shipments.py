@@ -24,7 +24,7 @@ from app.schemas.shipment import (
     TrackingPosition,
     Waypoint,
 )
-from app.services import mapbox_routing
+from app.services import mapbox_routing, rate_limit
 from app.services.merchant_service import get_active_merchant
 from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
 from app.services.pinned_location import delivery_point, merchant_point
@@ -113,6 +113,8 @@ def create_merchant_shipment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # CF-0060: first, so a blocked call reaches neither geocoding nor Mapbox.
+    rate_limit.enforce_action(db, "shipment_create", str(current_user.id))
     merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")

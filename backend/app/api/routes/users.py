@@ -14,7 +14,7 @@ from app.models.shipment import Shipment
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate
-from app.services import better_auth_store, r2_service, upload_validation
+from app.services import better_auth_store, r2_service, rate_limit, upload_validation
 from app.services.order_status import ACTIVE_ORDER_STATUSES
 
 router = APIRouter(tags=["users"])
@@ -50,6 +50,7 @@ def upload_my_avatar(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    rate_limit.enforce_action(db, "image_upload", str(current_user.id))  # CF-0060
     checked = upload_validation.check_image_upload(avatar, "Avatar")
     try:
         url = r2_service.upload_avatar(current_user.id, checked)

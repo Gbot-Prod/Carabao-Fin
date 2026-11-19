@@ -407,6 +407,8 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
     - `order_place`: 20 `POST /orders/me/place` calls per user per hour, refused ones included (CF-0045)
     - `payment_checkout`: 30 `POST /payments/checkout/{order_id}` calls per user per hour (CF-0045)
     - `farm_follow`: 60 follow + unfollow calls per user per hour (CF-0054); a buyer follows at most 500 farms (`MAX_FOLLOWS`, 409 above)
+    - `shipment_create`: 30 per merchant per hour (CF-0060); each create geocodes stops and calls Mapbox Matrix + Directions
+    - `image_upload`: 60 per user per hour across avatar, shop logo, shop banner and produce photo uploads (CF-0060)
   - Open unpaid orders: a buyer with `MAX_OPEN_PENDING_ORDERS` (10, `services/order_reservations.py`) PENDING orders gets 409 from place-order until they pay, cancel, or the reservation TTL releases them (CF-0045)
 - Better Auth admin plugin HTTP endpoints are blocked (404). Server-side `auth.api.*` calls still work.
 

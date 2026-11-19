@@ -668,6 +668,7 @@ def upload_my_shoppage_logo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    rate_limit.enforce_action(db, "image_upload", str(current_user.id))  # CF-0060
     merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
@@ -698,6 +699,7 @@ def upload_my_shoppage_banner(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    rate_limit.enforce_action(db, "image_upload", str(current_user.id))  # CF-0060
     merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
@@ -729,6 +731,7 @@ def upload_produce_image(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    rate_limit.enforce_action(db, "image_upload", str(current_user.id))  # CF-0060
     merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
