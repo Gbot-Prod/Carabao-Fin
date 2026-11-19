@@ -522,6 +522,9 @@ export const api = {
       request<null>(`/produce/${produceId}`, token, { method: 'DELETE' }),
   },
   payments: {
+    // CF-0124: give up an unpaid checkout; the server releases the held stock.
+    cancel: (token: string | null, orderId: number) =>
+      request<null>(`/payments/checkout/${orderId}/cancel`, token, { method: 'POST' }),
     checkout: (token: string | null, orderId: number) =>
       request<CheckoutSessionResponse>(`/payments/checkout/${orderId}`, token, {
         method: 'POST',

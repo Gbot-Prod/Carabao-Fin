@@ -296,6 +296,23 @@ function OrderDetailContent() {
           >
             <Text style={styles.btnText}>Message farm</Text>
           </TouchableOpacity>
+          {actions.canCancelUnpaid && (
+            <TouchableOpacity
+              style={[styles.btn, styles.btnDanger]}
+              disabled={busy}
+              onPress={() =>
+                runAction(
+                  'Cancel order',
+                  'This order is not paid yet. Cancel it? The produce goes back on sale; your cart keeps it.',
+                  'Cancel order',
+                  true,
+                  () => api.payments.cancel(token, order.order_id),
+                )
+              }
+            >
+              <Text style={styles.btnDangerText}>Cancel unpaid order</Text>
+            </TouchableOpacity>
+          )}
           {actions.canCancel && (
             <TouchableOpacity
               style={[styles.btn, styles.btnDanger]}

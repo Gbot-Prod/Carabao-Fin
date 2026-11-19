@@ -5,11 +5,13 @@ import assert from 'node:assert/strict';
 import { chatTitle, isOrderRef, orderActions, orderRef, parseOrderId } from './orderDetail.ts';
 
 test('cancel only while preparing, confirm only in transit (as the backend)', () => {
-  assert.deepEqual(orderActions('processing'), { canCancel: true, canConfirm: false, canTrack: true });
-  assert.deepEqual(orderActions('shipped'), { canCancel: false, canConfirm: true, canTrack: true });
-  assert.deepEqual(orderActions('out_for_delivery'), { canCancel: false, canConfirm: true, canTrack: true });
-  for (const s of ['pending', 'delivered', 'cancelled', 'payment_mismatch', 'something_new']) {
-    assert.deepEqual(orderActions(s), { canCancel: false, canConfirm: false, canTrack: false }, s);
+  const none = { canCancel: false, canCancelUnpaid: false, canConfirm: false, canTrack: false };
+  assert.deepEqual(orderActions('processing'), { ...none, canCancel: true, canTrack: true });
+  assert.deepEqual(orderActions('shipped'), { ...none, canConfirm: true, canTrack: true });
+  assert.deepEqual(orderActions('out_for_delivery'), { ...none, canConfirm: true, canTrack: true });
+  assert.deepEqual(orderActions('pending'), { ...none, canCancelUnpaid: true }); // CF-0124
+  for (const s of ['delivered', 'cancelled', 'payment_mismatch', 'something_new']) {
+    assert.deepEqual(orderActions(s), none, s);
   }
 });
 

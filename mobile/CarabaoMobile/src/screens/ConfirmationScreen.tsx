@@ -7,6 +7,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { openCheckout } from '../lib/openCheckout';
 import { isOrderRef, parseOrderId } from '../lib/orderDetail';
+import { useCart } from '../lib/CartContext';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { useAuth } from '../lib/AuthContext';
@@ -148,6 +149,34 @@ function ConfirmationScreenContent() {
     return () => clearTimeout(timer);
   }, [view, polls, checkStatus]);
 
+  // CF-0124: give up an unpaid order (web: PayMongo "back" calls the same route).
+  const [cancelled, setCancelled] = useState(false);
+  const { reload: reloadCart } = useCart();
+  const handleCancel = () => {
+    if (!token || numericOrderId === null) return;
+    Alert.alert('Cancel this order?', 'It is not paid yet. The produce goes back on sale; your cart keeps it.', [
+      { text: 'Keep order', style: 'cancel' },
+      {
+        text: 'Cancel order',
+        style: 'destructive',
+        onPress: async () => {
+          setPaying(true);
+          try {
+            await api.payments.cancel(token, numericOrderId);
+            setCancelled(true);
+            void reloadCart();
+          } catch (err) {
+            // e.g. 409 "Order has already been paid" / "A payment ... is already in progress".
+            Alert.alert('Not cancelled', err instanceof Error ? err.message : 'Please try again.');
+          } finally {
+            setPaying(false);
+            await checkStatus();
+          }
+        },
+      },
+    ]);
+  };
+
   const handlePayNow = async () => {
     if (!token || numericOrderId === null) return;
     setPaying(true);
@@ -213,13 +242,20 @@ function ConfirmationScreenContent() {
                 </View>
               </View>
             </View>
-            {view === 'pending' && (
+            {cancelled ? (
+              <Text style={styles.otherHint} accessibilityRole="alert">
+                Order cancelled. The produce is back on sale, and it is still in your cart.
+              </Text>
+            ) : view === 'pending' && (
               <View style={styles.payActions}>
                 <TouchableOpacity style={styles.primaryBtn} onPress={handlePayNow} disabled={paying}>
                   <Text style={styles.primaryBtnText}>{paying ? 'Opening…' : 'Pay now'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPolls(0)}>
                   <Text style={styles.secondaryBtnText}>Check again</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={handleCancel} disabled={paying} accessibilityRole="button">
+                  <Text style={[styles.secondaryBtnText, { color: Colors.error }]}>Cancel this order</Text>
                 </TouchableOpacity>
               </View>
             )}

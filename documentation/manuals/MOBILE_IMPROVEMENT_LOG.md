@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 27    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
+branch: improve/mobile-loop    push: no    iteration: 28    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0123) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0124) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 13/#26 · STRENGTHEN 6/#27 · SECURITY 4/#23 · AUDIT 4/#24
+PARITY 14/#28 · STRENGTHEN 6/#27 · SECURITY 4/#23 · AUDIT 4/#24
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #53 at mobile #24) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -31,7 +31,7 @@ PARITY 13/#26 · STRENGTHEN 6/#27 · SECURITY 4/#23 · AUDIT 4/#24
 | `order` produce search | `search` → `SearchScreen` (+ top hits in `OrderScreen`) | done | `/produce/search` with q, category, min/max price, in_stock, fresh, sort, page ✓ (since #21) | same sorts and labels as web, 24 per page with infinite scroll |
 | `saved` saved produce | `saved` → `SavedScreen` + `SaveHeart` | done | `/users/me/saved-produce`, `/users/me/saved-produce/ids`, `PUT/DELETE /produce/:id/save` ✓ (since #5) | hearts on farm produce rows and search hits; entry in Profile |
 | `cart` | `(tabs)/cart` → `CartScreen` | done | `GET/PUT /carts/me` ✓ (since #11) | server cart: survives restart, same as web; `unavailable_reason` (CF-0052) per line blocks checkout; fees and prices from the server lines; owned by user ID, wiped on sign-out (#10). Loop-branch CF-0042 `issue` / `previous_price` after the web merge (M35) |
-| `checkout` | `checkout` → `CheckoutScreen` | partial | `/orders/me/place` (with `delivery_date` since #18), `/payments/checkout/:id`, `/users/me/addresses` ✓; `/payments/checkout/:id/cancel` not called | saved addresses, delivery date (14 chips, default tomorrow), server error messages + cart reload; no map pin picker, no cancel of pending payment (M25), vouchers after the web merge (M35) |
+| `checkout` | `checkout` → `CheckoutScreen` | done | `/orders/me/place` (with `delivery_date`), `/payments/checkout/:id`, `/payments/checkout/:id/cancel` (#28), `/users/me/addresses` ✓ | saved addresses, delivery date, server errors + cart reload, cancel an unpaid order; no map pin picker (native extra), vouchers after the web merge (M35) |
 | `confirmation`, `orders/success` | `confirmation` → `ConfirmationScreen` | done | `/payments/transactions/order/:id` | checks status with server |
 | `orders` history | `(tabs)/history` → `HistoryScreen` | done | `/orders/me/history/page` ✓ (since #3) | status filter, search, infinite scroll; unpaged route now unused by mobile (M30) |
 | `orders/[orderId]` order detail | `order-detail` → `OrderDetailScreen` | done | `/orders/me/:id`, `/cancel`, `/confirm-received`, `POST/PATCH /orders/me/:id/review` ✓ (since #15) | write and edit a review in the app; receipt is web-loop only (M35) |
@@ -56,7 +56,7 @@ PARITY 13/#26 · STRENGTHEN 6/#27 · SECURITY 4/#23 · AUDIT 4/#24
 | merchant `shop` page | — | missing | `/merchants/me/shoppage` (+ banner, logo, publish, discard) exist | |
 | merchant `settings` | — | missing | `/merchants/me` exists | |
 
-Parity score: 13 / 26 done (5 partial, 8 missing; 3 rows n/a; 1 row blocked) since #25. #8: cart moved done → partial (memory-only cart, phone totals).
+Parity score: 14 / 26 done (4 partial, 8 missing; 3 rows n/a; 1 row blocked) since #28. #8: cart moved done → partial (memory-only cart, phone totals).
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
@@ -75,7 +75,6 @@ Parity score: 13 / 26 done (5 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | M20 | PARITY | M | 2 | 2 | merchant | parity | Merchant sales history (`/merchants/me/sales`, `/transactions`) — test: list matches the web sales page. |
 | M22 | PARITY | M | 2 | 2 | merchant | parity | Merchant chats inbox (`/merchants/me/chats`) → opens the existing `OrderChatScreen` — test: inbox lists chats, unread first. |
 | M23 | PARITY | M | 2 | 2 | account | parity | Avatar on profile (`POST /users/me/avatar`): needs an image picker (expo-image-picker works in Expo Go; check first, log a note) — test: picked photo shows on Profile and on the web. Account deletion part done at #26. |
-| M25 | PARITY | M | 2 | 2 | checkout | parity | Cancel a pending payment (`/payments/checkout/:id/cancel`) from confirmation — test: cancel acts as on the web. |
 | M27 | STRENGTHEN | M | 2 | 2 | perf | — | `ScrollView` + `map` → `FlatList` with memo rows where lists are long (`MerchantScreen` produce, `OrderScreen` hits) — test: lint + manual scroll of 50 rows. |
 | M30 | STRENGTHEN | S | 2 | 1 | orders | — | Retire unpaged `GET /orders/me/history` (backend `orders.py:325`): no mobile screen calls it since #3; mobile wrapper `api.orders.history` and web fetcher `util/api/orders.ts:84` still exist — check web callers first. Do with the web loop — test: backend pytest passes, grep finds no caller. |
 | M21 | PARITY | M | 2 | 3 | merchant | parity | Merchant shop page editor (details, banner, logo, publish / discard) — test: publish → buyer farm detail shows the new banner. |
@@ -84,6 +83,8 @@ Parity score: 13 / 26 done (5 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #28 — PARITY — checkout — CF-0124 — M
+What: cancel an unpaid order (M25; web calls `POST /payments/checkout/{id}/cancel` when PayMongo sends the buyer back without paying; on mobile the in-app browser just closes and the order stayed "pending" until it expired). Confirmation screen (pending view): "Cancel this order" → confirm → the route → "Order cancelled. The produce is back on sale, and it is still in your cart." (the server keeps cart lines until an order is paid; the cart is read again); server refusals (409 "Order has already been paid" / "A payment for this order is already in progress") show as the server says, then the status is re-checked. Order detail: `orderActions` gets `canCancelUnpaid` (`pending` only; the other cancel route is `processing` only) → "Cancel unpaid order" behind the same confirm, then the order is re-read. New `api.payments.cancel`. Why: buyers could not release an unpaid order (stock stayed held until expiry) — parity with web checkout. With this the checkout row is done (map pin picker logged as a native extra). Tests: `orderDetail.test.ts` updated (`canCancelUnpaid` for pending, false for every other status). Manual check: place an order, close the payment page → Cancel this order → message; History → that order shows Cancelled; cart still has the produce; pay first, then try → "Order has already been paid". Checks: npm test 115/115, lint 0/0, tsc pass, expo-doctor 20/20, android export OK (4th iteration). Not run on a device.
 ### #27 — STRENGTHEN — forms — CF-0123 — M
 What: M48. New pure `src/lib/apiErrors.ts` `parseErrorBody` reads both backend error shapes: `FieldErrors` (`{detail, errors: {field: message}}`, `core/errors.py`) and FastAPI 422 (`detail: [{loc, msg}]` → the top-level body field from `loc`, e.g. `price_tiers.0.unit_price` → `price_tiers`; "Value error, " prefix removed; duplicate lines dropped). Keys are checked (identifier form, ≤ 60 chars, never `__proto__` / `constructor` / `prototype`) and texts capped. `ApiError` now carries `fieldErrors` (default `{}`); the old `extractDetail` is gone. `AddressesScreen` shows each server message under its field (cleared when that field is edited or the form reopens); `ListingForm` gets `fieldErrors` from `ListingsScreen` and shows them under name, price, stock, harvest date, best before, minimum order and bulk prices. The overall message still shows as before. Why: §2B "show the backend field errors"; before, a server refusal was one line at the bottom with no field. Tests: `apiErrors.test.ts` 3 (both shapes, junk / reserved keys). Manual check: save a listing whose name the server refuses → message under Name; address with a 300-char street via a changed limit → message under Street, typing in Street clears it. Checks: npm test 115/115, lint 0/0, tsc pass. Not run on a device.
 ### #26 — PARITY — account — CF-0122 — M
@@ -143,7 +144,7 @@ What: created this log, branch `improve/mobile-loop` (own worktree), parity matr
 - Mobile tests: 115 in 27 files since #27 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
-- `expo-doctor`: 20/20. Last bundle check: #24 `expo export --platform android` OK (5 MB) (next: #28).
+- `expo-doctor`: 20/20. Last bundle check: #28 `expo export --platform android` OK (5 MB), expo-doctor 20/20 (next: #32).
 - Largest files: `src/lib/api.ts` 637 (M37), `AuthScreen` 457, `MerchantScreen` 449, `CheckoutScreen` 431 (M49).
 - Parity score: 12 / 26 done, 6 partial, 8 missing (46 %; 42 % at #16, 31 % at #8). Buyer path complete except the map pin picker and vouchers (web-loop only). Merchant side: orders ✓, listings, reviews partial; dashboard, shipments, chats inbox, sales, earnings, shop editor, settings missing.
 - Web loop: web #53, not merged; 30+ loop-only items wait in M35.
