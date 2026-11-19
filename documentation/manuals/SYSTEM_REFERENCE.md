@@ -202,6 +202,8 @@ Perf-only (`backend/scripts/perf`): `PERF_DATABASE_URL`, `PERF_CLIENT_CSV`, `PER
 | `EXPO_PUBLIC_WEB_URL` | `http://<PC-LAN-IP>:3000` | Better Auth host |
 | `EXPO_PUBLIC_IDLE_TIMEOUT_MINUTES` | empty | optional |
 
+Both URLs are checked at app start (`src/lib/baseUrl.ts`): `scheme://host[:port][/path]` only (no `user@`, query or fragment). A production build (`__DEV__` false) must use `https` for both, or the app stops at launch with an error that names the setting.
+
 ### 4.4 Postgres TLS
 
 - Always `verify-full` / `rejectUnauthorized: true`. No switch to turn it off.

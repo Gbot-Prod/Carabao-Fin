@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node --test src/lib/orderHistory.test.ts"
+    "test": "node --test src/lib/orderHistory.test.ts src/lib/baseUrl.test.ts"
   },
   "dependencies": {
     "@better-auth/core": "^1.7.26",

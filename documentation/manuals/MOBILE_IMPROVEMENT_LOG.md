@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 3    target: 20
+branch: improve/mobile-loop    push: no    iteration: 4    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0102) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0103) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 1/#3 · STRENGTHEN 1/#2 · SECURITY 0/- · AUDIT 1/#1
+PARITY 1/#3 · STRENGTHEN 1/#2 · SECURITY 1/#4 · AUDIT 1/#1
 
 ## Needs human
 - `npm audit --omit=dev`: 3 moderate (minimatch ReDoS via `@expo/fingerprint` ← `expo`). The only
@@ -60,14 +60,13 @@ Parity score: 8 / 26 done (7 partial, 11 missing; 3 rows n/a)
 |----|------|------|--------|--------|------|------|------------------------|
 | M29 | SECURITY | M | 4 | 2 | auth | — | `ProtectedScreen` accepts `requiredRole` but never checks it (its doc comment says it does). Nothing passes it today, so merchant screens rely on the server 404 → "not a merchant" state. Implement the role check from the server profile (`/users/me`), use it on merchant routes, test the pure decision in `src/lib/` — test: a buyer who opens `/listings` sees the not-allowed state with no merchant API call. |
 | M02 | STRENGTHEN | M | 3 | 2 | tests | — | `npm test` exists since #3 (`node --test`, Node 24 strips TS types; test files need `/// <reference types="node" />` and `.ts` import paths). Add test files for `cartGroups`, `orderStatus`, `phone`, `passwordPolicy`, `referencePrices`, `idle` and register each in the script; compare values with web/backend while there — test: `npm test` runs ≥ 7 files. |
-| M30 | STRENGTHEN | S | 2 | 1 | orders | — | Retire unpaged `GET /orders/me/history` (backend `orders.py:325`): mobile `api.orders.history` and web no longer use it after #3. Remove route + mobile wrapper + backend test, add a line to the web log — test: backend pytest passes, `grep` finds no caller. Batch with other backend S items or do with the web loop. |
+| M30 | STRENGTHEN | S | 2 | 1 | orders | — | Retire unpaged `GET /orders/me/history` (backend `orders.py:325`): no mobile screen calls it after #3, but the mobile wrapper `api.orders.history` and a web fetcher (`util/api/orders.ts:84`) still exist; check web callers first (fixed in #4: #3 said the web no longer used it). Remove route + wrappers + backend test, add a line to the web log — test: backend pytest passes, `grep` finds no caller. Batch with other backend S items or do with the web loop. |
 | M03 | PARITY | M | 4 | 3 | orders | parity | Order detail screen `orders/[orderId]` (items, status, totals from server, cancel, confirm received) — test: open from history, cancel a pending order, see the new status. |
 | M05 | PARITY | M | 4 | 3 | checkout | parity | Address book on checkout and profile (`/users/me/addresses`, default address) — test: add 2 addresses, set default, checkout uses default. |
 | M06 | PARITY | M | 3 | 2 | discovery | parity | Saved produce: heart on produce rows + Saved screen (was web B38) — test: save item, it shows in Saved after restart. |
 | M07 | PARITY | M | 3 | 2 | discovery | parity | Farm detail: reviews list + published shop page (banner, logo, about) — test: farm with reviews shows them with stars. |
 | M08 | PARITY | M | 3 | 3 | orders | parity | Leave a review for a delivered order (`/orders/me/:id/review`) — test: delivered order shows "Review", submit, farm rating updates. |
 | M09 | PARITY | M | 3 | 3 | discovery | parity | Produce search filters/sort/paging matching web `produceSearch.ts` — test: sort by price ascending, page 2 loads. |
-| M10 | SECURITY | M | 4 | 2 | config | — | Fail closed on non-https `API_BASE`/`WEB_BASE` in production builds (`__DEV__` false); pure check in `src/lib/config.ts` with test — test: `http://` in prod throws/blocks. |
 | M11 | SECURITY | M | 3 | 2 | auth | — | Verify a 401 that survives the token retry signs the user out and clears cart/user data; verify sign-out clears every AsyncStorage key with PII — test: unit test on the clear-keys list + manual check. |
 | M12 | SECURITY | S | 3 | 1 | payments | — | Allow-list hosts before `WebBrowser.openBrowserAsync(checkout.checkout_url)` (PayMongo host only) — test: off-list URL refused. |
 | M13 | STRENGTHEN | M | 3 | 2 | cleanup | — | Remove Expo starter files (`app/modal.tsx` + its Stack entry, `app/(tabs)/App.tsx` which is also a stray route, `hello-wave`, `parallax-scroll-view`, `external-link`, `collapsible`, themed-* if unused); merge `constants/theme.ts` into `src/lib/theme.ts` — test: lint + tsc pass, app boots. |
@@ -88,6 +87,8 @@ Parity score: 8 / 26 done (7 partial, 11 missing; 3 rows n/a)
 | M28 | PARITY | M | 2 | 3 | onboarding | parity | Native merchant application status (`/merchant-applications/me`) instead of only opening web — test: pending applicant sees "under review". |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #4 — SECURITY — config — CF-0103 — M
+What: `API_BASE` / `WEB_BASE` are checked at start-up by new pure `src/lib/baseUrl.ts` `checkBaseUrl` (M10). Only `http(s)://host[:port][/path]` is accepted (regex, because RN's `URL` lacks `protocol`/`hostname` on some versions): no `user:pass@`, query, fragment, spaces, other schemes or upper-case scheme tricks. In a production build (`__DEV__` false) both must be `https`, else the app stops at launch with an error naming the env var. Dev keeps http for localhost/LAN. SYSTEM_REFERENCE §4.3 updated. Why: the session token goes to both hosts; a misconfigured release must fail loudly instead of sending it over cleartext (Android/iOS release builds block cleartext by default today, so no working setup breaks; this makes the failure clear and survives a later cleartext opt-in). Tests: `src/lib/baseUrl.test.ts` 5 (dev http + slash strip, prod https only, bad schemes, credentials/query/fragment/spaces, error names the setting). `/security-review` on the diff: no findings. Checks: npm test 12/12, lint 0/0, tsc pass, expo-doctor 20/20, `expo export --platform android` OK (4.9 MB Hermes bundle) — 4th-iteration checks. Manual check: release build with `EXPO_PUBLIC_API_URL=http://…` → launch shows the error; with https → normal start. Follow-ups: none new; M12 (allow-list for the payment URL) is the next small SECURITY item.
 ### #3 — PARITY — orders — CF-0102 — M
 What: Order History uses `GET /orders/me/history/page` (M04, was web B34). Search box (order number or farm, 400 ms debounce, capped at 100 chars like the API), status chips (All / In progress / Delivered / Cancelled, same groups as web), infinite scroll (pages of 10, `onEndReached`), pull to refresh, "No matching orders" + "Clear filters" empty state, total count line. New `src/lib/orderHistory.ts`: copy of web `lib/order-history.ts` (marked to keep in step) + mobile-only `historyQueryString`, `mergeHistoryPage` (no duplicate rows when a new order shifts pages), `hasMoreHistory`. New `api.orders.historyPage`. First mobile test runner: `npm test` = `node --test` (Node 24 strips types); added `allowImportingTsExtensions` to tsconfig (as web) and `@types/node` ~26.6 as dev dependency (was already installed transitively; reference is in the test file only, so app code does not get Node globals). Removed: the summary banner "Delivered" and "Total spent" (cannot be computed from one page; no server total exists) — replaced by the count of orders for the current filter. Why: parity, and the unpaged route loaded every order. Tests: `src/lib/orderHistory.test.ts` 7 (web's 4 + query string encoding, merge without duplicates, has-more). Manual check: with > 10 orders scroll to the end → next 10 load with a spinner; tap "Cancelled" → only cancelled orders, count changes; type a farm name → list filters after a short pause; type "zzz" → "No matching orders" → "Clear filters" → full list; airplane mode → retry screen. Checks: npm test 7/7, lint 0/0, tsc pass. Not run on a device. Follow-ups: M30 (retire the unpaged route), M02 (tests for older libs).
 ### #2 — STRENGTHEN — lint — CF-0101 — M
@@ -96,7 +97,8 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT)
-- Mobile tests: 7 in 1 file since #3 (`npm test`).
+- Mobile tests: 12 in 2 files since #4 (`npm test`).
+- Last bundle check: #4, `expo export --platform android` OK; expo-doctor 20/20.
 - `tsc --noEmit`: pass.
 - Lint: pass, 0 errors / 0 warnings since #2 (was 30 + 7 at #1).
 - `npm audit --omit=dev`: 3 moderate (minimatch via `@expo/fingerprint`, see Needs human).
