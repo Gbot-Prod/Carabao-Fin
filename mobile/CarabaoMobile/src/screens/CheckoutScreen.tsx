@@ -9,7 +9,9 @@ import { useRouter } from 'expo-router';
 import { openCheckout } from '../lib/openCheckout';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
-import { api, defaultAddress, type ApiUserAddress } from '../lib/api';
+import { api, ApiError, defaultAddress, type ApiUserAddress } from '../lib/api';
+import { defaultDeliveryDate, deliveryDateChoices, deliveryDateError, placeOrderFailure } from '../lib/checkoutOptions';
+import { phToday } from '../lib/listingForm';
 import { addressLine, addressSummary, deliveryFields } from '../lib/addresses';
 import { cartTotals, groupCartByFarm, type PendingOrder } from '../lib/cartGroups';
 import { blockerText, checkoutBlockers } from '../lib/cartSync';
@@ -34,6 +36,9 @@ function CheckoutScreenContent() {
   const { token } = useAuth();
   const [payment, setPayment] = useState('online');
   const [timeWindow, setTimeWindow] = useState(TIME_WINDOWS[0]);
+  // CF-0115: the requested delivery day, as on the web (default tomorrow, PH time).
+  const [today] = useState(phToday);
+  const [deliveryDate, setDeliveryDate] = useState(() => defaultDeliveryDate(phToday()));
   const [address, setAddress] = useState('');
   // CF-0110: saved addresses; the default fills the field. Editing the text unlinks it.
   const [saved, setSaved] = useState<ApiUserAddress[]>([]);
@@ -76,6 +81,11 @@ function CheckoutScreenContent() {
       Alert.alert('Cart Empty', 'Add some produce before checking out.');
       return;
     }
+    const dateProblem = deliveryDateError(deliveryDate, phToday());
+    if (dateProblem) {
+      Alert.alert('Delivery date', `${dateProblem}.`);
+      return;
+    }
     const blocked = checkoutBlockers(items);
     if (blocked.length > 0) {
       Alert.alert('Check your cart', blocked.map(blockerText).join('\n'));
@@ -91,6 +101,7 @@ function CheckoutScreenContent() {
       );
       const result = await api.orders.place(token, {
         ...deliveryFields(selected, address),
+        delivery_date: deliveryDate,
         delivery_time: timeWindow,
         notes: notes.trim() || null,
       });
@@ -131,8 +142,14 @@ function CheckoutScreenContent() {
         setNeedsPhone(true);
         return;
       }
-      const message = err instanceof Error ? err.message : 'Failed to place order';
-      Alert.alert('Order Failed', message);
+      // CF-0115: the server's reason; on 400 / 409 the cart is read again so the
+      // changed lines show their warning.
+      const failure = placeOrderFailure(
+        err instanceof ApiError ? err.status : -1,
+        err instanceof Error ? err.message : null,
+      );
+      if (failure.reloadCart) void reloadCart();
+      Alert.alert('Order not placed', failure.text);
     } finally {
       setLoading(false);
     }
@@ -194,6 +211,24 @@ function CheckoutScreenContent() {
               Carabao delivers within Luzon only. Include your province or Metro Manila city.
             </Text>
           </View>
+
+          <Text style={styles.fieldLabel}>Delivery Date</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
+            {deliveryDateChoices(today).map((d) => (
+              <TouchableOpacity
+                key={d.value}
+                style={[styles.timePill, deliveryDate === d.value && styles.timePillActive]}
+                onPress={() => setDeliveryDate(d.value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: deliveryDate === d.value }}
+                accessibilityLabel={`Deliver ${d.label}`}
+              >
+                <Text style={[styles.timePillText, deliveryDate === d.value && styles.timePillTextActive]}>
+                  {d.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
           <Text style={styles.fieldLabel}>Time Window</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>

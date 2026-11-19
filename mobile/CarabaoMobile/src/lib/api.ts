@@ -292,6 +292,8 @@ export function merchantLocation(m: Pick<ApiMerchant, 'city' | 'province'>): str
 }
 
 export type PlaceOrderPayload = {
+  // YYYY-MM-DD, today .. +30 days (CF-0115); shown to the farm as the requested day.
+  delivery_date?: string | null;
   delivery_address?: string | null;
   // From a saved address (CF-0110): the server checks the region is in Luzon.
   delivery_region?: string;
