@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.user_address import UserAddressResponse
 
@@ -26,6 +26,20 @@ class UserUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     notifications_preferences: dict | None = None
+
+
+class AccountDeleteCodeRequest(BaseModel):
+    # Required when the account has a password (Google/Facebook-only accounts
+    # have none).
+    password: str | None = Field(default=None, max_length=128)
+
+
+class AccountDeleteCodeSent(BaseModel):
+    sent_to: str  # last 4 digits of the number the code went to
+
+
+class AccountDeleteConfirm(BaseModel):
+    code: str = Field(min_length=4, max_length=10)
 
 
 class UserMerchantInfo(BaseModel):

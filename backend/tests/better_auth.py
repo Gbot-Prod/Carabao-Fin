@@ -191,3 +191,21 @@ def break_user_table(db: Session) -> None:
         )
     )
     db.commit()
+
+
+def add_password(db: Session, user: User, password: str) -> None:
+    """Give a user a BetterAuth password ("credential" account), as signup does."""
+    from app.services.better_auth_store import hash_password
+
+    db.execute(
+        text(
+            'INSERT INTO "account" (id, "accountId", "providerId", "userId", password) '
+            "VALUES (:id, :uid, 'credential', :uid, :password)"
+        ),
+        {
+            "id": f"acc_{user.external_auth_id}",
+            "uid": user.external_auth_id,
+            "password": hash_password(password),
+        },
+    )
+    db.commit()

@@ -80,6 +80,9 @@ class PlaceOrderRequest(BaseModel):
     delivery_lat: float | None = None
     delivery_lng: float | None = None
     notes: str | None = Field(default=None, max_length=500)
+    # The cart lines the buyer ticked, by produce ID. None means the whole cart.
+    # Quantities and prices still come from the saved cart, never from here.
+    produce_ids: list[int] | None = Field(default=None, min_length=1, max_length=200)
 
     model_config = ConfigDict(extra="forbid")
 

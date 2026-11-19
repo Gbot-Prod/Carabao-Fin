@@ -22,6 +22,7 @@ write raises (503) so the whole request rolls back.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 import secrets
 import string
@@ -86,6 +87,27 @@ def hash_password(password: str, *, salt: str | None = None) -> str:
         maxmem=_SCRYPT_MAXMEM,
     )
     return f"{salt}:{key.hex()}"
+
+
+def stored_password(db: Session, identity_id: str | None) -> str | None:
+    """The account's password hash, or None when it has no password
+    (Google/Facebook sign-in only). A read, not a write."""
+    if not identity_id:
+        return None
+    stored = db.execute(
+        text(
+            'SELECT password FROM "account" WHERE "userId" = :uid '
+            "AND \"providerId\" = 'credential' AND password IS NOT NULL"
+        ),
+        {"uid": identity_id},
+    ).scalar()
+    return stored if stored and ":" in stored else None
+
+
+def password_matches(stored: str, password: str) -> bool:
+    """Whether ``password`` gives the hash ``stored`` (from stored_password)."""
+    salt = stored.split(":", 1)[0]
+    return hmac.compare_digest(hash_password(password, salt=salt), stored)
 
 
 def new_id() -> str:

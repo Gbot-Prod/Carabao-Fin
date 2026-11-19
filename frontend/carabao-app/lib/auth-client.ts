@@ -89,11 +89,33 @@ const errorCode = (error: unknown) => (error as { code?: string } | null)?.code;
 // BetterAuth's admin plugin reports an account an admin suspended as BANNED_USER.
 const SUSPENDED_MESSAGE = "This account has been suspended. Contact Carabao support.";
 
+// One message for a wrong number, a wrong email and a wrong password, so a
+// failed sign-in does not tell which accounts exist.
+export const WRONG_CREDENTIALS_MESSAGE = "That number, email or password doesn't match our records.";
+
+const WRONG_CREDENTIAL_CODES = new Set([
+  "INVALID_EMAIL_OR_PASSWORD",
+  "INVALID_PHONE_NUMBER_OR_PASSWORD",
+  "INVALID_EMAIL",
+  "INVALID_PASSWORD",
+  "USER_NOT_FOUND",
+  "CREDENTIAL_ACCOUNT_NOT_FOUND",
+]);
+
 type SignInResult = { twoFactorRedirect: true } | Record<string, unknown>;
 
-const finishSignIn = (data: unknown, error: unknown, fallback: string): SignInResult => {
+const finishSignIn = (data: unknown, error: unknown): SignInResult => {
   if (errorCode(error) === "BANNED_USER") throw new Error(SUSPENDED_MESSAGE);
-  if (error || !data) throw new Error(getErrorMessage(error, fallback));
+  if (error) {
+    const status = (error as { status?: number }).status;
+    if (status === 429) throw new Error("Too many attempts. Wait a few minutes and try again.");
+    const code = errorCode(error);
+    // 401 is a wrong number, email or password; other errors (e.g. an admin
+    // account on the public site) keep their own message.
+    if (status === 401 || (code && WRONG_CREDENTIAL_CODES.has(code))) throw new Error(WRONG_CREDENTIALS_MESSAGE);
+    throw new Error(getErrorMessage(error, WRONG_CREDENTIALS_MESSAGE));
+  }
+  if (!data) throw new Error(WRONG_CREDENTIALS_MESSAGE);
   // Two-step verification (E8b): no session until the code page succeeds;
   // the client plugin is already on its way there.
   if ((data as { twoFactorRedirect?: boolean }).twoFactorRedirect) {
@@ -120,12 +142,12 @@ export const signIn = {
       password,
       rememberMe,
     });
-    return finishSignIn(data, error, "Wrong phone number or password.");
+    return finishSignIn(data, error);
   },
   // Accounts that added and verified an email can sign in with it too.
   email: async (credentials: Credentials & { email: string }) => {
     const { data, error } = await authClient.signIn.email(credentials);
-    return finishSignIn(data, error, "Wrong email or password.");
+    return finishSignIn(data, error);
   },
   // Google or Facebook: leaves the page and comes back signed in, creating the
   // account on first use. Failures return to /auth?error=<code>. `next` is a
@@ -266,6 +288,45 @@ export const updateName = async (name: string) => {
   const { error } = await authClient.updateUser({ name: name.trim().replace(/\s+/g, " ") });
   if (error) throw new Error(getErrorMessage(error, "We couldn't save your name."));
   await refreshSession();
+};
+
+// ── Password on the profile page (Account section) ──────────────────────
+// BetterAuth asks for a recent sign-in before it sets a first password
+// (sensitiveSessionMiddleware) and reports SESSION_NOT_FRESH otherwise.
+
+const STALE_SESSION_CODES = new Set(["SESSION_NOT_FRESH", "SESSION_EXPIRED"]);
+
+/** True when the account can sign in with a password. */
+export const hasPassword = async (): Promise<boolean> => {
+  const { data, error } = await authClient.listAccounts();
+  if (error || !data) throw new Error(getErrorMessage(error, "We couldn't load your sign-in methods."));
+  return data.some((account) => account.providerId === "credential");
+};
+
+/** Changes the password. Other devices are signed out. */
+export const changePassword = async (currentPassword: string, newPassword: string) => {
+  const { error } = await authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions: true });
+  if (error) {
+    const code = errorCode(error);
+    if (code === "INVALID_PASSWORD") throw new Error("Your current password is not correct.");
+    throw new Error(getErrorMessage(error, "We couldn't change your password."));
+  }
+  await refreshSession();
+};
+
+/** Adds a first password to an account that has none (e.g. Google sign-in only). */
+export const addPassword = async (newPassword: string) => {
+  const { error } = await authClient.$fetch("/phone-number/set-password", {
+    method: "POST",
+    body: { newPassword },
+  });
+  if (error) {
+    const code = errorCode(error);
+    if (code && STALE_SESSION_CODES.has(code)) {
+      throw new Error("For your security, log out and log in again, then add the password.");
+    }
+    throw new Error(getErrorMessage(error, "We couldn't add your password."));
+  }
 };
 
 export const signOut = async () => {
