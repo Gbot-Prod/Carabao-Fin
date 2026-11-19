@@ -485,6 +485,11 @@ export const api = {
     // Both return the order as /orders/me/current does; the screen re-reads the detail after.
     cancel: (token: string | null, orderId: number) =>
       request<ApiCurrentOrder>(`/orders/me/${orderId}/cancel`, token, { method: 'POST' }),
+    // CF-0113: the buyer's review of a delivered order.
+    createReview: (token: string | null, orderId: number, body: { rating: number; comment: string | null }) =>
+      request<ApiOrderReview>(`/orders/me/${orderId}/review`, token, { method: 'POST', body: JSON.stringify(body) }),
+    updateReview: (token: string | null, orderId: number, body: { rating: number; comment: string | null }) =>
+      request<ApiOrderReview>(`/orders/me/${orderId}/review`, token, { method: 'PATCH', body: JSON.stringify(body) }),
     confirmReceived: (token: string | null, orderId: number) =>
       request<ApiCurrentOrder>(`/orders/me/${orderId}/confirm-received`, token, { method: 'POST' }),
     place: (token: string | null, payload: PlaceOrderPayload) =>

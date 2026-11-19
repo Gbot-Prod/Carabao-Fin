@@ -15,6 +15,8 @@ import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
 import { orderActions, orderRef, parseOrderId } from '../lib/orderDetail';
+import { canEditReview } from '../lib/reviewForm';
+import { OrderReviewForm } from '../components/OrderReviewForm';
 
 type Load = { kind: 'ok'; order: ApiOrderDetail } | { kind: 'notFound' } | { kind: 'error'; message: string };
 
@@ -58,6 +60,7 @@ function OrderDetailContent() {
   const [load, setLoad] = useState<Load | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [editingReview, setEditingReview] = useState(false);
 
   useEffect(() => {
     if (orderId === null) return;
@@ -140,6 +143,10 @@ function OrderDetailContent() {
       {header}
       <ScrollView
         contentContainerStyle={styles.scroll}
+        // The review form has a text field: keep it above the keyboard (CF-0113).
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -201,20 +208,53 @@ function OrderDetailContent() {
           </View>
         )}
 
-        {order.review && (
+        {order.review && !editingReview && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Your review</Text>
             <Text style={styles.stars} accessibilityLabel={`${order.review.rating} out of 5 stars`}>
               {'★'.repeat(order.review.rating)}{'☆'.repeat(Math.max(0, 5 - order.review.rating))}
             </Text>
             {order.review.comment ? <Text style={styles.reviewText}>{order.review.comment}</Text> : null}
+            {canEditReview(order.review.editable_until) && (
+              <TouchableOpacity style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => setEditingReview(true)}>
+                <Text style={styles.editLink}>
+                  Edit review (until {formatDate(order.review.editable_until)})
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+        {order.review && editingReview && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Edit your review</Text>
+            <OrderReviewForm
+              initialRating={order.review.rating}
+              initialComment={order.review.comment}
+              submitLabel="Save review"
+              onCancel={() => setEditingReview(false)}
+              onSubmit={async (body) => {
+                await api.orders.updateReview(token, order.order_id, body);
+                setEditingReview(false);
+                await reload();
+              }}
+            />
           </View>
         )}
         {!order.review && order.can_review && (
-          <Text style={styles.muted}>
-            You can review this order on the website
-            {order.review_deadline ? ` until ${formatDate(order.review_deadline)}` : ''}.
-          </Text>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Review this order</Text>
+            <Text style={styles.muted}>
+              Your review helps other buyers and the farm
+              {order.review_deadline ? `. You can write it until ${formatDate(order.review_deadline)}` : ''}.
+            </Text>
+            <OrderReviewForm
+              submitLabel="Post review"
+              onSubmit={async (body) => {
+                await api.orders.createReview(token, order.order_id, body);
+                await reload();
+              }}
+            />
+          </View>
         )}
 
         <View style={styles.actions}>
@@ -315,6 +355,7 @@ const styles = StyleSheet.create({
   totalValue: { fontSize: FontSize.md, fontWeight: '800', color: Colors.primary },
   stars: { fontSize: FontSize.lg, color: Colors.warning },
   reviewText: { fontSize: FontSize.sm, color: Colors.text, lineHeight: 20 },
+  editLink: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.primary },
   actions: { gap: Spacing.sm },
   btn: {
     minHeight: 48, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center',
