@@ -108,6 +108,33 @@ def test_suspended_merchant_in_cart_blocks_checkout_and_names_them(db, merchant,
     assert db.query(Order).count() == 0
 
 
+def test_selected_lines_only_are_ordered(db, merchant, buyer):  # noqa: F811
+    rival, talong, kamatis, mangga = _setup(db, merchant, buyer)
+
+    resp = _client(db, buyer[0]).post(
+        "/orders/me/place", json={"produce_ids": [talong.id]}
+    )
+
+    assert resp.status_code == 200, resp.text
+    placed = resp.json()["orders"]
+    assert [o["merchant_id"] for o in placed] == [merchant.id]
+    assert placed[0]["total_price"] == 50 * 2 + 40
+    db.expire_all()
+    assert db.get(Produce, talong.id).stock_quantity == 8
+    # Unticked lines are not reserved.
+    assert db.get(Produce, kamatis.id).stock_quantity == 10
+    assert db.get(Produce, mangga.id).stock_quantity == 3
+
+
+def test_selection_not_in_cart_is_refused(db, merchant, buyer):  # noqa: F811
+    _setup(db, merchant, buyer)
+
+    resp = _client(db, buyer[0]).post("/orders/me/place", json={"produce_ids": [999999]})
+
+    assert resp.status_code == 400
+    assert db.query(Order).count() == 0
+
+
 def test_single_merchant_cart_still_gets_one_order(db, merchant, buyer):  # noqa: F811
     talong = _produce(db, merchant, "Talong", 50)
     db.add(Cart(user_id=buyer[0].id, items=[{"produce_id": talong.id, "quantity": 1}]))

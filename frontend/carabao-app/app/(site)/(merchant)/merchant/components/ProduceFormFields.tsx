@@ -221,7 +221,7 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
         <div className={styles.pricePerLabel}>{t.listing.per}</div>
         <label className={`${styles.formLabel} ${styles.qtyField}`}>
           {t.listing.quantity}
-          <input className={styles.formInput} type="number" min="0.1" step="0.1" value={form.unit_quantity ?? 1} onChange={(e) => onChange({ ...form, unit_quantity: Number(e.target.value) || 1 })} />
+          <input className={styles.formInput} type="number" min="0.1" max="1000" step="0.1" value={form.unit_quantity ?? 1} onChange={(e) => onChange({ ...form, unit_quantity: Number(e.target.value) || 1 })} />
         </label>
         <div className={styles.priceUnitLabel}>{form.unit}</div>
       </div>

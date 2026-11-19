@@ -100,7 +100,7 @@ def test_owner_cannot_review_own_farm_from_an_old_self_order(
     )
 
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "You can't review your own farm"
+    assert resp.json()["detail"] == "You cannot review your own farm"
     assert db.query(Review).count() == 0
     db.refresh(merchant)
     assert merchant.rating_count in (0, None)

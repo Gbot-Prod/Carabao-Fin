@@ -63,6 +63,8 @@ export type PlaceOrderPayload = {
   notes?: string | null;
   /** One farm voucher code (CF-0064); the server works out the discount. */
   voucher_code?: string | null;
+  // The cart lines ticked in the cart, by produce ID. Omit for the whole cart.
+  produce_ids?: number[];
 };
 
 export type PlacedOrder = {
@@ -132,6 +134,12 @@ export const placeOrderFromCart = async (payload: PlaceOrderPayload): Promise<Pl
 
 export const confirmOrderReceived = async (orderId: number): Promise<CurrentOrderItem> => {
   const response = await apiClient.post<CurrentOrderItem>(`/orders/me/${orderId}/confirm-received`);
+  return response.data;
+};
+
+/** Cancel a paid order the farm has not shipped yet; the payment goes to the refund queue. */
+export const cancelMyOrder = async (orderId: number): Promise<CurrentOrderItem> => {
+  const response = await apiClient.post<CurrentOrderItem>(`/orders/me/${orderId}/cancel`);
   return response.data;
 };
 

@@ -112,3 +112,15 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* fill: the chat takes the parent's height (merchant Chats page). */
+.fill {
+  height: 100%;
+  min-height: 0;
+}
+
+.fill .list {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}

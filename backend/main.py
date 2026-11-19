@@ -48,7 +48,16 @@ from app.services.order_reservations import (
     expire_stale_reservations,
     reservation_ttl_minutes,
 )
-from app.services.order_status import auto_confirm_days, auto_confirm_delivered_orders
+from app.services.order_retention import (
+    order_details_retention_days,
+    purge_closed_order_details,
+)
+from app.services.order_status import (
+    auto_confirm_days,
+    auto_confirm_delivered_orders,
+    cancel_unshipped_orders,
+    unshipped_cancel_days,
+)
 from app.services.sms_service import notify_merchant_new_order
 
 logging.basicConfig(level=logging.INFO)
@@ -117,6 +126,20 @@ async def lifespan(_: FastAPI):
         finally:
             db.close()
 
+    def cancel_orders_never_shipped() -> None:
+        # CF-0045: paid orders still in processing after the window are cancelled.
+        db = SessionLocal()
+        try:
+            cancelled = cancel_unshipped_orders(db, unshipped_cancel_days())
+            db.commit()
+            if cancelled:
+                logger.info("Cancelled %s unshipped paid order(s)", cancelled)
+        except Exception:
+            db.rollback()
+            logger.exception("Could not cancel unshipped paid orders")
+        finally:
+            db.close()
+
     def text_merchants_about_unread_chat() -> None:
         # CH1: a buyer message still unread after 15 minutes texts the farm once.
         db = SessionLocal()
@@ -155,13 +178,29 @@ async def lifespan(_: FastAPI):
         finally:
             db.close()
 
+    def purge_old_order_details() -> None:
+        # CF-0044: chat, address, pin and notes go 14 days after an order closes.
+        db = SessionLocal()
+        try:
+            purged = purge_closed_order_details(db, order_details_retention_days())
+            db.commit()
+            if purged:
+                logger.info("Purged delivery details of %s closed order(s)", purged)
+        except Exception:
+            db.rollback()
+            logger.exception("Could not purge closed order details")
+        finally:
+            db.close()
+
     async def reservation_cleanup_loop() -> None:
         while True:
             # DB and PayMongo calls block, so keep them off the event loop.
             await asyncio.to_thread(release_expired_reservations)
             await asyncio.to_thread(confirm_unconfirmed_deliveries)
+            await asyncio.to_thread(cancel_orders_never_shipped)
             await asyncio.to_thread(text_merchants_about_unread_chat)
             await asyncio.to_thread(purge_expired_codes_and_limits)
+            await asyncio.to_thread(purge_old_order_details)
             await asyncio.sleep(60)
 
     cleanup_task = asyncio.create_task(reservation_cleanup_loop())

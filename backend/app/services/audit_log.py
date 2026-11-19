@@ -27,6 +27,7 @@ PRODUCE_HIDE = "produce.hide"
 PRODUCE_UNHIDE = "produce.unhide"
 REVIEW_HIDE = "review.hide"  # CF-0075
 REVIEW_UNHIDE = "review.unhide"
+ORDER_CANCEL = "order.cancel"  # CF-0045
 
 ACTIONS = (
     ROLE_CHANGE,
@@ -40,6 +41,7 @@ ACTIONS = (
     PRODUCE_UNHIDE,
     REVIEW_HIDE,
     REVIEW_UNHIDE,
+    ORDER_CANCEL,
 )
 
 

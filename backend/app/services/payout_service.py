@@ -212,6 +212,25 @@ def claimable_transactions(db: Session, merchant_id: int) -> list[Transaction]:
     )
 
 
+def fit_to_transfer_limit(
+    txns: list[Transaction], provider: str, fee: int
+) -> list[Transaction]:
+    """The oldest transactions whose payout, after ``fee``, one transfer can send.
+
+    InstaPay sends at most ₱50,000 per transfer (CF-0046). A batch above the
+    limit could never be sent and would block every later request, so the
+    request takes what fits; the rest stays claimable for the next payout.
+    """
+    cap = PROVIDER_MAX_PESOS[provider]
+    chosen: list[Transaction] = []
+    total = 0
+    for txn in sorted(txns, key=lambda t: (t.paid_at or t.created_at, t.id)):
+        if total + txn.merchant_amount - fee <= cap:
+            chosen.append(txn)
+            total += txn.merchant_amount
+    return chosen
+
+
 def _mark_failed(batch: PayoutBatch, reason: str) -> None:
     batch.status = PayoutStatus.FAILED
     batch.failure_reason = reason[:1000]

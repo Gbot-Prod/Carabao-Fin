@@ -200,7 +200,6 @@ Perf-only (`backend/scripts/perf`): `PERF_DATABASE_URL`, `PERF_CLIENT_CSV`, `PER
 | `BETTER_AUTH_RATE_LIMIT_STORAGE` | No | `memory` | `database` keeps Better Auth's per-IP counts in its `rateLimit` table, so they survive deploys and are shared by replicas (CF-0080). Set it only after `npm run auth:migrate:apply` has created that table. Rules: `lib/auth-rate-limit.ts` |
 | `MOCK_AUTH_SESSION` | No | `false` | never `true` on a host (fixed session without sign-in) |
 | `NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES` | No | | idle sign-out |
-| `NEXT_PUBLIC_FEATURE_LANGUAGE_TOGGLE` | No | | language switch |
 
 `NEXT_PUBLIC_*` values are baked in at build. Set before build; rebuild after a change.
 
@@ -474,6 +473,12 @@ other moves: 409
   - Images are 5 MB max, re-encoded with Pillow (strips EXIF/GPS), JPEG/PNG/WEBP only, and limited to 40 MP and 4096 px per side.
   - PDFs are 20 MB max. They need the magic bytes, must parse, and must not be encrypted or contain JS, launch actions or embedded files.
 - **Body limits:** 12 MB by default; 42 MB for `/merchant-onboarding/me` (2 documents). Oversize → 413, with CORS headers.
+- **Shop page draft and publish** (`shop_pages`):
+  - The merchant edits a draft (`draft_title`, `draft_description`, `draft_logo_url`, `draft_banner_image_url`). `PATCH /merchants/me/shoppage` and the logo and banner uploads change only the draft. Each upload gets a new R2 key, so the live image does not change.
+  - `POST /merchants/me/shoppage/publish` copies the draft to the live columns and sets `published_at`. A blank draft title → 422. `POST /merchants/me/shoppage/discard` copies the live columns back to the draft (400 if never published). `POST /merchants/me/shoppage/unpublish` sets `published_at` to NULL, so the farm is hidden again (400 if not live). The draft stays. Open orders continue, because order routes do not use `merchant_is_public()`. Publish makes the farm public again.
+  - A merchant is public only after the first publish: `merchant_is_public()` (`services/account_suspension.py`) requires a shop page with `published_at` set. Until then the farm is not in `/merchants`, search, follows or saved produce, and `/merchants/{id}` gives 404.
+  - Owner reads: `GET /merchants/me` and `GET /merchants/me/shoppage` (live plus draft, `is_published`, `has_unpublished_changes`). The merchant dashboard uses these, not the public routes.
+  - The slug is not part of the draft. A slug change applies at once.
 
 ### 7.5 Checkout and payment
 
@@ -492,9 +497,11 @@ The admin support list (`GET /admin/support`, CF-0076) is built in one SQL query
 
 **Listing page (CF-0081).** `GET /produce/{id}` (public, same per-IP limit as search; declared after `/produce/search`, which Starlette would otherwise read as an id) returns a listing buyers can order, its farm (name, town, rating, holiday mode — no address or contact) and up to 10 listings with the same name (case and spaces ignored) from other public farms, cheapest first; 404 for hidden, expired, suspended-farm or missing listings. Web page `/listings/[id]` (a buyer path in `BUYER_PREFIXES`; `/produce` is a merchant-site page); produce search cards open it, and it links to the farm page to order.
 
+**Cart lines (main CF-0052 + web loop CF-0042, joined 2026-11-20).** `GET /carts/me` builds each saved line again from its listing (price tier, stock, name, farm), writes the fresh lines back, and drops lines whose listing was deleted. Each line has `unavailable_reason` (text, for example "is no longer available"; the web cart and the mobile app show it) and `issue` (a code: `unavailable`, `expired`, `farm_unavailable`, `own_listing`, `below_minimum`, `exceeds_stock`). Stock is only a code: `unavailable_reason` stays null for `exceeds_stock`. `previous_price` is the price when the buyer last saved the line, if the listing price changed since; it stays until the next `PUT`. `PUT /carts/me` refuses (400) a new or changed line that checkout would refuse; a saved line that goes bad later is kept and flagged. Both forms come from one check (`cart_line_issue` in `routes/_order_helpers.py`). Place-order takes optional `produce_ids` (only the ticked lines) and `voucher_code`.
+
 **Order history removal (CF-0070).** `DELETE /orders/me/history/{id}` (closed orders only) sets `orders.hidden_by_buyer_at`; it never deletes the row. The buyer's history lists (`/orders/me/history`, `/page`) leave hidden orders out; the order detail link, the receipt, the farm's and the admins' views, payments, refunds, reviews and the buyer's data export keep them. Orders with payments can now be hidden too (the old 409 stopgap is gone).
 
-**Holiday mode (CF-0066).** A merchant can pause orders through a day (`PUT /merchants/me/pause` `{paused_until, message}`, today … today + 90 days on the Manila calendar; `DELETE` resumes). The farm stays listed and visible (public responses carry `paused_until` and `pause_message`), but `merchant_takes_orders` is false, so place-order refuses its lines ("… is on a break and takes orders again after …"), the cart flags them `farm_unavailable`, and reorder skips them. It ends by itself the day after `paused_until`; no job clears it. Orders placed before the pause are not changed. Web: merchant Settings → Holiday mode; a notice on the farm page; an "On a break until …" label on browse farm cards (slim list `paused_until`) and produce search results (`merchant_paused_until`, CF-0072). The voucher preview leaves a paused farm's lines out, like checkout.
+**Holiday mode (CF-0066).** A merchant can pause orders through a day (`PUT /merchants/me/pause` `{paused_until, message}`, today … today + 90 days on the Manila calendar; `DELETE` resumes). The farm stays listed and visible (public responses carry `paused_until` and `pause_message`), but `merchant_takes_orders` is false, so place-order refuses its lines ("… is on a break and takes orders again after …"), the cart flags them `farm_unavailable`, and reorder skips them. It ends by itself the day after `paused_until`; no job clears it. Orders placed before the pause are not changed. Web: merchant Shop & settings → Holiday mode (the old `/settings` path opens `/shop`); a notice on the farm page; an "On a break until …" label on browse farm cards (slim list `paused_until`) and produce search results (`merchant_paused_until`, CF-0072). The voucher preview leaves a paused farm's lines out, like checkout.
 
 Money is stored in whole pesos. Calculations use `Decimal` with ROUND_HALF_UP. The platform fee is 2%. PayMongo gets centavos, converted only at that boundary. An invalid amount raises `InvalidAmount` and never becomes 0. The cap is 10^15.
 
@@ -563,6 +570,17 @@ Startup runs `_check_field_encryption_keys`:
 
 ## 8. Maintenance
 
+### CF IDs
+
+Code comments and test names use `CF-00NN` tags. Some numbers have two meanings, because work on `main` and on `improve/loop` took IDs at the same time:
+
+- **CF-0039 to CF-0054:** `main` and the web loop use these numbers for different changes. Examples: CF-0042 is "listing input limits" on `main` and "cart line issues" in the web loop. CF-0052 is "cart line check" on `main` and "farm page hearts" in the web loop. Read the comment text, not only the number.
+- The old branch `fix/cf-0039-0044` used CF-0039 to CF-0044 too. `main` has its own version of those fixes, so the branch is not merged.
+- **Ranges from now on**, so the two loops can run at the same time:
+  - web (and `main`): CF-0085 to CF-0100, then CF-0200 to CF-0299, then CF-0400 and up.
+  - mobile loop: CF-0101 to CF-0199 (last used CF-0127), then CF-0300 to CF-0399.
+  - Find the highest used number with `grep -rhoE "CF-0[0-9]{3}" backend frontend mobile/CarabaoMobile/src mobile/CarabaoMobile/app | sort -u`.
+
 ### Admin recovery
 
 Run `uv run python scripts/make_admin.py <verified number or email>` in the API shell. Then do the first-admin steps 3–4.
@@ -579,7 +597,7 @@ There is no re-encrypt script yet. Keep the previous key until every TIN/RSBSA v
 
 ### Database changes
 
-- **API tables:** add an Alembic revision in `backend/alembic/versions`. Alembic excludes `user`, `session`, `account` and `verification` (`alembic/env.py`).
+- **API tables:** add an Alembic revision in `backend/alembic/versions`. When two branches each add revisions, add an empty merge revision with both heads as `down_revision` (example: `f5b7d9e1a3c6` joins `main` and `improve/loop`). `uv run alembic heads` must show one head. Alembic excludes `user`, `session`, `account` and `verification` (`alembic/env.py`).
 - **Better Auth tables:** change the plugins and fields in `lib/auth.ts` and in `scripts/better-auth-migrate.mjs`, then run `npm run auth:migrate:apply`.
 - **Cascades:**
   - Deleting a `user` row cascades to `backend_users`, `carts` and `merchant_applications`.

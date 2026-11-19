@@ -1,7 +1,8 @@
 'use client'
 
-// Not rendered on the profile page for now. Kept so it can be re-enabled by
-// importing it back into page.tsx inside a settingCard.
+// Notification switches in the profile page's Settings section.
+// The backend reads order_updates (SMS) and email_alerts (email); promotions
+// is saved but nothing sends promotions yet.
 
 import { useEffect, useState } from 'react';
 import styles from '../page.module.css';
@@ -56,10 +57,12 @@ export default function NotificationsPanel({ profile, onSaved }: { profile: User
           </div>
           <button
             type="button"
+            role="switch"
+            aria-checked={prefs[key]}
             className={`${styles.toggle} ${prefs[key] ? styles.toggleOn : ''}`}
             onClick={() => toggle(key)}
             disabled={saving === key}
-            aria-label={`${prefs[key] ? 'Disable' : 'Enable'} ${label}`}
+            aria-label={label}
           >
             <span className={styles.toggleThumb} />
           </button>

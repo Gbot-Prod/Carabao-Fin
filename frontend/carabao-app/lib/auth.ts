@@ -19,6 +19,7 @@ import { appSurface, merchantUrl, rootDomain, subdomainMode } from "@/lib/urls";
 import { PH_MOBILE_PATTERN, PHONE_PLACEHOLDER_EMAIL_DOMAIN, isPlaceholderEmail } from "@/lib/phone";
 import { OTP_SEND_PATHS, resendWaitSeconds } from "@/lib/otp-cooldown";
 import { authRateLimit } from "@/lib/auth-rate-limit";
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, PASSWORD_RULE_MESSAGE, isStrongPassword } from "@/lib/password-policy";
 import {
   ENROLMENT_TOKEN_HEADER,
   TOTP_SECRET_PATHS,
@@ -531,9 +532,14 @@ const phoneChangeHistory = (): BetterAuthPlugin => ({
 
 // After a phone signup's code is verified the account has no password yet;
 // BetterAuth only exposes setPassword to the server, so this adds the step.
-// Only for an account with no sign-in method at all (a phone signup that just
-// verified its code); a Google/Facebook account or one with a password is
-// refused (changing one goes through change-password).
+// Also used by the profile page's Account section to add a password to an
+// account that signs in with Google/Facebook only: that needs a sign-in in the
+// last 15 minutes, so a stolen session cannot add a password of its own
+// (sensitiveSessionMiddleware checks only that the session is valid). An
+// account that already has a password is refused (changing one goes through
+// change-password).
+const ADD_PASSWORD_SIGN_IN_WINDOW_MS = 15 * 60 * 1000;
+
 const phoneSignupPassword = (): BetterAuthPlugin => ({
   id: "carabao-phone-signup-password",
   endpoints: {
@@ -545,17 +551,20 @@ const phoneSignupPassword = (): BetterAuthPlugin => ({
         use: [sensitiveSessionMiddleware],
       },
       async (ctx) => {
+        // passwordPolicy() has already checked newPassword.
         const { newPassword } = ctx.body;
-        const { minPasswordLength, maxPasswordLength } = ctx.context.password.config;
-        if (newPassword.length < minPasswordLength || newPassword.length > maxPasswordLength) {
-          throw new APIError("BAD_REQUEST", {
-            message: `Use ${minPasswordLength} to ${maxPasswordLength} characters.`,
-          });
-        }
         const userId = ctx.context.session.user.id;
         const accounts = await ctx.context.internalAdapter.findAccounts(userId);
-        if (accounts.length > 0) {
-          throw new APIError("BAD_REQUEST", { message: "This account already has a way to sign in." });
+        if (accounts.some((account) => account.providerId === "credential")) {
+          throw new APIError("BAD_REQUEST", { message: "This account already has a password." });
+        }
+        // A phone signup has no account rows yet and its session is brand new.
+        const signedInAt = new Date(ctx.context.session.session.createdAt).getTime();
+        if (accounts.length > 0 && Date.now() - signedInAt >= ADD_PASSWORD_SIGN_IN_WINDOW_MS) {
+          throw new APIError("FORBIDDEN", {
+            code: "SESSION_NOT_FRESH",
+            message: "For your security, log out and log in again, then add the password.",
+          });
         }
         await ctx.context.internalAdapter.linkAccount({
           userId,
@@ -566,6 +575,33 @@ const phoneSignupPassword = (): BetterAuthPlugin => ({
         return ctx.json({ status: true });
       },
     ),
+  },
+});
+
+// Every endpoint that sets a new password obeys lib/password-policy.ts.
+// Sign-in is not checked: it only compares with the stored password.
+const NEW_PASSWORD_PATHS = [
+  "/phone-number/set-password",
+  "/phone-number/reset-password",
+  "/reset-password",
+  "/change-password",
+  "/set-password",
+];
+
+const passwordPolicy = (): BetterAuthPlugin => ({
+  id: "carabao-password-policy",
+  hooks: {
+    before: [
+      {
+        matcher: (ctx) => NEW_PASSWORD_PATHS.includes(ctx.path ?? ""),
+        handler: createAuthMiddleware(async (ctx) => {
+          const newPassword = (ctx.body as { newPassword?: unknown } | undefined)?.newPassword;
+          if (typeof newPassword !== "string" || !isStrongPassword(newPassword)) {
+            throw new APIError("BAD_REQUEST", { code: "WEAK_PASSWORD", message: PASSWORD_RULE_MESSAGE });
+          }
+        }),
+      },
+    ],
   },
 });
 
@@ -617,6 +653,7 @@ function createAuth() {
       otpResendCooldown(),
       phoneChangeHistory(),
       phoneSignupPassword(),
+      passwordPolicy(),
       // Public deploy: no session for an admin account (before adminTwoFactor()).
       ...(isAdminSurface ? [] : [noAdminsOnPublicSurface()]),
       // After twoFactor(), so that its after-hook has the last word on the response.
@@ -689,6 +726,8 @@ function createAuth() {
     secret: process.env.BETTER_AUTH_SECRET,
     emailAndPassword: {
       enabled: true,
+      minPasswordLength: PASSWORD_MIN_LENGTH,
+      maxPasswordLength: PASSWORD_MAX_LENGTH,
       // Accounts are created by phone, Google or Facebook only; email + password still
       // signs in an account that has a verified email.
       disableSignUp: true,

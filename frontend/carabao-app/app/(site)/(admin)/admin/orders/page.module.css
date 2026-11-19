@@ -292,3 +292,40 @@
 .clear:hover {
   border-color: #b9c7bd;
 }
+
+/* CF-0045: admin cancel */
+.cancelReason {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.cancelButton {
+  padding: 8px 14px;
+  border: 1px solid #b42318;
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+  color: #b42318;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cancelReason:focus-visible,
+.cancelButton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.cancelButton:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}

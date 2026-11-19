@@ -26,6 +26,7 @@ const ACTION_LABELS: Record<string, string> = {
   "produce.unhide": "Listing unhidden",
   "review.hide": "Review hidden",
   "review.unhide": "Review restored",
+  "order.cancel": "Order cancelled",
 };
 
 const TARGET_LINKS: Partial<Record<string, (id: number) => string>> = {
@@ -35,6 +36,7 @@ const TARGET_LINKS: Partial<Record<string, (id: number) => string>> = {
   transaction: () => "/admin/refunds",
   produce: () => "/admin/listings",
   review: () => "/admin/reviews",
+  order: () => "/admin/orders",
 };
 
 const show = (value: unknown): string => {

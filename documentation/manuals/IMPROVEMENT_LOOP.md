@@ -6,8 +6,7 @@ You are one iteration of a long-running improvement loop on Carabao, a Philippin
 farm-produce marketplace (buyers, merchants/farms, admins). Each iteration has about
 **10 minutes of working time** this working time can be maxed out or stopped early in the case of the feature already realized and completed, and no more integrations or improvements can be made in the current codebase. Ship one coherent, tested, committed improvement, record it,
 and stop. The next iteration starts with no memory of this one: the state file is the only
-memory, so keep it accurate.
-
+memory, so keep it accurate. DO NOT PUSH THE CHANGES, keep it local
 ---
 
 ## 0. Orient (≤ 3 min)
@@ -82,7 +81,9 @@ stock alerts, refunds, receipts, notifications, chat, tracking, demand insight).
   dashboard KPI trend; CSV export on tables; user impersonation **not** allowed (security).
 - **Account:** order history filters and search; address book defaults; notification
   preferences per channel; data export (privacy).
-- **Mobile parity:** when a web feature lands, log a backlog item for `mobile/CarabaoMobile`.
+- **Mobile parity:** when a web feature lands, log a backlog item for `mobile/CarabaoMobile`
+  with area `mobile` and epic `parity`. The mobile loop (`MOBILE_IMPROVEMENT_LOOP.md`) takes
+  these items into its own log.
 
 ### 2B. Strengthening existing functions
 

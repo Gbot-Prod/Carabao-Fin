@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ADMIN_PAGE_SIZE,
+  cancelAdminOrder,
   fetchAdminMerchants,
   fetchAdminOrder,
   fetchAdminOrders,
@@ -19,9 +20,12 @@ import styles from "./page.module.css";
 import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import OrderChat from "@/components/OrderChat/OrderChat";
+import getApiErrorMessage from "@/util/errorHelper";
 
 const ORDER_STATUSES: AdminOrderStatus[] = ["pending", "processing", "shipped", "out_for_delivery", "delivered", "cancelled", "payment_mismatch"];
 const PAYMENT_STATUSES: AdminPaymentStatus[] = ["awaiting_payment", "paid", "refund_pending", "refunded", "unpaid"];
+// Orders an admin may still cancel (mirrors ACTIVE_ORDER_STATUSES in the backend).
+const CANCELLABLE: AdminOrderStatus[] = ["pending", "processing", "shipped", "out_for_delivery"];
 const FILTER_KEYS = ["status", "merchant_id", "payment_status", "date_from", "date_to"] as const;
 
 const peso = (n: number) =>
@@ -296,11 +300,64 @@ function OrderDetailPanel({ orderId, onClose }: { orderId: number; onClose: () =
               </dl>
             </section>
 
+            {CANCELLABLE.includes(d.status as AdminOrderStatus) && (
+              <CancelOrderSection orderId={d.id} onCancelled={setDetail} />
+            )}
+
             {/* Admins can read the buyer-farm chat and join in (CH1b). */}
             <OrderChat orderId={d.id} />
           </>
         )}
       </aside>
     </div>
+  );
+}
+
+function CancelOrderSection({
+  orderId,
+  onCancelled,
+}: {
+  orderId: number;
+  onCancelled: (detail: AdminOrderDetail) => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (reason.trim().length < 3) {
+      setError("Give a reason. The buyer sees it.");
+      return;
+    }
+    if (!window.confirm("Cancel this order? A paid order goes to the refund queue.")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onCancelled(await cancelAdminOrder(orderId, reason.trim()));
+    } catch (err) {
+      setError(getApiErrorMessage(err) ?? "Could not cancel the order.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className={styles.section}>
+      <h3>Cancel order</h3>
+      <p className={styles.sub}>Use this when the farm cannot complete the order. The buyer is told the reason.</p>
+      <textarea
+        className={styles.cancelReason}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        maxLength={300}
+        rows={2}
+        placeholder="Reason, for example: farm cannot deliver"
+        aria-label="Cancel reason"
+      />
+      {error && <p className={styles.stateError}>{error}</p>}
+      <button type="button" className={styles.cancelButton} onClick={submit} disabled={busy}>
+        {busy ? "Cancelling…" : "Cancel order"}
+      </button>
+    </section>
   );
 }

@@ -19,7 +19,6 @@ from app.api.routes import merchants as merchant_routes
 from app.api.routes import shipments as shipment_routes
 from app.api.routes import users as user_routes
 from app.models.produce import Produce
-from app.models.shopPage import ShopPage
 from app.services import merchant_service, r2_service, rate_limit
 from tests.files import png_bytes
 from tests.shared_fixtures import _buyer
@@ -73,7 +72,7 @@ def test_uploads_share_one_limit_per_user(
     db: Session, merchant: Any, monkeypatch: pytest.MonkeyPatch, r2_calls: list[str]
 ) -> None:
     _shrink(monkeypatch, "image_upload", 3)
-    db.add(ShopPage(merchant_id=merchant.id, title="Farm", slug="farm"))
+    # The merchant fixture already has a shop page (main).
     produce = Produce(
         merchant_id=merchant.id, name="Talong", price=50, stock_quantity=5
     )
@@ -106,13 +105,13 @@ def test_shipment_create_is_limited_before_any_lookup(
 ) -> None:
     _shrink(monkeypatch, "shipment_create", 2)
     lookups: list[int] = []
-    real_lookup = merchant_service.get_active_merchant
+    real_lookup = merchant_service.get_editable_merchant
 
     def counting_lookup(session: Session, user_id: int) -> Any:
         lookups.append(user_id)
         return real_lookup(session, user_id)
 
-    monkeypatch.setattr(shipment_routes, "get_active_merchant", counting_lookup)
+    monkeypatch.setattr(shipment_routes, "get_editable_merchant", counting_lookup)
     client = _app(db, merchant.user)
     body = {"order_ids": [999_001]}
 

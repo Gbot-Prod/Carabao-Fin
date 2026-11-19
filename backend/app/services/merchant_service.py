@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,28 @@ def get_active_merchant(
     if for_update:
         query = query.with_for_update()
     return query.first()
+
+
+SUSPENDED_SHOP_DETAIL = (
+    "Your shop is suspended, so you cannot change listings, your shop page or "
+    "orders. You can still view your orders and request payouts. Contact "
+    "Carabao support."
+)
+
+
+def get_editable_merchant(
+    db: Session, user_id: int, *, for_update: bool = False
+) -> Merchant | None:
+    """The user's merchant profile, for a route that changes something.
+
+    Raises 403 while an admin has the shop suspended (CF-0054). Reads and
+    payout requests use get_active_merchant, so a suspended merchant can still
+    see their data and be paid what they already earned.
+    """
+    merchant = get_active_merchant(db, user_id, for_update=for_update)
+    if merchant is not None and merchant.suspended_at is not None:
+        raise HTTPException(status_code=403, detail=SUSPENDED_SHOP_DETAIL)
+    return merchant
 
 
 def find_deletion_blockers(db: Session, merchant_id: int) -> dict[str, int]:

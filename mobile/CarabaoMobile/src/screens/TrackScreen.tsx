@@ -232,7 +232,7 @@ function TrackScreenContent() {
                 <Divider />
                 <Text style={[styles.timelineTitle, { marginBottom: Spacing.sm }]}>Your Orders</Text>
               </View>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item, index }) => (
             <View style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.sm }}>

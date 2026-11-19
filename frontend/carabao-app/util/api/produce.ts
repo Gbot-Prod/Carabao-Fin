@@ -47,6 +47,8 @@ export type ProduceUpdatePayload = {
   unit?: 'kg' | 'lbs' | null;
   unit_quantity?: number | null;
   stock_quantity?: number | null;
+  // CF-0049: the stock the form loaded; the server answers 409 if it changed.
+  expected_stock_quantity?: number | null;
   image_url?: string | null;
   harvest_date?: string;
   best_before?: string;

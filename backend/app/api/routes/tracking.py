@@ -164,7 +164,7 @@ def get_order_tracking(
             return _waiting_for_shipment(
                 order_id=order_id,
                 merchant_name=merchant_name,
-                status=shipment.status if shipment else order.status,
+                status=order.status,
                 shipment_id=shipment.id if shipment else 0,
             )
         return _response_from_stored_route(
@@ -172,7 +172,8 @@ def get_order_tracking(
             shipment_id=shipment.id,
             order_id=order_id,
             merchant_name=merchant_name,
-            status=shipment.status,
+            # CF-0053: this order's status, not the whole shipment's.
+            status=order.status,
             shipped_at=shipment.shipped_at,
             highlight_order_id=order_id,
         )

@@ -5,7 +5,6 @@ import getApiErrorMessage from "@/util/errorHelper";
 import styles from './page.module.css';
 import {
   createMyAddress,
-  deleteMyAccount,
   deleteMyAddress,
   fetchMyAddresses,
   fetchMyProfile,
@@ -20,15 +19,33 @@ import type { Pin } from '@/util/reverseGeocode';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import TwoFactorSettings from '@/components/TwoFactorSettings/TwoFactorSettings';
 import DataExportSection from '@/components/DataExport/DataExportSection';
-import { addEmail, signOut, updateName } from '@/lib/auth-client';
+import { addEmail, updateName } from '@/lib/auth-client';
 import { formatPhMobile } from '@/lib/phone';
 import PhoneVerifyDialog from '@/components/PhoneVerifyDialog/PhoneVerifyDialog';
+import LanguageToggle from '@/components/LanguageToggle/LanguageToggle';
+import NotificationsPanel from './components/NotificationsPanel';
+import PasswordPanel from './components/PasswordPanel';
+import DeleteAccountPanel from './components/DeleteAccountPanel';
 
-// Hidden for now — kept as components in ./components so they can be re-enabled:
-//   NotificationsPanel  (🔔 Notifications)    <NotificationsPanel profile={profile} onSaved={setProfile} />
+// Hidden for now — kept as a component in ./components so it can be re-enabled:
 //   SupportPanel        (💬 Contact support)  <SupportPanel />
-// The "View Merchant Page" / "Merchant Dashboard" links, the "Apply as Merchant"
-// card and the "Help & Support" card were also removed from the left column.
+
+// One card: the left column is an overview and the section menu, the right
+// column shows the selected section. The section is kept in the URL hash
+// (#addresses), so a link or a reload opens the same one.
+const SECTIONS = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'addresses', label: 'Addresses' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'account', label: 'Account' },
+] as const;
+
+type SectionId = (typeof SECTIONS)[number]['id'];
+
+const sectionFromHash = (): SectionId => {
+  const hash = window.location.hash.slice(1);
+  return SECTIONS.some(s => s.id === hash) ? (hash as SectionId) : 'profile';
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatDate = (v: string | null | undefined) => {
@@ -191,7 +208,7 @@ function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | nul
         </div>
         {error && <p className={styles.panelError}>{error}</p>}
         <div className={styles.panelActions}>
-          <button className={styles.saveBtn} onClick={save} disabled={busy} type="button">{busy ? 'Saving…' : 'Save'}</button>
+          <button className={styles.primaryBtn} onClick={save} disabled={busy} type="button">{busy ? 'Saving…' : 'Save'}</button>
           <button className={styles.cancelBtn} onClick={cancel} disabled={busy} type="button">Cancel</button>
         </div>
       </div>
@@ -207,7 +224,7 @@ function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | nul
           <div key={a.id} className={styles.addressCard}>
             <div className={styles.addressHead}>
               <strong>{a.label || 'Address'}</strong>
-              {a.is_default && <span className={styles.defaultBadge}>Default</span>}
+              {a.is_default && <span className={styles.badgeOk}>Default</span>}
             </div>
             <span className={styles.panelRowValue}>{addressLine(a) || <NoData />}</span>
             <span className={styles.panelRowValue}>
@@ -239,7 +256,7 @@ function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | nul
       })}
       {error && <p className={styles.panelError}>{error}</p>}
       {addresses.length < MAX_ADDRESSES && (
-        <button className={styles.panelEditBtn} onClick={() => startEdit(null)} disabled={busy} type="button">+ Add address</button>
+        <button className={styles.secondaryBtn} onClick={() => startEdit(null)} disabled={busy} type="button">+ Add address</button>
       )}
     </div>
   );
@@ -252,6 +269,15 @@ type EditForm = { name: string; email: string };
 
 const profileToForm = (p: UserProfile): EditForm => ({ name: p.name ?? '', email: '' });
 
+function SectionHead({ title, desc }: { title: string; desc: string }) {
+  return (
+    <header className={styles.sectionHead}>
+      <h2 className={styles.sectionTitle}>{title}</h2>
+      <p className={styles.sectionDesc}>{desc}</p>
+    </header>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Profile() {
   const [isLoading, setIsLoading] = useState(true);
@@ -259,6 +285,7 @@ export default function Profile() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [section, setSection] = useState<SectionId>('profile');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<EditForm>({ name: '', email: '' });
@@ -266,9 +293,6 @@ export default function Profile() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
-
-  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false);
-  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     fetchMyProfile()
@@ -279,7 +303,16 @@ export default function Profile() {
     if (new URLSearchParams(window.location.search).get('email') === 'verified') {
       queueMicrotask(() => setNotice('Your email is verified.'));
     }
+    queueMicrotask(() => setSection(sectionFromHash()));
+    const onHash = () => setSection(sectionFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
+
+  const openSection = (id: SectionId) => {
+    setSection(id);
+    history.replaceState(null, '', `#${id}`);
+  };
 
   const reloadProfile = async () => setProfile(await fetchMyProfile());
 
@@ -319,165 +352,195 @@ export default function Profile() {
   const set = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(p => ({ ...p, [field]: e.target.value }));
 
-  const handleDeleteAccount = async () => {
-    setDeletingAccount(true);
-    try {
-      await deleteMyAccount();
-      await signOut().catch(() => {});
-      window.location.href = '/auth';
-    } catch {
-      setDeletingAccount(false);
-      setConfirmDeleteAccount(false);
-    }
-  };
-
   const fullName = profile ? profile.name?.trim() || 'Carabao User' : null;
   const hasMerchant = !!profile?.merchant?.id;
   const cart = profile?.cart;
   const memberSince = formatDate(profile?.created_at);
+  const phone = profile?.phone_number ? formatPhMobile(profile.phone_number) : null;
 
   if (isLoading) return <PageLoader label="Loading your profile…" />;
 
   return (
     <div className={styles.container}>
-      <main className={styles.main}>
+      <div className={styles.card}>
 
-        {/* ── Left column ── */}
-        <div className={styles.leftCol}>
-          <section className={styles.profileSection}>
-            <div className={styles.profileCover} aria-hidden="true" />
+        {/* ── Left: overview and section menu ── */}
+        <aside className={styles.sidebar}>
+          <div className={styles.overview}>
             <UserAvatar
               pictureUrl={profile?.profile_picture_url ?? null}
               uploading={avatarUploading}
               onUpload={(file) => void handleAvatarUpload(file)}
             />
-            {avatarError && <p role="alert" className={styles.saveError}>{avatarError}</p>}
-
-            <div className={styles.nameBlock}>
-              <h2 className={styles.name}>{fullName ?? '—'}</h2>
-              {memberSince && <p className={styles.memberSince}>Member since {memberSince}</p>}
-            </div>
-
-            {loadError && <p className={styles.errorBanner}>{loadError}</p>}
-            {notice && <p className={styles.noticeBanner} role="status">{notice}</p>}
-
-            <dl className={styles.contactList}>
-              <div className={styles.contactRow}>
-                <dt className={styles.contactLabel}>Email</dt>
-                <dd className={styles.contactValue}>
-                  <span className={styles.contactText}>{profile?.email ?? <NoData text="No email added" />}</span>
-                  {profile?.email && (
-                    <span className={profile.email_verified ? styles.badgeOk : styles.badgeWarn}>
-                      {profile.email_verified ? 'Verified' : 'Not verified'}
-                    </span>
-                  )}
-                </dd>
+            {avatarError && <p role="alert" className={styles.panelError}>{avatarError}</p>}
+            <p className={styles.name}>{fullName ?? '—'}</p>
+            <dl className={styles.overviewList}>
+              <div>
+                <dt>Email</dt>
+                <dd>{profile?.email ?? <NoData text="No email" />}</dd>
               </div>
-              <div className={styles.contactRow}>
-                <dt className={styles.contactLabel}>Mobile</dt>
-                <dd className={styles.contactValue}>
-                  <span className={styles.contactText}>
-                    {profile?.phone_number ? formatPhMobile(profile.phone_number) : <NoData text="No number added" />}
-                  </span>
-                  {profile?.phone_number && (
-                    <span className={profile.phone_verified ? styles.badgeOk : styles.badgeWarn}>
-                      {profile.phone_verified ? 'Verified' : 'Not verified'}
-                    </span>
-                  )}
-                </dd>
-                <button className={styles.linkBtn} onClick={() => setPhoneDialogOpen(true)} disabled={!!loadError} type="button">
-                  {profile?.phone_verified ? 'Change number' : profile?.phone_number ? 'Verify number' : 'Add mobile number'}
-                </button>
+              <div>
+                <dt>Contact</dt>
+                <dd>{phone ?? <NoData text="No number" />}</dd>
               </div>
             </dl>
+          </div>
 
-            <div className={styles.profileStats}>
-              <div className={styles.statCard}>
-                <strong className={styles.statValue}>{cart?.total_items ?? 0}</strong>
-                <span className={styles.statLabel}>Item{cart?.total_items === 1 ? '' : 's'} in cart</span>
+          <nav className={styles.nav} aria-label="Profile sections">
+            {SECTIONS.map(s => (
+              <button
+                key={s.id}
+                type="button"
+                className={`${styles.navItem} ${section === s.id ? styles.navItemActive : ''}`}
+                aria-current={section === s.id ? 'page' : undefined}
+                onClick={() => openSection(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </nav>
+        </aside>
+
+        {/* ── Right: the selected section ── */}
+        <div className={styles.content}>
+          {loadError && <p className={styles.errorBanner}>{loadError}</p>}
+
+          {section === 'profile' && (
+            <section>
+              <SectionHead title="Profile" desc="Your name and how we contact you." />
+              {notice && <p className={styles.noticeBanner} role="status">{notice}</p>}
+
+              <dl className={styles.detailList}>
+                <div className={styles.detailRow}>
+                  <dt className={styles.detailLabel}>Full name</dt>
+                  <dd className={styles.detailValue}>{fullName ?? <NoData />}</dd>
+                </div>
+                <div className={styles.detailRow}>
+                  <dt className={styles.detailLabel}>Email</dt>
+                  <dd className={styles.detailValue}>
+                    <span className={styles.detailText}>{profile?.email ?? <NoData text="No email added" />}</span>
+                    {profile?.email && (
+                      <span className={profile.email_verified ? styles.badgeOk : styles.badgeWarn}>
+                        {profile.email_verified ? 'Verified' : 'Not verified'}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+                <div className={styles.detailRow}>
+                  <dt className={styles.detailLabel}>Mobile</dt>
+                  <dd className={styles.detailValue}>
+                    <span className={styles.detailText}>{phone ?? <NoData text="No number added" />}</span>
+                    {profile?.phone_number && (
+                      <span className={profile.phone_verified ? styles.badgeOk : styles.badgeWarn}>
+                        {profile.phone_verified ? 'Verified' : 'Not verified'}
+                      </span>
+                    )}
+                    <button className={styles.linkBtn} onClick={() => setPhoneDialogOpen(true)} disabled={!!loadError} type="button">
+                      {profile?.phone_verified ? 'Change' : profile?.phone_number ? 'Verify' : 'Add'}
+                    </button>
+                  </dd>
+                </div>
+                <div className={styles.detailRow}>
+                  <dt className={styles.detailLabel}>Member since</dt>
+                  <dd className={styles.detailValue}>{memberSince ?? <NoData />}</dd>
+                </div>
+                {hasMerchant && (
+                  <div className={styles.detailRow}>
+                    <dt className={styles.detailLabel}>Your store</dt>
+                    <dd className={styles.detailValue}>{profile?.merchant?.merchant_name}</dd>
+                  </div>
+                )}
+              </dl>
+
+              <div className={styles.stats}>
+                <div className={styles.stat}>
+                  <strong className={styles.statValue}>{cart?.total_items ?? 0}</strong>
+                  <span className={styles.statLabel}>Item{cart?.total_items === 1 ? '' : 's'} in cart</span>
+                </div>
+                <div className={styles.stat}>
+                  <strong className={styles.statValue}>{formatPeso(cart?.total_price ?? 0)}</strong>
+                  <span className={styles.statLabel}>Cart total</span>
+                </div>
               </div>
-              <div className={styles.statCard}>
-                <strong className={styles.statValue}>{formatPeso(cart?.total_price ?? 0)}</strong>
-                <span className={styles.statLabel}>Cart total</span>
+
+              <div className={styles.panelActions}>
+                <button className={styles.secondaryBtn} onClick={openModal} disabled={!!loadError} type="button">
+                  Edit name or email
+                </button>
               </div>
-              {hasMerchant && (
-                <div className={`${styles.statCard} ${styles.statCardWide}`}>
-                  <strong className={styles.statValue}>{profile?.merchant?.merchant_name}</strong>
-                  <span className={styles.statLabel}>Your store</span>
+            </section>
+          )}
+
+          {section === 'addresses' && (
+            <section>
+              <SectionHead title="Addresses" desc="Where we deliver your orders. The default address is used at checkout." />
+              <AddressPanel
+                addresses={profile?.addresses ?? null}
+                onChanged={async () => {
+                  const addresses = await fetchMyAddresses();
+                  setProfile(p => (p ? { ...p, addresses } : p));
+                }}
+              />
+            </section>
+          )}
+
+          {section === 'notifications' && (
+            <section>
+              <SectionHead title="Notifications" desc="How we contact you." />
+              <div className={styles.group}>
+                <h3 className={styles.groupTitle}>Messages</h3>
+                <NotificationsPanel profile={profile} onSaved={setProfile} />
+              </div>
+            </section>
+          )}
+
+          {section === 'account' && (
+            <section>
+              <SectionHead title="Account" desc="Your language, your password and your account's security." />
+              <div className={styles.group}>
+                <h3 className={styles.groupTitle}>Language</h3>
+                <div className={styles.notifRow}>
+                  <div className={styles.notifText}>
+                    <span className={styles.notifLabel}>App language</span>
+                    <span className={styles.notifDesc}>
+                      Saved on this device.
+                    </span>
+                  </div>
+                  <LanguageToggle />
+                </div>
+              </div>
+              <div className={styles.group}>
+                <h3 className={styles.groupTitle}>Password</h3>
+                <PasswordPanel />
+              </div>
+              {/* Two-step verification (E8a): admins only, and required for them (CF-0003).
+                  Status only: setup is on /two-factor/enrol with the link's token (CF-0018). */}
+              {profile?.is_admin && (
+                <div className={`${styles.group} ${styles.twoFactorWrap}`}>
+                  <TwoFactorSettings />
                 </div>
               )}
-            </div>
-
-            <button className={styles.editBtn} onClick={openModal} disabled={!!loadError} type="button">
-              Edit Profile
-            </button>
-          </section>
-
-          {/* Two-step verification (E8a): admins only, and required for them (CF-0003).
-              Status only: setup is on /two-factor/enrol with the link's token (CF-0018). */}
-          {profile?.is_admin && <TwoFactorSettings />}
-
-          <DataExportSection />
-
-          <section className={styles.profileDangerZone}>
-            <p className={styles.profileDangerLabel}>Danger Zone</p>
-            {!confirmDeleteAccount ? (
-              <button className={styles.profileDangerBtn} onClick={() => setConfirmDeleteAccount(true)} type="button">
-                Delete account
-              </button>
-            ) : (
-              <div className={styles.profileDangerConfirm}>
-                <p className={styles.profileDangerWarning}>
-                  This permanently deletes your account and all data. This cannot be undone.
-                </p>
-                <button
-                  className={styles.profileDangerConfirmBtn}
-                  disabled={deletingAccount}
-                  onClick={() => void handleDeleteAccount()}
-                  type="button"
-                >
-                  {deletingAccount ? 'Deleting…' : 'Yes, delete my account'}
-                </button>
-                <button
-                  className={styles.merchantBtn}
-                  disabled={deletingAccount}
-                  onClick={() => setConfirmDeleteAccount(false)}
-                  type="button"
-                >
-                  Cancel
-                </button>
+              {/* CF-0069: download my data. */}
+              <div className={styles.group}>
+                <DataExportSection />
               </div>
-            )}
-          </section>
-        </div>
-
-        {/* ── Right column: Account Settings ── */}
-        <section className={styles.settingsSection}>
-          <h3 className={styles.settingsTitle}>Account Settings</h3>
-          <div className={styles.settingsList}>
-            <div className={styles.settingCard}>
-              <div className={styles.settingHeader}>
-                <span className={styles.settingLabel}>📍 Addresses</span>
-              </div>
-              <div className={styles.settingDetails}>
-                <AddressPanel
-                  addresses={profile?.addresses ?? null}
-                  onChanged={async () => {
-                    const addresses = await fetchMyAddresses();
-                    setProfile(p => (p ? { ...p, addresses } : p));
-                  }}
+              <div className={styles.group}>
+                <h3 className={`${styles.groupTitle} ${styles.dangerTitle}`}>Delete account</h3>
+                <DeleteAccountPanel
+                  phoneVerified={!!profile?.phone_verified}
+                  onAddPhone={() => openSection('profile')}
                 />
               </div>
-            </div>
-          </div>
-        </section>
-      </main>
+            </section>
+          )}
+        </div>
+      </div>
 
       {/* ── Edit profile modal ── */}
       {modalOpen && (
         <div className={styles.modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
-          <div className={styles.modalCard}>
-            <h3 className={styles.modalTitle}>Edit Profile</h3>
+          <div className={styles.modalCard} role="dialog" aria-modal="true" aria-labelledby="edit-profile-title">
+            <h3 id="edit-profile-title" className={styles.modalTitle}>Edit Profile</h3>
             <div className={styles.formGrid}>
               <div className={`${styles.formGroup} ${styles.formGroupFull}`}>
                 <label htmlFor="profile-name" className={styles.formLabel}>Full name</label>
@@ -499,9 +562,9 @@ export default function Profile() {
                 <span className={styles.formHint}>For receipts and resetting your password by email. We&apos;ll send a link to confirm it.</span>
               </div>
             </div>
-            {saveError && <p className={styles.saveError}>{saveError}</p>}
+            {saveError && <p className={styles.panelError}>{saveError}</p>}
             <div className={styles.modalActions}>
-              <button className={styles.saveBtn} onClick={handleSave} disabled={isSaving} type="button">{isSaving ? 'Saving…' : 'Save changes'}</button>
+              <button className={styles.primaryBtn} onClick={handleSave} disabled={isSaving} type="button">{isSaving ? 'Saving…' : 'Save changes'}</button>
               <button className={styles.cancelBtn} onClick={closeModal} disabled={isSaving} type="button">Cancel</button>
             </div>
           </div>

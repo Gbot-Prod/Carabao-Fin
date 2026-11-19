@@ -4,17 +4,18 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useAuth } from "@/hooks/useAuth";
 import {
   fetchMyMerchant,
-  fetchMerchantShopPage,
   fetchMyMerchantApplication,
   fetchMyMerchantPerformance,
   fetchMyProduce,
+  fetchMyShopPage,
   type Merchant,
   type MerchantPerformance,
+  type MyShopPage,
   type Produce,
-  type ShopPage,
 } from "@/util/api";
 import { useMerchantOrders, type MerchantOrdersState } from "./hooks/useMerchantOrders";
 import { useShipmentSelection } from "./hooks/useShipmentSelection";
+import { useMerchantChats, type MerchantChatsState } from "./hooks/useMerchantChats";
 import type { OrderStatus } from "@/util/api";
 
 // Same statuses as ACTIVE_ORDER_STATUSES in backend/app/services/order_status.py.
@@ -41,8 +42,9 @@ type MerchantContextValue = {
   reloadPerformance: () => void;
   merchant: Merchant | null;
   setMerchant: (m: Merchant) => void;
-  shopPage: ShopPage | null;
-  setShopPage: (s: ShopPage) => void;
+  /** The owner's shop page: the live version plus the unpublished draft. */
+  shopPage: MyShopPage | null;
+  setShopPage: (s: MyShopPage) => void;
   produces: Produce[];
   setProduces: React.Dispatch<React.SetStateAction<Produce[]>>;
   produceLoading: boolean;
@@ -54,6 +56,7 @@ type MerchantContextValue = {
   activeOrderCount: number;
   productCount: number;
   ordersState: MerchantOrdersState;
+  chatsState: MerchantChatsState;
   shipmentSelection: ReturnType<typeof useShipmentSelection>;
 };
 
@@ -70,13 +73,14 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
   const [attempt, setAttempt] = useState(0);
 
   const [merchant, setMerchant] = useState<Merchant | null>(null);
-  const [shopPage, setShopPage] = useState<ShopPage | null>(null);
+  const [shopPage, setShopPage] = useState<MyShopPage | null>(null);
   const [produces, setProduces] = useState<Produce[]>([]);
   // true from the start: pages render only after the merchant loads, and this load starts then.
   const [produceLoading, setProduceLoading] = useState(true);
 
   const ordersState = useMerchantOrders(isMerchant === true);
   const shipmentSelection = useShipmentSelection(ordersState.readyToShip);
+  const chatsState = useMerchantChats(isMerchant === true);
 
   useEffect(() => {
     if (authLoading || !isAuthenticated) return;
@@ -112,8 +116,9 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
       try {
         const [produceRes, shopPageRes, merchantRes] = await Promise.allSettled([
           fetchMyProduce(),
-          fetchMerchantShopPage(merchantId),
-          // Own profile: the public /merchants/{id} leaves out address and pin.
+          // The owner routes: the public ones hide a shop that is not published,
+          // and the public /merchants/{id} leaves out address and pin.
+          fetchMyShopPage(),
           fetchMyMerchant(),
         ]);
         if (produceRes.status === "fulfilled") setProduces(produceRes.value);
@@ -173,9 +178,10 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
       activeOrderCount,
       productCount,
       ordersState,
+      chatsState,
       shipmentSelection,
     }),
-    [status, applicationStatus, user, performance, reloadPerformance, merchant, shopPage, produces, produceLoading, activeOrderCount, productCount, ordersState, shipmentSelection],
+    [status, applicationStatus, user, performance, reloadPerformance, merchant, shopPage, produces, produceLoading, activeOrderCount, productCount, ordersState, chatsState, shipmentSelection],
   );
 
   return <MerchantContext.Provider value={value}>{children}</MerchantContext.Provider>;

@@ -14,15 +14,15 @@ from sqlalchemy.orm import Session
 from app.models.merchant import Merchant
 from app.models.produce import Produce
 from app.schemas.produce import (
-    DESCRIPTION_MAX_LENGTH,
+    MAX_DESCRIPTION,
+    MAX_NAME,
     MAX_UNIT_QUANTITY,
-    NAME_MAX_LENGTH,
     ProduceCreate,
     ProduceUpdate,
 )
 from app.schemas.review import ReviewCreate, ReviewUpdate
 from app.schemas.shipment import CreateShipmentRequest
-from app.schemas.shopPage import TITLE_MAX_LENGTH, ShopPageCreate, ShopPageUpdate
+from app.schemas.shopPage import MAX_TITLE, ShopPageCreate, ShopPageUpdate
 from tests.test_image_url_fields import _listing
 from tests.test_produce_pricing import _farmer
 
@@ -34,8 +34,8 @@ from tests.test_produce_pricing import _farmer
         {"unit_quantity": -1.5},
         {"unit_quantity": MAX_UNIT_QUANTITY + 1},
         {"name": ""},
-        {"name": "x" * (NAME_MAX_LENGTH + 1)},
-        {"description": "x" * (DESCRIPTION_MAX_LENGTH + 1)},
+        {"name": "x" * (MAX_NAME + 1)},
+        {"description": "x" * (MAX_DESCRIPTION + 1)},
         {"merchant_id": 999},
         {"hidden_at": "2026-01-01T00:00:00Z"},
     ],
@@ -52,8 +52,8 @@ def test_produce_create_refuses_bad_input(
 
 def test_produce_create_accepts_the_limits(db: Session, merchant: Merchant) -> None:
     body = _listing(
-        name="x" * NAME_MAX_LENGTH,
-        description="x" * DESCRIPTION_MAX_LENGTH,
+        name="x" * MAX_NAME,
+        description="x" * MAX_DESCRIPTION,
         unit_quantity=0.25,
     )
 
@@ -85,7 +85,7 @@ def test_old_long_names_still_serialize(db: Session, merchant: Merchant) -> None
     db.add(
         Produce(
             merchant_id=merchant.id,
-            name="x" * (NAME_MAX_LENGTH + 50),
+            name="x" * (MAX_NAME + 50),
             price=10,
             stock_quantity=1,
         )
@@ -101,7 +101,7 @@ def test_old_long_names_still_serialize(db: Session, merchant: Merchant) -> None
     "model, data",
     [
         (ShopPageCreate, {"title": "", "slug": "farm"}),
-        (ShopPageCreate, {"title": "x" * (TITLE_MAX_LENGTH + 1), "slug": "farm"}),
+        (ShopPageCreate, {"title": "x" * (MAX_TITLE + 1), "slug": "farm"}),
         (ShopPageCreate, {"title": "Farm", "slug": ""}),
         (ShopPageCreate, {"title": "Farm", "slug": "Bad Slug!"}),
         (ShopPageCreate, {"title": "Farm", "slug": "farm", "merchant_id": 3}),

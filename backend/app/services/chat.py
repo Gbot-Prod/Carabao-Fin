@@ -53,15 +53,19 @@ def require_role(order: Order | None, user: User) -> str:
 
 
 def closes_at(order: Order) -> datetime | None:
-    if order.delivered_at is None:
+    """7 days after the order was delivered or otherwise closed (CF-0044)."""
+    closed = order.delivered_at or getattr(order, "closed_at", None)
+    if closed is None:
         return None
-    delivered = order.delivered_at
-    if delivered.tzinfo is None:
-        delivered = delivered.replace(tzinfo=UTC)
-    return delivered + CLOSE_AFTER_DELIVERY
+    if closed.tzinfo is None:
+        closed = closed.replace(tzinfo=UTC)
+    return closed + CLOSE_AFTER_DELIVERY
 
 
 def is_closed(order: Order, now: datetime | None = None) -> bool:
+    # A purged order has no chat left, so it must not start a new one.
+    if getattr(order, "details_purged_at", None) is not None:
+        return True
     end = closes_at(order)
     return end is not None and (now or datetime.now(UTC)) >= end
 
@@ -108,7 +112,7 @@ def post_message(
         )
     if is_closed(order):
         raise HTTPException(
-            status_code=403, detail="This chat closed 7 days after delivery"
+            status_code=403, detail="This chat closed 7 days after the order closed"
         )
     conv = conversation_for(db, order, create=True)
     message = ChatMessage(

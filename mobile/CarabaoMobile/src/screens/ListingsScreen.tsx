@@ -171,7 +171,7 @@ function ListingsScreenContent() {
                 ].filter(Boolean).join(' · ')}
               </Text>
             </View>
-          ) : null
+          ) : undefined
         }
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

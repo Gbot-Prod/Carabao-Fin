@@ -17,6 +17,7 @@ from app.models.merchant import Merchant
 from app.models.produce import Produce
 from app.schemas.pagination import MAX_OFFSET
 from tests.better_auth import make_user
+from tests.shared_fixtures import publish_shop_page
 
 
 def _client(db: Session) -> TestClient:
@@ -47,6 +48,8 @@ def _farm(db: Session, n: int) -> Merchant:
     )
     db.add(farm)
     db.flush()
+    # main: a farm is public only after its first publish.
+    publish_shop_page(db, farm)
     for i in range(3):
         db.add(
             Produce(merchant_id=farm.id, name=f"Item {i}", price=10, stock_quantity=5)

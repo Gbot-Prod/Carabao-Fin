@@ -213,7 +213,11 @@ def list_all_merchants(
     )
     total = q.count()
     merchants = (
-        q.options(selectinload(Merchant.user))
+        q.options(
+            selectinload(Merchant.user),
+            selectinload(Merchant.shop_page),
+            selectinload(Merchant.produces),
+        )
         .order_by(Merchant.id.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
@@ -226,6 +230,9 @@ def list_all_merchants(
                 "owner_suspension_reason": (
                     m.user.suspension_reason if m.user else None
                 ),
+                "owner_name": ((m.user.name or "").strip() or None)
+                if m.user
+                else None,
             }
         )
         for m in merchants

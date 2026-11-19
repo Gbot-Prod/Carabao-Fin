@@ -33,15 +33,11 @@ def test_report_lists_only_offsite_urls_and_changes_nothing(
     )
     empty = Produce(merchant_id=merchant.id, name="C", price=1, image_url="")
     db.add_all([ok, bad, empty])
-    db.add(
-        ShopPage(
-            merchant_id=merchant.id,
-            title="Farm",
-            slug="farm",
-            banner_image_url=f"{R2}/banner.webp",
-            logo_url="http://old-host.example/logo.png",
-        )
-    )
+    # The merchant fixture already has a published shop page (main).
+    page = db.query(ShopPage).filter(ShopPage.merchant_id == merchant.id).one()
+    page.banner_image_url = f"{R2}/banner.webp"  # type: ignore[assignment]
+    page.logo_url = "http://old-host.example/logo.png"  # type: ignore[assignment]
+    page_id = int(page.id)
     owner = db.get(User, merchant.user_id)
     assert owner is not None
     db.query(User).filter(User.id == owner.id).update(
@@ -54,7 +50,7 @@ def test_report_lists_only_offsite_urls_and_changes_nothing(
 
     assert found == [
         OffsiteImage("produces", bad_id, "image_url", "https://tracker.example/p.gif"),
-        OffsiteImage("shop_pages", 1, "logo_url", "http://old-host.example/logo.png"),
+        OffsiteImage("shop_pages", page_id, "logo_url", "http://old-host.example/logo.png"),
         OffsiteImage(
             "backend_users",
             owner_id,

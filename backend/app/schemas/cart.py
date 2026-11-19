@@ -48,9 +48,12 @@ class CartItem(BaseModel):
     stock_quantity: int = 0
     # The merchant's delivery fee for its order (C1).
     delivery_fee: int = 0
-    # CF-0042: set on every read from the live listing. `issue` is why
-    # checkout would refuse the line; `previous_price` is the price the line
-    # had when it was saved, when the listing's price has changed since.
+    # Why checkout would refuse this line now, e.g. "is no longer available"
+    # (CF-0052). None when the line can be bought. Mobile and the web show it.
+    unavailable_reason: str | None = None
+    # CF-0042: the same check as a code, plus "exceeds_stock" (not in the
+    # text above). `previous_price` is the price when the buyer last saved
+    # the line, when the listing price has changed since.
     issue: (
         Literal[
             "unavailable",

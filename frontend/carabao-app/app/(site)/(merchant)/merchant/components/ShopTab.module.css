@@ -1,0 +1,155 @@
+/* Shop page draft and publish (ShopTab). */
+
+.publishBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--green-border);
+  background: var(--bg-white);
+}
+
+.publishText {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.publishMsg {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.publishActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Not live: the shop is hidden from buyers. */
+.toneDraft {
+  border-style: dashed;
+}
+.toneDraft .badge {
+  background: var(--surface-muted);
+  color: var(--text-strong);
+}
+
+/* Live, with a draft that differs from it. */
+.toneChanged {
+  border-color: #e6c77a;
+  background: #fffaf0;
+}
+.toneChanged .badge {
+  background: #f7e3b0;
+  color: #6b4a00;
+}
+
+.toneLive .badge {
+  background: var(--green-50);
+  color: var(--green-600);
+  border: 1px solid var(--green-border);
+}
+
+.views {
+  display: inline-flex;
+  align-self: flex-start;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+}
+
+.viewBtn {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.viewBtn:hover {
+  color: var(--text-strong);
+}
+
+.viewBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.viewBtnOn {
+  background: var(--bg-white);
+  color: var(--green-900);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.preview {
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-white);
+}
+
+.previewLabel {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--green-border);
+}
+
+/* The farm page uses 2rem side padding; the column here is narrower. */
+.previewBody {
+  padding: 1.25rem;
+}
+
+.previewName {
+  font-size: 1.5rem;
+}
+
+.previewMeta {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--green-border);
+}
+
+.editorError {
+  margin: 0;
+  padding: 0 16px 14px;
+  font-size: 13px;
+}
+
+@media (max-width: 600px) {
+  .publishActions {
+    width: 100%;
+  }
+  .publishActions > button {
+    flex: 1 1 auto;
+  }
+}

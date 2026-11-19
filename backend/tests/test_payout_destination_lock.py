@@ -205,10 +205,11 @@ def test_row_lock_is_taken_after_the_code_check(db, merchant, monkeypatch):  # n
     from app.api.routes import merchant_payouts as routes
 
     calls: list[str] = []
-    real_get = routes.get_active_merchant
+    # CF-0054: payout-info changes use the suspension-aware lookup.
+    real_get = routes.get_editable_merchant
     real_check = routes.payout_otp.check_code
 
-    def get_active_merchant(db, user_id, *, for_update=False):
+    def get_editable_merchant(db, user_id, *, for_update=False):
         calls.append("lock" if for_update else "read")
         return real_get(db, user_id, for_update=for_update)
 
@@ -216,7 +217,7 @@ def test_row_lock_is_taken_after_the_code_check(db, merchant, monkeypatch):  # n
         calls.append("code")
         return real_check(*args, **kwargs)
 
-    monkeypatch.setattr(routes, "get_active_merchant", get_active_merchant)
+    monkeypatch.setattr(routes, "get_editable_merchant", get_editable_merchant)
     monkeypatch.setattr(routes.payout_otp, "check_code", check_code)
 
     client = _merchant_client(db, merchant)

@@ -8,6 +8,7 @@ import PageLoader from "@/components/PageLoader/PageLoader";
 import OrderChat from "@/components/OrderChat/OrderChat";
 import { hasReceipt } from "@/lib/receipt";
 import {
+  cancelMyOrder,
   confirmOrderReceived,
   createOrderReview,
   fetchOrder,
@@ -253,6 +254,7 @@ export default function OrderDetailPage() {
     Number.isInteger(orderId) ? "loading" : "missing",
   );
   const [confirming, setConfirming] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
@@ -298,6 +300,22 @@ export default function OrderDetailPage() {
     }
   };
 
+  const handleCancelOrder = async () => {
+    setSubmitting(true);
+    setConfirmError(null);
+    try {
+      await cancelMyOrder(order.order_id);
+      setOrder(await fetchOrder(order.order_id));
+      setCancelling(false);
+    } catch {
+      setConfirmError("Could not cancel this order. The farm may have shipped it already.");
+      setCancelling(false);
+      setOrder(await fetchOrder(order.order_id).catch(() => order));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleReviewSaved = (review: Review) =>
     setOrder((prev) => (prev ? { ...prev, review, can_review: false } : prev));
 
@@ -327,6 +345,11 @@ export default function OrderDetailPage() {
         {!isClosed(order.status) && order.status !== "pending" && (
           <div className={styles.actions}>
             <Link href="/track" className={styles.primaryBtn}>Live tracking</Link>
+            {order.status === "processing" && !cancelling && (
+              <button type="button" className={styles.secondaryBtn} onClick={() => setCancelling(true)}>
+                Cancel order
+              </button>
+            )}
             {awaitingConfirmation && !confirming && (
               <button type="button" className={styles.secondaryBtn} onClick={() => setConfirming(true)}>
                 Order received
@@ -352,6 +375,22 @@ export default function OrderDetailPage() {
             </button>
             <button type="button" className={styles.secondaryBtn} onClick={() => setConfirming(false)} disabled={submitting}>
               Cancel
+            </button>
+          </div>
+        )}
+        {cancelling && (
+          <div className={styles.confirmRow}>
+            <span>Cancel this order? The items go back on sale and your payment will be refunded.</span>
+            <button
+              type="button"
+              className={styles.primaryBtn}
+              onClick={() => void handleCancelOrder()}
+              disabled={submitting}
+            >
+              {submitting ? "Cancelling…" : "Yes, cancel it"}
+            </button>
+            <button type="button" className={styles.secondaryBtn} onClick={() => setCancelling(false)} disabled={submitting}>
+              Keep order
             </button>
           </div>
         )}

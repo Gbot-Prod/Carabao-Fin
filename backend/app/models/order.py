@@ -56,6 +56,11 @@ class Order(Base):
     shipped_at = Column(DateTime(timezone=True), nullable=True, index=True)
     delivered_at = Column(DateTime(timezone=True), nullable=True)
     delivery_confirmed_by = Column(String, nullable=True)  # buyer | auto | legacy
+    # When the order became delivered, cancelled or payment_mismatch. The
+    # retention sweep starts its clock here (CF-0044; migration d2a6f8c4e1b7).
+    closed_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    # When the retention sweep removed the delivery details and chat.
+    details_purged_at = Column(DateTime(timezone=True), nullable=True)
     # Pre-computed ALNS route stored when marked for shipping
     route_waypoints = Column(JSONB, nullable=True)
     # ETA from the optimised delivery route

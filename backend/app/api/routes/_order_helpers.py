@@ -39,30 +39,45 @@ def merchant_takes_orders(merchant: Merchant | None) -> bool:
     )
 
 
-# CF-0042: why place-order would refuse a cart line. Same checks as
-# place_order_from_cart, so the cart warns before checkout does.
+# Why place-order would refuse a cart line. One check for both forms the cart
+# answer carries: `issue` is a code (web loop CF-0042), `unavailable_reason` a
+# short text (main CF-0052). The texts are what mobile and the web cart show.
 CartIssue = Literal[
     "unavailable",  # listing deleted or hidden by an admin
     "expired",  # past its best-before date
-    "farm_unavailable",  # farm closed, suspended, or owner banned
-    "own_listing",  # the buyer's own farm (CF-0040)
+    "farm_unavailable",  # farm closed, suspended, paused, or owner banned
+    "own_listing",  # the buyer's own farm (CF-0039)
     "below_minimum",  # quantity under the listing's minimum order
     "exceeds_stock",  # quantity over the stock left
 ]
 
+_ISSUE_TEXT: dict[str, str] = {
+    "unavailable": "is no longer available",
+    "expired": "is past its best-before date",
+    "farm_unavailable": "is from a farm that isn't taking orders",
+    "own_listing": "is from your own farm",
+}
+
+
+def is_own_produce(produce: Produce, buyer_id: int | None) -> bool:
+    """The buyer owns the farm that sells ``produce`` (CF-0039)."""
+    merchant = produce.merchant
+    return (
+        merchant is not None and buyer_id is not None and merchant.user_id == buyer_id
+    )
+
 
 def cart_line_issue(
-    produce: Produce | None, quantity: int, buyer_id: int, today: date
+    produce: Produce | None, quantity: int, buyer_id: int | None, today: date
 ) -> CartIssue | None:
     """The first reason checkout would refuse this line, or None."""
     if produce is None or produce.hidden_at is not None:
         return "unavailable"
     if is_expired(produce, today):
         return "expired"
-    merchant = produce.merchant
-    if not merchant_takes_orders(merchant):
+    if not merchant_takes_orders(produce.merchant):
         return "farm_unavailable"
-    if merchant is not None and merchant.user_id == buyer_id:
+    if is_own_produce(produce, buyer_id):
         return "own_listing"
     if quantity < (produce.min_order_qty or 1):
         return "below_minimum"
@@ -71,7 +86,30 @@ def cart_line_issue(
     return None
 
 
-def cart_line(produce: Produce, quantity: int, unit_price: int) -> dict[str, Any]:
+def line_problem(
+    produce: Produce, quantity: int, buyer_id: int | None, today: date
+) -> str | None:
+    """Why checkout would refuse this cart line, or None (CF-0052).
+
+    The same rules place-order applies, so the cart cannot hold a line that
+    fails checkout. Stock is not part of this text: it changes all the time,
+    and the cart shows ``stock_quantity`` (and the ``exceeds_stock`` issue)
+    for the client to cap the quantity.
+    """
+    issue = cart_line_issue(produce, quantity, buyer_id, today)
+    if issue is None or issue == "exceeds_stock":
+        return None
+    if issue == "below_minimum":
+        return f"has a minimum order of {produce.min_order_qty}"
+    return _ISSUE_TEXT[issue]
+
+
+def cart_line(
+    produce: Produce,
+    quantity: int,
+    unit_price: int,
+    unavailable_reason: str | None = None,
+) -> dict[str, Any]:
     """One cart line, built only from the produce row (CF-0008).
 
     The client sends produce_id and quantity; name, price, image and the
@@ -79,6 +117,7 @@ def cart_line(produce: Produce, quantity: int, unit_price: int) -> dict[str, Any
     """
     merchant = produce.merchant
     return {
+        "unavailable_reason": unavailable_reason,
         "id": str(produce.id),
         "produce_id": produce.id,
         "produce": produce.name,

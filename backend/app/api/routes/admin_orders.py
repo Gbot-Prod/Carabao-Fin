@@ -19,10 +19,17 @@ from app.schemas.admin_order import (
     AdminOrderSummary,
     AdminOrderTransaction,
     AdminRefund,
+    CancelOrderPayload,
     RecordRefundPayload,
 )
 from app.schemas.pagination import Page
-from app.services.order_status import payment_status
+from app.services import audit_log
+from app.services.order_status import (
+    ACTIVE_ORDER_STATUSES,
+    PaymentInProgress,
+    cancel_paid_order,
+    payment_status,
+)
 from app.services.produce_freshness import ph_day_start
 from app.services.refund_service import RefundError, record_refund
 
@@ -125,7 +132,47 @@ def get_order_detail(
     order = db.get(Order, order_id)
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
+    return _detail_view(order)
 
+
+@router.post("/admin/orders/{order_id}/cancel", response_model=AdminOrderDetail)
+def cancel_order_as_admin(
+    order_id: int,
+    payload: CancelOrderPayload,
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """CF-0045: cancel an order the farm cannot complete, so the buyer is refunded.
+
+    A paid order's money moves to refund_pending, where /admin/refunds lists it.
+    """
+    order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status not in ACTIVE_ORDER_STATUSES:
+        raise HTTPException(
+            status_code=409, detail=f"Cannot cancel an order that is {order.status}"
+        )
+    before = {"status": order.status}
+    try:
+        cancel_paid_order(order, db, payload.reason.strip())
+    except PaymentInProgress as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    audit_log.record_admin_action(
+        db,
+        admin=admin,
+        action=audit_log.ORDER_CANCEL,
+        target_type="order",
+        target_id=order.id,
+        before=before,
+        after={"status": order.status, "reason": payload.reason.strip()},
+    )
+    db.commit()
+    db.refresh(order)
+    return _detail_view(order)
+
+
+def _detail_view(order: Order) -> AdminOrderDetail:
     shipment = order.shipment
     return AdminOrderDetail(
         **_summary_fields(order),

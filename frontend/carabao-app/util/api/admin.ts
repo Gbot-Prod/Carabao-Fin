@@ -122,11 +122,30 @@ export const fetchAdminUsers = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Pro
   return res.data;
 };
 
+export type AdminMerchantShop = {
+  id: number;
+  title: string;
+  slug: string;
+  banner_image_url: string | null;
+  logo_url: string | null;
+  description: string | null;
+};
+
 // The admin API sends the full profile (AdminMerchantResponse), owner id included.
 export type AdminMerchant = Merchant & {
   user_id: number;
   owner_is_suspended: boolean;
   owner_suspension_reason: string | null;
+  owner_name: string | null;
+  legal_business_name: string | null;
+  business_type: string | null;
+  registration_type: string | null;
+  registration_number: string | null;
+  low_stock_threshold: number | null;
+  created_at: string | null;
+  verified_at: string | null;
+  deleted_at: string | null;
+  shop_page: AdminMerchantShop | null;
 };
 
 export const fetchAdminMerchantsPage = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Promise<Paginated<AdminMerchant>> => {
@@ -309,6 +328,12 @@ export const fetchAdminOrders = async (
 
 export const fetchAdminOrder = async (orderId: number): Promise<AdminOrderDetail> => {
   const res = await apiClient.get<AdminOrderDetail>(`/admin/orders/${orderId}`);
+  return res.data;
+};
+
+// CF-0045: cancel an order the farm cannot complete; a paid order goes to the refund queue.
+export const cancelAdminOrder = async (orderId: number, reason: string): Promise<AdminOrderDetail> => {
+  const res = await apiClient.post<AdminOrderDetail>(`/admin/orders/${orderId}/cancel`, { reason });
   return res.data;
 };
 

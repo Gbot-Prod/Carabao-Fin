@@ -11,8 +11,8 @@ import {
   LifeBuoy,
   LogOut,
   Menu,
+  MessagesSquare,
   Package,
-  Settings,
   ShoppingBag,
   ShoppingCart,
   Star,
@@ -72,6 +72,7 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
     applicationStatus,
     performance,
     ordersState,
+    chatsState,
     productCount,
     activeOrderCount,
     shopPage,
@@ -141,6 +142,7 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
       title: "Sales",
       items: [
         { path: P.sales, label: "Orders", icon: ShoppingBag, count: activeOrderCount || undefined },
+        { path: P.chats, label: "Chats", icon: MessagesSquare, count: chatsState.unreadCount || undefined, countTone: "alert" },
         { path: P.shipments, label: "Shipments", icon: Truck, count: readyCount || undefined, countTone: "alert", also: [P.routing] },
         { path: P.earnings, label: "Earnings", icon: Banknote },
         { path: P.reviews, label: "Reviews", icon: Star },
@@ -151,9 +153,8 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
       items: [
         { path: P.produce, label: "Produce", icon: Package, count: productCount || undefined },
         { path: P.inventory, label: "Inventory", icon: Boxes },
-        { path: P.shop, label: "Shop page", icon: Store },
+        { path: P.shop, label: "Shop & settings", icon: Store, also: ["/settings"] },
         { path: P.vouchers, label: "Vouchers", icon: Ticket },
-        { path: P.settings, label: "Settings", icon: Settings },
       ],
     },
   ];

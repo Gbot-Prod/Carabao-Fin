@@ -5,7 +5,7 @@
 
 const PAGE_BY_KIND: Record<string, string> = {
   new_order: "/sales",
-  chat_message: "/sales",
+  chat_message: "/chats",
   review_received: "/reviews",
   payout_released: "/earnings",
   payout_destination_changed: "/earnings",
@@ -30,15 +30,17 @@ export function merchantPageForNotification(link: string | null | undefined, kin
 export const MERCHANT_PAGES = {
   dashboard: "/",
   sales: "/sales",
+  chats: "/chats",
   shipments: "/shipments",
   routing: "/routing",
   earnings: "/earnings",
   reviews: "/reviews",
   produce: "/produce",
   inventory: "/inventory",
+  // The shop page and the store settings are one page (the old /settings
+  // path opens it).
   shop: "/shop",
   vouchers: "/vouchers",
-  settings: "/settings",
   onboarding: "/onboarding",
   // Same path as the buyer sign-in: each site signs in at /auth.
   login: "/auth",

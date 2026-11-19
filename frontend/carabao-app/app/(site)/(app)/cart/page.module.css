@@ -4,6 +4,8 @@
   overflow: auto;
   padding: 2rem;
   min-width: 0;
+  /* Shared column grid: checkbox | product | unit price | qty | total | actions */
+  --cart-cols: 32px minmax(0, 2.6fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.8fr);
 }
 
 .header h1 {
@@ -18,12 +20,19 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 1.8fr 1fr;
+  grid-template-columns: minmax(0, 1fr) 320px;
   gap: 1.25rem;
+  align-items: start;
 }
 
-.itemsCard,
-.summaryCard {
+.itemsColumn {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
   min-width: 0;
   background: var(--bg-white);
   border-radius: var(--radius-md);
@@ -31,47 +40,181 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
 }
 
-.itemsCard {
-  padding: 1.25rem;
+/* ---------- Checkboxes ---------- */
+
+.selectCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
 }
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #057a2d;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ---------- Column header row ---------- */
+
+.tableHead {
+  display: grid;
+  grid-template-columns: var(--cart-cols);
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.selectAllText {
+  /* The header row shows the column title "Product" beside the box instead. */
+  display: none;
+}
+
+.colProduct {
+  color: var(--text-primary, inherit);
+  font-weight: 600;
+}
+
+.colNum {
+  text-align: center;
+}
+
+/* ---------- Farm group ---------- */
+
+.farmGroup {
+  overflow: hidden;
+}
+
+.farmGroupHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--surface-muted);
+}
+
+.farmGroupHeader .selectCell {
+  width: 32px;
+  margin-right: 2px;
+}
+
+.shopIcon {
+  width: 18px;
+  height: 18px;
+  color: var(--green-900);
+  flex-shrink: 0;
+}
+
+.farmGroupName {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--green-900);
+  overflow-wrap: anywhere;
+}
+
+a.farmGroupName:hover {
+  text-decoration: underline;
+}
+
+.farmGroupMeta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.farmGroupTotal {
+  margin: 0;
+  padding: 12px 20px;
+  border-top: 1px solid var(--surface-muted);
+  text-align: right;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ---------- Item rows ---------- */
 
 .itemList {
   list-style: none;
-  display: grid;
-  gap: 0.9rem;
+  margin: 0;
+  padding: 0;
 }
 
 .itemRow {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 0.75rem;
+  grid-template-columns: var(--cart-cols);
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.itemRow + .itemRow {
+  border-top: 1px solid var(--surface-muted);
+}
+
+.product {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.thumb,
+.thumbPlaceholder {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
   border: 1px solid var(--surface-muted);
-  border-radius: var(--radius-md);
-  padding: 0.9rem;
+}
+
+.thumb {
+  object-fit: cover;
+}
+
+.thumbPlaceholder {
   background: var(--green-50);
 }
 
-.farm {
-  color: #057a2d;
-  font-weight: 600;
-  margin-bottom: 0.2rem;
+.itemMeta {
+  min-width: 0;
 }
 
 .itemMeta h3 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.priceLine {
+.unitLine {
+  margin-top: 4px;
+  font-size: 13px;
   color: var(--text-muted);
-  margin-top: 0.4rem;
 }
 
-.itemActions {
-  display: grid;
-  justify-items: end;
-  gap: 0.5rem;
+.unitPrice {
+  text-align: center;
+}
+
+.mobileLabel {
+  display: none;
+  color: var(--text-muted);
+}
+
+.qtyCell {
+  display: flex;
+  justify-content: center;
 }
 
 .qtyControl {
@@ -83,21 +226,11 @@
 
 .qtyControl button,
 .qtyControl span {
-  width: 36px;
-  height: 34px;
+  min-width: 40px;
+  min-height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.qtyControl button {
-  min-width: 44px;
-  min-height: 44px;
-}
-
-.qtyControl span {
-  min-width: 44px;
-  min-height: 44px;
 }
 
 .qtyControl button {
@@ -105,13 +238,27 @@
   font-weight: 700;
 }
 
+.qtyControl button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .qtyControl span {
   background: var(--surface-muted);
   font-weight: 600;
+  border-left: 1px solid var(--border-strong);
+  border-right: 1px solid var(--border-strong);
 }
 
 .lineTotal {
+  text-align: center;
   font-weight: 700;
+  color: #057a2d;
+}
+
+.actionsCell {
+  display: flex;
+  justify-content: center;
 }
 
 .removeButton {
@@ -119,11 +266,38 @@
   color: #ba2f2f;
   font-size: 0.9rem;
   font-weight: 600;
+  min-height: 40px;
+  padding: 0 0.25rem;
 }
+
+.removeButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- Bottom bulk bar ---------- */
+
+.bulkBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 12px 20px;
+  font-size: 14px;
+}
+
+.selectedCount {
+  color: var(--text-muted);
+}
+
+.bulkBar .removeButton {
+  margin-left: auto;
+}
+
+/* ---------- Summary ---------- */
 
 .summaryCard {
   padding: 1.25rem;
-  align-self: start;
   position: sticky;
   top: 1.25rem;
 }
@@ -169,9 +343,21 @@
   color: #ffffff;
 }
 
+.primaryButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .secondaryButton {
   border: 1px solid var(--border-strong);
   background: var(--bg-white);
+}
+
+.multiFarmNote {
+  margin: 4px 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-subtle);
 }
 
 .emptyState {
@@ -183,7 +369,9 @@
   padding: 1.25rem;
 }
 
-@media (max-width: 900px) {
+/* ---------- Narrow screens: rows become cards ---------- */
+
+@media (max-width: 1100px) {
   .layout {
     grid-template-columns: 1fr;
   }
@@ -191,17 +379,9 @@
   .summaryCard {
     position: static;
   }
-
-  .itemRow {
-    grid-template-columns: 1fr;
-  }
-
-  .itemActions {
-    justify-items: start;
-  }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .page {
     padding: 1rem 0.75rem 1.5rem;
   }
@@ -214,83 +394,104 @@
     font-size: 0.95rem;
   }
 
-  .itemsCard,
-  .summaryCard {
-    border-radius: var(--radius-md);
-    padding: 1rem;
+  .tableHead {
+    grid-template-columns: auto;
+    padding: 12px 16px;
+  }
+
+  .tableHead .colProduct,
+  .tableHead .colNum {
+    display: none;
+  }
+
+  .selectAllText {
+    display: inline;
+    color: var(--text-primary, inherit);
+    font-weight: 600;
+  }
+
+  .farmGroupHeader,
+  .farmGroupTotal,
+  .bulkBar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .farmGroupHeader .selectCell {
+    width: auto;
+  }
+
+  .farmGroupMeta {
+    margin-left: 0;
+    flex-basis: 100%;
+    padding-left: 30px;
   }
 
   .itemRow {
-    padding: 0.8rem;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check product product"
+      ".     price   price"
+      ".     qty     total"
+      ".     remove  remove";
+    gap: 8px 10px;
+    padding: 14px 16px;
   }
 
-  .itemActions {
-    grid-template-columns: 1fr auto;
-    align-items: center;
+  .itemRow > .selectCell {
+    grid-area: check;
+    align-self: start;
+    padding-top: 26px;
   }
 
-  .qtyControl {
-    justify-self: start;
+  .product {
+    grid-area: product;
+  }
+
+  .thumb,
+  .thumbPlaceholder {
+    width: 64px;
+    height: 64px;
+  }
+
+  .unitPrice {
+    grid-area: price;
+    text-align: left;
+    font-size: 14px;
+  }
+
+  .mobileLabel {
+    display: inline;
+  }
+
+  .qtyCell {
+    grid-area: qty;
+    justify-content: flex-start;
   }
 
   .lineTotal {
-    justify-self: end;
+    grid-area: total;
+    text-align: right;
   }
 
-  .removeButton {
-    grid-column: 1 / -1;
-    justify-self: start;
+  .actionsCell {
+    grid-area: remove;
+    justify-content: flex-start;
+  }
+
+  .qtyControl button,
+  .qtyControl span {
+    min-width: 44px;
     min-height: 44px;
-    padding: 0 0.25rem;
   }
 }
 
-/* Multi-farm cart (C1): one group per farm, each its own order. */
-.groupList {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.farmGroup {
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-md);
-  padding: 12px 16px;
-}
-
-.farmGroupHeader {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 12px;
-  margin-bottom: 4px;
-}
-
-.farmGroupName {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--green-900);
-}
-
-.farmGroupMeta {
+/* CF-0052: a line checkout would refuse */
+.unavailable {
+  margin: 4px 0 0;
   font-size: 12px;
-  color: var(--text-subtle);
-}
-
-.farmGroupTotal {
-  margin: 8px 0 0;
-  text-align: right;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.multiFarmNote {
-  margin: 4px 0 12px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--text-subtle);
+  font-weight: 600;
+  color: #b42318;
 }
 
 /* CF-0042: line problems from the server. */

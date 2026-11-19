@@ -100,8 +100,18 @@ export const deleteMyAddress = async (id: number): Promise<void> => {
 export const defaultAddress = (addresses: UserAddress[] | null | undefined): UserAddress | null =>
   addresses?.find((a) => a.is_default) ?? addresses?.[0] ?? null;
 
-export const deleteMyAccount = async (): Promise<void> => {
-  await apiClient.delete('/users/me');
+/**
+ * Text the code that confirms deleting the account; returns the last 4 digits it
+ * went to. The backend checks the password first when the account has one.
+ */
+export const sendAccountDeleteCode = async (password?: string): Promise<string> => {
+  const response = await apiClient.post<{ sent_to: string }>('/users/me/delete-code', { password: password ?? null });
+  return response.data.sent_to;
+};
+
+/** Delete the account, confirmed with the code from sendAccountDeleteCode. */
+export const deleteMyAccount = async (code: string): Promise<void> => {
+  await apiClient.delete('/users/me', { data: { code } });
 };
 
 /** CF-0069: download the caller's own data as a JSON file (5 per hour). */

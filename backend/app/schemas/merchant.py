@@ -58,6 +58,7 @@ class MerchantShopResponse(BaseModel):
     title: str
     slug: str
     banner_image_url: str | None = None
+    logo_url: str | None = None
     description: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -104,6 +105,14 @@ class AdminMerchantResponse(MerchantResponse):
     # The owner's account suspension (A3); a suspended merchant is hidden.
     owner_is_suspended: bool = False
     owner_suspension_reason: str | None = None
+    # Details for the admin's expanded row. No encrypted IDs (TIN, RSBSA).
+    owner_name: str | None = None
+    business_type: str | None = None
+    registration_type: str | None = None
+    registration_number: str | None = None
+    low_stock_threshold: int | None = None
+    created_at: datetime | None = None
+    verified_at: datetime | None = None
 
 
 class StorePauseIn(BaseModel):

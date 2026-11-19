@@ -74,11 +74,22 @@ export default function CheckoutPage() {
     });
   };
 
+  // Lines ticked on the cart page (?items=1,2,3). Null means the whole cart.
+  const [selectedIds, setSelectedIds] = useState<number[] | null>(null);
+
   useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("items");
+    const ids = raw
+      ? [...new Set(raw.split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0))]
+      : [];
+    const picked = ids.length > 0 ? ids : null;
+    setSelectedIds(picked);
+
     const loadCart = async () => {
       try {
         const cart = await fetchMyCart();
-        setCheckoutItems(Array.isArray(cart.items) ? cart.items : []);
+        const all = Array.isArray(cart.items) ? cart.items : [];
+        setCheckoutItems(picked ? all.filter((item) => picked.includes(Number(item.id))) : all);
       } catch {
         setCheckoutItems([]);
       } finally {
@@ -187,6 +198,8 @@ export default function CheckoutPage() {
         delivery_lng: pin?.lng ?? null,
         notes: notes || null,
         voucher_code: voucher?.code ?? null,
+        // Send exactly what this page shows, so unticked lines stay in the cart.
+        ...(selectedIds ? { produce_ids: checkoutItems.map((item) => Number(item.id)) } : {}),
       });
 
       // PayMongo takes one order per checkout, so a multi-farm cart is paid in
@@ -298,6 +311,7 @@ export default function CheckoutPage() {
                   type="date"
                   value={deliveryDate}
                   min={localIsoDate()}
+                  max={localIsoDate(30)}
                   onChange={(event) => setDeliveryDate(event.target.value)}
                   required
                 />

@@ -53,6 +53,7 @@ from app.services.account_suspension import merchant_is_public
 from app.services.merchant_service import (
     find_deletion_blockers,
     get_active_merchant,
+    get_editable_merchant,
     soft_delete_merchant,
 )
 from app.services.order_status import (
@@ -348,7 +349,7 @@ def update_my_merchant(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -542,7 +543,7 @@ def create_produce(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -575,20 +576,43 @@ def update_produce(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
+    # CF-0049: locked like checkout locks it, so a stock edit and a checkout
+    # decrement cannot overwrite each other.
     produce = (
         db.query(Produce)
         .filter(Produce.id == produce_id, Produce.merchant_id == merchant.id)
+        .with_for_update()
+        .populate_existing()
         .first()
     )
     if not produce:
         raise HTTPException(status_code=404, detail="Produce item not found")
 
-    changes = produce_update.model_dump(exclude_unset=True, exclude={"price_tiers"})
-    upload_validation.check_image_url_fields(changes, {"image_url": produce.image_url})
+    expected = produce_update.expected_stock_quantity
+    if (
+        produce_update.stock_quantity is not None
+        and expected is not None
+        and expected != produce.stock_quantity
+    ):
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Stock changed to {produce.stock_quantity} since you opened this "
+                "listing (orders came in or were cancelled). Check it and save again."
+            ),
+        )
+
+    changes = produce_update.model_dump(
+        exclude_unset=True, exclude={"price_tiers", "expected_stock_quantity"}
+    )
+    upload_validation.check_image_url_fields(
+        changes, {"image_url": produce.image_url}
+    )
     if "image_url" in changes:
         changes["image_url"] = upload_validation.blank_to_none(changes["image_url"])
     for field, value in changes.items():
@@ -619,7 +643,7 @@ def delete_produce(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -637,6 +661,11 @@ def delete_produce(
 
 # ---------------------------------------------------------------------------
 # ShopPage routes
+#
+# The merchant edits a draft (draft_* columns). Buyers see only the live
+# columns, and only after the first publish. POST .../publish copies the
+# draft to live; POST .../unpublish hides the shop from buyers again;
+# POST .../discard copies live back to the draft.
 # ---------------------------------------------------------------------------
 
 
@@ -648,7 +677,7 @@ def upload_produce_image(
     current_user: User = Depends(get_current_user),
 ):
     rate_limit.enforce_action(db, "image_upload", str(current_user.id))  # CF-0060
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -759,7 +788,7 @@ def update_my_merchant_order_status(
     current_user: User = Depends(get_current_user),
 ):
     status = body.status
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 

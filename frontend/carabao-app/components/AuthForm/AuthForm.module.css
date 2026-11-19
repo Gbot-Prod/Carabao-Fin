@@ -1,0 +1,358 @@
+/*
+ * The shared sign-in / sign-up card. A page can set the --af-* tokens on the
+ * card (through the className prop) to match its own site.
+ */
+
+.card {
+  --af-accent: #1d7a46;
+  --af-accent-hover: #17663a;
+  --af-line: #dfe5e0;
+  --af-input-line: #c9d3cc;
+  --af-input-bg: #fff;
+  --af-muted: #5f6f62;
+  --af-faint: #8a978d;
+  --af-radius: 3px;
+  --af-card-radius: 4px;
+  --af-card-shadow: 0 2px 14px rgba(19, 46, 29, 0.08);
+  --af-card-border: none;
+  --af-submit-case: uppercase;
+
+  background: #fff;
+  border: var(--af-card-border);
+  border-radius: var(--af-card-radius);
+  box-shadow: var(--af-card-shadow);
+  padding: 28px 30px 26px;
+  color: var(--text-strong);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--af-input-line);
+  border-radius: var(--af-radius);
+  background: var(--af-input-bg);
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+}
+
+.input::placeholder,
+.phoneInput::placeholder {
+  color: var(--af-faint);
+}
+
+.input:focus,
+.phone:focus-within {
+  outline: none;
+  border-color: var(--af-accent);
+  box-shadow: 0 0 0 3px rgba(29, 122, 70, 0.15);
+}
+
+.passwordWrap {
+  position: relative;
+}
+
+.passwordWrap .input {
+  padding-right: 46px;
+}
+
+.eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--af-radius);
+  background: transparent;
+  color: var(--af-muted);
+  cursor: pointer;
+}
+
+.eye:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.phone {
+  display: flex;
+  align-items: center;
+  height: 42px;
+  border: 1px solid var(--af-input-line);
+  border-radius: var(--af-radius);
+  background: var(--af-input-bg);
+  overflow: hidden;
+}
+
+.phoneInvalid,
+.phoneInvalid:focus-within {
+  border-color: var(--danger);
+}
+
+.phonePrefix {
+  padding: 0 12px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  border-right: 1px solid var(--af-line);
+  color: var(--af-muted);
+  font-size: 15px;
+}
+
+.phoneInput {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+/* The field around it shows the focus ring. */
+.phoneInput:focus,
+.phoneInput:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.fieldError {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.submit {
+  height: 44px;
+  border: 0;
+  border-radius: var(--af-radius);
+  background: var(--af-accent);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: var(--af-submit-case);
+  cursor: pointer;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--af-accent-hover);
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.submit:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: -4px;
+  font-size: 13px;
+}
+
+.remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--af-muted);
+  cursor: pointer;
+}
+
+.remember input {
+  accent-color: var(--af-accent);
+}
+
+.link,
+.inlineLink {
+  color: #1f5fa8;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.inlineLink {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.inlineLink:disabled {
+  color: var(--af-faint);
+  cursor: not-allowed;
+}
+
+.link:hover,
+.inlineLink:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.right {
+  align-self: flex-end;
+  margin-top: -8px;
+}
+
+.help {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--af-muted);
+}
+
+.notice,
+.error {
+  padding: 10px 12px;
+  border-radius: var(--af-radius);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.notice {
+  background: #eef6f0;
+  color: var(--success-text);
+}
+
+.error {
+  background: #fdecec;
+  color: var(--danger);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 20px 0 16px;
+  color: var(--af-faint);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--af-line);
+}
+
+.social {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.socialBtn {
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--af-input-line);
+  border-radius: var(--af-radius);
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.socialBtn:hover:not(:disabled) {
+  background: #f6f8f6;
+}
+
+.socialBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.socialBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.terms {
+  margin: 22px 0 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--af-muted);
+}
+
+.terms a {
+  color: var(--af-accent);
+  text-decoration: none;
+}
+
+.terms a:hover {
+  text-decoration: underline;
+}
+
+.switchLine {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--af-faint);
+}
+
+.switchBtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--af-accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.switchBtn:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+  .card {
+    padding: 22px 18px;
+  }
+}
+
+@media (max-width: 380px) {
+  .social {
+    grid-template-columns: 1fr;
+  }
+}

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.models.produce import Produce
 from app.models.user import User
-from app.services.merchant_service import get_active_merchant
+from app.services.merchant_service import get_active_merchant, get_editable_merchant
 from app.services.produce_freshness import ph_today
 
 router = APIRouter(tags=["merchants"])
@@ -79,8 +79,9 @@ def stock_alerts(produces: list[Produce], threshold: int, today: date) -> StockA
     )
 
 
-def _merchant(db: Session, user: User):
-    merchant = get_active_merchant(db, user.id)
+def _merchant(db: Session, user: User, *, editable: bool = False):
+    get = get_editable_merchant if editable else get_active_merchant
+    merchant = get(db, user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
     return merchant
@@ -114,7 +115,7 @@ def set_low_stock_threshold(
     current_user: User = Depends(get_current_user),
 ):
     """Set the stock level at or below which a listing is flagged (0 turns it off)."""
-    merchant = _merchant(db, current_user)
+    merchant = _merchant(db, current_user, editable=True)
     merchant.low_stock_threshold = payload.low_stock_threshold
     db.commit()
     return get_stock_alerts(db, current_user)

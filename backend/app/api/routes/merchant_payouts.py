@@ -1,5 +1,6 @@
 """A farm's payout details, transactions and payout requests (CF-0079: moved
-from routes/merchants.py without a change in behaviour)."""
+from routes/merchants.py; merged with main's CF-0046 transfer limit and CF-0054
+edit lock)."""
 
 import logging
 from datetime import UTC, datetime
@@ -41,9 +42,13 @@ from app.services import (
 )
 from app.services.merchant_service import (
     get_active_merchant,
+    get_editable_merchant,
 )
 from app.services.payout_service import (
+    PROVIDER_LABELS,
+    PROVIDER_MAX_PESOS,
     claimable_transactions,
+    fit_to_transfer_limit,
     get_payout_info,
     move_failed_batches,
     payout_info_problem,
@@ -131,7 +136,7 @@ def send_payout_info_code(
     current_user: User = Depends(get_current_user),
 ):
     """CF-0004: text a code that confirms exactly this payout method."""
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
     values = _payout_values(payload)
@@ -153,11 +158,11 @@ def update_my_payout_info(
     """
     # CF-0024: the PayMongo call and the code check (which commits) come
     # first. The row lock is then held only for the write, until one commit.
-    if not get_active_merchant(db, current_user.id):
+    if not get_editable_merchant(db, current_user.id):
         raise HTTPException(status_code=404, detail="Merchant profile not found")
     values = _payout_values(payload)
     payout_otp.check_code(db, request, current_user, values, payload.code)
-    merchant = get_active_merchant(db, current_user.id, for_update=True)
+    merchant = get_editable_merchant(db, current_user.id, for_update=True)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -294,8 +299,22 @@ def request_my_payout(
             detail="No delivered orders with unpaid earnings to cash out",
         )
 
-    total = sum(t.merchant_amount for t in unpaid_txns)
     fee = transfer_fee()
+    destination = resolve_destination(info)
+    # CF-0046: never more than one transfer can carry; the rest waits.
+    unpaid_txns = fit_to_transfer_limit(unpaid_txns, destination.provider, fee)
+    if not unpaid_txns:
+        provider = destination.provider
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"An order's earnings are above the {PROVIDER_LABELS[provider]} "
+                f"limit of ₱{PROVIDER_MAX_PESOS[provider]:,} per transfer. "
+                "Contact support to cash it out."
+            ),
+        )
+
+    total = sum(t.merchant_amount for t in unpaid_txns)
     if total <= fee:
         raise HTTPException(
             status_code=400,
@@ -312,7 +331,7 @@ def request_my_payout(
         status=PayoutStatus.PENDING,
     )
     # CF-0004: fixed now; sending never reads the payout method again.
-    save_destination(batch, resolve_destination(info))
+    save_destination(batch, destination)
     db.add(batch)
     db.flush()
 

@@ -1,8 +1,8 @@
 import { useState, type ChangeEvent, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import styles from "../page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
-import getApiErrorMessage from "@/util/errorHelper";
-import { createProduce, deleteProduce, updateProduce, uploadProduceImage, type Produce } from "@/util/api";
+import { createProduce, deleteProduce, fetchMyProduce, updateProduce, uploadProduceImage, type Produce } from "@/util/api";
+import getApiErrorMessage, { getApiErrorStatus } from "@/util/errorHelper";
 import ProduceFormFields, { emptyProduceForm, formToPayload, produceToForm, type ProduceFormState } from "./ProduceFormFields";
 import { formatRequestedDate, todayInManila } from "../lib/format";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -65,10 +65,28 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
     if (editingId === null) return;
     setSaving(true);
     setActionError(null);
+    const loaded = produces.find((p) => p.id === editingId);
     try {
-      replace(await updateProduce(editingId, formToPayload(editForm)));
+      replace(
+        await updateProduce(editingId, {
+          ...formToPayload(editForm),
+          expected_stock_quantity: loaded?.stock_quantity ?? null,
+        }),
+      );
       setEditingId(null);
-    } catch (err) { setActionError(getApiErrorMessage(err, "The changes could not be saved.")); }
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, "The changes could not be saved."));
+      // CF-0049: orders changed the stock while the form was open. Load the
+      // new stock into the form; the message above says what happened.
+      if (getApiErrorStatus(err) === 409) {
+        try {
+          const fresh = await fetchMyProduce();
+          setProduces(fresh);
+          const current = fresh.find((p) => p.id === editingId);
+          if (current) setEditForm((prev) => ({ ...prev, stock_quantity: produceToForm(current).stock_quantity }));
+        } catch { /* keep the form as it is */ }
+      }
+    }
     finally { setSaving(false); }
   };
 

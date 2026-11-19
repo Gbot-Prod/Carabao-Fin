@@ -1,10 +1,15 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
-# CF-0051 (B02): input limits, kept in step with the web Shop tab (maxLength in
-# merchant/components/ShopTab.tsx). The web builds the slug from the title.
-TITLE_MAX_LENGTH = 100
-DESCRIPTION_MAX_LENGTH = 2000
+# CF-0043 (main) / CF-0051 (web loop): limits for the shop page, kept in step
+# with the web Shop tab (maxLength in merchant/components/ShopTab.tsx). A slug
+# is lowercase words joined by hyphens, e.g. "dela-cruz-farm", so it is safe in
+# a URL and cannot imitate one. The web builds the slug from the title.
+MAX_TITLE = 100
+MAX_DESCRIPTION = 2000
 SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+MIN_SLUG, MAX_SLUG = 3, 80
 
 
 class ShopPageBase(BaseModel):
@@ -16,28 +21,44 @@ class ShopPageBase(BaseModel):
 
 
 class ShopPageCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=TITLE_MAX_LENGTH)
-    slug: str = Field(min_length=1, max_length=TITLE_MAX_LENGTH, pattern=SLUG_PATTERN)
-    description: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
-
     model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=MAX_TITLE)
+    slug: str = Field(min_length=MIN_SLUG, max_length=MAX_SLUG, pattern=SLUG_PATTERN)
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION)
 
 
 class ShopPageUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=TITLE_MAX_LENGTH)
+    """Changes to the draft. Buyers see them only after publish."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, max_length=MAX_TITLE)
     slug: str | None = Field(
-        default=None, min_length=1, max_length=TITLE_MAX_LENGTH, pattern=SLUG_PATTERN
+        default=None, min_length=MIN_SLUG, max_length=MAX_SLUG, pattern=SLUG_PATTERN
     )
     # Only the stored URL or null (CF-0034, checked in the route).
     banner_image_url: str | None = None
     logo_url: str | None = None
-    description: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
-
-    model_config = ConfigDict(extra="forbid")
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION)
 
 
 class ShopPageResponse(ShopPageBase):
+    """The live shop page, as buyers see it."""
+
     id: int
     merchant_id: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ShopPageOwnerResponse(ShopPageResponse):
+    """The live shop page plus the owner's draft and publish state."""
+
+    draft_title: str
+    draft_description: str | None = None
+    draft_logo_url: str | None = None
+    draft_banner_image_url: str | None = None
+    published_at: datetime | None = None
+    is_published: bool
+    has_unpublished_changes: bool

@@ -8,17 +8,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test util/navigation.test.ts lib/blocked-auth-paths.test.ts lib/phone.test.ts lib/admin-two-factor.test.ts lib/next-path.test.ts lib/urls.test.ts lib/merchant-links.test.ts lib/otp-cooldown.test.ts lib/structured-data.test.ts lib/order-history.test.ts lib/saved-produce.test.ts lib/sitemap.test.ts lib/cart-issues.test.ts lib/review-reply.test.ts lib/farm-reviews.test.ts lib/visible-poll.test.ts lib/receipt.test.ts lib/recently-viewed.test.ts util/errorHelper.test.ts lib/shop-slug.test.ts lib/farm-images.test.ts lib/vouchers.test.ts lib/store-pause.test.ts lib/admin-window.test.ts lib/auth-rate-limit.test.ts",
+    "test": "node --test util/navigation.test.ts lib/blocked-auth-paths.test.ts lib/phone.test.ts lib/admin-two-factor.test.ts lib/next-path.test.ts lib/urls.test.ts lib/merchant-links.test.ts lib/otp-cooldown.test.ts lib/structured-data.test.ts lib/order-history.test.ts lib/saved-produce.test.ts lib/password-policy.test.ts lib/sitemap.test.ts lib/cart-issues.test.ts lib/review-reply.test.ts lib/farm-reviews.test.ts lib/visible-poll.test.ts lib/receipt.test.ts lib/recently-viewed.test.ts util/errorHelper.test.ts lib/shop-slug.test.ts lib/farm-images.test.ts lib/vouchers.test.ts lib/store-pause.test.ts lib/admin-window.test.ts lib/auth-rate-limit.test.ts",
     "auth:migrate": "node scripts/better-auth-migrate.mjs",
     "auth:migrate:apply": "node scripts/better-auth-migrate.mjs --apply"
   },
   "dependencies": {
-    "@better-auth/core": "^1.7.25",
-    "@better-auth/expo": "^1.7.25",
+    "@better-auth/core": "^1.7.26",
+    "@better-auth/expo": "^1.7.26",
     "@turf/along": "^7.3.5",
     "@turf/length": "^7.3.5",
     "axios": "^1.13.6",
-    "better-auth": "^1.7.25",
+    "better-auth": "^1.7.26",
     "lucide-react": "^1.49.0",
     "mapbox-gl": "^3.19.0",
     "next": "16.4.6",
@@ -36,6 +36,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "typescript": "^5"
+    "typescript": "~6.0.3"
   }
 }

@@ -25,7 +25,7 @@ from app.schemas.shipment import (
     Waypoint,
 )
 from app.services import mapbox_routing, rate_limit
-from app.services.merchant_service import get_active_merchant
+from app.services.merchant_service import get_active_merchant, get_editable_merchant
 from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
 from app.services.pinned_location import delivery_point, merchant_point
 from app.utils.geocoding import _geocode
@@ -117,7 +117,7 @@ def create_merchant_shipment(
 ):
     # CF-0060: first, so a blocked call reaches neither geocoding nor Mapbox.
     rate_limit.enforce_action(db, "shipment_create", str(current_user.id))
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -426,8 +426,8 @@ def list_my_shipments(
     )
     rows = sorted(open_rows + recent, key=lambda s: (s.created_at, s.id), reverse=True)
 
-    # Shipment.status is never advanced after creation, so the merchant's
-    # active/past split is derived from how many of its orders are closed.
+    # The active/past split is derived from how many of its orders are closed.
+    # Shipment.status turns "completed" when the last one closes (CF-0053).
     closed_counts = (
         dict(
             db.query(Order.shipment_id, func.count(Order.id))
