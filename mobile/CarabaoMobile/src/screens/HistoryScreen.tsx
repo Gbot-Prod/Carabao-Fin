@@ -1,8 +1,8 @@
 // src/screens/HistoryScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity,
-  StyleSheet, SafeAreaView, Alert,
+  View, Text, FlatList, TouchableOpacity, TextInput, ScrollView,
+  StyleSheet, SafeAreaView, Alert, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -14,6 +14,9 @@ import { Badge } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
+import {
+  HISTORY_FILTERS, HISTORY_SEARCH_MAX, hasMoreHistory, mergeHistoryPage, type HistoryFilter,
+} from '../lib/orderHistory';
 
 function HistoryCard({ order }: { order: ApiHistoryOrder }) {
   const [expanded, setExpanded] = useState(false);
@@ -124,36 +127,124 @@ function HistoryCard({ order }: { order: ApiHistoryOrder }) {
 
 function HistoryScreenContent() {
   const { token } = useAuth();
-  const [orders, setOrders] = useState<ApiHistoryOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  const [filter, setFilter] = useState<HistoryFilter | ''>('');
+  const [searchInput, setSearchInput] = useState('');
+  const [query, setQuery] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [orders, setOrders] = useState<ApiHistoryOrder[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [pulled, setPulled] = useState(false);
+
+  // CF-0102: page 1 is loaded for each filter + search + retry. "Loading" is derived
+  // from which key was last loaded, so no state is set synchronously in the effect.
+  const key = `${filter}|${query}|${attempt}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = loadedKey !== key;
+  const keyRef = useRef(key);
+  useEffect(() => {
+    keyRef.current = key;
+  }, [key]);
+
+  // Search runs 400 ms after the last key press.
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(searchInput.trim()), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const data = await api.orders.history(token);
-        setOrders(data);
+    let active = true;
+    api.orders
+      .historyPage(token, { page: 1, status: filter, q: query })
+      .then((res) => {
+        if (!active) return;
+        setOrders(res.items);
+        setPage(1);
+        setTotal(res.total);
         setFailed(false);
-      } catch {
-        setFailed(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
-  }, [token, attempt]);
+      })
+      .catch(() => { if (active) setFailed(true); })
+      .finally(() => {
+        if (!active) return;
+        setLoadedKey(key);
+        setPulled(false);
+      });
+    return () => { active = false; };
+  }, [token, filter, query, key]);
 
-  const totalSpent = orders.reduce((s, o) => s + o.total_amount, 0);
-  const delivered = orders.filter((o) => o.status.toLowerCase() === 'delivered').length;
+  const loadMore = () => {
+    if (loading || loadingMore || !hasMoreHistory(page, total)) return;
+    const startedFor = key;
+    const next = page + 1;
+    setLoadingMore(true);
+    api.orders
+      .historyPage(token, { page: next, status: filter, q: query })
+      .then((res) => {
+        if (keyRef.current !== startedFor) return; // the filter changed while this page loaded
+        setOrders((prev) => mergeHistoryPage(prev, res.items, next));
+        setPage(next);
+        setTotal(res.total);
+      })
+      .catch(() => { /* the next scroll to the end tries again */ })
+      .finally(() => setLoadingMore(false));
+  };
 
-  if (loading) {
+  const filtered = filter !== '' || query !== '';
+  const clearFilters = () => {
+    setFilter('');
+    setSearchInput('');
+    setQuery('');
+  };
+
+  const header = (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>Order History</Text>
+      <View style={styles.searchBox}>
+        <Ionicons name="search" size={16} color={Colors.textMuted} />
+        <TextInput
+          style={styles.searchInput}
+          value={searchInput}
+          onChangeText={setSearchInput}
+          placeholder="Order number or farm"
+          placeholderTextColor={Colors.textLight}
+          maxLength={HISTORY_SEARCH_MAX}
+          returnKeyType="search"
+          onSubmitEditing={() => setQuery(searchInput.trim())}
+          autoCapitalize="none"
+          autoCorrect={false}
+          accessibilityLabel="Search orders by order number or farm"
+        />
+        {searchInput !== '' && (
+          <TouchableOpacity onPress={() => setSearchInput('')} accessibilityLabel="Clear search" hitSlop={12}>
+            <Ionicons name="close-circle" size={18} color={Colors.textLight} />
+          </TouchableOpacity>
+        )}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        {HISTORY_FILTERS.map((f) => {
+          const on = f.value === filter;
+          return (
+            <TouchableOpacity
+              key={f.value || 'all'}
+              style={[styles.chip, on && styles.chipOn]}
+              onPress={() => setFilter(f.value)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+            >
+              <Text style={[styles.chipText, on && styles.chipTextOn]}>{f.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+
+  if (loading && orders.length === 0 && !failed) {
     return (
       <SafeAreaView style={styles.root}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Order History</Text>
-        </View>
+        {header}
         <SkeletonList label="Loading order history" rows={4} />
       </SafeAreaView>
     );
@@ -162,11 +253,9 @@ function HistoryScreenContent() {
   if (failed && orders.length === 0) {
     return (
       <SafeAreaView style={styles.root}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Order History</Text>
-        </View>
+        {header}
         <LoadError
-          message="We couldn't load your orders. Check your connection and try again."
+          message="We couldn’t load your orders. Check your connection and try again."
           onRetry={() => setAttempt((n) => n + 1)}
         />
       </SafeAreaView>
@@ -175,40 +264,47 @@ function HistoryScreenContent() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Order History</Text>
-        <Text style={styles.headerSub}>Tap any order for details</Text>
-      </View>
-
+      {header}
       <FlatList
         data={orders}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => <HistoryCard order={item} />}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
+        refreshControl={
+          <RefreshControl
+            refreshing={pulled}
+            onRefresh={() => {
+              setPulled(true);
+              setAttempt((n) => n + 1);
+            }}
+          />
+        }
+        ListHeaderComponent={
+          <View style={styles.countRow}>
+            <Text style={styles.countText} accessibilityLiveRegion="polite">
+              {total} order{total === 1 ? '' : 's'}{filtered ? ' found' : ''}
+            </Text>
+            {loading && <ActivityIndicator size="small" color={Colors.primary} />}
+          </View>
+        }
+        ListFooterComponent={
+          loadingMore ? <ActivityIndicator style={styles.footer} color={Colors.primary} /> : undefined
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="document-text-outline" size={48} color={Colors.textLight} />
-            <Text style={styles.emptyTitle}>No orders yet</Text>
-            <Text style={styles.emptySub}>Your past orders will appear here</Text>
-          </View>
-        }
-        ListHeaderComponent={
-          <View style={styles.summaryBanner}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryNum}>{orders.length}</Text>
-              <Text style={styles.summaryLabel}>Total Orders</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryNum}>{delivered}</Text>
-              <Text style={styles.summaryLabel}>Delivered</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryNum}>₱{totalSpent.toLocaleString()}</Text>
-              <Text style={styles.summaryLabel}>Total Spent</Text>
-            </View>
+            <Text style={styles.emptyTitle}>{filtered ? 'No matching orders' : 'No orders yet'}</Text>
+            <Text style={styles.emptySub}>
+              {filtered ? 'Try another order number, farm or filter.' : 'Your past orders will appear here'}
+            </Text>
+            {filtered && (
+              <TouchableOpacity style={styles.buyAgain} onPress={clearFilters}>
+                <Text style={styles.buyAgainText}>Clear filters</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -239,19 +335,24 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   headerTitle: { fontSize: FontSize.xxl, fontWeight: '800', color: Colors.text },
-  headerSub: { fontSize: FontSize.sm, color: Colors.textMuted },
 
-  summaryBanner: {
-    flexDirection: 'row', backgroundColor: Colors.white,
-    borderRadius: Radius.lg, marginHorizontal: Spacing.lg,
-    marginTop: Spacing.lg, marginBottom: Spacing.md,
-    padding: Spacing.lg, borderWidth: 1, borderColor: Colors.border,
-    ...Shadow.sm,
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.sm,
+    backgroundColor: Colors.offWhite, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border,
+    paddingHorizontal: Spacing.md, minHeight: 44,
   },
-  summaryItem: { flex: 1, alignItems: 'center' },
-  summaryNum: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.primary },
-  summaryLabel: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
-  summaryDivider: { width: 1, backgroundColor: Colors.border },
+  searchInput: { flex: 1, fontSize: FontSize.sm, color: Colors.text, paddingVertical: Spacing.sm },
+  chips: { gap: Spacing.sm, paddingTop: Spacing.sm },
+  chip: {
+    paddingHorizontal: Spacing.md, minHeight: 36, justifyContent: 'center',
+    borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.white,
+  },
+  chipOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipText: { fontSize: FontSize.sm, color: Colors.text, fontWeight: '600' },
+  chipTextOn: { color: Colors.white },
+  countRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingTop: Spacing.md },
+  countText: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '600' },
+  footer: { paddingVertical: Spacing.lg },
 
   listContent: { paddingHorizontal: Spacing.lg, paddingBottom: 100, gap: Spacing.sm },
 

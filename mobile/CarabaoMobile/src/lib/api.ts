@@ -2,6 +2,7 @@ import type { ApiReferencePrice } from './referencePrices';
 
 import { getAccessToken } from './authClient';
 import { API_BASE } from './config';
+import { historyQueryString, type HistoryQuery } from './orderHistory';
 
 export { API_BASE, WEB_BASE } from './config';
 
@@ -436,6 +437,9 @@ export const api = {
       request<ApiCurrentOrder[]>('/orders/me/current', token),
     history: (token: string | null) =>
       request<ApiHistoryOrder[]>('/orders/me/history', token),
+    // CF-0102: one page, newest first, filtered by status group and/or search.
+    historyPage: (token: string | null, query: HistoryQuery) =>
+      request<ApiPage<ApiHistoryOrder>>(`/orders/me/history/page?${historyQueryString(query)}`, token),
     place: (token: string | null, payload: PlaceOrderPayload) =>
       request<PlaceOrderResponse>('/orders/me/place', token, {
         method: 'POST',
