@@ -23,6 +23,7 @@ from urllib.parse import quote
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.errors import describe_error
 from app.core.urls import admin_url
 from app.integrations.sms.semaphore import send_sms
 from app.models.user import User
@@ -89,13 +90,19 @@ def deliver(user: User, token: str) -> list[str]:
             send_sms(number=user.phone_number, message=_SMS.format(url=url))
             sent.append("sms")
         except Exception as exc:  # noqa: BLE001 - any send failure
-            logger.warning("Admin setup SMS failed for user %s: %s", user.id, exc)
+            logger.warning(
+                "Admin setup SMS failed for user %s: %s", user.id, describe_error(exc)
+            )
     if user.verified_email:
         try:
             send_admin_enrolment_email(user.verified_email, url)
             sent.append("email")
         except Exception as exc:  # noqa: BLE001 - any send failure
-            logger.warning("Admin setup email failed for user %s: %s", user.id, exc)
+            logger.warning(
+                "Admin setup email failed for user %s: %s",
+                user.id,
+                describe_error(exc),
+            )
     if not sent:
         raise HTTPException(status_code=502, detail=NOT_SENT_DETAIL)
     return sent

@@ -57,6 +57,20 @@ def with_reference(message: str, request_id: str) -> str:
     return f"{message} (reference: {request_id})"
 
 
+def describe_error(exc: BaseException) -> str:
+    """CF-0071: a log-safe description of an outside service's error.
+
+    The type only: email and SMS provider errors can repeat the recipient,
+    the message (a code or a setup link) or a key. ``SemaphoreError`` texts
+    are built without values (integrations/sms/semaphore.py), so they are kept.
+    """
+    from app.integrations.sms.semaphore import SemaphoreError
+
+    if isinstance(exc, SemaphoreError):
+        return f"SemaphoreError: {exc}"
+    return type(exc).__name__
+
+
 def upstream_error(
     status_code: int,
     message: str,

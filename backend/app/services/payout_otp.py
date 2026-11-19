@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
 
+from app.core.errors import describe_error
 from app.integrations.sms.semaphore import SemaphoreError, send_otp, send_sms
 from app.models.user import User
 from app.services import otp, rate_limit
@@ -149,4 +150,6 @@ def alert_contacts(user: User, merchant, *, old: str, new: str) -> None:
         try:
             send_payout_change_email(email, old=old, new=new)
         except Exception as exc:  # noqa: BLE001 - an alert must not fail the save
-            logger.warning("[email] Payout change alert failed: %s", exc)
+            logger.warning(
+                "[email] Payout change alert failed: %s", describe_error(exc)
+            )

@@ -23,6 +23,20 @@ class SemaphoreError(RuntimeError):
     pass
 
 
+def _shape(payload: Any) -> str:
+    """CF-0071: what came back, without any value from it.
+
+    Semaphore's error answers can repeat the request (the number, the message,
+    which may hold an OTP or an admin setup link), and callers log this
+    error's text. Keep only the field names / the kind of answer.
+    """
+    if isinstance(payload, dict):
+        return "fields: " + (", ".join(sorted(str(k) for k in payload)) or "none")
+    if isinstance(payload, list):
+        return f"a list of {len(payload)}"
+    return type(payload).__name__
+
+
 @dataclass(frozen=True)
 class SemaphoreConfig:
     api_key: str
@@ -83,10 +97,12 @@ def _post(
         raise SemaphoreError("Semaphore returned a non-JSON response") from exc
 
     if not resp.ok:
-        raise SemaphoreError(f"Semaphore error: {payload!r}")
+        raise SemaphoreError(
+            f"Semaphore error (HTTP {resp.status_code}; {_shape(payload)})"
+        )
 
     if not isinstance(payload, list):
-        raise SemaphoreError(f"Unexpected Semaphore response: {payload!r}")
+        raise SemaphoreError(f"Unexpected Semaphore response ({_shape(payload)})")
 
     return payload
 

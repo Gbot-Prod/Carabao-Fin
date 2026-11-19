@@ -14,6 +14,7 @@ from typing import cast
 
 from sqlalchemy.orm import Session
 
+from app.core.errors import describe_error
 from app.integrations.sms.semaphore import SemaphoreError, send_sms
 from app.models.statuses import TransactionStatus
 from app.models.transaction import Transaction
@@ -122,7 +123,11 @@ def notify_buyer_refunded(txn: Transaction) -> None:
                 reference=txn.refund_reference or "",
             )
         except Exception as exc:  # noqa: BLE001 - email provider errors vary
-            logger.warning("[email] Could not send refund email for %s: %s", ref, exc)
+            logger.warning(
+                "[email] Could not send refund email for %s: %s",
+                ref,
+                describe_error(exc),
+            )
 
     if buyer.phone_number and notifications.wants(buyer, "sms"):
         message = (
