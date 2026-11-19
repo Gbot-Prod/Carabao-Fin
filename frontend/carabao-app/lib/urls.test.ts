@@ -274,3 +274,11 @@ test('public and admin deploys leave /api to the app', () => {
   assert.deepEqual(local.route(req('merchant.carabao.test', '/api/auth/get-session')), { kind: 'next' });
   assert.deepEqual(admin.route(req('admin.carabao.test', '/api/auth/jwks')), { kind: 'next' });
 });
+
+test('a listing page is a buyer page (CF-0081)', () => {
+  assert.deepEqual(local.route(req('carabao.test:3000', '/listings/5')), { kind: 'next' });
+  assert.deepEqual(local.route(req('merchant.carabao.test:3000', '/listings/5?x=1')), {
+    kind: 'redirect',
+    location: 'http://carabao.test:3000/listings/5?x=1',
+  });
+});

@@ -49,6 +49,8 @@ const BUYER_PREFIXES = [
   "/track",
   "/landing",
   "/farms",
+  // CF-0081: one listing and other farms selling it.
+  "/listings",
 ];
 // Pages that moved from the apex to help.<root>. The old apex URLs redirect
 // there (sign-up links, bookmarks, search results).

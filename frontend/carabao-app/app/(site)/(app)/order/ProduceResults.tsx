@@ -124,7 +124,7 @@ export default function ProduceResults({ query }: { query: string }) {
                   onToggle={() => saved.toggle(p.id)}
                 />
               </div>
-              <Link href={`/farms/${p.merchant_id}`} className={styles.card}>
+              <Link href={`/listings/${p.id}`} className={styles.card}>
                 {p.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={p.image_url} alt={p.name ? `Photo of ${p.name}` : "Produce photo"} className={styles.image} loading="lazy" />

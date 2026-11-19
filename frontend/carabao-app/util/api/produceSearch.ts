@@ -27,6 +27,29 @@ export type ProduceSearchResult = Produce & {
   merchant_paused_until?: string | null;
 };
 
+/** CF-0081: GET /produce/{id}: one listing, its farm, the same produce elsewhere. */
+export type ListingFarm = {
+  id: number;
+  merchant_name: string;
+  province: string | null;
+  city: string | null;
+  rating: number | null;
+  rating_count: number;
+  paused_until: string | null;
+};
+
+export type ListingDetail = {
+  listing: Produce;
+  farm: ListingFarm;
+  /** Other farms' listings of the same produce, cheapest first (max 10). */
+  other_farms: ProduceSearchResult[];
+};
+
+export const fetchListing = async (produceId: number): Promise<ListingDetail> => {
+  const res = await apiClient.get<ListingDetail>(`/produce/${produceId}`);
+  return res.data;
+};
+
 export const searchProduce = async (params: ProduceSearchParams): Promise<Paginated<ProduceSearchResult>> => {
   // Drop empty values so the server applies no filter for them.
   const clean = Object.fromEntries(

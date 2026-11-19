@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
@@ -143,3 +144,89 @@ def _log_search(db: Session, text: str, province: str | None, total: int) -> Non
     except SQLAlchemyError as exc:
         logger.warning("[search] Could not log search: %s", exc)
         db.rollback()
+
+
+# --- CF-0081 (B64): one listing and other farms selling the same produce ------
+
+OTHER_FARMS_SHOWN = 10
+
+
+class ListingFarm(BaseModel):
+    id: int
+    merchant_name: str
+    province: str | None = None
+    city: str | None = None
+    rating: float | None = None
+    rating_count: int = 0
+    paused_until: date | None = None
+
+
+class ListingDetail(BaseModel):
+    listing: ProduceResponse
+    farm: ListingFarm
+    # Listings with the same name (case and spaces ignored) from other public
+    # farms that buyers can order today, cheapest first.
+    other_farms: list[ProduceSearchResult]
+
+
+def _farm(merchant: Merchant, today: date) -> ListingFarm:
+    return ListingFarm(
+        id=cast(int, merchant.id),
+        merchant_name=cast(str, merchant.merchant_name),
+        province=cast(Any, merchant.province),
+        city=cast(Any, merchant.city),
+        rating=cast(Any, merchant.rating),
+        rating_count=int(cast(Any, merchant.rating_count) or 0),
+        paused_until=store_pause.paused_until(merchant, today),
+    )
+
+
+# Declared after /produce/search: Starlette would read "search" as an id.
+@router.get("/produce/{produce_id}", response_model=ListingDetail)
+def get_listing(
+    produce_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> ListingDetail:
+    """A listing buyers can order, with its farm and the same produce elsewhere.
+
+    404 for a hidden or expired listing or a farm buyers may not see, the same
+    as a missing one.
+    """
+    # Same per-IP limit as search: both are public reads of the catalogue.
+    rate_limit.enforce_action(db, "produce_search", rate_limit.client_ip(request))
+    today = ph_today()
+    listed = (
+        db.query(Produce)
+        .join(Merchant, Merchant.id == Produce.merchant_id)
+        .options(joinedload(Produce.merchant))
+        .filter(merchant_is_public(), is_listed(today))  # type: ignore[no-untyped-call]
+    )
+    produce = listed.filter(Produce.id == produce_id).first()
+    if produce is None:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    name = (cast(str, produce.name) or "").strip().lower()
+    others = (
+        listed.filter(
+            func.lower(func.trim(Produce.name)) == name,
+            Produce.merchant_id != produce.merchant_id,
+        )
+        .order_by(Produce.price.asc(), Produce.id.asc())
+        .limit(OTHER_FARMS_SHOWN)
+        .all()
+    )
+    return ListingDetail(
+        listing=ProduceResponse.model_validate(produce),
+        farm=_farm(produce.merchant, today),
+        other_farms=[
+            ProduceSearchResult(
+                **ProduceResponse.model_validate(p).model_dump(),
+                merchant_name=p.merchant.merchant_name,
+                merchant_province=p.merchant.province,
+                merchant_city=p.merchant.city,
+                merchant_paused_until=store_pause.paused_until(p.merchant, today),
+            )
+            for p in others
+        ],
+    )
