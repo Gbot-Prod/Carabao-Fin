@@ -1,14 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 1    target: 20
+branch: improve/mobile-loop    push: no    iteration: 2    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
+CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
+takes IDs from **CF-0101 upward** (last used: CF-0101) to avoid collisions.
 
 ## In progress
-#2 — STRENGTHEN — M01 lint to green (fix code, no rule changes)
+(none)
 
 ## Kind balance (count / last iteration #)
-PARITY 0/- · STRENGTHEN 0/- · SECURITY 0/- · AUDIT 1/#1
+PARITY 0/- · STRENGTHEN 1/#2 · SECURITY 0/- · AUDIT 1/#1
 
 ## Needs human
 - `npm audit --omit=dev`: 3 moderate (minimatch ReDoS via `@expo/fingerprint` ← `expo`). The only
@@ -53,7 +55,7 @@ Parity score: 7 / 26 done (8 partial, 11 missing; 3 rows n/a)
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
-| M01 | STRENGTHEN | M | 4 | 2 | lint | — | Lint is red before any change: 30 errors (react-hooks/refs ×20 in `ConfirmationScreen`, `Skeleton`, `AuthContext`; set-state-in-effect ×8 in 8 files; no-unescaped-entities ×3). Fix the code, do not weaken rules — test: `npm run lint` exits 0. |
+| M29 | SECURITY | M | 4 | 2 | auth | — | `ProtectedScreen` accepts `requiredRole` but never checks it (its doc comment says it does). Nothing passes it today, so merchant screens rely on the server 404 → "not a merchant" state. Implement the role check from the server profile (`/users/me`), use it on merchant routes, test the pure decision in `src/lib/` — test: a buyer who opens `/listings` sees the not-allowed state with no merchant API call. |
 | M02 | STRENGTHEN | M | 3 | 2 | tests | — | Add `npm test` (`node --test`, TS via `--experimental-strip-types` or compiled) for `cartGroups`, `orderStatus`, `phone`, `passwordPolicy`, `referencePrices`, `idle` — test: `npm test` passes with ≥ 6 files. |
 | M03 | PARITY | M | 4 | 3 | orders | parity | Order detail screen `orders/[orderId]` (items, status, totals from server, cancel, confirm received) — test: open from history, cancel a pending order, see the new status. |
 | M04 | PARITY | M | 4 | 2 | orders | parity | HistoryScreen → `/orders/me/history/page` with status filter, search, infinite scroll (was web B34) — test: 25 orders load in pages of 10; filter "cancelled" shows only cancelled. |
@@ -83,13 +85,15 @@ Parity score: 7 / 26 done (8 partial, 11 missing; 3 rows n/a)
 | M28 | PARITY | M | 2 | 3 | onboarding | parity | Native merchant application status (`/merchant-applications/me`) instead of only opening web — test: pending applicant sees "under review". |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #2 — STRENGTHEN — lint — CF-0101 — M
+What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no rule or config change, no disable comments). refs ×20: `Animated.Value` held with lazy `useState`, not `useRef().current` (`Skeleton`, `ConfirmationScreen`); `AuthContext` writes `signedInRef` in an effect, not in render. set-state-in-effect ×8: `use-color-scheme.web` uses `useSyncExternalStore` for hydration; `ListingForm` resets its fields during render when it opens or the listing changes; `OrderScreen` derives empty search hits for a query < 2 chars; `TrackScreen` keys tracking data by order ID (no stale ETA after an order switch); `Listings` / `MerchantOrders` split a pure `fetch*` (tagged result) from `apply` (sets state in `.then`), and the error now clears after a good reload; `Notifications` / `Confirmation` set state in `.then`. Unescaped `'` ×3 → `’`. Warnings: unused imports/vars removed (dead `ProtectedScreen` styles, `AuthScreen` `width`), missing hook deps added. Why: M01 — lint must pass before any later commit (§5). Tests: no mobile tests yet (M02 next). Manual check: My listings → edit a listing → cancel → edit another (fields show the second one); Track with 2 orders → switch (no old ETA shows); search 1 char → no hits, 2+ chars → hits; airplane mode → error on Listings / Merchant orders → back online, pull to refresh → error clears. Checks: lint pass (0/0), tsc pass, no mobile tests. Note: the log update missed the code commit (script error) and went in a second commit; no amend (no history rewrites). Follow-ups: M29 (new, found here).
 ### #1 — AUDIT — all — (no CF ID) — M
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT)
 - Mobile tests: none (no `test` script yet).
 - `tsc --noEmit`: pass.
-- Lint: FAIL, 30 errors + 7 warnings, all pre-existing (see M01).
+- Lint: pass, 0 errors / 0 warnings since #2 (was 30 + 7 at #1).
 - `npm audit --omit=dev`: 3 moderate (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20 checks pass.
 - Largest files: `src/lib/api.ts` 528 (split by domain soon), `AuthScreen` 459, `MerchantScreen` 417, `ConfirmationScreen` 379, `ProfileScreen` 346, `CheckoutScreen` 343, `TrackScreen` 342.
