@@ -100,11 +100,16 @@ def create_payment_checkout(
         db.refresh(order)
 
     if order.status != OrderStatus.PENDING:
-        raise HTTPException(status_code=400, detail="This order is no longer awaiting payment")
+        raise HTTPException(
+            status_code=400, detail="This order is no longer awaiting payment"
+        )
 
     already_paid = (
         db.query(Transaction)
-        .filter(Transaction.order_id == order_id, Transaction.status == TransactionStatus.PAID)
+        .filter(
+            Transaction.order_id == order_id,
+            Transaction.status == TransactionStatus.PAID,
+        )
         .first()
     )
     if already_paid:
@@ -129,7 +134,9 @@ def create_payment_checkout(
         created_at = existing_pending.created_at
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
-        if (datetime.now(UTC) - created_at).total_seconds() < reservation_ttl_minutes() * 60:
+        if (
+            datetime.now(UTC) - created_at
+        ).total_seconds() < reservation_ttl_minutes() * 60:
             return CheckoutResponse(
                 transaction_id=existing_pending.id,
                 order_id=order_id,
@@ -147,8 +154,13 @@ def create_payment_checkout(
         )
     (
         db.query(Transaction)
-        .filter(Transaction.order_id == order_id, Transaction.status == TransactionStatus.PENDING)
-        .update({Transaction.status: TransactionStatus.EXPIRED}, synchronize_session=False)
+        .filter(
+            Transaction.order_id == order_id,
+            Transaction.status == TransactionStatus.PENDING,
+        )
+        .update(
+            {Transaction.status: TransactionStatus.EXPIRED}, synchronize_session=False
+        )
     )
 
     merchant = db.query(Merchant).filter(Merchant.id == order.merchant_id).first()
@@ -173,7 +185,9 @@ def create_payment_checkout(
             reference_number=str(order_id),
         )
     except requests.HTTPError as e:
-        release_order_reservation(order, db, transaction_status=TransactionStatus.FAILED)
+        release_order_reservation(
+            order, db, transaction_status=TransactionStatus.FAILED
+        )
         db.commit()
         response_text = e.response.text if e.response is not None else ""
         raise upstream_error(
@@ -186,7 +200,9 @@ def create_payment_checkout(
             exc=e,
         ) from e
     except RuntimeError as e:
-        release_order_reservation(order, db, transaction_status=TransactionStatus.FAILED)
+        release_order_reservation(
+            order, db, transaction_status=TransactionStatus.FAILED
+        )
         db.commit()
         raise upstream_error(
             500,
@@ -195,7 +211,9 @@ def create_payment_checkout(
             exc=e,
         ) from e
     except Exception as e:
-        release_order_reservation(order, db, transaction_status=TransactionStatus.FAILED)
+        release_order_reservation(
+            order, db, transaction_status=TransactionStatus.FAILED
+        )
         db.commit()
         raise upstream_error(
             500,
@@ -248,7 +266,10 @@ def cancel_payment_checkout(
 
     paid = (
         db.query(Transaction.id)
-        .filter(Transaction.order_id == order.id, Transaction.status == TransactionStatus.PAID)
+        .filter(
+            Transaction.order_id == order.id,
+            Transaction.status == TransactionStatus.PAID,
+        )
         .first()
     )
     if paid:

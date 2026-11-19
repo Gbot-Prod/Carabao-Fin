@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
-from app.schemas.pagination import MAX_OFFSET
 from app.api.dependencies import get_current_user, get_db
 from app.models.notification import Notification
 from app.models.user import User
+from app.schemas.pagination import MAX_OFFSET
 
 router = APIRouter(tags=["notifications"])
 

@@ -201,7 +201,10 @@ def create_merchant_shipment(
         destination_results = list(
             pool.map(
                 lambda ctx: delivery_point(
-                    ctx["order"], ctx["saved_address"], ctx["delivery_address"], _geocode
+                    ctx["order"],
+                    ctx["saved_address"],
+                    ctx["delivery_address"],
+                    _geocode,
                 ),
                 order_contexts,
             )
@@ -421,21 +424,23 @@ def list_my_shipments(
         .limit(SHIPMENTS_SHOWN)
         .all()
     )
-    rows = sorted(
-        open_rows + recent, key=lambda s: (s.created_at, s.id), reverse=True
-    )
+    rows = sorted(open_rows + recent, key=lambda s: (s.created_at, s.id), reverse=True)
 
     # Shipment.status is never advanced after creation, so the merchant's
     # active/past split is derived from how many of its orders are closed.
-    closed_counts = dict(
-        db.query(Order.shipment_id, func.count(Order.id))
-        .filter(
-            Order.shipment_id.in_([s.id for s in rows]),
-            Order.status.in_(CLOSED_ORDER_STATUSES),
+    closed_counts = (
+        dict(
+            db.query(Order.shipment_id, func.count(Order.id))
+            .filter(
+                Order.shipment_id.in_([s.id for s in rows]),
+                Order.status.in_(CLOSED_ORDER_STATUSES),
+            )
+            .group_by(Order.shipment_id)
+            .all()
         )
-        .group_by(Order.shipment_id)
-        .all()
-    ) if rows else {}
+        if rows
+        else {}
+    )
 
     return [
         {

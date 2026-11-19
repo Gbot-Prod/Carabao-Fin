@@ -53,7 +53,10 @@ def _geocode_sync(address: str) -> tuple[float, float] | None:
                 timeout=_GEOCODE_TIMEOUT_SECONDS,
             )
             break
-        except (_requests.exceptions.Timeout, _requests.exceptions.ConnectionError) as exc:
+        except (
+            _requests.exceptions.Timeout,
+            _requests.exceptions.ConnectionError,
+        ) as exc:
             if attempt == _GEOCODE_ATTEMPTS:
                 logger.warning(
                     "geocode: Mapbox unavailable after %s attempts (%s)",

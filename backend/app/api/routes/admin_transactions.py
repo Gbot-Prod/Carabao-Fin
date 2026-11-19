@@ -102,7 +102,9 @@ def _buyer_name(user: User | None) -> str | None:
     return (user.name or None) if user is not None else None
 
 
-def _row(txn: Transaction, user: User | None, merchant: Merchant | None) -> AdminTransactionRow:
+def _row(
+    txn: Transaction, user: User | None, merchant: Merchant | None
+) -> AdminTransactionRow:
     return AdminTransactionRow(
         id=txn.id,
         order_id=txn.order_id,

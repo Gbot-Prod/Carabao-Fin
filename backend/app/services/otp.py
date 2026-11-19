@@ -79,11 +79,14 @@ def reserve_send(db: Session, key: str) -> None:
                 seconds=OTP_RESEND_COOLDOWN_SECONDS
             )
             if now < ready_at:
-                # Retry-After lets the client resume its countdown (hooks/useResendCooldown.ts).
+                # Retry-After lets the client resume its countdown
+                # (hooks/useResendCooldown.ts).
                 wait = max(1, math.ceil((ready_at - now).total_seconds()))
                 raise HTTPException(
                     status_code=429,
-                    detail=f"Please wait {wait} seconds before requesting another code.",
+                    detail=(
+                        f"Please wait {wait} seconds before requesting another code."
+                    ),
                     headers={"Retry-After": str(wait)},
                 )
             db.delete(record)
@@ -108,9 +111,9 @@ def release_send(db: Session, key: str) -> None:
     """Remove the claim from reserve_send after a failed send. Commits."""
     try:
         lock_keys(db, f"otp:{key}")
-        db.query(OtpCode).filter(
-            OtpCode.key == key, OtpCode.code_hash == ""
-        ).delete(synchronize_session=False)
+        db.query(OtpCode).filter(OtpCode.key == key, OtpCode.code_hash == "").delete(
+            synchronize_session=False
+        )
         db.commit()
     except Exception:
         db.rollback()
@@ -148,9 +151,7 @@ def check_code(db: Session, key: str, code: str) -> None:
     candidate = hash_code(key, code)
     try:
         lock_keys(db, f"otp:{key}")
-        record = (
-            db.query(OtpCode).filter(OtpCode.key == key).with_for_update().first()
-        )
+        record = db.query(OtpCode).filter(OtpCode.key == key).with_for_update().first()
         error: str | None = None
         if record is None:
             error = INVALID_CODE

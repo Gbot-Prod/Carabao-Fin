@@ -2,8 +2,8 @@
 
 A payout batch is created when a merchant cashes out. An admin sends it, which
 makes one PayMongo transfer (InstaPay, or PESONet for GCash) from the platform
-wallet to the merchant's bank or e-wallet. The transfer settles asynchronously: the batch stays
-``processing`` until PayMongo's webhook (or a status refresh) says it
+wallet to the merchant's bank or e-wallet. The transfer settles asynchronously:
+the batch stays ``processing`` until PayMongo's webhook (or a status refresh) says it
 succeeded (``released``) or failed (``failed``, which an admin can resend).
 
 Sending is guarded so money never goes out twice: the batch is locked and
@@ -240,8 +240,7 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
     if destination is None:
         raise PayoutError(
             409,
-            "This payout has no saved destination. The merchant must request "
-            "it again.",
+            "This payout has no saved destination. The merchant must request it again.",
         )
     fee = transfer_fee()
     net = batch.gross_amount - fee
@@ -338,7 +337,8 @@ def apply_transfer_status(
                 merchant.user_id if merchant is not None else None,
                 notifications.PAYOUT_RELEASED,
                 "Payout sent",
-                f"PHP {(batch.net_amount or batch.gross_amount):,} is on its way to your account.",
+                f"PHP {(batch.net_amount or batch.gross_amount):,} is on its way "
+                "to your account.",
                 "/merchantDashboard",
             )
     elif status == "failed":

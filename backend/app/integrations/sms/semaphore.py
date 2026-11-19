@@ -145,7 +145,9 @@ def send_otp(
     parameter is ``code`` or ``otp``, and if it's ignored Semaphore generates its own.
     """
     if OTP_PLACEHOLDER not in message:
-        raise SemaphoreError(f"OTP message must contain the {OTP_PLACEHOLDER} placeholder")
+        raise SemaphoreError(
+            f"OTP message must contain the {OTP_PLACEHOLDER} placeholder"
+        )
     if not code or not code.isdigit():
         raise SemaphoreError("OTP code must be numeric")
 
@@ -159,9 +161,13 @@ def send_otp(
         extra={"code": code},
     )
 
-    returned = payload[0].get("code") if payload and isinstance(payload[0], dict) else None
+    returned = (
+        payload[0].get("code") if payload and isinstance(payload[0], dict) else None
+    )
     if returned is None:
-        logger.warning("[sms] Semaphore OTP response had no code; assuming ours was used")
+        logger.warning(
+            "[sms] Semaphore OTP response had no code; assuming ours was used"
+        )
         return code
     # Docs show the code as a JSON number, which would drop leading zeros.
     delivered = str(returned).strip().zfill(len(code))

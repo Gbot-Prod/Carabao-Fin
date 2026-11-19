@@ -75,7 +75,9 @@ def _unauthorized() -> HTTPException:
 
 
 def token_issuer() -> str:
-    issuer = _origin(os.getenv("AUTH_JWT_ISSUER")) or _origin(os.getenv("BETTER_AUTH_URL"))
+    issuer = _origin(os.getenv("AUTH_JWT_ISSUER")) or _origin(
+        os.getenv("BETTER_AUTH_URL")
+    )
     if not issuer:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

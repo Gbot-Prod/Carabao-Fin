@@ -126,13 +126,14 @@ def write_to_support(
         db.flush()
     message = _post(db, conv, current_user, "user", payload.body)
     name = current_user.name
+    sender = name or current_user.email or current_user.phone_number
     for admin in _admins(db):
         if admin.id != current_user.id:
             notifications.notify(
                 db,
                 admin.id,
                 "support_message",
-                f"Support message from {name or current_user.email or current_user.phone_number}",
+                f"Support message from {sender}",
                 payload.body.strip()[:120],
                 "/admin/support",
             )

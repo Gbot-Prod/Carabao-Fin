@@ -44,7 +44,9 @@ def _ca_file(env: Mapping[str, str]) -> str | None:
         return None
     pem = raw.replace("\\n", "\n")
     if "-----BEGIN CERTIFICATE-----" not in pem:
-        raise RuntimeError("PGSSL_CA must be a PEM certificate (-----BEGIN CERTIFICATE-----).")
+        raise RuntimeError(
+            "PGSSL_CA must be a PEM certificate (-----BEGIN CERTIFICATE-----)."
+        )
     digest = hashlib.sha256(pem.encode()).hexdigest()[:16]
     path = os.path.join(tempfile.gettempdir(), f"carabao-pg-ca-{digest}.pem")
     if not os.path.exists(path):
@@ -55,7 +57,9 @@ def _ca_file(env: Mapping[str, str]) -> str | None:
     return path
 
 
-def create_db_engine(url: str, env: Mapping[str, str] | None = None, **kwargs: Any) -> Engine:
+def create_db_engine(
+    url: str, env: Mapping[str, str] | None = None, **kwargs: Any
+) -> Engine:
     """create_engine() with verified TLS for any non-local Postgres host.
 
     CF-0074: ``hide_parameters`` by default, so a database error's text (and
@@ -88,7 +92,9 @@ def create_db_engine(url: str, env: Mapping[str, str] | None = None, **kwargs: A
 
         @event.listens_for(engine, "do_connect")
         def _pin_cert_name(dialect, conn_rec, cargs, cparams):  # noqa: ARG001
-            cparams["hostaddr"] = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)[0][4][0]
+            cparams["hostaddr"] = socket.getaddrinfo(
+                host, port, type=socket.SOCK_STREAM
+            )[0][4][0]
             cparams["host"] = servername
 
     return engine

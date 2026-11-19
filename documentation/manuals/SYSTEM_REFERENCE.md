@@ -307,7 +307,9 @@ cd backend && uv run pytest && uv run ruff check . && uv run mypy .
 cd frontend/carabao-app && npm test && npm run lint && npm run build
 ```
 
-`npm test` runs node --test on `util/navigation`, `lib/blocked-auth-paths`, `lib/phone`, `lib/admin-two-factor`, `lib/next-path`. Add new pure-logic test files to the `test` script.
+`npm test` runs node --test on the files listed in the `test` script of `package.json`. Add new pure-logic test files there.
+
+`uv run ruff check app` has no findings since CF-0082 (#60): keep it at 0 for new code. The 69 findings left by `ruff check .` are in `tests/` and `scripts/` (B27).
 
 ---
 

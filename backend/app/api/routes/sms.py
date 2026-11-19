@@ -28,7 +28,10 @@ _otp_lock = Lock()  # guards _sent_today only
 _OTP_USER_HOURLY_LIMIT = rate_limit.IDENTIFIER_LIMITS["otp_send_user"].max_hits
 
 # Literal {otp} is Semaphore's placeholder — do not .format() this.
-_OTP_MESSAGE = "Your Carabao verification code is {otp}. Valid for 10 minutes. Do not share this with anyone."
+_OTP_MESSAGE = (
+    "Your Carabao verification code is {otp}. Valid for 10 minutes. "
+    "Do not share this with anyone."
+)
 
 
 def _normalize_phone_number(value: str) -> str:

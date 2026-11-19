@@ -80,8 +80,11 @@ def record_refund(
     txn.refunded_at = datetime.now(UTC)
     txn.refunded_by = admin.id
     notifications.notify(
-        db, txn.user_id, notifications.REFUND,
-        f"Refund sent for {order_ref(txn)}", f"PHP {txn.amount:,} via {REFUND_METHODS[method]}.",
+        db,
+        txn.user_id,
+        notifications.REFUND,
+        f"Refund sent for {order_ref(txn)}",
+        f"PHP {txn.amount:,} via {REFUND_METHODS[method]}.",
         f"/orders/{txn.order_id}",
     )
     audit_log.record_admin_action(

@@ -25,7 +25,9 @@ def notify_order_shipped(
     if status not in _SHIP_STATUSES:
         return
 
-    verb = "has been shipped" if status == OrderStatus.SHIPPED else "is out for delivery"
+    verb = (
+        "has been shipped" if status == OrderStatus.SHIPPED else "is out for delivery"
+    )
     message = (
         f"Hi! Your Carabao order {order_ref} from {merchant_name} {verb}. "
         "Track your delivery in the app."

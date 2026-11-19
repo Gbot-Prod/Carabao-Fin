@@ -100,7 +100,10 @@ class MerchantOrderStatusUpdate(BaseModel):
 
 
 def _compute_and_store_route(db: Session, order: Order) -> None:
-    """Compute ALNS route for order and store waypoints. Called when marking for shipping."""
+    """Compute the ALNS route for ``order`` and store its waypoints.
+
+    Called when the order is marked for shipping.
+    """
     if not order.merchant:
         logger.info("route: skipping order %s, no merchant", order.id)
         return
@@ -136,9 +139,7 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
 
     if not origin_coords:
         # No address text in the log: it is personal data (CF-0039).
-        logger.warning(
-            "route: could not geocode merchant address, order %s", order.id
-        )
+        logger.warning("route: could not geocode merchant address, order %s", order.id)
         return
 
     if not dest_coords:
@@ -433,9 +434,7 @@ def get_my_merchant_performance(
         or 0
     )
 
-    total_orders = (
-        db.query(func.count(Order.id)).filter(*paid_orders).scalar() or 0
-    )
+    total_orders = db.query(func.count(Order.id)).filter(*paid_orders).scalar() or 0
     active_orders = (
         db.query(func.count(Order.id))
         .filter(*paid_orders, Order.status.in_(ACTIVE_ORDER_STATUSES))
@@ -461,11 +460,7 @@ def get_my_merchant_performance(
         .scalar()
         or 0
     )
-    last_order_at = (
-        db.query(func.max(Order.ordered_at))
-        .filter(*paid_orders)
-        .scalar()
-    )
+    last_order_at = db.query(func.max(Order.ordered_at)).filter(*paid_orders).scalar()
 
     last_30_days_orders = (
         db.query(func.count(Order.id))
@@ -593,9 +588,7 @@ def update_produce(
         raise HTTPException(status_code=404, detail="Produce item not found")
 
     changes = produce_update.model_dump(exclude_unset=True, exclude={"price_tiers"})
-    upload_validation.check_image_url_fields(
-        changes, {"image_url": produce.image_url}
-    )
+    upload_validation.check_image_url_fields(changes, {"image_url": produce.image_url})
     if "image_url" in changes:
         changes["image_url"] = upload_validation.blank_to_none(changes["image_url"])
     for field, value in changes.items():
@@ -797,7 +790,9 @@ def update_my_merchant_order_status(
 
     notify_order_shipped(
         # U5: only when the buyer accepts SMS updates.
-        phone_number=user.phone_number if user and notifications.wants(user, "sms") else None,
+        phone_number=user.phone_number
+        if user and notifications.wants(user, "sms")
+        else None,
         merchant_name=merchant.merchant_name or "Merchant",
         order_ref=notifications.order_ref(order),
         status=status,

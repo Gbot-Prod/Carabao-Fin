@@ -154,7 +154,8 @@ def _payload_field_errors(exc: ValidationError) -> dict[str, str]:
     """The first problem per field, e.g. {"postal_code": "Postal code is required."}."""
     errors: dict[str, str] = {}
     for error in exc.errors():
-        errors.setdefault(_error_field(error) or "payload", _describe_error(error) + ".")
+        field = _error_field(error) or "payload"
+        errors.setdefault(field, _describe_error(error) + ".")
     return errors
 
 
@@ -168,7 +169,9 @@ def _with_field(field: str, call, *args):
         # 413: an upload over the size cap, shown under its dropzone.
         if exc.status_code not in (400, 413, 422):
             raise
-        raise FieldErrors({field: str(exc.detail)}, status_code=exc.status_code) from exc
+        raise FieldErrors(
+            {field: str(exc.detail)}, status_code=exc.status_code
+        ) from exc
 
 
 def _discard_uploads(*paths: str) -> None:
@@ -237,7 +240,9 @@ def submit_my_merchant_onboarding_route(
         and verified.get("number") == contact
     )
     if not (is_account_phone or has_token):
-        raise FieldErrors({"contact_number": "Please verify your contact number first."})
+        raise FieldErrors(
+            {"contact_number": "Please verify your contact number first."}
+        )
 
     # The same for the contact email: the account's own verified email, or a
     # code sent to it (/email/otp/verify).
@@ -274,10 +279,16 @@ def submit_my_merchant_onboarding_route(
 
     # Both files are checked before either is uploaded.
     checked = _with_field(
-        "rsbsa_file", upload_validation.check_document_upload, rsbsa_file, "RSBSA document"
+        "rsbsa_file",
+        upload_validation.check_document_upload,
+        rsbsa_file,
+        "RSBSA document",
     )
     checked_gov_id = _with_field(
-        "gov_id_file", upload_validation.check_document_upload, gov_id_file, "Government ID"
+        "gov_id_file",
+        upload_validation.check_document_upload,
+        gov_id_file,
+        "Government ID",
     )
     try:
         saved_path = r2_service.upload_rsbsa_document(current_user.id, checked)

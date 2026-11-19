@@ -106,7 +106,8 @@ def place_order_from_cart(
     cart_items = cart.items or []
     if not cart_items:
         raise HTTPException(status_code=400, detail="Cart is empty")
-    if payload.delivery_date is not None and payload.delivery_date < datetime.now(_PH_TZ).date():
+    requested_day = payload.delivery_date
+    if requested_day is not None and requested_day < datetime.now(_PH_TZ).date():
         raise HTTPException(
             status_code=400, detail="Delivery date cannot be in the past"
         )
@@ -145,7 +146,9 @@ def place_order_from_cart(
 
         produce_id = _extract_item_int(item, "produce_id", "produceId", "id")
         if produce_id is None:
-            raise HTTPException(status_code=400, detail="Cart item is missing a produce ID")
+            raise HTTPException(
+                status_code=400, detail="Cart item is missing a produce ID"
+            )
 
         produce = locked_produce.get(produce_id)
         if produce is None:
@@ -171,7 +174,9 @@ def place_order_from_cart(
 
         quantity = max(_to_int(item.get("quantity"), 0), 0)
         if quantity == 0:
-            raise HTTPException(status_code=400, detail="Item quantity must be positive")
+            raise HTTPException(
+                status_code=400, detail="Item quantity must be positive"
+            )
         if quantity < produce.min_order_qty:
             raise HTTPException(
                 status_code=400,
@@ -341,9 +346,10 @@ def preview_voucher(
             ):
                 continue
             quantity = lines[cast(int, produce.id)]
-            subtotal_by_merchant[merchant_id] = subtotal_by_merchant.get(
-                merchant_id, 0
-            ) + unit_price_for(produce, quantity) * quantity
+            subtotal_by_merchant[merchant_id] = (
+                subtotal_by_merchant.get(merchant_id, 0)
+                + unit_price_for(produce, quantity) * quantity
+            )
     if not subtotal_by_merchant:
         raise HTTPException(status_code=400, detail="Cart is empty")
     voucher, discount = vouchers.claim(
@@ -556,6 +562,7 @@ def confirm_order_received(
 # ---------------------------------------------------------------------------
 # Merchant order queue routes
 # ---------------------------------------------------------------------------
+
 
 @router.get("/orders/merchant/current", response_model=list[CurrentOrderResponse])
 def get_merchant_current_orders(
