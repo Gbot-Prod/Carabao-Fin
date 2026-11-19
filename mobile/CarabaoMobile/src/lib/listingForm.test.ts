@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
-  addDays, checkListing, freshnessError, LISTING_NAME_MAX, LISTING_PRICE_MAX, LISTING_STOCK_MAX, parseYmd, phToday,
+  addDays, checkListing, freshnessError, LISTING_NAME_MAX, LISTING_PRICE_MAX, LISTING_STOCK_MAX, LISTING_TIERS_MAX,
+  parseYmd, phToday, pricingError,
 } from './listingForm.ts';
 
 const ok = { name: 'Kale', price: '120', stock: '5', harvestDate: '2026-11-18', bestBefore: '2026-11-25' };
@@ -35,8 +36,38 @@ test('freshness: same messages and order as backend freshness_error', () => {
 
 test('a good form gives the payload with both dates', () => {
   assert.deepEqual(checkListing(ok, today), {
-    ok: { name: 'Kale', price: 120, stock_quantity: 5, harvest_date: '2026-11-18', best_before: '2026-11-25' },
+    ok: {
+      name: 'Kale', price: 120, stock_quantity: 5, harvest_date: '2026-11-18', best_before: '2026-11-25',
+      min_order_qty: 1, price_tiers: [],
+    },
   });
+});
+
+test('min order and bulk prices: sorted, blank rows left out, backend pricing rules', () => {
+  const r = checkListing({
+    ...ok, minOrderQty: '2',
+    tiers: [{ minQty: '10', unitPrice: '100' }, { minQty: '', unitPrice: '' }, { minQty: '5', unitPrice: '110' }],
+  }, today);
+  assert.ok('ok' in r);
+  assert.equal(r.ok.min_order_qty, 2);
+  assert.deepEqual(r.ok.price_tiers, [{ min_qty: 5, unit_price: 110 }, { min_qty: 10, unit_price: 100 }]);
+  const err = (over: Partial<typeof ok> & { minOrderQty?: string; tiers?: { minQty: string; unitPrice: string }[] }) => {
+    const x = checkListing({ ...ok, ...over }, today);
+    return 'error' in x ? x.error : null;
+  };
+  assert.match(err({ minOrderQty: '0' })!, /Minimum order/);
+  assert.match(err({ tiers: [{ minQty: '1', unitPrice: '100' }] })!, /quantity of 2/);
+  assert.match(err({ tiers: [{ minQty: '5', unitPrice: '' }] })!, /pesos/);
+  assert.match(err({ tiers: [{ minQty: '5', unitPrice: '100' }, { minQty: '5', unitPrice: '90' }] })!, /different quantity/);
+  assert.match(err({ minOrderQty: '5', tiers: [{ minQty: '5', unitPrice: '100' }] })!, /start above the minimum/);
+  assert.match(err({ tiers: [{ minQty: '5', unitPrice: '120' }] })!, /cheaper than the price before/);
+  assert.match(err({ tiers: [{ minQty: '5', unitPrice: '100' }, { minQty: '10', unitPrice: '100' }] })!, /cheaper/);
+  assert.match(err({ tiers: Array.from({ length: 6 }, (_, i) => ({ minQty: String(i + 2), unitPrice: String(110 - i) })) })!, /at most 5/);
+});
+
+test('pricingError = backend produce_pricing.pricing_error cases', () => {
+  assert.equal(pricingError(120, 1, []), null);
+  assert.equal(pricingError(120, 1, [{ min_qty: 10, unit_price: 100 }, { min_qty: 5, unit_price: 110 }]), null); // order does not matter
 });
 
 test('each bad field gives its message', () => {
@@ -62,4 +93,5 @@ test('bounds = backend schemas/produce.py', () => {
   assert.equal(num('MAX_NAME'), LISTING_NAME_MAX);
   assert.equal(num('MAX_PRICE'), LISTING_PRICE_MAX);
   assert.equal(num('MAX_STOCK'), LISTING_STOCK_MAX);
+  assert.equal(num('MAX_PRICE_TIERS'), LISTING_TIERS_MAX);
 });

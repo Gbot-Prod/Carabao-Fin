@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 18    target: 20
+branch: improve/mobile-loop    push: no    iteration: 19    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0115) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0116) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 8/#18 · STRENGTHEN 4/#13 · SECURITY 3/#17 · AUDIT 3/#16
+PARITY 9/#19 · STRENGTHEN 4/#13 · SECURITY 3/#17 · AUDIT 3/#16
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #45 at mobile #16) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -45,7 +45,7 @@ PARITY 8/#18 · STRENGTHEN 4/#13 · SECURITY 3/#17 · AUDIT 3/#16
 | merchant `auth` | `AuthScreen` (shared) | done | Better Auth | |
 | merchant `onboarding` | `onboarding` → `OnboardingScreen` | partial | opens web `/merchantOnboarding` in browser; `/merchant-onboarding/me`, `/merchant-applications/me` not called | no native onboarding / application status |
 | merchant dashboard | — | missing | `/merchants/me/performance`, `/merchants/me/demand` exist | |
-| merchant `produce` | `listings` → `ListingsScreen` + `ListingForm` | partial | `/merchants/me/produce`, `POST /produce/`, `PATCH /produce/:id` ✓ (create fixed #9); `/produce/:id/image` not called | no photo upload, no min order qty / price tiers |
+| merchant `produce` | `listings` → `ListingsScreen` + `ListingForm` | partial | `/merchants/me/produce`, `POST /produce/`, `PATCH` / `DELETE /produce/:id` ✓ (#9, #19); `/produce/:id/image` not called | create, edit, delete, dates, min order, bulk prices; no photo upload (M17) |
 | merchant `inventory` / stock alerts | `ListingsScreen` | partial | `/merchants/me/stock-alerts` ✓ | alerts shown inline, no inventory view |
 | merchant `orders` | `merchant-orders` → `MerchantOrdersScreen` | done | `/merchants/me/orders`, `/merchants/me/orders/:id/status` | |
 | merchant `shipments`, `routing/[shipmentId]` | — | missing | `/merchants/me/shipments`, `/shipments/:id` exist | |
@@ -62,7 +62,6 @@ Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
 | M42 | STRENGTHEN | M | 3 | 2 | perf | — | **New (#16, web CF-0047).** Polling does not stop when the screen is out of view or the app is in the background: `OrderChatScreen` every 10 s (a stack screen stays mounted under the next one), the bell count in `OrderScreen` every 60 s (a tab stays mounted) and it downloads the whole notification list for the count. Pause on blur and on `AppState` background (one pure "should poll" helper with a test), read the count only — test: helper tests; manual: background the app 2 min → no requests in the API log. |
-| M45 | PARITY | S | 2 | 1 | merchant | parity | **New (#16).** A merchant cannot delete a listing on mobile; backend `DELETE /produce/{id}` exists and the web uses it. Add "Delete listing" with a confirm to `ListingForm`; batch with M39 (min order qty, price tiers) — test: delete → listing gone after reload. |
 | M34 | STRENGTHEN | S | 2 | 1 | types | — | **New (#8).** `ApiMerchant` types `address`, `barangay` as present and `contact_number` as `string`; after the web loop merge the public farm routes leave the first two out (CF-0048) and `contact_number` is nullable. No screen reads them, so only the types are wrong. Make them match `PublicMerchantResponse` — test: tsc passes; farm screen hides the contact row when null. |
 | M29 | SECURITY | M | 4 | 2 | auth | — | `ProtectedScreen` accepts `requiredRole` but never checks it (its doc comment says it does). Nothing passes it today, so merchant screens rely on the server 404 → "not a merchant" state. Implement the role check from the server profile, use it on merchant routes, test the pure decision — test: a buyer who opens `/listings` sees the not-allowed state with no merchant API call. |
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 6 rows that do nothing on tap (Address fixed #12; `onPress={() => {}}`: Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target or remove it — test: every Profile row opens something or is gone. |
@@ -70,7 +69,6 @@ Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 | M11 | SECURITY | S | 3 | 1 | auth | — | Verify a 401 that survives the token retry signs the user out cleanly (today `request` throws and the screen shows an error, the session stays). Storage half checked at #10: AsyncStorage holds only the idle timestamp (`LEFT_AT_KEY`), removed by `clearLocal`; cart and saved ids are wiped by owner (CF-0108) — test: an expired session → one sign-out, back to sign-in. |
 | M09 | PARITY | M | 3 | 3 | discovery | parity | Produce search filters/sort/paging matching web `produceSearch.ts` — test: sort by price ascending, page 2 loads. |
 | M15 | PARITY | M | 3 | 3 | merchant | parity | Merchant dashboard (performance + demand + stock alert counts) — test: totals match the web dashboard. |
-| M39 | PARITY | S | 2 | 1 | merchant | parity | **New (#9).** Listing form has no `min_order_qty` and no `price_tiers` (bulk prices, max 5) although the backend and web support both — test: set min order 5 → buyer cannot add 4. Batch with M17. |
 | M17 | PARITY | M | 3 | 3 | merchant | parity | Listing photo upload via `/produce/:id/image` (expo-image-picker — check Expo Go support first) — test: new listing shows the uploaded photo. |
 | M35 | PARITY | M | 3 | 3 | checkout | after-web-merge | **New (#8). Blocked until `improve/loop` is merged.** Web-loop features with backend routes only on that branch: review `merchant_reply` (show under each review in `FarmReviews`, reply from M18), cart line `issue` / `previous_price` (CF-0042, show in `CartScreen` next to `unavailable_reason`), holiday mode on the farm screen + pause switch for merchants (`paused_until`, `pause_message`, CF-0066, web B77), "download my data" on Profile (CF-0069), voucher code at checkout + discount on order/receipt (CF-0058/0061, web B70), order receipt (`GET /orders/me/{id}/receipt`, CF-0049, web B63), recently viewed farms (CF-0052). — test: place-order sends `voucher_code`; receipt opens from order detail. |
 | M40 | STRENGTHEN | S | 2 | 2 | checkout | — | **New (#12).** Editing a saved address on mobile leaves its `region` and map pin (`lat`/`lng`) as they were, so a street changed on the phone can keep the old pin; mobile also has no region field (web sets it with a picker). Clear the pin when street/city/province change, or add a region picker — test: edit street → saved pin is null. |
@@ -89,6 +87,8 @@ Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #19 — PARITY — merchant — CF-0116 — M
+What: listings batch M45 + M39 (web produce page). `ListingForm` gets "Minimum order (sale units)" and "Bulk prices" (up to 5 rows: from quantity + ₱ per unit, add / remove, 44 pt targets, a11y labels), prefilled on edit from `min_order_qty` / `price_tiers`; and, in edit mode, "Delete listing" → confirm → `DELETE /produce/:id` (new `api.produce.remove`), the row leaves the list and stock alerts are read again. `checkListing` now returns `min_order_qty` and `price_tiers` (blank rows left out, sorted) and runs a word-for-word port of backend `produce_pricing.pricing_error` (`pricingError`: different quantities, first tier above the minimum order, each tier cheaper than the one before); tier bounds = backend `PriceTier` (min_qty ≥ 2, price 1…1 000 000) and `MAX_PRICE_TIERS` 5 (a test reads `schemas/produce.py`). The payload type gets the two fields. Why: merchant parity; merchants could not remove a listing or set bulk prices on the phone. Tests: `listingForm.test.ts` +2 (pricing rules, order independence) and the payload test now includes the new fields. Manual check: edit a listing → min order 2, bulk price "from 10, ₱100" → Save → buyer farm screen shows the listing; bulk price ₱130 above the ₱120 price → "must be cheaper"; Delete listing → confirm → gone after pull to refresh. Checks: npm test 89/89, lint 0/0, tsc pass. Not run on a device.
 ### #18 — PARITY — checkout — CF-0115 — M
 What: checkout batch M44 + M36. (1) Delivery date: mobile never sent `delivery_date`, so every mobile order showed "Any day" to the farm. Checkout now has a "Delivery Date" row of 14 chips (Today, Tomorrow, "Mon 23 Nov", …) in Philippine time, default tomorrow like the web, checked before sending with the backend's rules and messages (not in the past, ≤ 30 days ahead), and sent as `delivery_date`. (2) Order failures: the alert now says the server's reason via `placeOrderFailure`; on 400 / 409 (stock, price, availability or the cart changed) the server cart is read again so the changed lines show their warning ("Your cart was refreshed"); a 429 without a message says "Too many tries. Wait a minute"; network errors say so. Pure `src/lib/checkoutOptions.ts`: `dateLabel`, `deliveryDateChoices`, `defaultDeliveryDate`, `deliveryDateError`, `placeOrderFailure`; a test reads `MAX_DELIVERY_DAYS_AHEAD` from `routes/orders.py`. Why: parity (web checkout date) and merchants planning deliveries; M36 was web B63 part. Tests: `checkoutOptions.test.ts` 5. Manual check: checkout → "Tomorrow" selected → pick "Mon 23 Nov" → place → merchant orders screen shows 2026-11-23 instead of "Any day"; set a listing's stock below the cart quantity on the web → place → server message + cart line warning. Checks: npm test 87/87, lint 0/0, tsc pass. Not run on a device.
 ### #17 — SECURITY — payments / deep links — CF-0114 — M
@@ -127,7 +127,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #16)
-- Mobile tests: 87 in 21 files since #18 (`npm test` runs every `src/lib/**/*.test.ts`; 7 of them also read backend / web files to keep values in step).
+- Mobile tests: 89 in 21 files since #19 (`npm test` runs every `src/lib/**/*.test.ts`; 7 of them also read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #16 `expo export --platform android` OK (5 MB) (next: #20).

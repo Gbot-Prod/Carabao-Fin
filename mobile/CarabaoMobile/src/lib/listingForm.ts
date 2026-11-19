@@ -5,6 +5,7 @@
 export const LISTING_NAME_MAX = 100; // backend MAX_NAME
 export const LISTING_PRICE_MAX = 1_000_000; // backend MAX_PRICE
 export const LISTING_STOCK_MAX = 10_000_000; // backend MAX_STOCK
+export const LISTING_TIERS_MAX = 5; // backend MAX_PRICE_TIERS (CF-0116)
 
 const PH_OFFSET_MS = 8 * 60 * 60 * 1000;
 
@@ -36,13 +37,21 @@ export function freshnessError(harvest: string | null, bestBefore: string | null
   return null;
 }
 
+export type TierFields = { minQty: string; unitPrice: string };
+
 export type ListingFields = {
   name: string;
   price: string;
   stock: string;
   harvestDate: string;
   bestBefore: string;
+  /** Blank = 1 (CF-0116). */
+  minOrderQty?: string;
+  /** Rows with both boxes blank are left out. */
+  tiers?: TierFields[];
 };
+
+export type PriceTier = { min_qty: number; unit_price: number };
 
 export type ListingValues = {
   name: string;
@@ -50,7 +59,22 @@ export type ListingValues = {
   stock_quantity: number;
   harvest_date: string;
   best_before: string;
+  min_order_qty: number;
+  price_tiers: PriceTier[];
 };
+
+/** Backend services/produce_pricing.pricing_error, word for word. */
+export function pricingError(price: number, minOrderQty: number, tiers: readonly PriceTier[]): string | null {
+  const ordered = [...tiers].sort((a, b) => a.min_qty - b.min_qty);
+  if (new Set(ordered.map((t) => t.min_qty)).size !== ordered.length) return 'Each price tier needs a different quantity';
+  if (ordered.length && ordered[0].min_qty <= minOrderQty) return 'Price tiers must start above the minimum order quantity';
+  let previous = price;
+  for (const t of ordered) {
+    if (t.unit_price >= previous) return 'Each price tier must be cheaper than the price before it';
+    previous = t.unit_price;
+  }
+  return null;
+}
 
 function parseWhole(value: string): number | null {
   return /^\d+$/.test(value.trim()) ? Number(value.trim()) : null;
@@ -75,5 +99,30 @@ export function checkListing(f: ListingFields, today: string): { ok: ListingValu
   if (f.bestBefore.trim() && best === null) return { error: 'Best-before date must be a real date, like 2026-11-26.' };
   const fresh = freshnessError(harvest, best, today);
   if (fresh) return { error: `${fresh}.` };
-  return { ok: { name, price, stock_quantity: stock, harvest_date: harvest as string, best_before: best as string } };
+
+  const minRaw = (f.minOrderQty ?? '').trim();
+  const minOrder = minRaw === '' ? 1 : parseWhole(minRaw);
+  if (minOrder === null || minOrder < 1 || minOrder > LISTING_STOCK_MAX) {
+    return { error: 'Minimum order must be a whole number of 1 or more.' };
+  }
+  const rows = (f.tiers ?? []).filter((t) => t.minQty.trim() !== '' || t.unitPrice.trim() !== '');
+  if (rows.length > LISTING_TIERS_MAX) return { error: `A listing can have at most ${LISTING_TIERS_MAX} bulk prices.` };
+  const tiers: PriceTier[] = [];
+  for (const row of rows) {
+    const q = parseWhole(row.minQty);
+    const p = parseWhole(row.unitPrice);
+    if (q === null || q < 2 || q > LISTING_STOCK_MAX) return { error: 'Each bulk price needs a quantity of 2 or more.' };
+    if (p === null || p < 1 || p > LISTING_PRICE_MAX) return { error: 'Each bulk price needs a whole number of pesos.' };
+    tiers.push({ min_qty: q, unit_price: p });
+  }
+  const pricing = pricingError(price, minOrder, tiers);
+  if (pricing) return { error: `${pricing}.` };
+  tiers.sort((a, b) => a.min_qty - b.min_qty);
+
+  return {
+    ok: {
+      name, price, stock_quantity: stock, harvest_date: harvest as string, best_before: best as string,
+      min_order_qty: minOrder, price_tiers: tiers,
+    },
+  };
 }

@@ -165,6 +165,9 @@ export type ProduceCreatePayload = {
   // YYYY-MM-DD. Required by the backend on create and checked on every edit (CF-0107).
   harvest_date?: string | null;
   best_before?: string | null;
+  // CF-0116: backend checks these with produce_pricing.pricing_error.
+  min_order_qty?: number;
+  price_tiers?: { min_qty: number; unit_price: number }[];
 };
 
 export type ProduceUpdatePayload = Partial<{
@@ -511,6 +514,9 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify(payload),
       }),
+    // CF-0116: the owner deletes a listing (backend DELETE /produce/{id}).
+    remove: (token: string | null, produceId: number) =>
+      request<null>(`/produce/${produceId}`, token, { method: 'DELETE' }),
   },
   payments: {
     checkout: (token: string | null, orderId: number) =>

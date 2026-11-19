@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { Button } from './UI';
-import { addDays, checkListing, phToday } from '../lib/listingForm';
+import { addDays, checkListing, LISTING_TIERS_MAX, phToday, type TierFields } from '../lib/listingForm';
 import type {
   ApiProduce, ProduceCategory, ProduceCreatePayload, ProduceUnit,
 } from '../lib/api';
@@ -27,9 +27,11 @@ type Props = {
   onCancel: () => void;
   // Every field is always sent, so the same payload works for POST and PATCH.
   onSave: (payload: ProduceCreatePayload) => void;
+  /** Edit mode only: delete the listing (asks first). CF-0116. */
+  onDelete?: () => void;
 };
 
-export function ListingForm({ visible, produce, saving, error, onCancel, onSave }: Props) {
+export function ListingForm({ visible, produce, saving, error, onCancel, onSave, onDelete }: Props) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('');
@@ -37,6 +39,8 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave 
   const [category, setCategory] = useState<ProduceCategory | null>(null);
   const [harvestDate, setHarvestDate] = useState('');
   const [bestBefore, setBestBefore] = useState('');
+  const [minOrderQty, setMinOrderQty] = useState('1');
+  const [tiers, setTiers] = useState<TierFields[]>([]);
   const [localError, setLocalError] = useState<string | null>(null);
 
   // CF-0101: reset the fields when the sheet opens or the listing changes. Done during
@@ -56,12 +60,14 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave 
       const today = phToday();
       setHarvestDate(produce?.harvest_date ?? today);
       setBestBefore(produce?.best_before ?? addDays(today, 7));
+      setMinOrderQty(String(produce?.min_order_qty ?? 1));
+      setTiers((produce?.price_tiers ?? []).map((t) => ({ minQty: String(t.min_qty), unitPrice: String(t.unit_price) })));
       setLocalError(null);
     }
   }
 
   const handleSave = () => {
-    const result = checkListing({ name, price, stock, harvestDate, bestBefore }, phToday());
+    const result = checkListing({ name, price, stock, harvestDate, bestBefore, minOrderQty, tiers }, phToday());
     if ('error' in result) return setLocalError(result.error);
     setLocalError(null);
     onSave({ ...result.ok, unit, category });
@@ -136,6 +142,48 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave 
             </View>
             <Text style={styles.hint}>Buyers stop seeing the listing after its best-before date.</Text>
 
+            <Text style={styles.label}>Minimum order (sale units)</Text>
+            <TextInput
+              style={styles.input} value={minOrderQty} onChangeText={setMinOrderQty}
+              keyboardType="number-pad" accessibilityLabel="Minimum order quantity"
+            />
+
+            <Text style={styles.label}>Bulk prices (optional)</Text>
+            <Text style={styles.hint}>A lower price per unit once a buyer orders this many or more.</Text>
+            {tiers.map((t, i) => (
+              <View key={i} style={[styles.twoCol, styles.tierRow]}>
+                <TextInput
+                  style={[styles.input, styles.col]} value={t.minQty} placeholder="From qty"
+                  placeholderTextColor={Colors.textLight} keyboardType="number-pad"
+                  onChangeText={(v) => setTiers((p) => p.map((x, j) => (j === i ? { ...x, minQty: v } : x)))}
+                  accessibilityLabel={`Bulk price ${i + 1}, from quantity`}
+                />
+                <TextInput
+                  style={[styles.input, styles.col]} value={t.unitPrice} placeholder="₱ per unit"
+                  placeholderTextColor={Colors.textLight} keyboardType="number-pad"
+                  onChangeText={(v) => setTiers((p) => p.map((x, j) => (j === i ? { ...x, unitPrice: v } : x)))}
+                  accessibilityLabel={`Bulk price ${i + 1}, pesos per unit`}
+                />
+                <TouchableOpacity
+                  style={styles.tierRemove}
+                  onPress={() => setTiers((p) => p.filter((_, j) => j !== i))}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove bulk price ${i + 1}`}
+                >
+                  <Text style={styles.tierRemoveText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            {tiers.length < LISTING_TIERS_MAX && (
+              <TouchableOpacity
+                style={styles.addTier}
+                onPress={() => setTiers((p) => [...p, { minQty: '', unitPrice: '' }])}
+                accessibilityRole="button"
+              >
+                <Text style={styles.addTierText}>+ Add bulk price</Text>
+              </TouchableOpacity>
+            )}
+
             <Text style={styles.label}>Unit</Text>
             <View style={styles.pills}>
               {UNITS.map((u) => (
@@ -163,6 +211,11 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave 
             </View>
 
             {shownError ? <Text style={styles.error}>{shownError}</Text> : null}
+            {produce && onDelete ? (
+              <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} disabled={saving} accessibilityRole="button">
+                <Text style={styles.deleteText}>Delete listing</Text>
+              </TouchableOpacity>
+            ) : null}
 
             <View style={styles.actions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} disabled={saving}>
@@ -203,6 +256,13 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   chipRow: { marginTop: Spacing.sm, flexWrap: 'wrap' },
   hint: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: Spacing.xs },
+  tierRow: { alignItems: 'center', marginTop: Spacing.sm },
+  tierRemove: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  tierRemoveText: { fontSize: FontSize.lg, color: Colors.textMuted },
+  addTier: { minHeight: 44, justifyContent: 'center' },
+  addTierText: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.primary },
+  deleteBtn: { minHeight: 44, justifyContent: 'center', alignItems: 'center', marginTop: Spacing.lg },
+  deleteText: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.error },
   pillText: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '500' },
   pillTextActive: { color: Colors.white, fontWeight: '700' },
   error: { color: Colors.error, fontSize: FontSize.sm, marginTop: Spacing.md },

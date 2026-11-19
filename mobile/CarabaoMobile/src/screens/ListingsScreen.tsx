@@ -4,7 +4,7 @@
 // (which, unlike the public list, includes expired and admin-hidden listings).
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, SafeAreaView,
+  View, Text, FlatList, StyleSheet, SafeAreaView, Alert,
   TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -98,6 +98,30 @@ function ListingsScreenContent() {
     setSaveError(null);
     setEditing(item);
   };
+
+  // CF-0116: delete after a confirm; the list and stock alerts are updated.
+  const confirmDelete = (item: ApiProduce) =>
+    Alert.alert('Delete listing?', `"${item.name ?? 'This listing'}" will be removed. Buyers can no longer order it.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          if (!token) return;
+          setSaving(true);
+          try {
+            await api.produce.remove(token, item.id);
+            setItems((prev) => prev.filter((p) => p.id !== item.id));
+            setEditing(null);
+            api.merchants.stockAlerts(token).then(setAlerts).catch(() => {});
+          } catch (err) {
+            setSaveError(err instanceof Error ? err.message : 'Could not delete this listing');
+          } finally {
+            setSaving(false);
+          }
+        },
+      },
+    ]);
 
   const handleSave = async (payload: ProduceCreatePayload) => {
     if (!token || !editing) return;
@@ -227,6 +251,7 @@ function ListingsScreenContent() {
         error={saveError}
         onCancel={() => setEditing(null)}
         onSave={handleSave}
+        onDelete={editing && editing !== 'new' ? () => confirmDelete(editing) : undefined}
       />
     </SafeAreaView>
   );
