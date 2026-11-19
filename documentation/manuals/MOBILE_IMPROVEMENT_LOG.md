@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 29    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
+branch: improve/mobile-loop    push: no    iteration: 30    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0125) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0126) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 15/#29 · STRENGTHEN 6/#27 · SECURITY 4/#23 · AUDIT 4/#24
+PARITY 15/#29 · STRENGTHEN 6/#27 · SECURITY 5/#30 · AUDIT 4/#24
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #53 at mobile #24) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -82,6 +82,8 @@ Parity score: 15 / 26 done (4 partial, 7 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #30 — SECURITY — input / deep links — CF-0126 — M
+What: §2C sweep for "the same bounds as the backend on all inputs" and "validate every deep link parameter" (no SECURITY item was left in the backlog; found by checking every `useLocalSearchParams` and every free-text `TextInput`). Checkout delivery address and notes had no length limit (backend `PlaceOrderRequest` max 500 each → the server refused with a 422 after typing); they now stop at 500. Chat's hard-coded 2000 now uses the shared constant. The farm screen title used the route's `farmName` as given (a link could title a real farm page with any text until the data loaded); now it is only a placeholder while loading, and only when `routeText` accepts it (≤ 100 chars, trimmed, no control / line-separator / bidi-override characters — refused, not stripped). Remaining route params checked and fine: `auth?mode` (two values), `search?q` (sliced to 100), `order-detail` / `order-chat` / `confirmation` (CF-0105 / CF-0114), `merchant?farmId` (CF-0112). Token storage checked: Better Auth session in SecureStore (`authClient.ts`); AsyncStorage holds only the idle key; one log line, dev only. Pure `src/lib/inputLimits.ts` (`CHAT_BODY_MAX`, `ORDER_NOTES_MAX`, `DELIVERY_ADDRESS_MAX`, `routeText`); a test reads `services/chat.py` and `schemas/order.py`. Note: the file tool wrote ` `-style escapes as raw characters, which broke the regex; replaced with ASCII escapes. Security review of the diff (inline): only limits and stricter checks; no findings. Tests: `inputLimits.test.ts` 2. Manual check: paste 600 chars into checkout notes → stops at 500; `carabaomobile://merchant?farmId=3&farmName=%E2%80%AEevil` → title "Farm" then the real name. Checks: npm test 121/121, lint 0/0, tsc pass. Not run on a device.
 ### #29 — PARITY — merchant — CF-0125 — M
 What: merchant dashboard (M15, web merchant shell home). New `merchant-dashboard` route → `MerchantDashboardScreen` (Profile → "Dashboard" for merchants; `requiredRole="merchant"`, CF-0120): 6 tiles (open orders, sales and orders in the last 30 days, delivered, sales all time, listings), rating + total orders + cancel rate, links with counts to Incoming orders / My listings (alert count) / Reviews, a stock-alert card (low stock ≤ threshold, best-before soon, expired = hidden from buyers), and "Buyers in <province>, last 30 days": most ordered and searches that found nothing (what buyers want and no one lists). Stock alerts and demand are optional (the dashboard shows without them); pull to refresh; skeleton / retry. New `api.merchants.performance / demand`. Pure `src/lib/dashboard.ts`: `statTiles`, `peso`, `cancelRate`, `alertCounts`, `unmetSearches`; field names checked against `schemas/merchant_performance.py` and `routes/demand_insight.py`. Why: merchant parity; the mobile merchant had no overview. Tests: `dashboard.test.ts` 4. Manual check: merchant → Profile → Dashboard → open orders match Incoming orders; set a listing's stock to 1 → alert card shows "1 listing low on stock"; buyer account → farm-account message. Checks: npm test 119/119, lint 0/0, tsc pass. Not run on a device.
 ### #28 — PARITY — checkout — CF-0124 — M
@@ -142,7 +144,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #24)
-- Mobile tests: 119 in 28 files since #29 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
+- Mobile tests: 121 in 29 files since #30 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #28 `expo export --platform android` OK (5 MB), expo-doctor 20/20 (next: #32).

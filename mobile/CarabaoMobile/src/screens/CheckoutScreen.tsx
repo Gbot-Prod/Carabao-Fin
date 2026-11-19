@@ -12,6 +12,7 @@ import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, defaultAddress, type ApiUserAddress } from '../lib/api';
 import { defaultDeliveryDate, deliveryDateChoices, deliveryDateError, placeOrderFailure } from '../lib/checkoutOptions';
 import { phToday } from '../lib/listingForm';
+import { DELIVERY_ADDRESS_MAX, ORDER_NOTES_MAX } from '../lib/inputLimits';
 import { addressLine, addressSummary, deliveryFields } from '../lib/addresses';
 import { cartTotals, groupCartByFarm, type PendingOrder } from '../lib/cartGroups';
 import { blockerText, checkoutBlockers } from '../lib/cartSync';
@@ -198,6 +199,7 @@ function CheckoutScreenContent() {
               style={[styles.input, styles.textArea]}
               value={address}
               onChangeText={setAddress}
+              maxLength={DELIVERY_ADDRESS_MAX}
               multiline
               numberOfLines={3}
               placeholder="Street, barangay, city, province"
@@ -279,6 +281,7 @@ function CheckoutScreenContent() {
             style={[styles.input, styles.textArea]}
             value={notes}
             onChangeText={setNotes}
+            maxLength={ORDER_NOTES_MAX}
             placeholder="Gate instructions, handling requests, preferred contact method..."
             placeholderTextColor={Colors.textLight}
             multiline

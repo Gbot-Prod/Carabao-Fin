@@ -12,6 +12,7 @@ import { useAuth } from '../lib/AuthContext';
 import { api, type ApiChatMessage } from '../lib/api';
 import { chatTitle, parseOrderId } from '../lib/orderDetail';
 import { usePolling } from '../lib/usePolling';
+import { CHAT_BODY_MAX } from '../lib/inputLimits';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { isPhoneVerificationRequired, PhoneVerifySheet } from '../components/PhoneVerifySheet';
@@ -138,7 +139,7 @@ function OrderChatContent() {
               placeholder="Write a message"
               placeholderTextColor={Colors.textLight}
               multiline
-              maxLength={2000}
+              maxLength={CHAT_BODY_MAX}
             />
             <TouchableOpacity
               style={[styles.sendBtn, (!draft.trim() || sending) && styles.disabled]}

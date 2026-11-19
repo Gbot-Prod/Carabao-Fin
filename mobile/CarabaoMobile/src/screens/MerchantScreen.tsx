@@ -15,6 +15,7 @@ import { SaveHeart } from '../components/SaveHeart';
 import { FarmReviews } from '../components/FarmReviews';
 import { deliveryFeeLabel, deliveryTimeLabel, ratingLabel } from '../lib/farms';
 import { parseOrderId as parseRouteId } from '../lib/orderDetail';
+import { routeText } from '../lib/inputLimits';
 
 // "YYYY-MM-DD" → "Nov 20", read as a calendar date so no timezone shifts the day.
 function formatDay(ymd: string): string {
@@ -111,7 +112,9 @@ function MerchantScreenContent() {
     setAddedIds((prev) => new Set([...prev, product.id]));
   };
 
-  const displayName = merchant?.merchant_name ?? farmName ?? 'Merchant';
+  // CF-0126: the route's farmName (a deep link can set it) is only a placeholder while
+  // loading, checked first; the server's name replaces it.
+  const displayName = merchant?.merchant_name ?? (loading ? routeText(farmName) : null) ?? 'Farm';
 
   // Favourite farms (U4)
   const [following, setFollowing] = useState(false);
