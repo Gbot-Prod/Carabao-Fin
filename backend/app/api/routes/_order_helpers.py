@@ -11,6 +11,7 @@ from app.models.cart import Cart
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.produce import Produce
+from app.services import store_pause
 from app.services.order_status import (
     SHIPPED_STATUSES,
     auto_confirm_at,
@@ -27,12 +28,14 @@ def _to_int(value: Any, default: int = 0) -> int:
 
 
 def merchant_takes_orders(merchant: Merchant | None) -> bool:
-    """Not closed, not suspended by an admin, and the owner is not banned."""
+    """Not closed, not suspended by an admin, the owner is not banned, and
+    the farm is not in holiday mode (CF-0066)."""
     return (
         merchant is not None
         and merchant.deleted_at is None
         and merchant.suspended_at is None
         and (merchant.user is None or not merchant.user.is_suspended)
+        and not store_pause.is_paused(merchant)
     )
 
 

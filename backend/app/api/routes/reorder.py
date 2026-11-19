@@ -11,6 +11,7 @@ from app.models.order import Order
 from app.models.produce import Produce
 from app.models.user import User
 from app.schemas.cart import MAX_CART_ITEMS, MAX_ITEM_QUANTITY, CartResponse
+from app.services import store_pause
 from app.services.produce_freshness import is_expired, ph_today
 from app.services.produce_pricing import unit_price_for
 
@@ -84,9 +85,12 @@ def reorder(
             continue
         name = produce.name or name
         if not merchant_takes_orders(produce.merchant):
-            skipped.append(
-                ReorderSkip(name=name, reason="the farm isn't taking orders")
+            reason = (
+                "the farm is on a break"
+                if store_pause.is_paused(produce.merchant)
+                else "the farm isn't taking orders"
             )
+            skipped.append(ReorderSkip(name=name, reason=reason))
             continue
         existing = by_id.get(produce.id)
         if existing is None and len(lines) >= MAX_CART_ITEMS:

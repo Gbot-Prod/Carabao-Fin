@@ -34,6 +34,9 @@ export type Merchant = {
   rating_count?: number;
   /** Last change to the farm row (CF-0041, sitemap lastModified). */
   updated_at?: string | null;
+  /** CF-0066 holiday mode: no orders through this day (yyyy-mm-dd, Manila). */
+  paused_until?: string | null;
+  pause_message?: string | null;
   /** The public list and detail include the shop page (CF-0056). */
   shop_page?: Pick<ShopPage, 'logo_url' | 'banner_image_url'> | null;
   produces: Produce[];
@@ -150,6 +153,20 @@ export type MerchantUpdatePayload = {
 
 export const updateMyMerchant = async (payload: MerchantUpdatePayload): Promise<Merchant> => {
   const response = await apiClient.patch<Merchant>('/merchants/me', payload);
+  return response.data;
+};
+
+/** CF-0066: take no orders through `pausedUntil` (yyyy-mm-dd, Manila). */
+export const pauseMyStore = async (pausedUntil: string, message: string | null): Promise<Merchant> => {
+  const response = await apiClient.put<Merchant>('/merchants/me/pause', {
+    paused_until: pausedUntil,
+    message: message || null,
+  });
+  return response.data;
+};
+
+export const resumeMyStore = async (): Promise<Merchant> => {
+  const response = await apiClient.delete<Merchant>('/merchants/me/pause');
   return response.data;
 };
 

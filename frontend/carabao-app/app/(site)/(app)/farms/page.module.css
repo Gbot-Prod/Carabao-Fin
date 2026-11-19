@@ -355,3 +355,15 @@
   background: #fef3f2;
   color: #b42318;
 }
+
+/* CF-0066: holiday mode notice on a farm page */
+.pausedBanner {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid #e0b44c;
+  background: #fff7e0;
+  color: #5a4300;
+}

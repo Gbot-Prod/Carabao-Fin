@@ -122,6 +122,8 @@ const fil: Strings = {
     recentClear: 'Burahin',
   },
   shop: {
+    pausedTitle: 'Nagpapahinga hanggang {date}',
+    pausedBody: 'Tatanggap muli ng order ang bukid na ito pagkatapos ng {date}. Puwede ka pa ring tumingin at mag-save ng item.',
     loading: 'Nilo-load ang tindahan…',
     addedToCart: 'Naidagdag sa basket ang {name}',
     viewCart: 'Tingnan ang basket',

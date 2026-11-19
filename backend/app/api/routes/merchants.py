@@ -39,6 +39,7 @@ from app.schemas.merchant import (
     MerchantUpdate,
     PublicMerchantDetailResponse,
     PublicMerchantResponse,
+    StorePauseIn,
 )
 from app.schemas.merchant_performance import MerchantPerformanceResponse
 from app.schemas.pagination import MAX_OFFSET
@@ -62,6 +63,7 @@ from app.services import (
     payout_otp,
     r2_service,
     rate_limit,
+    store_pause,
     upload_validation,
 )
 from app.services.account_suspension import merchant_is_public
@@ -316,6 +318,50 @@ def get_merchant(merchant_id: int, db: Session = Depends(get_db)):
     if owner is not None:
         response.owner_name = (owner.name or "").strip() or None
     return response
+
+
+@router.put("/merchants/me/pause", response_model=MerchantResponse)
+def pause_my_store(
+    payload: StorePauseIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Merchant:
+    """CF-0066 (B13): take no orders through ``paused_until`` (Manila)."""
+    merchant = get_active_merchant(db, cast(int, current_user.id))
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    today = ph_today()
+    if payload.paused_until < today:
+        raise HTTPException(status_code=422, detail="Pick today or a later day.")
+    if payload.paused_until > store_pause.latest_allowed(today):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"A break can last up to {store_pause.MAX_PAUSE_DAYS} days. "
+                "For longer, hide your listings."
+            ),
+        )
+    merchant.paused_until = payload.paused_until  # type: ignore[assignment]
+    merchant.pause_message = payload.message or None  # type: ignore[assignment]
+    db.commit()
+    db.refresh(merchant)
+    return merchant
+
+
+@router.delete("/merchants/me/pause", response_model=MerchantResponse)
+def resume_my_store(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Merchant:
+    """CF-0066: take orders again now."""
+    merchant = get_active_merchant(db, cast(int, current_user.id))
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    merchant.paused_until = None  # type: ignore[assignment]
+    merchant.pause_message = None  # type: ignore[assignment]
+    db.commit()
+    db.refresh(merchant)
+    return merchant
 
 
 @router.patch("/merchants/me", response_model=MerchantResponse)

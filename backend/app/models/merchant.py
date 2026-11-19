@@ -1,6 +1,7 @@
 from sqlalchemy import (
     JSON,
     Column,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -79,6 +80,12 @@ class Merchant(Base):
 
     # F1: listings at or below this stock are flagged on the dashboard (0 = off).
     low_stock_threshold = Column(Integer, nullable=False, default=5, server_default="5")
+
+    # CF-0066 (B13): holiday mode. While today (Manila) is on or before
+    # paused_until the farm stays listed but takes no orders. It ends by
+    # itself the day after; no job has to clear it.
+    paused_until = Column(Date, nullable=True)
+    pause_message = Column(String(200), nullable=True)
 
     # Legal details
     legal_business_name = Column(String, nullable=True)

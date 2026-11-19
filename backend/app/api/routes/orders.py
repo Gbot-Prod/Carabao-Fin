@@ -29,7 +29,7 @@ from app.schemas.order import (
 )
 from app.schemas.pagination import Page
 from app.schemas.receipt import ReceiptResponse
-from app.services import notifications, rate_limit, vouchers
+from app.services import notifications, rate_limit, store_pause, vouchers
 from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
     MAX_OPEN_PENDING_ORDERS,
@@ -221,6 +221,10 @@ def place_order_from_cart(
             .populate_existing()
             .first()
         )
+        if merchant is not None and store_pause.is_paused(merchant):
+            raise HTTPException(
+                status_code=400, detail=store_pause.pause_detail(merchant)
+            )
         if not merchant_takes_orders(merchant):
             name = merchant.merchant_name if merchant is not None else "A merchant"
             raise HTTPException(

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -90,6 +90,9 @@ class MerchantResponse(BaseModel):
     deleted_at: datetime | None = None
     # Sitemap lastModified on the web (CF-0041).
     updated_at: datetime | None = None
+    # CF-0066: holiday mode; the farm takes no orders through this day.
+    paused_until: date | None = None
+    pause_message: str | None = None
 
     shop_page: MerchantShopResponse | None = None
     produces: list[ProduceResponse] = Field(default_factory=list)
@@ -101,6 +104,15 @@ class AdminMerchantResponse(MerchantResponse):
     # The owner's account suspension (A3); a suspended merchant is hidden.
     owner_is_suspended: bool = False
     owner_suspension_reason: str | None = None
+
+
+class StorePauseIn(BaseModel):
+    """CF-0066: pause orders through ``paused_until`` (Manila calendar)."""
+
+    paused_until: date
+    message: str | None = Field(default=None, max_length=200)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
 class PublicMerchantResponse(BaseModel):
@@ -132,6 +144,9 @@ class PublicMerchantResponse(BaseModel):
     rating: float | None = None
     rating_count: int = 0
     updated_at: datetime | None = None
+    # CF-0066: holiday mode; the farm takes no orders through this day.
+    paused_until: date | None = None
+    pause_message: str | None = None
 
     shop_page: MerchantShopResponse | None = None
     produces: list[ProduceResponse] = Field(default_factory=list)

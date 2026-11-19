@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAuthPrompt } from '@/components/AuthPrompt/AuthPromptContext';
 import { fetchMyFollows, followFarm, unfollowFarm } from '@/util/api/merchants';
 import { fmt } from '@/lib/i18n/format';
+import { activePause, shortDay } from '@/lib/store-pause';
 import ReferencePriceHint, { useReferencePrices } from '@/components/ReferencePrice/ReferencePriceHint';
 import { formatRequestedDate } from '@/app/(site)/(merchant)/merchant/lib/format';
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
@@ -154,6 +155,9 @@ export default function FarmDetailClient() {
     }
   };
 
+  // CF-0066: holiday mode; the farm stays visible but takes no orders.
+  const pausedThrough = activePause(merchant?.paused_until);
+
   if (!merchant && !error) {
     return <PageLoader label={t.shop.loading} />;
   }
@@ -203,6 +207,14 @@ export default function FarmDetailClient() {
                     {following ? `✓ ${t.follow.following}` : `+ ${t.follow.follow}`}
                   </button>
                 </div>
+                {pausedThrough && (
+                  <div className={styles.pausedBanner} role="status">
+                    <strong>{fmt(t.shop.pausedTitle, { date: shortDay(pausedThrough) })}</strong>
+                    <span>
+                      {merchant.pause_message || fmt(t.shop.pausedBody, { date: shortDay(pausedThrough) })}
+                    </span>
+                  </div>
+                )}
                 <dl className={styles.ownerInfo}>
                   <div className={styles.ownerRow}>
                     <dt>{t.shop.owner}</dt>

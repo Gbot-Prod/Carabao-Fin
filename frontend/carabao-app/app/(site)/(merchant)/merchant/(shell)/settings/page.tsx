@@ -5,6 +5,7 @@ import { useMerchant } from "../../MerchantContext";
 import MerchantPage from "../../MerchantPage";
 import StoreDetails from "../../components/StoreDetails";
 import DangerZone from "../../components/DangerZone";
+import HolidayModePanel from "../../components/HolidayModePanel";
 
 export default function MerchantSettingsPage() {
   const { merchant, setMerchant, produceLoading } = useMerchant();
@@ -18,7 +19,10 @@ export default function MerchantSettingsPage() {
       {produceLoading && !merchant ? (
         <PageLoader variant="inline" label="Loading store details…" />
       ) : (
-        <StoreDetails merchant={merchant} onSaved={setMerchant} />
+        <>
+          <HolidayModePanel merchant={merchant} onSaved={setMerchant} />
+          <StoreDetails merchant={merchant} onSaved={setMerchant} />
+        </>
       )}
       <DangerZone />
     </MerchantPage>

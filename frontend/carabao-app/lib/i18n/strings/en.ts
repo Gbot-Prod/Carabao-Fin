@@ -113,6 +113,8 @@ const en = {
     recentClear: 'Clear',
   },
   shop: {
+    pausedTitle: 'On a break until {date}',
+    pausedBody: 'This farm takes orders again after {date}. You can still browse and save items.',
     loading: 'Loading shop…',
     addedToCart: '{name} added to cart',
     viewCart: 'View Cart',
