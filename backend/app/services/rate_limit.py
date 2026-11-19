@@ -106,12 +106,29 @@ def _aware(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
+def proxy_hops() -> int:
+    """How many proxies of ours stand in front of the API (default 1)."""
+    try:
+        return max(1, int(os.getenv("RATE_LIMIT_PROXY_HOPS", "1")))
+    except ValueError:
+        return 1
+
+
 def client_ip(request: Request) -> str:
+    """The client address the per-IP limits count.
+
+    CF-0083 (B36): behind our proxy, take the ``X-Forwarded-For`` entry that
+    proxy added — the right-most one with one proxy (``RATE_LIMIT_PROXY_HOPS``
+    for more). The left-most entry is whatever the client sent, so trusting it
+    let anyone pick a new "IP" per request and skip every per-IP limit. This
+    works whether the proxy appends to the header or replaces it.
+    """
     if os.getenv("RATE_LIMIT_TRUST_PROXY", "").lower() in {"1", "true", "yes"}:
         forwarded = request.headers.get("x-forwarded-for", "")
-        first = forwarded.split(",")[0].strip()
-        if first:
-            return first
+        hops = [part.strip() for part in forwarded.split(",") if part.strip()]
+        if hops:
+            # Fewer entries than proxies: the left-most is the best we have.
+            return hops[-min(proxy_hops(), len(hops))]
     return request.client.host if request.client else "unknown"
 
 

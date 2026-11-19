@@ -147,6 +147,7 @@ Hard start-up failures:
 | `AUTH_JWT_ISSUER` | No | empty | issuer override (else `BETTER_AUTH_URL`) |
 | `FRONTEND_URL` | No | | no longer read; use `APP_URL` |
 | `RATE_LIMIT_TRUST_PROXY` | Prod | empty | `true` behind Railway/Vercel, else all clients share the proxy IP |
+| `RATE_LIMIT_PROXY_HOPS` | No | `1` | How many of our proxies add to `X-Forwarded-For`; the per-IP key is the entry the outermost one added (the right-most with 1), never a client-set left entry (CF-0083). Set `2` only if another proxy (e.g. a CDN) is put in front of Railway |
 | `PAYMONGO_USE_TEST` | Yes | `true` | `false` for live |
 | `PAYMONGO_SECRET_TEST_KEY` | Test | sk_test | used only in test mode |
 | `PAYMONGO_SECRET_KEY` | Live | empty | sk_live. The API reads no PayMongo public key. |
