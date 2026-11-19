@@ -5,7 +5,7 @@ Worktree: this loop runs in its own git worktree (not the main checkout, not the
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 
 ## In progress
-(none)
+#2 — STRENGTHEN — M01 lint to green (fix code, no rule changes)
 
 ## Kind balance (count / last iteration #)
 PARITY 0/- · STRENGTHEN 0/- · SECURITY 0/- · AUDIT 1/#1

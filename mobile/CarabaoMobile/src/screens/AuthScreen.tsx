@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
-  Dimensions, Linking,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
@@ -13,8 +13,6 @@ import { formatPhMobile } from '../lib/phone';
 import { PasswordResetSheet } from '../components/PasswordResetSheet';
 import { PASSWORD_RULE_MESSAGE, isStrongPassword } from '../lib/passwordPolicy';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
-
-const { width } = Dimensions.get('window');
 
 const RESEND_COOLDOWN_MS = 60_000;
 

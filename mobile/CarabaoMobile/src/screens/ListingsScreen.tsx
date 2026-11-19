@@ -44,7 +44,7 @@ function ListingRow({ item, alert, onPress }: { item: ApiProduce; alert: string 
         {alert ? <Text style={styles.rowAlert}>{alert}</Text> : null}
         {item.hidden_at ? (
           <Text style={styles.rowHidden}>
-            Hidden by Carabao admin: buyers can't see or order it.
+            Hidden by Carabao admin: buyers can’t see or order it.
             {item.hidden_reason ? ` Reason: ${item.hidden_reason}` : ''}
           </Text>
         ) : null}
@@ -56,6 +56,27 @@ function ListingRow({ item, alert, onPress }: { item: ApiProduce; alert: string 
       <Ionicons name="create-outline" size={18} color={Colors.textLight} />
     </TouchableOpacity>
   );
+}
+
+// CF-0101: fetch without touching state; the screen applies the result in a .then
+// callback (no state set synchronously inside an effect).
+type ListingsLoad =
+  | { kind: 'ok'; merchantName: string; produce: ApiProduce[]; alerts: ApiStockAlerts | null }
+  | { kind: 'notMerchant' }
+  | { kind: 'error'; message: string };
+
+async function fetchListings(token: string): Promise<ListingsLoad> {
+  try {
+    const profile = await api.users.me(token);
+    if (!profile.merchant) return { kind: 'notMerchant' };
+    const [produce, alerts] = await Promise.all([
+      api.merchants.myProduce(token),
+      api.merchants.stockAlerts(token).catch(() => null),
+    ]);
+    return { kind: 'ok', merchantName: profile.merchant.merchant_name, produce, alerts };
+  } catch (err) {
+    return { kind: 'error', message: err instanceof Error ? err.message : 'Could not load your listings' };
+  }
 }
 
 function ListingsScreenContent() {
@@ -99,26 +120,23 @@ function ListingsScreenContent() {
     }
   };
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    setError(null);
-    try {
-      const profile = await api.users.me(token);
-      if (!profile.merchant) {
-        setNotMerchant(true);
-        return;
-      }
-      setMerchantName(profile.merchant.merchant_name);
-      const [produce, stockAlerts] = await Promise.all([
-        api.merchants.myProduce(token),
-        api.merchants.stockAlerts(token).catch(() => null),
-      ]);
-      setItems(produce);
-      setAlerts(stockAlerts);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load your listings');
+  const apply = useCallback((r: ListingsLoad) => {
+    if (r.kind === 'notMerchant') {
+      setNotMerchant(true);
+    } else if (r.kind === 'error') {
+      setError(r.message);
+    } else {
+      setMerchantName(r.merchantName);
+      setItems(r.produce);
+      setAlerts(r.alerts);
+      setError(null);
     }
-  }, [token]);
+  }, []);
+
+  const load = useCallback(
+    () => (token ? fetchListings(token).then(apply) : Promise.resolve()),
+    [token, apply],
+  );
 
   useEffect(() => {
     void load().finally(() => setLoading(false));

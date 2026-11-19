@@ -125,6 +125,21 @@ function OrderRow({
   );
 }
 
+// CF-0101: fetch without touching state; applied in a .then callback by the screen.
+type OrdersLoad =
+  | { kind: 'ok'; orders: ApiMerchantOrder[] }
+  | { kind: 'notMerchant' }
+  | { kind: 'error'; message: string };
+
+async function fetchMerchantOrders(token: string): Promise<OrdersLoad> {
+  try {
+    return { kind: 'ok', orders: await api.merchants.myOrders(token) };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return { kind: 'notMerchant' };
+    return { kind: 'error', message: err instanceof Error ? err.message : 'Could not load your orders' };
+  }
+}
+
 function MerchantOrdersContent() {
   const router = useRouter();
   const { token } = useAuth();
@@ -136,16 +151,21 @@ function MerchantOrdersContent() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('open');
   const [busyId, setBusyId] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    setError(null);
-    try {
-      setOrders(await api.merchants.myOrders(token));
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 404) setNotMerchant(true);
-      else setError(err instanceof Error ? err.message : 'Could not load your orders');
+  const apply = useCallback((r: OrdersLoad) => {
+    if (r.kind === 'notMerchant') {
+      setNotMerchant(true);
+    } else if (r.kind === 'error') {
+      setError(r.message);
+    } else {
+      setOrders(r.orders);
+      setError(null);
     }
-  }, [token]);
+  }, []);
+
+  const load = useCallback(
+    () => (token ? fetchMerchantOrders(token).then(apply) : Promise.resolve()),
+    [token, apply],
+  );
 
   useEffect(() => {
     void load().finally(() => setLoading(false));

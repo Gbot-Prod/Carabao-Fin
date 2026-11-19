@@ -200,7 +200,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // signs out, so the next protected screen sends the user to sign in.
   const leftAtRef = useRef<number | null>(null);
   const signedInRef = useRef(false);
-  signedInRef.current = !!user;
+  useEffect(() => {
+    signedInRef.current = !!user;
+  }, [user]);
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
       if (!signedInRef.current) return;

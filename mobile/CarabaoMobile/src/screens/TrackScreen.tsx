@@ -125,15 +125,17 @@ function TrackScreenContent() {
   }, [token, attempt]);
 
   const selected = orders[selectedIdx];
-  const [tracking, setTracking] = useState<ApiTracking | null>(null);
+  // CF-0101: keyed by order so a switch of order never shows the old order's tracking.
+  const [loaded, setLoaded] = useState<{ orderId: number; data: ApiTracking } | null>(null);
+  const tracking = selected && loaded?.orderId === selected.order_id ? loaded.data : null;
 
   useEffect(() => {
-    setTracking(null);
     if (!selected) return;
+    const orderId = selected.order_id;
     let active = true;
     api.tracking
-      .forOrder(token, selected.order_id)
-      .then((data) => { if (active) setTracking(data); })
+      .forOrder(token, orderId)
+      .then((data) => { if (active) setLoaded({ orderId, data }); })
       .catch(() => { /* leave the "waiting for shipment" state */ });
     return () => { active = false; };
   }, [token, selected]);

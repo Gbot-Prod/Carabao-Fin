@@ -27,13 +27,14 @@ function NotificationsContent() {
   const [items, setItems] = useState<ApiNotification[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      setItems((await api.notifications.list(token)).items);
-    } catch {
-      // keep what we have
-    }
-  }, [token]);
+  const load = useCallback(
+    () =>
+      api.notifications
+        .list(token)
+        .then((page) => setItems(page.items))
+        .catch(() => { /* keep what we have */ }),
+    [token],
+  );
 
   useEffect(() => {
     void load();

@@ -228,7 +228,7 @@ function CheckoutScreenContent() {
           />
           {groups.length > 1 && (
             <Text style={styles.fieldHint}>
-              This creates {groups.length} orders, one per farm. You'll pay for each in turn.
+              This creates {groups.length} orders, one per farm. You’ll pay for each in turn.
             </Text>
           )}
           <Divider style={{ marginTop: Spacing.sm }} />

@@ -64,19 +64,17 @@ function OrderScreenContent() {
       .catch(() => setFollowed(new Set()));
   }, [token]);
   // U2: produce matching the search box, from the server (debounced).
-  const [produceHits, setProduceHits] = useState<ApiProduceSearchResult[]>([]);
+  const [hits, setHits] = useState<ApiProduceSearchResult[]>([]);
+  const produceHits = search.trim().length < 2 ? [] : hits;
   useEffect(() => {
     const q = search.trim();
-    if (q.length < 2) {
-      setProduceHits([]);
-      return;
-    }
+    if (q.length < 2) return;
     let active = true;
     const timer = setTimeout(() => {
       api.search
         .produce(token, q)
-        .then((res) => { if (active) setProduceHits(res.items); })
-        .catch(() => { if (active) setProduceHits([]); });
+        .then((res) => { if (active) setHits(res.items); })
+        .catch(() => { if (active) setHits([]); });
     }, 300);
     return () => { active = false; clearTimeout(timer); };
   }, [search, token]);

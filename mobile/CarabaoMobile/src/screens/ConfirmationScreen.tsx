@@ -1,5 +1,5 @@
 // src/screens/ConfirmationScreen.tsx
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView,
   TouchableOpacity, Animated, ScrollView, Alert,
@@ -18,15 +18,19 @@ function OtherOrderRow({ order, token }: { order: PendingOrder; token: string | 
   const [paying, setPaying] = useState(false);
   const view = toPaymentView(status);
 
-  const refresh = useCallback(async () => {
-    if (!token) return;
-    try {
-      setStatus((await api.payments.transactionByOrder(token, order.id)).status);
-    } catch (err) {
-      // 404 = no checkout session yet: still unpaid.
-      if (!(err instanceof ApiError && err.status === 404)) console.warn('Status check failed', err);
-    }
-  }, [token, order.id]);
+  const refresh = useCallback(
+    () =>
+      token
+        ? api.payments
+            .transactionByOrder(token, order.id)
+            .then((tx) => setStatus(tx.status))
+            .catch((err: unknown) => {
+              // 404 = no checkout session yet: still unpaid.
+              if (!(err instanceof ApiError && err.status === 404)) console.warn('Status check failed', err);
+            })
+        : Promise.resolve(),
+    [token, order.id],
+  );
 
   useEffect(() => {
     void refresh();
@@ -149,9 +153,9 @@ function ConfirmationScreenContent() {
     }
   };
 
-  const scale = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const slideY = useRef(new Animated.Value(30)).current;
+  const [scale] = useState(() => new Animated.Value(0));
+  const [opacity] = useState(() => new Animated.Value(0));
+  const [slideY] = useState(() => new Animated.Value(30));
 
   useEffect(() => {
     Animated.sequence([
@@ -161,7 +165,7 @@ function ConfirmationScreenContent() {
         Animated.timing(slideY, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]),
     ]).start();
-  }, []);
+  }, [scale, opacity, slideY]);
 
   return (
     <SafeAreaView style={styles.root}>

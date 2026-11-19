@@ -2,7 +2,7 @@
 // Create/edit form for one produce listing, shown in a modal from My listings.
 // Field rules mirror backend ProduceUpdate (app/schemas/produce.py):
 // price and stock are whole numbers, unit is kg|lbs, category is Vegetables|Fruits.
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, KeyboardAvoidingView, Platform,
@@ -39,17 +39,22 @@ export function ListingForm({ visible, produce, saving, error, onCancel, onSave 
   const [category, setCategory] = useState<ProduceCategory | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!visible) return;
-    setName(produce?.name ?? '');
-    setPrice(produce ? String(produce.price) : '');
-    setStock(produce ? String(produce.stock_quantity) : '');
-    setUnit(produce?.unit === 'lbs' ? 'lbs' : 'kg');
-    setCategory(
-      produce?.category === 'Vegetables' || produce?.category === 'Fruits' ? produce.category : null,
-    );
-    setLocalError(null);
-  }, [visible, produce]);
+  // CF-0101: reset the fields when the sheet opens or the listing changes. Done during
+  // render (React's "adjust state on prop change"), not in an effect.
+  const [shownFor, setShownFor] = useState<{ visible: boolean; produce: Props['produce'] } | null>(null);
+  if (!shownFor || shownFor.visible !== visible || shownFor.produce !== produce) {
+    setShownFor({ visible, produce });
+    if (visible) {
+      setName(produce?.name ?? '');
+      setPrice(produce ? String(produce.price) : '');
+      setStock(produce ? String(produce.stock_quantity) : '');
+      setUnit(produce?.unit === 'lbs' ? 'lbs' : 'kg');
+      setCategory(
+        produce?.category === 'Vegetables' || produce?.category === 'Fruits' ? produce.category : null,
+      );
+      setLocalError(null);
+    }
+  }
 
   const handleSave = () => {
     const parsedPrice = parseWhole(price);

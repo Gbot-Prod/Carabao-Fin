@@ -1,8 +1,6 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
-import { Colors } from '../lib/theme';
 
 interface ProtectedScreenProps {
   children: React.ReactNode;
@@ -22,7 +20,7 @@ export function ProtectedScreen({ children, requiredRole }: ProtectedScreenProps
     if (!isLoading && !isAuthenticated) {
       router.replace('/auth');
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, router]);
 
   if (!isAuthenticated) {
     return null;
@@ -30,10 +28,3 @@ export function ProtectedScreen({ children, requiredRole }: ProtectedScreenProps
 
   return <>{children}</>;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.offWhite,
-  },
-});
