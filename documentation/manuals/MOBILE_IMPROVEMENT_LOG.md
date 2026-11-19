@@ -1,5 +1,5 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 15    target: 20
+branch: improve/mobile-loop    push: no    iteration: 16    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
@@ -10,11 +10,11 @@ takes IDs from **CF-0101 upward** (last used: CF-0113) to avoid collisions.
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 7/#15 · STRENGTHEN 4/#13 · SECURITY 2/#10 · AUDIT 2/#8
+PARITY 7/#15 · STRENGTHEN 4/#13 · SECURITY 2/#10 · AUDIT 3/#16
 
 ## Needs human
-- **Merge the web loop.** `improve/loop` (web iteration #37) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
-- Web log B47 (mobile better-auth 1.6 → 1.7) is already done: mobile and web both use `better-auth` ^1.7.26. Web B54 / B63 / B70 are in this backlog as M07 + M08, M35 + M36, M35. Mark them moved when the logs are merged.
+- **Merge the web loop.** `improve/loop` (web iteration #45 at mobile #16) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
+- Web log B47 (mobile better-auth 1.6 → 1.7) is already done: mobile and web both use `better-auth` ^1.7.26. Web B54 / B63 / B70 / B77 are in this backlog as M07 + M08 (done), M35 + M36, M35, M35. Mark them moved when the logs are merged.
 - `npm audit --omit=dev`: 3 moderate (minimatch ReDoS via `@expo/fingerprint` ← `expo`). The only
   "fix" npm offers is a downgrade to expo@52 (breaking). Wait for an Expo 58 patch that bumps
   `@expo/fingerprint`; do not force it in a loop iteration. Build-time tool, not in the app bundle.
@@ -22,8 +22,8 @@ PARITY 7/#15 · STRENGTHEN 4/#13 · SECURITY 2/#10 · AUDIT 2/#8
   half is M06 here. Not edited from this branch because the web loop edits that file at the same time
   (merge conflict risk). When the two branches are merged, mark B34 "moved to mobile log M04/M06".
 
-## Parity matrix (refreshed on AUDIT #8, row updated on each PARITY)
-| web loop only (not on `main`) | — | blocked | vouchers, receipt, recently viewed (CF-0049/0052/0058/0061) | M35, after the web loop is merged |
+## Parity matrix (refreshed on AUDIT #16, row updated on each PARITY)
+| web loop only (not on `main`) | — | blocked | vouchers, receipt, recently viewed, review replies, cart `issue`, holiday mode, data export (CF-0042/0043/0049/0052/0058/0061/0064/0066/0069) | M35, after the web loop is merged |
 | web page / feature | mobile screen | status | backend routes | notes |
 |--------------------|---------------|--------|----------------|-------|
 | `farms` farm list (+ follow) | `(tabs)/index` → `OrderScreen` | done | `/merchants`, `/users/me/follows`, `/merchants/:id/follow` | real data only since #13 (`mockData.ts` deleted) |
@@ -61,6 +61,10 @@ Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
+| M43 | SECURITY | S | 3 | 1 | deep links | — | **New (#16).** `OrderChatScreen` (`Number(orderId)`, line 29) and `ConfirmationScreen` (`Number(orderId)`, line 117) use the route parameter without `parseOrderId`: `carabaomobile://order-chat?orderId=1e3` becomes 1000, `abc` becomes `NaN` and the screen polls `/orders/NaN/messages`. The server checks ownership, so this is defense in depth. Use `parseOrderId` and show "not found"; batch with M12 (payment URL host) — test: bad ids open the not-found state, no request is sent. |
+| M42 | STRENGTHEN | M | 3 | 2 | perf | — | **New (#16, web CF-0047).** Polling does not stop when the screen is out of view or the app is in the background: `OrderChatScreen` every 10 s (a stack screen stays mounted under the next one), the bell count in `OrderScreen` every 60 s (a tab stays mounted) and it downloads the whole notification list for the count. Pause on blur and on `AppState` background (one pure "should poll" helper with a test), read the count only — test: helper tests; manual: background the app 2 min → no requests in the API log. |
+| M44 | PARITY | S | 3 | 1 | checkout | parity | **New (#16).** Mobile checkout never sends `delivery_date` (web `PlaceOrderPayload.delivery_date`), so merchants see "Any day" for every mobile order (`MerchantOrdersScreen:77`). Add a date choice (next 7 days, chips) with the same rules as the web / backend — test: pure date list test; placed order shows the date on the merchant screen. |
+| M45 | PARITY | S | 2 | 1 | merchant | parity | **New (#16).** A merchant cannot delete a listing on mobile; backend `DELETE /produce/{id}` exists and the web uses it. Add "Delete listing" with a confirm to `ListingForm`; batch with M39 (min order qty, price tiers) — test: delete → listing gone after reload. |
 | M12 | SECURITY | S | 3 | 1 | payments | — | Allow-list hosts before `WebBrowser.openBrowserAsync(checkout.checkout_url)` (PayMongo checkout host only; `CheckoutScreen:84`, `ConfirmationScreen:40,142`) — test: pure host check refuses off-list URLs. |
 | M34 | STRENGTHEN | S | 2 | 1 | types | — | **New (#8).** `ApiMerchant` types `address`, `barangay` as present and `contact_number` as `string`; after the web loop merge the public farm routes leave the first two out (CF-0048) and `contact_number` is nullable. No screen reads them, so only the types are wrong. Make them match `PublicMerchantResponse` — test: tsc passes; farm screen hides the contact row when null. |
 | M29 | SECURITY | M | 4 | 2 | auth | — | `ProtectedScreen` accepts `requiredRole` but never checks it (its doc comment says it does). Nothing passes it today, so merchant screens rely on the server 404 → "not a merchant" state. Implement the role check from the server profile, use it on merchant routes, test the pure decision — test: a buyer who opens `/listings` sees the not-allowed state with no merchant API call. |
@@ -71,7 +75,7 @@ Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 | M15 | PARITY | M | 3 | 3 | merchant | parity | Merchant dashboard (performance + demand + stock alert counts) — test: totals match the web dashboard. |
 | M39 | PARITY | S | 2 | 1 | merchant | parity | **New (#9).** Listing form has no `min_order_qty` and no `price_tiers` (bulk prices, max 5) although the backend and web support both — test: set min order 5 → buyer cannot add 4. Batch with M17. |
 | M17 | PARITY | M | 3 | 3 | merchant | parity | Listing photo upload via `/produce/:id/image` (expo-image-picker — check Expo Go support first) — test: new listing shows the uploaded photo. |
-| M35 | PARITY | M | 3 | 3 | checkout | after-web-merge | **New (#8). Blocked until `improve/loop` is merged.** Web-loop features with backend routes only on that branch: review `merchant_reply` (show under each review in `FarmReviews`, reply from M18), cart line `issue` / `previous_price` (CF-0042, show in `CartScreen` next to `unavailable_reason`), voucher code at checkout + discount on order/receipt (CF-0058/0061, web B70), order receipt (`GET /orders/me/{id}/receipt`, CF-0049, web B63), recently viewed farms (CF-0052). — test: place-order sends `voucher_code`; receipt opens from order detail. |
+| M35 | PARITY | M | 3 | 3 | checkout | after-web-merge | **New (#8). Blocked until `improve/loop` is merged.** Web-loop features with backend routes only on that branch: review `merchant_reply` (show under each review in `FarmReviews`, reply from M18), cart line `issue` / `previous_price` (CF-0042, show in `CartScreen` next to `unavailable_reason`), holiday mode on the farm screen + pause switch for merchants (`paused_until`, `pause_message`, CF-0066, web B77), "download my data" on Profile (CF-0069), voucher code at checkout + discount on order/receipt (CF-0058/0061, web B70), order receipt (`GET /orders/me/{id}/receipt`, CF-0049, web B63), recently viewed farms (CF-0052). — test: place-order sends `voucher_code`; receipt opens from order detail. |
 | M40 | STRENGTHEN | S | 2 | 2 | checkout | — | **New (#12).** Editing a saved address on mobile leaves its `region` and map pin (`lat`/`lng`) as they were, so a street changed on the phone can keep the old pin; mobile also has no region field (web sets it with a picker). Clear the pin when street/city/province change, or add a region picker — test: edit street → saved pin is null. |
 | M36 | STRENGTHEN | S | 2 | 1 | checkout | — | **New (#8, web B63 part).** Check that checkout shows the backend's 409 (stock / limits, CF-0045) and 429 messages, not a generic error; batch with M25 — test: place an order above stock → the server's message shows. |
 | M16 | PARITY | L | 4 | 4 | merchant | merchant-shipments | Merchant shipments list + shipment route view (`/merchants/me/shipments`, `/shipments/:id`) — slice 1: list; slice 2: map / stop order. |
@@ -89,6 +93,8 @@ Parity score: 11 / 26 done (6 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #16 — AUDIT — all — (no CF ID) — M
+What: re-survey after #9–#15. Web loop: `improve/loop` is at web #45 (CF-0064…0069), still not merged into `main` (`main` unchanged at a188d76). New loop-only features for mobile: holiday mode (web B77), download my data (CF-0069), web voucher entry (CF-0064) → added to M35; CF-0068 security headers / `no-store` need nothing on mobile. New from reading the code (not from §2): M42 polling continues off-screen and in the background (chat 10 s, bell 60 s, whole list for a count); M43 chat and confirmation screens use unchecked route ids; M44 checkout never sends a delivery date, so merchants see "Any day"; M45 no listing delete on mobile; plus `api.ts` now 607 lines (M37) and `MerchantScreen` 449. Backlog: 30 items. Matrix: blocked row lists every loop-only feature. Parity 11 / 26 (42 %). Checks: npm test 77/77, lint 0/0, tsc pass, expo-doctor 20/20, android export OK (5 MB), npm audit 3 moderate (unchanged, Needs human). Next: #17 non-parity (M43 + M12 SECURITY batch, or M42), then PARITY M44.
 ### #15 — PARITY — orders — CF-0113 — M
 What: write and edit the review of a delivered order (M08, web `orders/[orderId]`, web B54). `OrderDetailScreen`: when `can_review` and there is no review, a "Review this order" card with the deadline and a new `OrderReviewForm` (5 star buttons, 44 pt, radio a11y roles + labels; optional comment with a counter; "Post review" stays off until a star is chosen) → `POST /orders/me/:id/review`; an existing review shows "Edit review (until …)" while `editable_until` is in the future → the same form prefilled → `PATCH` (a blank comment is sent as `null`, which clears it: the backend uses `exclude_unset`). After saving, the detail is read again; server refusals (window closed, own farm, already reviewed, rate limit) show the server's message in the form. ScrollView keeps the field above the keyboard. Pure `src/lib/reviewForm.ts`: `checkReview` (whole 1–5, trimmed, blank → null, ≤ 2000 after trimming = backend; a test reads `schemas/review.py`), `canEditReview`, `starLabel`. Why: buyers could only review on the website. Tests: `reviewForm.test.ts` 5. Manual check: delivered order → tap 4 stars → write a comment → Post → card shows ★★★★☆ and "Edit review"; Edit → clear the comment → Save → comment gone; the farm screen's reviews show it. Checks: npm test 77/77, lint 0/0, tsc pass. Not run on a device.
 ### #14 — PARITY — discovery — CF-0112 — M
@@ -120,11 +126,11 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 ### #1 — AUDIT — all — (no CF ID) — M
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
-## Health (refreshed on AUDIT, last #8)
-- Mobile tests: 77 in 19 files since #15 (`npm test` runs every `src/lib/**/*.test.ts`).
+## Health (refreshed on AUDIT, last #16)
+- Mobile tests: 77 in 19 files (`npm test` runs every `src/lib/**/*.test.ts`; 7 of them also read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
-- `expo-doctor`: 20/20. Last bundle check: #12 `expo export --platform android` OK (5 MB), expo-doctor 20/20 (next: #16).
-- Largest files: `src/lib/api.ts` 587 (M37), `AuthScreen` 457, `MerchantScreen` 419, `HistoryScreen` 399, `ConfirmationScreen` 383, `ProfileScreen` 347.
-- Parity score: 8 / 26 done, 9 partial, 9 missing (31 %; was 9 / 26 before cart was re-rated). Buyer path: find ✓ (search partial), cart ✗ (memory only, M33), checkout partial (M05), pay ✓, track ✓ (detail partial).
-- Web loop: `improve/loop` is at web iteration #37, 20+ commits ahead of `main` and not merged. Mobile builds against `main`. Checked its breaking changes for mobile: CF-0048 (public farm fields) → types only (M34); CF-0062 (slim farm list) keeps the full list by default for mobile; CF-0063 (unknown fields refused) → every mobile request body sends only known fields (cart, place, produce, status, chat) — OK.
+- `expo-doctor`: 20/20. Last bundle check: #16 `expo export --platform android` OK (5 MB) (next: #20).
+- Largest files: `src/lib/api.ts` 607 (M37), `AuthScreen` 457, `MerchantScreen` 449, `CheckoutScreen` 396, `ConfirmationScreen` 390.
+- Parity score: 11 / 26 done, 6 partial, 9 missing (42 %; was 31 % at #8). Buyer path: find ✓ (search partial, M09), cart ✓, checkout partial (no delivery date M44, no pin picker), pay ✓, track ✓, order detail ✓, review ✓. Merchant side: orders ✓, listings partial, everything else missing.
+- Web loop: web #45, not merged. Breaking-change check from #8 still holds; the new loop commits (CF-0064…0069) add fields and routes only.
