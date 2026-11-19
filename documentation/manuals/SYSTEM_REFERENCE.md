@@ -109,6 +109,8 @@ The web app never sends SMS or email itself. It asks the API.
 | Postgres TLS rules | `lib/db-ssl.mjs` | `app/core/database_url.py` |
 | Mobile app scheme `carabaomobile://` | `lib/auth.ts`, `lib/admin-two-factor.ts` | mobile `app.json` |
 
+The mobile app has copies of the status values and labels, the phone pattern, the password policy and the order-history limits (`mobile/CarabaoMobile/src/lib/`). `npm test` in `mobile/CarabaoMobile` (`src/lib/inStep.test.ts`) reads the web and backend files above and fails when a copy differs.
+
 ---
 
 ## 4. Environment variables

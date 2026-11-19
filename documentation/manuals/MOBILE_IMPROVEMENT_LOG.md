@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 6    target: 20
+branch: improve/mobile-loop    push: no    iteration: 7    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0105) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0106) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 3/#6 · STRENGTHEN 1/#2 · SECURITY 1/#4 · AUDIT 1/#1
+PARITY 3/#6 · STRENGTHEN 2/#7 · SECURITY 1/#4 · AUDIT 1/#1
 
 ## Needs human
 - `npm audit --omit=dev`: 3 moderate (minimatch ReDoS via `@expo/fingerprint` ← `expo`). The only
@@ -59,7 +59,6 @@ Parity score: 9 / 26 done (8 partial, 9 missing; 3 rows n/a)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
 | M29 | SECURITY | M | 4 | 2 | auth | — | `ProtectedScreen` accepts `requiredRole` but never checks it (its doc comment says it does). Nothing passes it today, so merchant screens rely on the server 404 → "not a merchant" state. Implement the role check from the server profile (`/users/me`), use it on merchant routes, test the pure decision in `src/lib/` — test: a buyer who opens `/listings` sees the not-allowed state with no merchant API call. |
-| M02 | STRENGTHEN | M | 3 | 2 | tests | — | `npm test` exists since #3 (`node --test`, Node 24 strips TS types; test files need `/// <reference types="node" />` and `.ts` import paths). Add test files for `cartGroups`, `orderStatus`, `phone`, `passwordPolicy`, `referencePrices`, `idle` and register each in the script; compare values with web/backend while there — test: `npm test` runs ≥ 7 files. |
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 7 rows that do nothing on tap (`onPress={() => {}}`: Address, Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target (Address → M05 address book; Terms/Help → web pages via allow-listed `WebBrowser`) or remove it — test: every Profile row either opens something or is gone. |
 | M30 | STRENGTHEN | S | 2 | 1 | orders | — | Retire unpaged `GET /orders/me/history` (backend `orders.py:325`): no mobile screen calls it after #3, but the mobile wrapper `api.orders.history` and a web fetcher (`util/api/orders.ts:84`) still exist; check web callers first (fixed in #4: #3 said the web no longer used it). Remove route + wrappers + backend test, add a line to the web log — test: backend pytest passes, `grep` finds no caller. Batch with other backend S items or do with the web loop. |
 | M05 | PARITY | M | 4 | 3 | checkout | parity | Address book on checkout and profile (`/users/me/addresses`, default address) — test: add 2 addresses, set default, checkout uses default. |
@@ -86,6 +85,8 @@ Parity score: 9 / 26 done (8 partial, 9 missing; 3 rows n/a)
 | M28 | PARITY | M | 2 | 3 | onboarding | parity | Native merchant application status (`/merchant-applications/me`) instead of only opening web — test: pending applicant sees "under review". |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #7 — STRENGTHEN — tests — CF-0106 — M
+What: tests for the older pure libs (M02): `phone` (all input forms = backend `normalize_ph_mobile` cases; landline/foreign/short/long refused), `passwordPolicy` (each character class, inclusive length limits, non-ASCII letters), `orderStatus` (labels, readable unknowns, colours, timeline), `cartGroups` (per-farm groups, one fee per farm, default fee, totals, `parsePendingOrders` drops bad JSON / rows), `referencePrices` (whole words, longest wins, unit tie-break, sample label), `idle` (bad env → 30 min like web, limit inclusive). New `inStep.test.ts` reads backend `models/statuses.py`, web `util/api/statuses.ts`, `lib/password-policy.ts`, `lib/phone.ts`, `lib/order-history.ts` and backend `orders.py` `q` max_length, and fails when a mobile copy differs (checked: changing one mobile label makes it fail). `npm test` now runs `"src/lib/**/*.test.ts"` (Node 24 glob), so new test files need no registration. SYSTEM_REFERENCE §3 notes the check. Values compared: all equal today. Small differences found, not changed (display only or server re-checks): mobile `normalizePhMobile` strips every whitespace kind, backend only spaces (a tab-separated number passes the phone check then the server refuses it — same on web); mobile `matchReferencePrice` collapses repeated spaces, backend `_norm` does not (only the "Market ref" label can differ). Why: M02; "values kept in step" was only a comment before. Tests: 25 new (47 total). Checks: npm test 47/47, lint 0/0, tsc pass. Follow-ups: none.
 ### #6 — PARITY — orders — CF-0105 — M
 What: order detail screen (M03, web `orders/[orderId]`). New route `order-detail?orderId=` → `OrderDetailScreen`: reference `CB-YYYY-NNNN`, farm, status badge, pending-payment and delivered notes, item lines, delivery fee and total from the server (`total_amount`, not summed on the phone), delivery address / requested date + window / notes, the buyer's review (read only), and actions: "Order received" (shipped / out for delivery, with the auto-confirm date), "Cancel order" (processing only), both behind a confirm dialog, then the detail is re-read so the screen shows the server's status also after a refusal; "Live tracking", "Message farm". 404 → "Order not found" (also for another buyer's id). `api.orders.detail/cancel/confirmReceived` + `ApiOrderDetail`. History cards get "View details". Notification links `/orders/<id>` (backend chat, refund, order notifications) now open that order; mapping moved to pure `src/lib/notificationLinks.ts`; bad ids fall back to the history list, full URLs open nothing. Pure `src/lib/orderDetail.ts`: `orderActions` (same rules as backend cancel / confirm routes), `orderRef` (same as backend `order_ref`), `parseOrderId` (plain positive integer only — route params can come from deep links). Why: parity on the buyer "track" path; cancel and confirm existed only on the web. Tests: `orderDetail.test.ts` 3, `notificationLinks.test.ts` 3. Manual check: History → expand → View details; processing order → Cancel order → confirm → badge "Cancelled"; shipped order → Order received → "Delivered … confirmed by you"; open `carabaomobile://order-detail?orderId=abc` → "Order not found"; tap a chat notification → opens that order. Checks: npm test 22/22, lint 0/0, tsc pass, android export OK. Not run on a device. Follow-ups: M08 now targets this screen.
 ### #5 — PARITY — discovery — CF-0104 — M
@@ -100,7 +101,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT)
-- Mobile tests: 22 in 5 files since #6 (`npm test`).
+- Mobile tests: 47 in 12 files since #7 (`npm test` runs every `src/lib/**/*.test.ts`).
 - Last bundle check: #6 (android export OK, also proves Metro resolves `./x.ts` imports in app code); before: #4, `expo export --platform android` OK; expo-doctor 20/20.
 - `tsc --noEmit`: pass.
 - Lint: pass, 0 errors / 0 warnings since #2 (was 30 + 7 at #1).
