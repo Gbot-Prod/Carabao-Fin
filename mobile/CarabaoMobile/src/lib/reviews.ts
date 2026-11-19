@@ -52,3 +52,48 @@ export function wasEdited(r: Pick<PublicReview, 'created_at' | 'updated_at'>): b
   const u = Date.parse(r.updated_at);
   return Number.isFinite(c) && Number.isFinite(u) && u - c > 60_000;
 }
+
+// ---- the merchant's own reviews (GET /merchants/me/reviews), CF-0119 ----
+
+export type MyReview = PublicReview & { order_id: number | null; editable_until: string | null };
+
+export type MyMerchantReviews = {
+  merchant_id: number;
+  rating: number | null;
+  rating_count: number;
+  /** Keyed 1-5 (JSON keys arrive as strings); covers every review, not only the filtered ones. */
+  rating_breakdown: Record<string, number>;
+  with_comment_count: number;
+  /** Reviews matching the filters, for paging. */
+  total: number;
+  reviews: MyReview[];
+  limit: number;
+  offset: number;
+};
+
+export type MyReviewsFilter = { ratings: number[]; hasComment: boolean | null };
+export const MY_REVIEWS_PAGE = 20; // backend default limit
+
+/** Query string: FastAPI reads a list as repeated keys (rating=1&rating=2), like the web. */
+export function myReviewsQuery(f: MyReviewsFilter, offset: number, limit = MY_REVIEWS_PAGE): string {
+  const parts = [...new Set(f.ratings)]
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= 5)
+    .sort()
+    .map((n) => `rating=${n}`);
+  if (f.hasComment !== null) parts.push(`has_comment=${f.hasComment}`);
+  parts.push(`limit=${limit}`, `offset=${Math.max(0, Math.floor(offset) || 0)}`);
+  return parts.join('&');
+}
+
+/** 5 rows, 5 stars first, with the share of all reviews (0-100, whole). */
+export function breakdownRows(breakdown: Record<string, number>, ratingCount: number): { stars: number; count: number; percent: number }[] {
+  return [5, 4, 3, 2, 1].map((stars) => {
+    const count = Number(breakdown[String(stars)] ?? 0) || 0;
+    return { stars, count, percent: ratingCount > 0 ? Math.round((count / ratingCount) * 100) : 0 };
+  });
+}
+
+/** Turn a star filter on or off. */
+export function toggleRating(ratings: readonly number[], stars: number): number[] {
+  return ratings.includes(stars) ? ratings.filter((n) => n !== stars) : [...ratings, stars].sort();
+}

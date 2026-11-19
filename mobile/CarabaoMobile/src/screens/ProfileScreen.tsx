@@ -151,6 +151,7 @@ function ProfileScreenContent() {
               <View style={styles.settingsGroup}>
                 <SettingItem icon="receipt-outline" label="Incoming orders" onPress={() => router.push('/merchant-orders')} />
                 <SettingItem icon="leaf-outline" label="My listings" onPress={() => router.push('/listings')} />
+                <SettingItem icon="star-outline" label="Reviews" onPress={() => router.push('/merchant-reviews')} />
               </View>
             </>
           ) : null}

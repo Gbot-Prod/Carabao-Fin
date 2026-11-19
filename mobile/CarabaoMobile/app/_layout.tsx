@@ -38,6 +38,7 @@ export default function RootLayout() {
                   <Stack.Screen name="order-detail" options={{ headerShown: false }} />
                   <Stack.Screen name="addresses" options={{ headerShown: false }} />
                   <Stack.Screen name="search" options={{ headerShown: false }} />
+                  <Stack.Screen name="merchant-reviews" options={{ headerShown: false }} />
                 </Stack>
                 <StatusBar style="auto" />
               </ThemeProvider>

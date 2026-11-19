@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 21    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
+branch: improve/mobile-loop    push: no    iteration: 22    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0118) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0119) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 10/#21 · STRENGTHEN 5/#20 · SECURITY 3/#17 · AUDIT 3/#16
+PARITY 11/#22 · STRENGTHEN 5/#20 · SECURITY 3/#17 · AUDIT 3/#16
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #45 at mobile #16) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -50,13 +50,13 @@ PARITY 10/#21 · STRENGTHEN 5/#20 · SECURITY 3/#17 · AUDIT 3/#16
 | merchant `orders` | `merchant-orders` → `MerchantOrdersScreen` | done | `/merchants/me/orders`, `/merchants/me/orders/:id/status` | |
 | merchant `shipments`, `routing/[shipmentId]` | — | missing | `/merchants/me/shipments`, `/shipments/:id` exist | |
 | merchant `chats` | — | missing | `/merchants/me/chats` exists | per-order chat works, no inbox |
-| merchant `reviews` + replies | — | missing | `/merchants/me/reviews` exists | |
+| merchant `reviews` + replies | `merchant-reviews` → `MerchantReviewsScreen` | partial | `/merchants/me/reviews` (rating, has_comment, limit, offset) ✓ (since #22) | summary, star breakdown, star / comment filters, paging; replying needs the web loop merge (M35) |
 | merchant `sales` | — | missing | `/merchants/me/sales`, `/merchants/me/transactions` exist | |
 | merchant `earnings` / cash-out | — | missing | `/merchants/me/payouts*`, `/merchants/me/payout-info*`, `/merchants/me/payout-institutions` exist | payout destination lock rules apply |
 | merchant `shop` page | — | missing | `/merchants/me/shoppage` (+ banner, logo, publish, discard) exist | |
 | merchant `settings` | — | missing | `/merchants/me` exists | |
 
-Parity score: 12 / 26 done (5 partial, 9 missing; 3 rows n/a; 1 row blocked) since #21. #8: cart moved done → partial (memory-only cart, phone totals).
+Parity score: 12 / 26 done (6 partial, 8 missing; 3 rows n/a; 1 row blocked) since #22. #8: cart moved done → partial (memory-only cart, phone totals).
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
@@ -64,7 +64,6 @@ Parity score: 12 / 26 done (5 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 | M34 | STRENGTHEN | S | 2 | 1 | types | — | **New (#8).** `ApiMerchant` types `address`, `barangay` as present and `contact_number` as `string`; after the web loop merge the public farm routes leave the first two out (CF-0048) and `contact_number` is nullable. No screen reads them, so only the types are wrong. Make them match `PublicMerchantResponse` — test: tsc passes; farm screen hides the contact row when null. |
 | M29 | SECURITY | M | 4 | 2 | auth | — | `ProtectedScreen` accepts `requiredRole` but never checks it (its doc comment says it does). Nothing passes it today, so merchant screens rely on the server 404 → "not a merchant" state. Implement the role check from the server profile, use it on merchant routes, test the pure decision — test: a buyer who opens `/listings` sees the not-allowed state with no merchant API call. |
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 6 rows that do nothing on tap (Address fixed #12; `onPress={() => {}}`: Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target or remove it — test: every Profile row opens something or is gone. |
-| M18 | PARITY | M | 3 | 2 | merchant | parity | Merchant reviews list (`/merchants/me/reviews`, rating breakdown, filters) — the reply part (CF-0043, `merchant_reply`) exists only on the web loop branch: do it with M35 after the merge — test: merchant sees their reviews with the breakdown. |
 | M11 | SECURITY | S | 3 | 1 | auth | — | Verify a 401 that survives the token retry signs the user out cleanly (today `request` throws and the screen shows an error, the session stays). Storage half checked at #10: AsyncStorage holds only the idle timestamp (`LEFT_AT_KEY`), removed by `clearLocal`; cart and saved ids are wiped by owner (CF-0108) — test: an expired session → one sign-out, back to sign-in. |
 | M15 | PARITY | M | 3 | 3 | merchant | parity | Merchant dashboard (performance + demand + stock alert counts) — test: totals match the web dashboard. |
 | M17 | PARITY | M | 3 | 3 | merchant | parity | Listing photo upload via `/produce/:id/image` (expo-image-picker — check Expo Go support first) — test: new listing shows the uploaded photo. |
@@ -85,6 +84,8 @@ Parity score: 12 / 26 done (5 partial, 9 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #22 — PARITY — merchant — CF-0119 — M
+What: merchant reviews (M18, web merchant shell reviews tab). New `merchant-reviews` route → `MerchantReviewsScreen` (Profile → "Reviews" for merchants): summary (stars + "4.3 · 12 reviews"), 5-to-1 star bars with counts (`rating_breakdown` covers all reviews), "n with a comment", filter chips for each star (several at once) and "With comment", "n reviews shown", the review list (stars, date, edited, comment, reviewer, order #) with paging of 20 and pull to refresh; 404 → "Reviews are for farm accounts"; stale answers after a filter change are dropped. New `api.merchants.myReviews`. Pure additions to `src/lib/reviews.ts`: `myReviewsQuery` (repeated `rating=` keys like the web, `has_comment`, limit, offset), `breakdownRows` (string JSON keys, whole percentages), `toggleRating`; types `MyMerchantReviews`, `MyReview`. Replies (`merchant_reply`, CF-0043) are loop-only → M35. Why: merchant parity; merchants could not read their reviews on the phone. Tests: `reviews.test.ts` +3. Manual check: merchant → Profile → Reviews → bars add up to the count; tap 5★ and 4★ → only those; tap With comment → only commented ones; buyer account opening the route → farm-account message. Checks: npm test 100/100, lint 0/0, tsc pass. Not run on a device.
 ### #21 — PARITY — discovery — CF-0118 — M
 What: full produce search (M09, web `order` page produce tab + `util/api/produceSearch.ts`). New `search` route → `SearchScreen`: query box (400 ms debounce, ≤ 100 chars), filter panel (sort: Best match / Price low–high / high–low / Most recently harvested / Newest listings; category All / Vegetables / Fruits; Min ₱ / Max ₱; In stock; Fresh), "Filters (n)" count, Reset, result count, 24 per page (web `PAGE_SIZE`) with infinite scroll (no duplicates across pages; a page that arrives after a filter change is dropped), heart per row, tap → farm, empty / error / loading states, 44 pt targets and a11y labels. `OrderScreen` hits get "See all produce results, filter and sort →" which opens the screen with the query. New `api.search.page`. Pure `src/lib/produceSearch.ts`: `SORTS`, `searchQuery` (empty values left out like the web; whole-peso prices; min ≤ max checked before a request), `activeFilterCount`, `NO_FILTERS`; a test reads backend `SortKey` (`produce_search.py`) and the web `en.ts` sort labels. Paging reuses `hasMoreHistory` / `mergeHistoryPage` (generic). Why: buyer "find" step; mobile showed only the first 10 in-stock hits. Tests: `produceSearch.test.ts` 5. Manual check: search "kale" on browse → See all → filters → Price low to high → prices rise; Min 300 / Max 100 → "Min ₱ is above max ₱." with no request; scroll past 24 → next page loads. Checks: npm test 97/97, lint 0/0, tsc pass. Not run on a device. Note: 5 cron firings came in while this iteration ran; they were not run in parallel (one iteration at a time on this tree).
 ### #20 — STRENGTHEN — perf — CF-0117 — M
@@ -129,7 +130,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #16)
-- Mobile tests: 97 in 23 files since #21 (`npm test` runs every `src/lib/**/*.test.ts`; 7 of them also read backend / web files to keep values in step).
+- Mobile tests: 100 in 23 files since #22 (`npm test` runs every `src/lib/**/*.test.ts`; 7 of them also read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #20 `expo export --platform android` OK (5 MB), expo-doctor 20/20 (next: #24).
