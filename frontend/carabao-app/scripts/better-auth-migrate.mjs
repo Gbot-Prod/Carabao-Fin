@@ -35,6 +35,9 @@ if (!normalizedPostgresUrl) {
 const pool = new Pool(poolConfigFromUrl(normalizedPostgresUrl, env));
 
 const config = {
+  // CF-0080: always create Better Auth's rateLimit table, so production can
+  // switch BETTER_AUTH_RATE_LIMIT_STORAGE=database after this has run.
+  rateLimit: { enabled: true, storage: "database" },
   // Keep in step with lib/auth.ts (schema-bearing plugins and fields only).
   // phoneNumber adds "phoneNumber" (unique) and "phoneNumberVerified"; the
   // backend migration c3e8a1f5d7b9 adds the unique index on an existing column.

@@ -196,6 +196,7 @@ Perf-only (`backend/scripts/perf`): `PERF_DATABASE_URL`, `PERF_CLIENT_CSV`, `PER
 | `BETTER_AUTH_TRUSTED_ORIGINS` | No | | extra trusted origins (comma list). Trusted list also includes `NEXT_PUBLIC_APP_URL`, `RAILWAY_PUBLIC_DOMAIN`, `carabaomobile://`, and `exp://` in dev |
 | `CSP_ENFORCE` | No | empty | empty = Report-Only; `true` = enforced + `upgrade-insecure-requests` |
 | `BETTER_AUTH_RATE_LIMIT` | No | empty | on in production; `true` enables locally |
+| `BETTER_AUTH_RATE_LIMIT_STORAGE` | No | `memory` | `database` keeps Better Auth's per-IP counts in its `rateLimit` table, so they survive deploys and are shared by replicas (CF-0080). Set it only after `npm run auth:migrate:apply` has created that table. Rules: `lib/auth-rate-limit.ts` |
 | `MOCK_AUTH_SESSION` | No | `false` | never `true` on a host (fixed session without sign-in) |
 | `NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES` | No | | idle sign-out |
 | `NEXT_PUBLIC_FEATURE_LANGUAGE_TOGGLE` | No | | language switch |

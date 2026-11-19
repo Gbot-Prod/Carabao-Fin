@@ -18,6 +18,7 @@ import { AUTH_BASE_PATH, isBlockedAuthPath, isBlockedOnAdminSurface } from "@/li
 import { appSurface, merchantUrl, rootDomain, subdomainMode } from "@/lib/urls";
 import { PH_MOBILE_PATTERN, PHONE_PLACEHOLDER_EMAIL_DOMAIN, isPlaceholderEmail } from "@/lib/phone";
 import { OTP_SEND_PATHS, resendWaitSeconds } from "@/lib/otp-cooldown";
+import { authRateLimit } from "@/lib/auth-rate-limit";
 import {
   ENROLMENT_TOKEN_HEADER,
   TOTP_SECRET_PATHS,
@@ -669,26 +670,9 @@ function createAuth() {
         },
       },
     },
-    // E7: BetterAuth limits by client IP. Defaults to production only; stricter
-    // rules for the credential and SMS endpoints. (The per-number SMS limit lives
-    // in the FastAPI backend, app/services/rate_limit.py.)
-    rateLimit: {
-      enabled: process.env.NODE_ENV === "production" || process.env.BETTER_AUTH_RATE_LIMIT === "true",
-      window: 60,
-      max: 100,
-      customRules: {
-        "/sign-in/email": { window: 900, max: 10 },
-        "/sign-in/phone-number": { window: 900, max: 10 },
-        // Lenient on purpose (no CAPTCHA yet): 20 codes per IP per hour.
-        "/phone-number/send-otp": { window: 3600, max: 20 },
-        "/phone-number/request-password-reset": { window: 3600, max: 20 },
-        "/phone-number/verify": { window: 900, max: 30 },
-        "/phone-number/reset-password": { window: 900, max: 10 },
-        "/request-password-reset": { window: 900, max: 5 },
-        "/reset-password": { window: 900, max: 10 },
-        "/change-email": { window: 3600, max: 5 },
-      },
-    },
+    // E7: BetterAuth limits by client IP; rules and storage in
+    // lib/auth-rate-limit.ts (CF-0080).
+    rateLimit: authRateLimit(process.env),
     session: {
       cookieCache: {
         enabled: true,
