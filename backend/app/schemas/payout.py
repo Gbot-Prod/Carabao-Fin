@@ -2,7 +2,7 @@ import re
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from app.models.statuses import (
     OrderStatus,
@@ -65,10 +65,10 @@ class PayoutInfoResponse(BaseModel):
 
 class PayoutInfoUpdate(BaseModel):
     payout_type: Literal["bank", "gcash", "maya"]
-    bank_code: str | None = None
-    account_number: str | None = None
-    account_name: str | None = None
-    ewallet_number: str | None = None
+    bank_code: str | None = Field(default=None, max_length=20)
+    account_number: str | None = Field(default=None, max_length=40)
+    account_name: str | None = Field(default=None, max_length=100)
+    ewallet_number: str | None = Field(default=None, max_length=20)
 
     @model_validator(mode="after")
     def _require_destination(self):
@@ -107,11 +107,13 @@ class PayoutInfoUpdate(BaseModel):
             self.account_number = None
         return self
 
+    model_config = ConfigDict(extra="forbid")  # CF-0063
+
 
 class PayoutInfoChange(PayoutInfoUpdate):
     """A payout method plus the SMS code sent for exactly it (CF-0004)."""
 
-    code: str
+    code: str = Field(min_length=1, max_length=12)
 
 
 class PayoutCodeSent(BaseModel):

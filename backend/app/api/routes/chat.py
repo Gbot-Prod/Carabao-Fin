@@ -36,6 +36,8 @@ class ChatThread(BaseModel):
 class ChatPost(BaseModel):
     body: str = Field(min_length=1, max_length=chat.MAX_BODY)
 
+    model_config = ConfigDict(extra="forbid")  # CF-0063
+
 
 def _out(m: ChatMessage, user: User) -> ChatMessageOut:
     return ChatMessageOut(

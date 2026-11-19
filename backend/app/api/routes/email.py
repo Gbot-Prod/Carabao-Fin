@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.api.dependencies import require_internal_secret
 from app.core.errors import upstream_error
@@ -14,7 +14,10 @@ router = APIRouter(tags=["email"], dependencies=[Depends(require_internal_secret
 
 class VerificationEmailPayload(BaseModel):
     to: EmailStr
-    verification_url: str
+    # CF-0063: an http(s) link only; it goes into an href.
+    verification_url: str = Field(min_length=1, max_length=2000, pattern=r"^https?://")
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 @router.post("/email/send-verification")
@@ -33,7 +36,9 @@ def send_verification_email_route(payload: VerificationEmailPayload) -> dict:
 
 class PasswordResetEmailPayload(BaseModel):
     to: EmailStr
-    reset_url: str
+    reset_url: str = Field(min_length=1, max_length=2000, pattern=r"^https?://")
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 @router.post("/email/send-password-reset")

@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -29,10 +29,14 @@ MERCHANT_EMAIL_PURPOSE = "merchant_email"
 class EmailOTPSendRequest(BaseModel):
     email: EmailStr
 
+    model_config = ConfigDict(extra="forbid")  # CF-0063
+
 
 class EmailOTPVerifyRequest(BaseModel):
     email: EmailStr
     otp: str = Field(min_length=1, max_length=12)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 def _key(user_id: int, email: str) -> str:

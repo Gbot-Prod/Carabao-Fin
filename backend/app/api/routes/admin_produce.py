@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_db
@@ -24,6 +24,8 @@ class AdminProduceResponse(ProduceResponse):
 
 class HidePayload(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 def _view(produce: Produce) -> AdminProduceResponse:

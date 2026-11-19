@@ -2,7 +2,7 @@ import logging
 from datetime import UTC, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Date, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -84,6 +84,8 @@ def _require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 class RolePayload(BaseModel):
     is_admin: bool
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 @router.patch("/admin/users/{user_id}/role", response_model=UserResponse)
@@ -232,6 +234,8 @@ def list_all_merchants(
 
 class SuspendPayload(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 def _get_other_user(db: Session, user_id: int, admin: User) -> User:

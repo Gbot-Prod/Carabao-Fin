@@ -6,7 +6,7 @@ from threading import Lock
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db, require_internal_secret
@@ -69,12 +69,16 @@ def _semaphore_send_otp_message(number: str, otp: str, message: str) -> str:
 
 
 class OTPSendRequest(BaseModel):
-    number: str
+    number: str = Field(max_length=20)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 class OTPVerifyRequest(BaseModel):
-    number: str
-    otp: str
+    number: str = Field(max_length=20)
+    otp: str = Field(max_length=12)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 def _merchant_otp_key(user_id: int, number: str) -> str:
@@ -154,9 +158,11 @@ _sent_today: dict[str, int] = {"day": 0, "count": 0}
 
 
 class AccountOTPRequest(BaseModel):
-    phone_number: str
-    code: str
+    phone_number: str = Field(max_length=20)
+    code: str = Field(max_length=12)
     purpose: Literal["verify", "password_reset"] = "verify"
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 def _count_send() -> int:

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.statuses import PaymentStatus
 
@@ -68,6 +68,8 @@ class RecordRefundPayload(BaseModel):
     method: RefundMethod
     reference: str = Field(min_length=1, max_length=200)
     notes: str | None = Field(default=None, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 class AdminRefund(BaseModel):

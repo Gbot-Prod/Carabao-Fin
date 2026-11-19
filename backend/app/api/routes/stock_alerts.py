@@ -7,7 +7,7 @@ Expired listings are already hidden from buyers by ``is_listed``
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -40,6 +40,8 @@ class StockAlerts(BaseModel):
 
 class ThresholdUpdate(BaseModel):
     low_stock_threshold: int = Field(ge=0, le=100_000)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 def _item(p: Produce, today: date) -> StockAlertItem:

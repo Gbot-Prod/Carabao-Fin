@@ -11,7 +11,7 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, raiseload, selectinload
@@ -113,8 +113,11 @@ _get_leg_durations = mapbox_routing.leg_durations
 # CF-0062: largest window of GET /merchants?limit=.
 MAX_PUBLIC_FARMS_PAGE = 500
 
+
 class MerchantOrderStatusUpdate(BaseModel):
     status: OrderStatus
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 def _compute_and_store_route(db: Session, order: Order) -> None:

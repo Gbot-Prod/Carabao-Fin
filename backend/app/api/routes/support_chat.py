@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,8 @@ class SupportThread(BaseModel):
 
 class SupportPost(BaseModel):
     body: str = Field(min_length=1, max_length=chat.MAX_BODY)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
 class SupportConversationSummary(BaseModel):
