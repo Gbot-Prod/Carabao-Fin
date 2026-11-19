@@ -5,6 +5,7 @@ import { API_BASE } from './config';
 import { historyQueryString, type HistoryQuery } from './orderHistory';
 import type { ServerCartLine } from './cartSync';
 import type { AddressPayload } from './addresses';
+import type { MerchantReviews } from './reviews';
 
 export { API_BASE, WEB_BASE } from './config';
 
@@ -121,6 +122,7 @@ export type ApiMerchant = {
     title: string;
     slug: string;
     banner_image_url: string | null;
+    logo_url?: string | null;
     description: string | null;
   } | null;
 };
@@ -514,6 +516,11 @@ export const api = {
   tracking: {
     forOrder: (token: string | null, orderId: number) =>
       request<ApiTracking>(`/tracking/${orderId}`, token),
+  },
+  // Public farm reviews (CF-0112).
+  reviews: {
+    forMerchant: (merchantId: number, offset: number, limit: number) =>
+      request<MerchantReviews>(`/merchants/${merchantId}/reviews?limit=${limit}&offset=${offset}`, null),
   },
   saved: {
     ids: (token: string | null) => request<number[]>('/users/me/saved-produce/ids', token),

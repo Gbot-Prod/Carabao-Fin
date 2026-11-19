@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 13    target: 20
+branch: improve/mobile-loop    push: no    iteration: 14    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0111) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0112) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 5/#12 · STRENGTHEN 4/#13 · SECURITY 2/#10 · AUDIT 2/#8
+PARITY 6/#14 · STRENGTHEN 4/#13 · SECURITY 2/#10 · AUDIT 2/#8
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #37) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -27,7 +27,7 @@ PARITY 5/#12 · STRENGTHEN 4/#13 · SECURITY 2/#10 · AUDIT 2/#8
 | web page / feature | mobile screen | status | backend routes | notes |
 |--------------------|---------------|--------|----------------|-------|
 | `farms` farm list (+ follow) | `(tabs)/index` → `OrderScreen` | done | `/merchants`, `/users/me/follows`, `/merchants/:id/follow` | real data only since #13 (`mockData.ts` deleted) |
-| `farms/[merchantID]` farm detail | `merchant` → `MerchantScreen` | partial | `/merchants/:id`, `/merchants/:id/produce` ✓; `/merchants/:id/reviews`, `/merchants/:id/shoppage` not called | no reviews list, no published shop page (banner/logo/about) |
+| `farms/[merchantID]` farm detail | `merchant` → `MerchantScreen` + `FarmReviews` | done | `/merchants/:id`, `/merchants/:id/produce`, `/merchants/:id/reviews` ✓ (since #14) | banner, logo, about from the published shop page; reviews with summary and paging; merchant replies exist only on the web loop branch (M35) |
 | `order` produce search | `OrderScreen` search | partial | `/produce/search` ✓ (only `q`, `in_stock`, `page_size`) | no category/price filters, no sort, no paging |
 | `saved` saved produce | `saved` → `SavedScreen` + `SaveHeart` | done | `/users/me/saved-produce`, `/users/me/saved-produce/ids`, `PUT/DELETE /produce/:id/save` ✓ (since #5) | hearts on farm produce rows and search hits; entry in Profile |
 | `cart` | `(tabs)/cart` → `CartScreen` | done | `GET/PUT /carts/me` ✓ (since #11) | server cart: survives restart, same as web; `unavailable_reason` (CF-0052) per line blocks checkout; fees and prices from the server lines; owned by user ID, wiped on sign-out (#10). Loop-branch CF-0042 `issue` / `previous_price` after the web merge (M35) |
@@ -56,7 +56,7 @@ PARITY 5/#12 · STRENGTHEN 4/#13 · SECURITY 2/#10 · AUDIT 2/#8
 | merchant `shop` page | — | missing | `/merchants/me/shoppage` (+ banner, logo, publish, discard) exist | |
 | merchant `settings` | — | missing | `/merchants/me` exists | |
 
-Parity score: 9 / 26 done (8 partial, 9 missing; 3 rows n/a; 1 row blocked) since #11. #8: cart moved done → partial (memory-only cart, phone totals).
+Parity score: 10 / 26 done (7 partial, 9 missing; 3 rows n/a; 1 row blocked) since #14. #8: cart moved done → partial (memory-only cart, phone totals).
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
@@ -65,15 +65,14 @@ Parity score: 9 / 26 done (8 partial, 9 missing; 3 rows n/a; 1 row blocked) sinc
 | M34 | STRENGTHEN | S | 2 | 1 | types | — | **New (#8).** `ApiMerchant` types `address`, `barangay` as present and `contact_number` as `string`; after the web loop merge the public farm routes leave the first two out (CF-0048) and `contact_number` is nullable. No screen reads them, so only the types are wrong. Make them match `PublicMerchantResponse` — test: tsc passes; farm screen hides the contact row when null. |
 | M29 | SECURITY | M | 4 | 2 | auth | — | `ProtectedScreen` accepts `requiredRole` but never checks it (its doc comment says it does). Nothing passes it today, so merchant screens rely on the server 404 → "not a merchant" state. Implement the role check from the server profile, use it on merchant routes, test the pure decision — test: a buyer who opens `/listings` sees the not-allowed state with no merchant API call. |
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 6 rows that do nothing on tap (Address fixed #12; `onPress={() => {}}`: Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target or remove it — test: every Profile row opens something or is gone. |
-| M07 | PARITY | M | 3 | 2 | discovery | parity | Farm detail: reviews list (`/merchants/:id/reviews`, with merchant replies) + published shop page (banner, logo, about) (web B54/B63 part) — test: farm with reviews shows them with stars and replies. |
-| M18 | PARITY | M | 3 | 2 | merchant | parity | Merchant reviews + reply (`/merchants/me/reviews`) — test: reply shows under the review on farm detail. |
+| M18 | PARITY | M | 3 | 2 | merchant | parity | Merchant reviews list (`/merchants/me/reviews`, rating breakdown, filters) — the reply part (CF-0043, `merchant_reply`) exists only on the web loop branch: do it with M35 after the merge — test: merchant sees their reviews with the breakdown. |
 | M11 | SECURITY | S | 3 | 1 | auth | — | Verify a 401 that survives the token retry signs the user out cleanly (today `request` throws and the screen shows an error, the session stays). Storage half checked at #10: AsyncStorage holds only the idle timestamp (`LEFT_AT_KEY`), removed by `clearLocal`; cart and saved ids are wiped by owner (CF-0108) — test: an expired session → one sign-out, back to sign-in. |
 | M08 | PARITY | M | 3 | 3 | orders | parity | Leave / edit a review for a delivered order (`/orders/me/:id/review`) from `OrderDetailScreen` (replace the "review on the website" line; edit while `editable_until`) (web B54) — test: delivered order → write review → detail shows it. |
 | M09 | PARITY | M | 3 | 3 | discovery | parity | Produce search filters/sort/paging matching web `produceSearch.ts` — test: sort by price ascending, page 2 loads. |
 | M15 | PARITY | M | 3 | 3 | merchant | parity | Merchant dashboard (performance + demand + stock alert counts) — test: totals match the web dashboard. |
 | M39 | PARITY | S | 2 | 1 | merchant | parity | **New (#9).** Listing form has no `min_order_qty` and no `price_tiers` (bulk prices, max 5) although the backend and web support both — test: set min order 5 → buyer cannot add 4. Batch with M17. |
 | M17 | PARITY | M | 3 | 3 | merchant | parity | Listing photo upload via `/produce/:id/image` (expo-image-picker — check Expo Go support first) — test: new listing shows the uploaded photo. |
-| M35 | PARITY | M | 3 | 3 | checkout | after-web-merge | **New (#8). Blocked until `improve/loop` is merged.** Web-loop features with backend routes only on that branch: cart line `issue` / `previous_price` (CF-0042, show in `CartScreen` next to `unavailable_reason`), voucher code at checkout + discount on order/receipt (CF-0058/0061, web B70), order receipt (`GET /orders/me/{id}/receipt`, CF-0049, web B63), recently viewed farms (CF-0052). — test: place-order sends `voucher_code`; receipt opens from order detail. |
+| M35 | PARITY | M | 3 | 3 | checkout | after-web-merge | **New (#8). Blocked until `improve/loop` is merged.** Web-loop features with backend routes only on that branch: review `merchant_reply` (show under each review in `FarmReviews`, reply from M18), cart line `issue` / `previous_price` (CF-0042, show in `CartScreen` next to `unavailable_reason`), voucher code at checkout + discount on order/receipt (CF-0058/0061, web B70), order receipt (`GET /orders/me/{id}/receipt`, CF-0049, web B63), recently viewed farms (CF-0052). — test: place-order sends `voucher_code`; receipt opens from order detail. |
 | M40 | STRENGTHEN | S | 2 | 2 | checkout | — | **New (#12).** Editing a saved address on mobile leaves its `region` and map pin (`lat`/`lng`) as they were, so a street changed on the phone can keep the old pin; mobile also has no region field (web sets it with a picker). Clear the pin when street/city/province change, or add a region picker — test: edit street → saved pin is null. |
 | M36 | STRENGTHEN | S | 2 | 1 | checkout | — | **New (#8, web B63 part).** Check that checkout shows the backend's 409 (stock / limits, CF-0045) and 429 messages, not a generic error; batch with M25 — test: place an order above stock → the server's message shows. |
 | M16 | PARITY | L | 4 | 4 | merchant | merchant-shipments | Merchant shipments list + shipment route view (`/merchants/me/shipments`, `/shipments/:id`) — slice 1: list; slice 2: map / stop order. |
@@ -91,6 +90,8 @@ Parity score: 9 / 26 done (8 partial, 9 missing; 3 rows n/a; 1 row blocked) sinc
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #14 — PARITY — discovery — CF-0112 — M
+What: farm detail parity (M07, web `farms/[merchantID]`). New `FarmReviews` on the farm screen: summary ("★★★★☆ 4.3 · 12 reviews" / "No reviews yet"), the first 5 reviews (stars, date, "edited", comment, reviewer name), "Show more reviews" in pages of 10 (`GET /merchants/:id/reviews?limit&offset`, public, no token); a load failure hides the section, the shop still works. Published shop page on the hero: the farm's banner (no more hot-linked Unsplash photo — a leaf placeholder when there is none), logo, and the about text. Stats use `src/lib/farms.ts` labels: "New" instead of "0.0", "—" instead of "N/A" / a made-up ₱0. The farm id from the route (deep links) is checked with `parseOrderId` (plain positive integer) and also used for follow / unfollow; a bad id shows "Farm not found" instead of a spinner that never stops. Pure `src/lib/reviews.ts`: `stars`, `reviewSummary`, `mergeReviews` (no duplicates when new reviews shift offsets), `hasMoreReviews`, `wasEdited`. Note: merchant replies (`merchant_reply`) exist only on the web loop branch → M35 / M18. Why: parity on the buyer "find" step (web B54 / B63 part). Tests: `reviews.test.ts` 4. Manual check: open a farm with > 5 reviews → 5 show, "Show more" adds the rest then disappears; farm without reviews → "No reviews yet", rating "New"; farm with a banner and logo → both show; `carabaomobile://merchant?farmId=abc` → "Farm not found". Checks: npm test 72/72, lint 0/0, tsc pass. Not run on a device.
 ### #13 — STRENGTHEN — cleanup — CF-0111 — M
 What: cleanup batch M13 (with M14, M26). Deleted after checking every import (all were used only by each other): Expo starter `components/` (hello-wave, parallax-scroll-view, external-link, themed-text, themed-view, ui/collapsible, ui/icon-symbol(.ios)), `hooks/use-theme-color.ts`, `constants/theme.ts` (so no theme merge is needed: `src/lib/theme.ts` is the only theme), `app/modal.tsx` + its Stack entry, the stray route `app/(tabs)/App.tsx` (it duplicated all providers) + its `Tabs.Screen`, the unused React-Navigation `src/types.ts`, `src/lib/mockData.ts`, 4 React logo images, and `scripts/reset-project.js` + its npm script (it moves or deletes `app/`, `components/`, … when run). Kept `hooks/use-color-scheme(.web)` (used by `app/_layout.tsx`). Farm cards: `Farm` type moved to new pure `src/lib/farms.ts` with `ratingLabel` ("New" instead of "⭐ 0"), `deliveryTimeLabel` and `deliveryFeeLabel` (left out when unknown instead of "N/A" / a made-up "₱0 delivery"; 0 → "Free delivery"); no hot-linked Unsplash photo — a farm without a banner shows a leaf placeholder; `expo-image` and an a11y label on the card. `ConfirmationScreen` logs only status + message, and only in `__DEV__`. Why: dead code and mock data (§2B Cleanup); the stray route and the reset script were traps. Tests: `farms.test.ts` 3. Manual check: browse farms → a farm without reviews shows "New", without a fee shows no fee line, without a banner shows the leaf; app starts with no "missing route" warning. Checks: npm test 68/68, lint 0/0, tsc pass, android export OK (routes changed). Not run on a device. Follow-ups: M41 (unused dependencies).
 ### #12 — PARITY — checkout / account — CF-0110 — M
@@ -119,7 +120,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #8)
-- Mobile tests: 68 in 17 files since #13 (`npm test` runs every `src/lib/**/*.test.ts`).
+- Mobile tests: 72 in 18 files since #14 (`npm test` runs every `src/lib/**/*.test.ts`).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #12 `expo export --platform android` OK (5 MB), expo-doctor 20/20 (next: #16).

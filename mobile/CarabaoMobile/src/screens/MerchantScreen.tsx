@@ -12,8 +12,9 @@ import { api, merchantLocation, type ApiMerchant, type ApiProduce } from '../lib
 import { matchReferencePrice, referenceLabel, type ApiReferencePrice } from '../lib/referencePrices';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { SaveHeart } from '../components/SaveHeart';
-
-const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
+import { FarmReviews } from '../components/FarmReviews';
+import { deliveryFeeLabel, deliveryTimeLabel, ratingLabel } from '../lib/farms';
+import { parseOrderId as parseRouteId } from '../lib/orderDetail';
 
 // "YYYY-MM-DD" → "Nov 20", read as a calendar date so no timezone shifts the day.
 function formatDay(ymd: string): string {
@@ -53,9 +54,11 @@ function MerchantScreenContent() {
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const [referencePrices, setReferencePrices] = useState<ApiReferencePrice[]>([]);
 
+  // CF-0112: the id can come from a deep link; plain positive integers only.
+  const merchantId = parseRouteId(farmId);
   useEffect(() => {
-    if (!farmId) return;
-    const id = Number(farmId);
+    if (merchantId === null) return;
+    const id = merchantId;
     const load = async () => {
       setLoading(true);
       setError(null);
@@ -78,7 +81,7 @@ function MerchantScreenContent() {
       }
     };
     void load();
-  }, [farmId, token]);
+  }, [merchantId, token]);
 
   const handleAdd = (product: ApiProduce) => {
     // Orders and saved carts belong to an account: explain instead of letting a
@@ -114,12 +117,12 @@ function MerchantScreenContent() {
   const [following, setFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   useEffect(() => {
-    if (!token || !farmId) return;
+    if (!token || merchantId === null) return;
     api.follows
       .mine(token)
-      .then((ids) => setFollowing(ids.includes(Number(farmId))))
+      .then((ids) => setFollowing(ids.includes(merchantId)))
       .catch(() => setFollowing(false));
-  }, [token, farmId]);
+  }, [token, merchantId]);
   const toggleFollow = async () => {
     if (!isAuthenticated) {
       Alert.alert('Sign in to follow farms', 'Followed farms are listed first when you browse.', [
@@ -128,10 +131,11 @@ function MerchantScreenContent() {
       ]);
       return;
     }
+    if (merchantId === null) return;
     setFollowBusy(true);
     try {
-      if (following) await api.follows.unfollow(token, Number(farmId));
-      else await api.follows.follow(token, Number(farmId));
+      if (following) await api.follows.unfollow(token, merchantId);
+      else await api.follows.follow(token, merchantId);
       setFollowing(!following);
     } catch (err) {
       Alert.alert('Could not update', err instanceof Error ? err.message : 'Please try again.');
@@ -164,7 +168,12 @@ function MerchantScreenContent() {
         </View>
       </View>
 
-      {loading ? (
+      {merchantId === null ? (
+        <View style={styles.center}>
+          <Ionicons name="search-outline" size={36} color={Colors.textLight} />
+          <Text style={styles.errorText}>Farm not found. The link may be wrong.</Text>
+        </View>
+      ) : loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.loadingText}>Loading…</Text>
@@ -178,7 +187,17 @@ function MerchantScreenContent() {
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Hero */}
           <View style={styles.heroContainer}>
-            <Image source={{ uri: PLACEHOLDER_IMAGE }} style={styles.heroImage} resizeMode="cover" />
+            {merchant?.shop_page?.banner_image_url ? (
+              <Image source={{ uri: merchant.shop_page.banner_image_url }} style={styles.heroImage} resizeMode="cover" />
+            ) : (
+              // CF-0112: the farm's own banner, or a plain placeholder (no hot-linked stock photo).
+              <View style={[styles.heroImage, styles.heroPlaceholder]}>
+                <Ionicons name="leaf-outline" size={56} color={Colors.primary} />
+              </View>
+            )}
+            {merchant?.shop_page?.logo_url ? (
+              <Image source={{ uri: merchant.shop_page.logo_url }} style={styles.heroLogo} accessibilityLabel={`${displayName} logo`} />
+            ) : null}
             <View style={styles.heroGradient} />
             <View style={styles.heroBadge}>
               <Text style={styles.heroBadgeText}>{(merchant && merchantLocation(merchant)) || 'Farm Goods'}</Text>
@@ -195,25 +214,29 @@ function MerchantScreenContent() {
               </View>
             ) : null}
 
+            {merchant?.shop_page?.description ? (
+              <Text style={styles.about}>{merchant.shop_page.description}</Text>
+            ) : null}
+
             {/* Stats row */}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <View style={styles.statValueRow}>
                   <Ionicons name="star" size={14} color={Colors.warning} />
-                  <Text style={styles.statValue}> {(merchant?.rating ?? 0).toFixed(1)}</Text>
+                  <Text style={styles.statValue}> {ratingLabel(merchant?.rating)}</Text>
                 </View>
                 <Text style={styles.statLabel}>Rating</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>
-                  🕒 {merchant?.delivery_time ? `${merchant.delivery_time}d` : 'N/A'}
+                  🕒 {deliveryTimeLabel(merchant?.delivery_time) ?? '—'}
                 </Text>
                 <Text style={styles.statLabel}>Delivery</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>₱{(merchant?.delivery_price ?? 0).toLocaleString()}</Text>
+                <Text style={styles.statValue}>{deliveryFeeLabel(merchant?.delivery_price)?.replace(' delivery', '') ?? '—'}</Text>
                 <Text style={styles.statLabel}>Delivery fee</Text>
               </View>
             </View>
@@ -297,6 +320,7 @@ function MerchantScreenContent() {
               })
             )}
           </View>
+          {merchantId !== null && <FarmReviews merchantId={merchantId} />}
           <View style={{ height: 100 }} />
         </ScrollView>
       )}
@@ -346,6 +370,12 @@ const styles = StyleSheet.create({
 
   heroContainer: { height: 240, position: 'relative' },
   heroImage: { width: '100%', height: '100%' },
+  heroPlaceholder: { backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  heroLogo: {
+    position: 'absolute', left: Spacing.lg, bottom: -28, width: 64, height: 64, borderRadius: 32,
+    borderWidth: 3, borderColor: Colors.white, backgroundColor: Colors.white,
+  },
+  about: { fontSize: FontSize.sm, color: Colors.text, lineHeight: 20, marginTop: Spacing.sm },
   heroGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, backgroundColor: 'rgba(0,0,0,0.2)' },
   heroBadge: {
     position: 'absolute', bottom: Spacing.md, left: Spacing.md,
