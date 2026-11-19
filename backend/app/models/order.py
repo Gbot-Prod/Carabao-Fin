@@ -61,6 +61,10 @@ class Order(Base):
     # ETA from the optimised delivery route
     time_of_arrival = Column(DateTime(timezone=True), nullable=True)
     delivery_fee = Column(Integer, nullable=False, default=0, server_default="0")
+    # CF-0058: pesos a farm voucher took off the produce subtotal, and its code.
+    # total_price is already net of it: subtotal + delivery_fee - discount.
+    discount = Column(Integer, nullable=False, default=0, server_default="0")
+    voucher_code = Column(String(32), nullable=True)
     image = Column(String, nullable=True)
 
     user = relationship("User")

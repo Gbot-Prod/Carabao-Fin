@@ -80,6 +80,8 @@ class PlaceOrderRequest(BaseModel):
     delivery_lat: float | None = None
     delivery_lng: float | None = None
     notes: str | None = Field(default=None, max_length=500)
+    # CF-0058: one farm voucher code. The discount is worked out on the server.
+    voucher_code: str | None = Field(default=None, max_length=40)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -92,6 +94,8 @@ class PlacedOrder(BaseModel):
     merchant_name: str
     total_price: int
     delivery_fee: int
+    discount: int = 0
+    voucher_code: str | None = None
 
 
 class PlaceOrderResponse(BaseModel):

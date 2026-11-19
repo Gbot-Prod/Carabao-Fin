@@ -36,4 +36,7 @@ class ReceiptResponse(BaseModel):
     lines: list[ReceiptLine]
     subtotal: int
     delivery_fee: int
+    # CF-0058: farm voucher, 0 / None when none was used.
+    discount: int = 0
+    voucher_code: str | None = None
     total: int

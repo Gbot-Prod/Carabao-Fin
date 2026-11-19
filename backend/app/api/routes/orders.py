@@ -16,6 +16,7 @@ from app.models.review import Review
 from app.models.statuses import OrderStatus
 from app.models.transaction import Transaction
 from app.models.user import User
+from app.models.voucher import Voucher
 from app.schemas.order import (
     CurrentOrderResponse,
     OrderDetailResponse,
@@ -26,7 +27,7 @@ from app.schemas.order import (
 )
 from app.schemas.pagination import Page
 from app.schemas.receipt import ReceiptResponse
-from app.services import notifications, rate_limit
+from app.services import notifications, rate_limit, vouchers
 from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
     MAX_OPEN_PENDING_ORDERS,
@@ -195,6 +196,17 @@ def place_order_from_cart(
             subtotal_by_merchant.get(produce.merchant_id, 0) + unit_price * quantity
         )
 
+    # CF-0058: a farm voucher lowers that farm's produce subtotal only (not
+    # the delivery fee). Checked after the stock lines, so its minimum spend
+    # is measured on the prices this checkout really uses.
+    voucher: Voucher | None = None
+    discount_by_merchant: dict[int, int] = {}
+    if payload.voucher_code and payload.voucher_code.strip():
+        voucher, voucher_discount = vouchers.claim(
+            db, payload.voucher_code, subtotal_by_merchant, cast(int, current_user.id)
+        )
+        discount_by_merchant[cast(int, voucher.merchant_id)] = voucher_discount
+
     # One order per merchant (C1); all of them or none (single commit below).
     # Shared locks, in id order: checkouts don't block each other, but a
     # concurrent merchant deletion either waits for these orders or is seen here.
@@ -215,11 +227,14 @@ def place_order_from_cart(
                 "from your cart to continue.",
             )
         service_fee = merchant.delivery_price or 0
+        discount = discount_by_merchant.get(merchant_id, 0)
         order = Order(
             user_id=current_user.id,
             merchant_id=merchant.id,
             status=OrderStatus.PENDING,
-            total_price=subtotal_by_merchant[merchant_id] + service_fee,
+            total_price=subtotal_by_merchant[merchant_id] + service_fee - discount,
+            discount=discount,
+            voucher_code=voucher.code if discount and voucher is not None else None,
             items=items_by_merchant[merchant_id],
             delivery_address=(payload.delivery_address or "").strip() or None,
             delivery_lat=delivery_pin[0] if delivery_pin else None,
@@ -235,6 +250,9 @@ def place_order_from_cart(
 
     db.flush()  # ids for the notifications below
     for order, merchant in orders:
+        if voucher is not None and order.discount:
+            buyer_id = cast(int, current_user.id)
+            vouchers.record(db, voucher, order, buyer_id, cast(int, order.discount))
         notifications.notify(
             db,
             current_user.id,
@@ -258,6 +276,8 @@ def place_order_from_cart(
                 merchant_name=merchant.merchant_name,
                 total_price=order.total_price,
                 delivery_fee=order.delivery_fee,
+                discount=order.discount or 0,
+                voucher_code=order.voucher_code,
             )
         )
 

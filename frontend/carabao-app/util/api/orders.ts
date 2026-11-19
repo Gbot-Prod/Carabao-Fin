@@ -157,6 +157,9 @@ export type OrderReceipt = {
   lines: ReceiptLine[];
   subtotal: number;
   delivery_fee: number;
+  /** Farm voucher (CF-0058); 0 / null when none was used. */
+  discount?: number;
+  voucher_code?: string | null;
   total: number;
 };
 

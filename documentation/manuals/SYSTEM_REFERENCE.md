@@ -475,6 +475,8 @@ other moves: 409
    - **Mismatch:** the order goes to `payment_mismatch`, the transaction to `refund_pending`, and an admin is alerted.
 5. If nothing is paid within the TTL, the sweep releases the stock and expires the session. If PayMongo shows the session as paid, the sweep settles it instead.
 
+**Vouchers (CF-0058).** Checkout accepts one optional `voucher_code`. A voucher belongs to one farm (`vouchers` table) and takes pesos off that farm's produce subtotal only (not the delivery fee and not other farms' orders). The farm pays for it: `orders.total_price` = subtotal + `delivery_fee` − `discount`, and the payment and the payout use that total. Percent discounts are 1–90 % and are rounded down; a fixed discount is never more than the subtotal. Checks (`services/vouchers.py`, voucher row locked): active, `starts_at`/`expires_at`, `min_subtotal`, `usage_limit`, `per_user_limit`. Each use is a `voucher_redemptions` row; uses on `cancelled` or `payment_mismatch` orders do not count. A code of a farm that is not in the cart gets the same answer as an unknown code. There is no merchant voucher screen or buyer code field yet (B05 slices 2–3), and no platform-wide vouchers (Needs human: who pays).
+
 Money is stored in whole pesos. Calculations use `Decimal` with ROUND_HALF_UP. The platform fee is 2%. PayMongo gets centavos, converted only at that boundary. An invalid amount raises `InvalidAmount` and never becomes 0. The cap is 10^15.
 
 ### 7.6 Status values

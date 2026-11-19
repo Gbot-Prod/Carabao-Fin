@@ -154,6 +154,14 @@ export default function OrderReceiptPage() {
                 <th scope="row" colSpan={3}>Delivery</th>
                 <td className={styles.num}>{receiptPeso(r.delivery_fee)}</td>
               </tr>
+              {r.discount ? (
+                <tr>
+                  <th scope="row" colSpan={3}>
+                    Voucher{r.voucher_code ? ` (${r.voucher_code})` : ''}
+                  </th>
+                  <td className={styles.num}>−{receiptPeso(r.discount)}</td>
+                </tr>
+              ) : null}
               <tr className={styles.totalRow}>
                 <th scope="row" colSpan={3}>Total paid</th>
                 <td className={styles.num}>{receiptPeso(r.total)}</td>

@@ -38,6 +38,7 @@ from app.models import (  # noqa: F401
     transaction,
     user,
     user_address,
+    voucher,
 )
 from app.services import otp as otp_service
 from app.services import rate_limit, retention
