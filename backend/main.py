@@ -23,6 +23,7 @@ from app.core.errors import (
     set_request_id,
     with_reference,
 )
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.models import (  # noqa: F401
     cart,
     merchant,
@@ -226,6 +227,10 @@ async def request_id_and_errors_middleware(request: Request, call_next):
 # CF-0022: added after the request-ID middleware and before CORS, so it sits
 # outside the app but inside CORS (a 413 keeps its CORS headers).
 app.add_middleware(BodySizeLimitMiddleware)
+
+# CF-0068: security headers on every response, also the 413s and 500s above
+# (it sits outside them and inside CORS).
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 # Every web origin that calls the API with credentials: the buyer site, the
