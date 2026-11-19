@@ -9,6 +9,7 @@ import PageLoader from '@/components/PageLoader/PageLoader';
 import { fetchMerchants, fetchMyCart } from '@/util/api';
 import { farmImages } from '@/lib/farm-images';
 import { fetchMyFollows } from '@/util/api/merchants';
+import { activePause, shortDay } from '@/lib/store-pause';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
 import RecentFarms from '@/components/RecentFarms/RecentFarms';
 import ProduceResults from './ProduceResults';
@@ -24,6 +25,8 @@ type FarmView = {
   deliveryFee: number;
   logoUrl: string | null;
   bannerUrl: string | null;
+  /** CF-0072: last day of the farm's break, when it is on today. */
+  pausedUntil: string | null;
 };
 
 // URL values stay in English so shared links work in either language.
@@ -48,6 +51,7 @@ const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]
   deliveryTimeDays: merchant.delivery_time ?? null,
   category: merchant.category ?? null,
   deliveryFee: merchant.delivery_price ?? 0,
+  pausedUntil: activePause(merchant.paused_until),
   ...farmImages(merchant),
 });
 
@@ -321,6 +325,9 @@ function OrderContent() {
                 <div className={styles.cardTitleRow}>
                   <h3 className={styles.cardTitle}>{farm.name}</h3>
                   {followed.has(farm.merchantId) && <span className={styles.followTag}>{t.follow.badge}</span>}
+                  {farm.pausedUntil && (
+                    <span className={styles.pausedTag}>{fmt(t.browse.onBreak, { date: shortDay(farm.pausedUntil) })}</span>
+                  )}
                   {farm.rating > 0 && (
                     <span className={styles.rating}>
                       <Star size={13} aria-hidden />

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -17,7 +18,7 @@ from app.models.produce import Produce
 from app.models.search_log import SearchLog
 from app.schemas.pagination import Page
 from app.schemas.produce import ProduceResponse
-from app.services import rate_limit
+from app.services import rate_limit, store_pause
 from app.services.account_suspension import merchant_is_public
 from app.services.produce_freshness import is_listed, ph_today
 
@@ -31,6 +32,8 @@ class ProduceSearchResult(ProduceResponse):
     merchant_name: str
     merchant_province: str | None = None
     merchant_city: str | None = None
+    # CF-0072 (B81): the farm's holiday mode, when it is on today.
+    merchant_paused_until: date | None = None
 
 
 @router.get("/produce/search", response_model=Page[ProduceSearchResult])
@@ -118,6 +121,7 @@ def search_produce(
             merchant_name=p.merchant.merchant_name,
             merchant_province=p.merchant.province,
             merchant_city=p.merchant.city,
+            merchant_paused_until=store_pause.paused_until(p.merchant, today),
         )
         for p in rows
     ]

@@ -88,6 +88,7 @@ const fil: Strings = {
     account: 'Account',
   },
   browse: {
+    onBreak: 'Nagpapahinga hanggang {date}',
     title: 'Mga Tindahan',
     shopCountOne: '{count} tindahan',
     shopCountMany: '{count} tindahan',

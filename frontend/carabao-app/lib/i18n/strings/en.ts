@@ -79,6 +79,7 @@ const en = {
     account: 'Account',
   },
   browse: {
+    onBreak: 'On a break until {date}',
     title: 'Browse Shops',
     shopCountOne: '{count} shop',
     shopCountMany: '{count} shops',

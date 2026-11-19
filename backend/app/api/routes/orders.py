@@ -324,12 +324,20 @@ def preview_voucher(
             lines[produce_id] = lines.get(produce_id, 0) + quantity
     subtotal_by_merchant: dict[int, int] = {}
     if lines:
-        for produce in db.query(Produce).filter(Produce.id.in_(list(lines))).all():
+        preview_rows = (
+            db.query(Produce)
+            .options(selectinload(Produce.merchant))
+            .filter(Produce.id.in_(list(lines)))
+            .all()
+        )
+        for produce in preview_rows:
             merchant_id = cast(int, produce.merchant_id)
             if (
                 produce.hidden_at is not None
                 or is_expired(produce, today)
                 or merchant_id == own_merchant_id
+                # CF-0072 (B83): checkout refuses a paused farm's lines.
+                or store_pause.is_paused(produce.merchant, today)
             ):
                 continue
             quantity = lines[cast(int, produce.id)]

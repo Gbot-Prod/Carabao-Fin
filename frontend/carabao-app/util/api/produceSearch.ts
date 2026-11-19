@@ -23,6 +23,8 @@ export type ProduceSearchResult = Produce & {
   merchant_name: string;
   merchant_province: string | null;
   merchant_city: string | null;
+  /** CF-0072: the farm's holiday mode when it is on today (yyyy-mm-dd). */
+  merchant_paused_until?: string | null;
 };
 
 export const searchProduce = async (params: ProduceSearchParams): Promise<Paginated<ProduceSearchResult>> => {

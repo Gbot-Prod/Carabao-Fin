@@ -8,6 +8,7 @@ import { fmt, plural } from "@/lib/i18n/format";
 import SaveProduceButton from "@/components/SaveProduceButton/SaveProduceButton";
 import { useSavedProduce } from "@/components/SaveProduceButton/useSavedProduce";
 import styles from "./ProduceResults.module.css";
+import { activePause, shortDay } from "@/lib/store-pause";
 
 const PAGE_SIZE = 24;
 const SORTS: ProduceSort[] = ["relevance", "price_asc", "price_desc", "freshest", "newest"];
@@ -137,6 +138,11 @@ export default function ProduceResults({ query }: { query: string }) {
                     {p.merchant_name}
                     {p.merchant_province ? ` · ${p.merchant_province}` : ""}
                   </span>
+                  {activePause(p.merchant_paused_until) && (
+                    <span className={styles.pausedTag}>
+                      {fmt(t.browse.onBreak, { date: shortDay(activePause(p.merchant_paused_until)!) })}
+                    </span>
+                  )}
                   <span className={styles.meta}>
                     {p.stock_quantity > 0 ? fmt(s.stock, { qty: p.stock_quantity }) : s.outOfStock}
                   </span>
