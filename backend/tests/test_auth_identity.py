@@ -30,7 +30,9 @@ from app.models import (  # noqa: F401  (registers User's related mappers)
 )
 from app.models.user import User
 from tests import better_auth
+from tests.account_delete import delete_account
 from tests.files import png_bytes
+from tests.payout_codes import last_code
 from tests.tokens import (
     ADMIN_KEY,
     ADMIN_KID,
@@ -375,10 +377,12 @@ def test_verified_phone_is_required_where_asked(db):
 def test_deleting_the_account_removes_the_login_too(client, db):
     from sqlalchemy import text
 
-    better_auth.add_identity(db, "ba_me")
+    better_auth.add_identity(
+        db, "ba_me", phoneNumber="639171112222", phoneNumberVerified=True
+    )
     assert _me(client, sub="ba_me").status_code == 200
 
-    res = client.delete("/users/me", headers=bearer(sub="ba_me"))
+    res = delete_account(client, headers=bearer(sub="ba_me"))
 
     assert res.status_code == 204, res.text
     ids = db.execute(text('SELECT id FROM "user"')).scalars().all()
@@ -448,9 +452,16 @@ def test_avatar_upload_is_written_back_to_better_auth(client, db, monkeypatch):
 
 def test_failed_identity_delete_keeps_the_account(client, db):
     _me(client)
+    better_auth.set_identity(
+        db, _row(db, "ba_user"), phoneNumber="639171112222", phoneNumberVerified=True
+    )
+    code = client.post("/users/me/delete-code", headers=bearer())
+    assert code.status_code == 200, code.text
     better_auth.break_user_table(db)
 
-    res = client.delete("/users/me", headers=bearer())
+    res = client.request(
+        "DELETE", "/users/me", json={"code": last_code()}, headers=bearer()
+    )
 
     assert res.status_code == 503
     db.rollback()  # get_db closes the request's session without committing

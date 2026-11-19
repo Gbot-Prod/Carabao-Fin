@@ -136,3 +136,18 @@ def test_suspended_merchant_is_hidden_from_buyers(db, merchant):
 
     admin_client.post(f"/admin/users/{merchant.user_id}/reinstate")
     assert buyer_view.get(f"/merchants/{merchant.id}/produce").status_code == 200
+
+
+def test_admin_merchant_list_has_detail_fields(db, merchant):
+    db.add(Produce(merchant_id=merchant.id, name="Talong", price=80, stock_quantity=5))
+    merchant.shop_page.logo_url = "https://x/logo.png"
+    db.commit()
+
+    res = _admin_client(db).get("/admin/merchants")
+    assert res.status_code == 200, res.text
+    item = res.json()["items"][0]
+    assert item["shop_page"]["logo_url"] == "https://x/logo.png"
+    assert [p["name"] for p in item["produces"]] == ["Talong"]
+    assert item["business_type"] == merchant.business_type
+    assert "created_at" in item and "owner_name" in item
+    assert "tin" not in item and "rsbsa_number" not in item

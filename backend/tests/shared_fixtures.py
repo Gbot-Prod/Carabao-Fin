@@ -7,6 +7,7 @@ without the import. A module that defines its own ``db`` still overrides it.
 """
 
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -18,6 +19,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base
 from app.models.merchant import Merchant
+from app.models.shopPage import ShopPage
 from app.models.user import User
 from tests.better_auth import make_user
 
@@ -68,8 +70,26 @@ def merchant(db: Session) -> Merchant:
         gov_id_document_path="gov-id/x.pdf",
     )
     db.add(merchant)
+    db.flush()
+    publish_shop_page(db, merchant)
     db.commit()
     return merchant
+
+
+def publish_shop_page(
+    db: Session, merchant: Merchant, *, title: str | None = None
+) -> ShopPage:
+    """A merchant is public to buyers only with a published shop page."""
+    title = title or merchant.merchant_name
+    page = ShopPage(
+        merchant_id=merchant.id,
+        title=title,
+        slug=f"shop-{merchant.id}",
+        published_at=datetime.now(UTC),
+    )
+    db.add(page)
+    db.flush()
+    return page
 
 
 def _buyer(

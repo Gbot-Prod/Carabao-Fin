@@ -21,6 +21,7 @@ from app.models.shipment import Shipment
 from app.models.shopPage import ShopPage  # noqa: F401 - registers the table
 from app.models.transaction import Transaction
 from app.models.user import User
+from tests.account_delete import delete_account
 from tests.better_auth import make_user
 
 
@@ -147,7 +148,7 @@ def test_account_delete_blocked_by_order_history(
         _transaction(db, order, txn_status)
     db.commit()
 
-    resp = _client(db, user).delete("/users/me")
+    resp = delete_account(_client(db, user))
 
     assert resp.status_code == 409
     assert resp.json()["detail"]["blockers"] == expected
@@ -162,7 +163,7 @@ def test_account_delete_blocked_for_merchant_with_sales(db, seller, buyer):
     db.add(Shipment(merchant_id=merchant.id))
     db.commit()
 
-    resp = _client(db, user).delete("/users/me")
+    resp = delete_account(_client(db, user))
 
     assert resp.status_code == 409
     assert resp.json()["detail"]["blockers"] == {
@@ -179,7 +180,7 @@ def test_account_delete_succeeds_with_unpaid_closed_orders(db, seller, buyer):
     _order(db, merchant, buyer, "cancelled")
     db.commit()
 
-    resp = _client(db, user).delete("/users/me")
+    resp = delete_account(_client(db, user))
 
     assert resp.status_code == 204
     db.expire_all()
@@ -212,7 +213,7 @@ def test_account_delete_succeeds_for_merchant_without_sales(db, seller):
     )
     db.commit()
 
-    resp = _client(db, user).delete("/users/me")
+    resp = delete_account(_client(db, user))
 
     assert resp.status_code == 204
     db.expire_all()
@@ -250,3 +251,79 @@ def test_history_remove_succeeds_for_unpaid_cancelled_order(db, seller, buyer):
     assert resp.status_code == 204
     db.expire_all()
     assert db.get(Order, order.id) is None
+
+
+# ── The SMS code that confirms the delete ────────────────────────────────
+
+
+def test_account_delete_needs_the_code(db, buyer):
+    user, _ = buyer
+    client = _client(db, user)
+
+    assert client.delete("/users/me").status_code == 422  # no code at all
+    client.post("/users/me/delete-code")
+    resp = client.request("DELETE", "/users/me", json={"code": "000000"})
+
+    assert resp.status_code == 400
+    db.expire_all()
+    assert db.get(User, user.id) is not None
+
+
+def test_account_delete_code_needs_a_verified_number(db):
+    user = make_user(db, "google@example.com", phone_number=None)
+    db.commit()
+
+    resp = _client(db, user).post("/users/me/delete-code")
+
+    assert resp.status_code == 400
+    assert "mobile number" in resp.json()["detail"]
+
+
+def test_account_delete_code_is_not_sent_when_blocked(db, seller, buyer):
+    from tests import payout_codes
+
+    _, merchant = seller
+    user, _ = buyer
+    _transaction(db, _order(db, merchant, buyer, "delivered"), "paid")
+    db.commit()
+
+    resp = _client(db, user).post("/users/me/delete-code")
+
+    assert resp.status_code == 409
+    assert payout_codes.SENT == []
+
+
+def test_account_delete_needs_the_password_first(db, buyer):
+    from tests import payout_codes
+    from tests.better_auth import add_password
+
+    user, _ = buyer
+    add_password(db, user, "Correct-horse-1!")
+    client = _client(db, user)
+
+    for body in (None, {"password": "Wrong-horse-1!"}):
+        resp = client.post("/users/me/delete-code", json=body)
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Your password is not correct."
+    assert payout_codes.SENT == []  # no SMS before the password is right
+
+    resp = delete_account(client, password="Correct-horse-1!")
+
+    assert resp.status_code == 204
+    db.expire_all()
+    assert db.get(User, user.id) is None
+
+
+def test_account_delete_password_tries_are_limited(db, buyer):
+    from tests.better_auth import add_password
+
+    user, _ = buyer
+    add_password(db, user, "Correct-horse-1!")
+    client = _client(db, user)
+
+    codes = [
+        client.post("/users/me/delete-code", json={"password": "nope"}).status_code
+        for _ in range(6)
+    ]
+
+    assert codes == [400] * 5 + [429]

@@ -60,8 +60,9 @@ def _jwks_urls(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _payout_sms(monkeypatch):
-    """CF-0004: payout-change codes and alerts are captured, not texted."""
-    from app.services import payout_otp
+    """CF-0004: payout-change codes and alerts are captured, not texted.
+    Account-deletion codes too."""
+    from app.services import account_deletion_otp, payout_otp
     from tests import payout_codes
 
     payout_codes.SENT.clear()
@@ -71,6 +72,9 @@ def _payout_sms(monkeypatch):
         os.environ.get("AUTH_SYNC_SHARED_SECRET") or "test-secret",
     )
     monkeypatch.setattr(payout_otp, "send_otp", payout_codes.fake_send_otp)
+    monkeypatch.setattr(
+        account_deletion_otp, "send_otp", payout_codes.fake_send_otp
+    )
     monkeypatch.setattr(payout_otp, "send_sms", payout_codes.fake_send_sms)
     monkeypatch.setattr(
         payout_otp,

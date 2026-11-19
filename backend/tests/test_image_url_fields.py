@@ -60,14 +60,10 @@ def listing(db: Session, merchant: Merchant) -> Produce:
 
 @pytest.fixture
 def shop_page(db: Session, merchant: Merchant) -> ShopPage:
-    page = ShopPage(
-        merchant_id=merchant.id,
-        title="Dela Cruz Farm",
-        slug="dela-cruz",
-        banner_image_url=STORED,
-        logo_url=None,
-    )
-    db.add(page)
+    # The merchant fixture already has a published page. Edits go to the draft.
+    page = merchant.shop_page
+    page.draft_banner_image_url = STORED
+    page.draft_logo_url = None
     db.commit()
     return page
 
@@ -137,8 +133,8 @@ def test_shop_page_banner_and_logo_cannot_be_set_by_patch(
     assert res.status_code == 400
     assert set(res.json()["errors"]) == {"banner_image_url", "logo_url"}
     db.refresh(shop_page)
-    assert shop_page.banner_image_url == STORED
-    assert shop_page.title == "Dela Cruz Farm"
+    assert shop_page.draft_banner_image_url == STORED
+    assert shop_page.draft_title == "Dela Cruz Farm"
 
 
 def test_shop_page_patch_can_keep_or_clear_images(
@@ -150,6 +146,8 @@ def test_shop_page_patch_can_keep_or_clear_images(
     )
     assert res.status_code == 200
     db.refresh(shop_page)
-    assert shop_page.banner_image_url == STORED
-    assert shop_page.logo_url is None
-    assert shop_page.title == "New"
+    assert shop_page.draft_banner_image_url == STORED
+    assert shop_page.draft_logo_url is None
+    assert shop_page.draft_title == "New"
+    # A PATCH changes only the draft. The live page changes on publish.
+    assert shop_page.title == "Dela Cruz Farm"

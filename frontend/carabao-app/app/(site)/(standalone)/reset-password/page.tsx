@@ -7,8 +7,7 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import "../auth/page.css";
 import { useSignInPath } from "@/hooks/useSignInPath";
-
-const MIN_LENGTH = 8;
+import { PASSWORD_MIN_LENGTH as MIN_LENGTH, isStrongPassword } from "@/lib/password-policy";
 
 /** Where BetterAuth's emailed link lands: ?token=... or ?error=INVALID_TOKEN (E6). */
 export default function ResetPasswordPage() {
@@ -35,7 +34,7 @@ export default function ResetPasswordPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!token) return;
-    if (password.length < MIN_LENGTH) return setError(t.reset.tooShort);
+    if (!isStrongPassword(password)) return setError(t.reset.weak);
     if (password !== confirm) return setError(t.reset.mismatch);
     setBusy(true);
     setError("");

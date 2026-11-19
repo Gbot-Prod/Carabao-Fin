@@ -191,7 +191,6 @@ Perf-only (`backend/scripts/perf`): `PERF_DATABASE_URL`, `PERF_CLIENT_CSV`, `PER
 | `BETTER_AUTH_RATE_LIMIT` | No | empty | on in production; `true` enables locally |
 | `MOCK_AUTH_SESSION` | No | `false` | never `true` on a host (fixed session without sign-in) |
 | `NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES` | No | | idle sign-out |
-| `NEXT_PUBLIC_FEATURE_LANGUAGE_TOGGLE` | No | | language switch |
 
 `NEXT_PUBLIC_*` values are baked in at build. Set before build; rebuild after a change.
 
@@ -453,6 +452,12 @@ other moves: 409
   - Images are 5 MB max, re-encoded with Pillow (strips EXIF/GPS), JPEG/PNG/WEBP only, and limited to 40 MP and 4096 px per side.
   - PDFs are 20 MB max. They need the magic bytes, must parse, and must not be encrypted or contain JS, launch actions or embedded files.
 - **Body limits:** 12 MB by default; 42 MB for `/merchant-onboarding/me` (2 documents). Oversize → 413, with CORS headers.
+- **Shop page draft and publish** (`shop_pages`):
+  - The merchant edits a draft (`draft_title`, `draft_description`, `draft_logo_url`, `draft_banner_image_url`). `PATCH /merchants/me/shoppage` and the logo and banner uploads change only the draft. Each upload gets a new R2 key, so the live image does not change.
+  - `POST /merchants/me/shoppage/publish` copies the draft to the live columns and sets `published_at`. A blank draft title → 422. `POST /merchants/me/shoppage/discard` copies the live columns back to the draft (400 if never published).
+  - A merchant is public only after the first publish: `merchant_is_public()` (`services/account_suspension.py`) requires a shop page with `published_at` set. Until then the farm is not in `/merchants`, search, follows or saved produce, and `/merchants/{id}` gives 404.
+  - Owner reads: `GET /merchants/me` and `GET /merchants/me/shoppage` (live plus draft, `is_published`, `has_unpublished_changes`). The merchant dashboard uses these, not the public routes.
+  - The slug is not part of the draft. A slug change applies at once.
 
 ### 7.5 Checkout and payment
 

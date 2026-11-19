@@ -1,4 +1,5 @@
 import os
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import requests as _requests
@@ -16,7 +17,7 @@ from app.models.merchant_payout import MerchantPayoutInfo, PayoutDestinationChan
 from app.models.order import Order
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.produce import Produce
-from app.models.shopPage import ShopPage
+from app.models.shopPage import DRAFT_FIELDS, ShopPage
 from app.models.statuses import (
     OPEN_PAYOUT_STATUSES,
     OrderStatus,
@@ -44,7 +45,12 @@ from app.schemas.payout import (
     TransactionSummary,
 )
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
-from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
+from app.schemas.shopPage import (
+    ShopPageCreate,
+    ShopPageOwnerResponse,
+    ShopPageResponse,
+    ShopPageUpdate,
+)
 from app.services import (
     notifications,
     paymongo,
@@ -269,6 +275,18 @@ def list_merchants(db: Session = Depends(get_db)):
         .order_by(Merchant.id.asc())
         .all()
     )
+
+
+@router.get("/merchants/me", response_model=MerchantResponse)
+def get_my_merchant(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The owner's own farm, also before the shop page is published."""
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    return merchant
 
 
 @router.get("/merchants/{merchant_id}", response_model=MerchantDetailResponse)
@@ -595,7 +613,38 @@ def delete_produce(
 
 # ---------------------------------------------------------------------------
 # ShopPage routes
+#
+# The merchant edits a draft (draft_* columns). Buyers see only the live
+# columns, and only after the first publish. POST .../publish copies the
+# draft to live; POST .../discard copies live back to the draft.
 # ---------------------------------------------------------------------------
+
+
+def _my_shop_page(db: Session, user: User) -> tuple[Merchant, ShopPage]:
+    merchant = get_active_merchant(db, user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    shop_page = merchant.shop_page
+    if not shop_page:
+        raise HTTPException(
+            status_code=404, detail="Shop page not found — create one first"
+        )
+    return merchant, shop_page
+
+
+def _save(db: Session, shop_page: ShopPage) -> ShopPage:
+    db.commit()
+    db.refresh(shop_page)
+    return shop_page
+
+
+@router.get("/merchants/me/shoppage", response_model=ShopPageOwnerResponse)
+def get_my_shoppage(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _, shop_page = _my_shop_page(db, current_user)
+    return shop_page
 
 
 @router.get("/merchants/{merchant_id}/shoppage", response_model=ShopPageResponse)
@@ -611,7 +660,7 @@ def get_merchant_shoppage(merchant_id: int, db: Session = Depends(get_db)):
     return shop_page
 
 
-@router.post("/merchants/me/shoppage", response_model=ShopPageResponse)
+@router.post("/merchants/me/shoppage", response_model=ShopPageOwnerResponse)
 def create_my_shoppage(
     shop_page_in: ShopPageCreate,
     db: Session = Depends(get_db),
@@ -632,28 +681,27 @@ def create_my_shoppage(
     if existing_slug:
         raise HTTPException(status_code=400, detail="Slug already taken")
 
-    shop_page = ShopPage(merchant_id=merchant.id, **shop_page_in.model_dump())
+    # A new page is a draft only. The live title column cannot be empty, but
+    # buyers see nothing until the first publish.
+    shop_page = ShopPage(
+        merchant_id=merchant.id,
+        slug=shop_page_in.slug,
+        title=shop_page_in.title,
+        draft_title=shop_page_in.title,
+        draft_description=shop_page_in.description,
+    )
     db.add(shop_page)
-    db.commit()
-    db.refresh(shop_page)
-    return shop_page
+    return _save(db, shop_page)
 
 
-@router.patch("/merchants/me/shoppage", response_model=ShopPageResponse)
+@router.patch("/merchants/me/shoppage", response_model=ShopPageOwnerResponse)
 def update_my_shoppage(
     shop_page_update: ShopPageUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
-    if not merchant:
-        raise HTTPException(status_code=404, detail="Merchant profile not found")
-
-    shop_page = merchant.shop_page
-    if not shop_page:
-        raise HTTPException(
-            status_code=404, detail="Shop page not found — create one first with POST"
-        )
+    """Change the draft. Buyers see the change only after publish."""
+    _, shop_page = _my_shop_page(db, current_user)
 
     updates = shop_page_update.model_dump(exclude_unset=True)
     if "slug" in updates:
@@ -665,82 +713,112 @@ def update_my_shoppage(
         if existing:
             raise HTTPException(status_code=400, detail="Slug already taken")
 
+    if "title" in updates and not (updates["title"] or "").strip():
+        raise HTTPException(status_code=422, detail="Title is required")
+
     upload_validation.check_image_url_fields(
         updates,
         {
-            "banner_image_url": shop_page.banner_image_url,
-            "logo_url": shop_page.logo_url,
+            "banner_image_url": shop_page.draft_banner_image_url,
+            "logo_url": shop_page.draft_logo_url,
         },
     )
     for field in ("banner_image_url", "logo_url"):
         if field in updates:
             updates[field] = upload_validation.blank_to_none(updates[field])
+
+    # The slug is not part of the draft. It only names the page.
+    if "slug" in updates:
+        shop_page.slug = updates.pop("slug")
     for field, value in updates.items():
-        setattr(shop_page, field, value)
+        setattr(shop_page, f"draft_{field}", value)
 
-    db.commit()
-    db.refresh(shop_page)
-    return shop_page
+    return _save(db, shop_page)
 
 
-@router.post("/merchants/me/shoppage/logo", response_model=ShopPageResponse)
+@router.post("/merchants/me/shoppage/publish", response_model=ShopPageOwnerResponse)
+def publish_my_shoppage(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Copy the draft to the live page. The first publish makes the shop public."""
+    _, shop_page = _my_shop_page(db, current_user)
+    if not (shop_page.draft_title or "").strip():
+        raise HTTPException(status_code=422, detail="Add a title before you publish")
+    for field in DRAFT_FIELDS:
+        setattr(shop_page, field, getattr(shop_page, f"draft_{field}"))
+    shop_page.published_at = datetime.now(UTC)
+    return _save(db, shop_page)
+
+
+@router.post("/merchants/me/shoppage/discard", response_model=ShopPageOwnerResponse)
+def discard_my_shoppage_draft(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Copy the live page back to the draft."""
+    _, shop_page = _my_shop_page(db, current_user)
+    if not shop_page.is_published:
+        raise HTTPException(
+            status_code=400, detail="The shop is not live yet. Nothing to go back to."
+        )
+    for field in DRAFT_FIELDS:
+        setattr(shop_page, f"draft_{field}", getattr(shop_page, field))
+    return _save(db, shop_page)
+
+
+def _upload_draft_image(
+    db: Session,
+    user: User,
+    file: UploadFile,
+    *,
+    label: str,
+    field: str,
+    send: Callable[[int, upload_validation.CheckedFile], str],
+) -> ShopPage:
+    merchant, shop_page = _my_shop_page(db, user)
+    checked = upload_validation.check_image_upload(file, label)
+    try:
+        url = send(merchant.id, checked)
+    except Exception as exc:
+        raise upstream_error(
+            502, "Image upload failed", log="R2 image upload failed", exc=exc
+        ) from exc
+    # Each upload gets a new R2 key, so the live image does not change.
+    setattr(shop_page, f"draft_{field}", url)
+    return _save(db, shop_page)
+
+
+@router.post("/merchants/me/shoppage/logo", response_model=ShopPageOwnerResponse)
 def upload_my_shoppage_logo(
     logo: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
-    if not merchant:
-        raise HTTPException(status_code=404, detail="Merchant profile not found")
-
-    shop_page = merchant.shop_page
-    if not shop_page:
-        raise HTTPException(
-            status_code=404, detail="Shop page not found — create one first"
-        )
-
-    checked = upload_validation.check_image_upload(logo, "Logo")
-    try:
-        url = r2_service.upload_shop_logo(merchant.id, checked)
-    except Exception as exc:
-        raise upstream_error(
-            502, "Image upload failed", log="R2 image upload failed", exc=exc
-        ) from exc
-
-    shop_page.logo_url = url
-    db.commit()
-    db.refresh(shop_page)
-    return shop_page
+    return _upload_draft_image(
+        db,
+        current_user,
+        logo,
+        label="Logo",
+        field="logo_url",
+        send=r2_service.upload_shop_logo,
+    )
 
 
-@router.post("/merchants/me/shoppage/banner", response_model=ShopPageResponse)
+@router.post("/merchants/me/shoppage/banner", response_model=ShopPageOwnerResponse)
 def upload_my_shoppage_banner(
     banner: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
-    if not merchant:
-        raise HTTPException(status_code=404, detail="Merchant profile not found")
-
-    shop_page = merchant.shop_page
-    if not shop_page:
-        raise HTTPException(
-            status_code=404, detail="Shop page not found — create one first"
-        )
-
-    checked = upload_validation.check_image_upload(banner, "Banner")
-    try:
-        url = r2_service.upload_banner(merchant.id, checked)
-    except Exception as exc:
-        raise upstream_error(
-            502, "Image upload failed", log="R2 image upload failed", exc=exc
-        ) from exc
-
-    shop_page.banner_image_url = url
-    db.commit()
-    db.refresh(shop_page)
-    return shop_page
+    return _upload_draft_image(
+        db,
+        current_user,
+        banner,
+        label="Banner",
+        field="banner_image_url",
+        send=r2_service.upload_banner,
+    )
 
 
 @router.post("/produce/{produce_id}/image", response_model=ProduceResponse)

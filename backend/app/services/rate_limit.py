@@ -43,6 +43,8 @@ LIMITS: dict[str, tuple[Limit, Limit]] = {
     # Merchant contact-email codes; the identifier is the email.
     "email_otp_send": (Limit(20, 900), Limit(5, 900)),
     "email_otp_verify": (Limit(30, 900), Limit(10, 900)),
+    # The password typed before an account-deletion code; the identifier is the user id.
+    "password_check": (Limit(20, 900), Limit(5, 900)),
 }
 
 # scope -> per identifier, for server-to-server calls where the client IP is
