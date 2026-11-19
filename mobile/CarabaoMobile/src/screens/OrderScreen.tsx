@@ -13,6 +13,7 @@ import { api, merchantLocation, type ApiMerchant, type ApiProduceSearchResult } 
 import { type Farm } from '../lib/mockData';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { SkeletonList, LoadError } from '../components/Skeleton';
+import { SaveHeart } from '../components/SaveHeart';
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
 
 function merchantToFarm(m: ApiMerchant): Farm {
@@ -235,6 +236,7 @@ function OrderScreenContent() {
                       </Text>
                     </View>
                     <Text style={styles.hitPrice}>₱{p.price.toLocaleString()}/{p.unit}</Text>
+                    <SaveHeart produceId={p.id} name={p.name ?? 'produce'} size={20} />
                   </TouchableOpacity>
                 ))}
                 <Text style={styles.hitsTitle}>Farms</Text>

@@ -353,6 +353,9 @@ export type ApiProduceSearchResult = ApiProduce & {
 
 export type ApiPage<T> = { items: T[]; total: number; page: number; page_size: number };
 
+// Saved produce (CF-0038 backend, CF-0104 mobile): backend SavedProduceResponse.
+export type ApiSavedProduce = ApiProduceSearchResult & { saved_at: string };
+
 // The notification centre (U5).
 export type ApiNotification = {
   id: number;
@@ -469,6 +472,14 @@ export const api = {
   tracking: {
     forOrder: (token: string | null, orderId: number) =>
       request<ApiTracking>(`/tracking/${orderId}`, token),
+  },
+  saved: {
+    ids: (token: string | null) => request<number[]>('/users/me/saved-produce/ids', token),
+    list: (token: string | null) => request<ApiSavedProduce[]>('/users/me/saved-produce', token),
+    save: (token: string | null, produceId: number) =>
+      request<null>(`/produce/${produceId}/save`, token, { method: 'PUT' }),
+    unsave: (token: string | null, produceId: number) =>
+      request<null>(`/produce/${produceId}/save`, token, { method: 'DELETE' }),
   },
   search: {
     produce: (token: string | null, q: string, pageSize = 10) =>

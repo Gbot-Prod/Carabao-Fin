@@ -172,6 +172,7 @@ function ProfileScreenContent() {
             <SettingItem icon="location-outline" label="Address" value={address || 'Not set'} onPress={() => { }} />
             <SettingItem icon="card-outline" label="Payment Methods" value="No cards saved" onPress={() => { }} />
             <SettingItem icon="receipt-outline" label="Order History" onPress={() => router.push('/(tabs)/history')} />
+            <SettingItem icon="heart-outline" label="Saved produce" onPress={() => router.push('/saved')} />
             <SettingItem
               icon="chatbubbles-outline"
               label="Contact support"

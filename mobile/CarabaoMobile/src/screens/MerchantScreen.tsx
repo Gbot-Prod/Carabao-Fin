@@ -11,6 +11,7 @@ import { useAuth } from '../lib/AuthContext';
 import { api, merchantLocation, type ApiMerchant, type ApiProduce } from '../lib/api';
 import { matchReferencePrice, referenceLabel, type ApiReferencePrice } from '../lib/referencePrices';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
+import { SaveHeart } from '../components/SaveHeart';
 
 const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600';
 
@@ -280,6 +281,7 @@ function MerchantScreenContent() {
                       })()}
                       <View style={styles.productFooter}>
                         <Text style={styles.productPrice}>₱{product.price.toLocaleString()}</Text>
+                        <SaveHeart produceId={product.id} name={product.name ?? 'produce'} />
                         <TouchableOpacity
                           style={[styles.addBtn, isAdded && styles.addBtnAdded]}
                           onPress={() => handleAdd(product)}
@@ -397,8 +399,8 @@ const styles = StyleSheet.create({
   productName: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   productDesc: { fontSize: FontSize.xs, color: Colors.textMuted, lineHeight: 16 },
   productFreshness: { fontSize: FontSize.xs, color: Colors.textMuted },
-  productFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  productPrice: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.primary },
+  productFooter: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, marginTop: 4 },
+  productPrice: { flex: 1, fontSize: FontSize.lg, fontWeight: '800', color: Colors.primary },
   productReference: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
   addBtn: { backgroundColor: Colors.white, borderWidth: 1.5, borderColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 6, borderRadius: Radius.md },
   addBtnAdded: { backgroundColor: Colors.primary, borderColor: Colors.primary },
