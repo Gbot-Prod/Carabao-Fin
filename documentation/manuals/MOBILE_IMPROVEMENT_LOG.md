@@ -1,10 +1,19 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 31    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
+branch: improve/mobile-loop    push: final-only    iteration: 31    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
 takes IDs from **CF-0101 upward** (last used: CF-0127) to avoid collisions.
+
+## Session rules (2026-11-20, the user is away)
+- Run until **15:00 (Asia/Manila) on 2026-11-20**. The PC force-shuts down at 15:00. One iteration every 15 min.
+- The iteration that starts at or after **14:30** is the **final** one. After its commit, the session runs the full checks and pushes **only** `improve/mobile-loop` to `origin` (no force). No iteration starts after it. Do not push in any other iteration.
+- The user is not available. Do not wait on "Needs human". If a decision is safe and easy to undo, make it, and record it with the reason under "Decisions made by the loop" below. **Never:** production DB / Railway / `.env*` changes, major dependency upgrades, destructive migrations, pushing or committing to `main`. Device-only checks: build to a typecheck-passing slice and note "not run on a device". Leave the rest in "Needs human" and pick other work.
+- Decided by the user on 2026-11-20: B56 keep the full `owner_name` on the public farm page (no change). B05 no platform-wide vouchers (farm vouchers only). Better Auth dry-run run on local Docker (see Needs human).
+
+## Decisions made by the loop
+(none yet)
 
 ## In progress
 (none)
@@ -13,7 +22,7 @@ takes IDs from **CF-0101 upward** (last used: CF-0127) to avoid collisions.
 PARITY 16/#31 · STRENGTHEN 6/#27 · SECURITY 5/#30 · AUDIT 4/#24
 
 ## Needs human
-- **Merge the web loop.** `improve/loop` (web iteration #53 at mobile #24) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
+- **Web loop merged (2026-11-20).** The user merged `improve/loop` and this branch into `main` (3bb875b); this branch restarted from that commit. Vouchers, receipt, recently viewed farms, review replies, cart `issue`, holiday mode, data export and hide-from-history are now on this branch's backend: M35 is no longer blocked. Refresh the parity matrix row "web loop only".
 - Web log B47 (mobile better-auth 1.6 → 1.7) is already done: mobile and web both use `better-auth` ^1.7.26. Web B54 / B63 / B70 / B77 are in this backlog as M07 + M08 (done), M35 + M36, M35, M35. Mark them moved when the logs are merged.
 - `npm audit --omit=dev`: 3 moderate (minimatch ReDoS via `@expo/fingerprint` ← `expo`). The only
   "fix" npm offers is a downgrade to expo@52 (breaking). Wait for an Expo 58 patch that bumps
