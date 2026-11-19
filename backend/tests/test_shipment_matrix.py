@@ -1,6 +1,7 @@
 """Tests for the shipment road-matrix fetch and the shipment size cap."""
 
 import pytest
+import requests
 from pydantic import ValidationError
 
 from app.api.routes import shipments
@@ -29,7 +30,7 @@ def _fetch(monkeypatch, response=None, exc=None, token="pk.test"):
         return response
 
     monkeypatch.setenv("MAPBOX_ACCESS_TOKEN", token)
-    monkeypatch.setattr(shipments._requests, "get", fake_get)
+    monkeypatch.setattr(requests, "get", fake_get)  # mapbox_routing uses it
     return shipments._get_duration_matrix(COORDS), calls
 
 
@@ -51,7 +52,7 @@ def test_http_error_returns_none(monkeypatch):
 
 
 def test_network_failure_returns_none(monkeypatch):
-    result, _ = _fetch(monkeypatch, exc=shipments._requests.exceptions.ConnectTimeout())
+    result, _ = _fetch(monkeypatch, exc=requests.exceptions.ConnectTimeout())
     assert result is None
 
 

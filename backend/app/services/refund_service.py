@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy.orm import Session
 
@@ -39,8 +40,9 @@ class RefundError(Exception):
 
 def order_ref(txn: Transaction) -> str:
     order = txn.order
-    year = order.ordered_at.year if order is not None and order.ordered_at else "XXXX"
-    return f"CB-{year}-{txn.order_id:04d}"
+    return notifications.format_order_ref(
+        cast(int, txn.order_id), order.ordered_at if order is not None else None
+    )
 
 
 def record_refund(

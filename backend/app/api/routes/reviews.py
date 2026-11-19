@@ -7,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from app.schemas.pagination import MAX_OFFSET
 from app.api.dependencies import get_current_user, get_db
 from app.models.merchant import Merchant
 from app.models.order import Order
@@ -155,7 +156,7 @@ def list_my_merchant_reviews(
     ),
     has_comment: bool | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=MAX_OFFSET),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> MyMerchantReviewsResponse:
@@ -214,7 +215,7 @@ def list_my_merchant_reviews(
 def list_merchant_reviews(
     merchant_id: int,
     limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=MAX_OFFSET),
     db: Session = Depends(get_db),
 ) -> MerchantReviewsResponse:
     """Public, newest-first list of a merchant's reviews with the summary."""

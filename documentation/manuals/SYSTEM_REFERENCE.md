@@ -528,6 +528,7 @@ Startup runs `_check_field_encryption_keys`:
 - On an unhandled exception, the server logs `[request_id=...]` with the traceback. The client gets 500 `"Internal server error (ref ...)"` plus `request_id`.
 - The request-ID middleware sits inside CORS, so 500 and 413 responses keep their CORS headers.
 - Admin actions go to the audit log (`services/audit_log.py`).
+- Mapbox calls (`utils/geocoding.py`, `services/mapbox_routing.py`) log only the HTTP status or the exception type (CF-0059). They never log the address, the coordinates or the exception text: the text of a `requests` error can contain the URL with `access_token`, and addresses are buyers' home addresses. `app/` has no `print()` left. Use a module logger.
 
 ### 7.10 OTP storage (API-owned codes)
 

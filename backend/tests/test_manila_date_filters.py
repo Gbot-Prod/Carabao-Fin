@@ -73,8 +73,9 @@ def test_directions_failure_is_logged_without_token(
         token = params["access_token"]
         raise requests.ConnectionError(f"failed {url}?access_token={token}")
 
-    monkeypatch.setattr(requests, "get", boom)  # merchants imports it as _requests
-    with caplog.at_level(logging.WARNING, logger=merchants.__name__):
+    monkeypatch.setattr(requests, "get", boom)  # mapbox_routing imports it as _requests
+    # CF-0059: the helper moved to services/mapbox_routing; merchants uses it.
+    with caplog.at_level(logging.WARNING, logger="app.services.mapbox_routing"):
         assert merchants._get_leg_durations([(14.6, 121.0), (14.7, 121.1)]) is None
-    assert "shipment directions failed" in caplog.text
+    assert "mapbox directions failed" in caplog.text
     assert "secret-token" not in caplog.text

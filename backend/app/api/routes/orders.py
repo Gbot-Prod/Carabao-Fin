@@ -266,11 +266,10 @@ def place_order_from_cart(
     placed = []
     for order, merchant in orders:
         db.refresh(order)
-        ordered_year = order.ordered_at.year if order.ordered_at else 0
         placed.append(
             PlacedOrder(
                 order_id=order.id,
-                order_reference=f"CB-{ordered_year}-{order.id:04d}",
+                order_reference=notifications.order_ref(order),
                 status=order.status,
                 merchant_id=merchant.id,
                 merchant_name=merchant.merchant_name,

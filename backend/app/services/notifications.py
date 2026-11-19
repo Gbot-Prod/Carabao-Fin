@@ -11,6 +11,8 @@ shows.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy.orm import Session, object_session
 from sqlalchemy.orm.exc import UnmappedInstanceError
 
@@ -70,10 +72,19 @@ def notify(
     )
 
 
-def order_ref(order) -> str:
-    ordered_at = getattr(order, "ordered_at", None)
+def format_order_ref(order_id: int | None, ordered_at: datetime | None) -> str:
+    """The buyer-facing order number, e.g. ``CB-2026-0042`` (CF-0059).
+
+    The one place this format is built; the order history search parses it.
+    """
     year = ordered_at.year if ordered_at else "XXXX"
-    return f"CB-{year}-{getattr(order, 'id', None) or 0:04d}"
+    return f"CB-{year}-{order_id or 0:04d}"
+
+
+def order_ref(order) -> str:
+    return format_order_ref(
+        getattr(order, "id", None), getattr(order, "ordered_at", None)
+    )
 
 
 def buyer_id(order) -> int | None:

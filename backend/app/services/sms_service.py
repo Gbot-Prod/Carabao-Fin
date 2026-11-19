@@ -53,8 +53,7 @@ def notify_merchant_new_order(*, order: Order) -> None:
     if owner is not None and not notifications.wants(owner, "sms"):
         return
 
-    year = order.ordered_at.year if order.ordered_at else "XXXX"
-    order_ref = f"CB-{year}-{order.id:04d}"
+    order_ref = notifications.order_ref(order)
     item_count = sum(
         int(item.get("quantity") or 0)
         for item in order.items or []

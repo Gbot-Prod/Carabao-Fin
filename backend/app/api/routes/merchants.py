@@ -1,9 +1,7 @@
 import logging
-import os
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
-import requests as _requests
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, or_
@@ -49,6 +47,7 @@ from app.schemas.payout import (
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
 from app.schemas.shopPage import ShopPageCreate, ShopPageResponse, ShopPageUpdate
 from app.services import (
+    mapbox_routing,
     notifications,
     paymongo,
     payout_otp,
@@ -98,34 +97,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["merchants"])
 
 
+# CF-0059: one copy of the Mapbox call, in services/mapbox_routing.
+_get_leg_durations = mapbox_routing.leg_durations
+
+
 class MerchantOrderStatusUpdate(BaseModel):
     status: OrderStatus
-
-
-def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
-    """Calls Mapbox Directions and returns cumulative driving duration (seconds) from coords[0] to each subsequent coord."""
-    token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
-    if not token or len(coords) < 2:
-        return None
-    coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
-    url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{coord_str}"
-    try:
-        resp = _requests.get(
-            url, params={"access_token": token, "overview": "false"}, timeout=10
-        )
-        if not resp.ok:
-            logger.warning("shipment directions: Mapbox error %s", resp.status_code)
-            return None
-        legs = resp.json().get("routes", [{}])[0].get("legs", [])
-        cumulative, total = [], 0.0
-        for leg in legs:
-            total += leg.get("duration", 0.0)
-            cumulative.append(total)
-        return cumulative
-    except Exception as exc:
-        # Type only: the exception text can hold the request URL with the token.
-        logger.warning("shipment directions failed: %s", type(exc).__name__)
-        return None
 
 
 def _compute_and_store_route(db: Session, order: Order) -> None:
@@ -1156,7 +1133,7 @@ def update_my_merchant_order_status(
         # U5: only when the buyer accepts SMS updates.
         phone_number=user.phone_number if user and notifications.wants(user, "sms") else None,
         merchant_name=merchant.merchant_name or "Merchant",
-        order_ref=f"CB-{order.ordered_at.year if order.ordered_at else 'XXXX'}-{order.id:04d}",
+        order_ref=notifications.order_ref(order),
         status=status,
     )
 

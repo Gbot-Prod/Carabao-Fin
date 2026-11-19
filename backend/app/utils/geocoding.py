@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import time
 from urllib.parse import quote
@@ -14,6 +15,11 @@ _METRO_MANILA_PROXIMITY = "120.9842,14.5995"
 _GEOCODE_ATTEMPTS = 3
 _GEOCODE_TIMEOUT_SECONDS = 10
 _geocode_cache: dict[str, tuple[float, float]] = {}
+
+# CF-0059: logs never hold the address, the coordinates or an exception text.
+# Addresses are buyers' home addresses (PII), and a requests exception text
+# can contain the request URL with the access_token.
+logger = logging.getLogger(__name__)
 
 
 def _normalise_address(address: str) -> str:
@@ -49,53 +55,43 @@ def _geocode_sync(address: str) -> tuple[float, float] | None:
             break
         except (_requests.exceptions.Timeout, _requests.exceptions.ConnectionError) as exc:
             if attempt == _GEOCODE_ATTEMPTS:
-                print(
-                    f"[geocode] Mapbox unavailable after {_GEOCODE_ATTEMPTS} attempts "
-                    f"for {normalised!r}: {exc}"
+                logger.warning(
+                    "geocode: Mapbox unavailable after %s attempts (%s)",
+                    _GEOCODE_ATTEMPTS,
+                    type(exc).__name__,
                 )
                 return None
             time.sleep(0.5 * attempt)
-            print(f"[geocode] Retrying Mapbox request ({attempt + 1}/{_GEOCODE_ATTEMPTS})")
+            logger.info("geocode: retry %s/%s", attempt + 1, _GEOCODE_ATTEMPTS)
     try:
         if not resp.ok:
-            print(
-                f"[geocode] Mapbox error {resp.status_code} for address: {normalised!r}"
-            )
+            logger.warning("geocode: Mapbox HTTP %s", resp.status_code)
             return None
 
         body = resp.json()
         features = body.get("features", [])
         if not features:
-            print(f"[geocode] No results for address: {normalised!r}")
+            logger.info("geocode: no result")
             return None
 
         feature = features[0]
         relevance = feature.get("relevance", 1.0)
         if relevance < 0.4:
-            print(
-                f"[geocode] Low-confidence result (relevance={relevance:.2f}) for: {
-                    normalised!r
-                } → {feature.get('place_name')}"
-            )
+            logger.info("geocode: low-confidence result (relevance=%.2f)", relevance)
 
         lng, lat = feature["center"]
         if not in_luzon_bbox(lat, lng):
-            print(f"[geocode] Result outside Luzon for {normalised!r}: ({lat}, {lng})")
+            logger.info("geocode: result outside Luzon")
             return None
-        print(
-            f"[geocode] {normalised!r} → ({lat:.5f}, {lng:.5f})  place={
-                feature.get('place_name')!r
-            }  relevance={relevance:.2f}"
-        )
         return (lat, lng)
     except _requests.exceptions.RequestException as exc:
-        print(f"[geocode] Mapbox request failed for {normalised!r}: {exc}")
+        logger.warning("geocode: Mapbox request failed (%s)", type(exc).__name__)
         return None
     except (KeyError, TypeError, ValueError) as exc:
-        print(f"[geocode] Invalid Mapbox response for {normalised!r}: {exc}")
+        logger.warning("geocode: invalid Mapbox response (%s)", type(exc).__name__)
         return None
     except Exception as exc:
-        print(f"[geocode] Exception for address {normalised!r}: {exc}")
+        logger.warning("geocode failed (%s)", type(exc).__name__)
         return None
 
 

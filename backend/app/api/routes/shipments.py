@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
-import requests as _requests
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -26,12 +24,17 @@ from app.schemas.shipment import (
     TrackingPosition,
     Waypoint,
 )
+from app.services import mapbox_routing
 from app.services.merchant_service import get_active_merchant
 from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
 from app.services.pinned_location import delivery_point, merchant_point
 from app.utils.geocoding import _geocode
 
 router = APIRouter(tags=["shipments"])
+
+# CF-0059: one copy of the Mapbox calls, in services/mapbox_routing.
+_get_leg_durations = mapbox_routing.leg_durations
+_get_duration_matrix = mapbox_routing.duration_matrix
 
 GEOCODE_WORKERS = 8
 
@@ -45,65 +48,6 @@ def _resolve_delivery_address(
     if order.delivery_address:
         return order.delivery_address
     return saved_address.short_line if saved_address is not None else None
-
-
-def _get_leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
-    """Calls Mapbox Directions and returns cumulative driving duration (seconds) from coords[0] to each subsequent coord."""
-    token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
-    if not token or len(coords) < 2:
-        return None
-    coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
-    url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{coord_str}"
-    try:
-        resp = _requests.get(
-            url, params={"access_token": token, "overview": "false"}, timeout=10
-        )
-        if not resp.ok:
-            print(f"[shipment-directions] Mapbox error {resp.status_code}")
-            return None
-        legs = resp.json().get("routes", [{}])[0].get("legs", [])
-        cumulative, total = [], 0.0
-        for leg in legs:
-            total += leg.get("duration", 0.0)
-            cumulative.append(total)
-        return cumulative
-    except Exception as exc:
-        print(f"[shipment-directions] Exception: {exc}")
-        return None
-
-
-def _get_duration_matrix(
-    coords: list[tuple[float, float]],
-) -> list[list[float | None]] | None:
-    """
-    Calls the Mapbox Matrix API and returns the all-pairs driving duration
-    matrix (seconds), coords[0] first. A None entry means Mapbox found no road
-    route for that pair. Returns None if the request itself fails.
-    """
-    token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
-    if not token:
-        print("[shipment-matrix] MAPBOX_ACCESS_TOKEN is not set")
-        return None
-    coord_str = ";".join(f"{lng},{lat}" for lat, lng in coords)
-    url = f"https://api.mapbox.com/directions-matrix/v1/mapbox/driving/{coord_str}"
-    try:
-        resp = _requests.get(
-            url,
-            params={"access_token": token, "annotations": "duration"},
-            timeout=10,
-        )
-        if not resp.ok:
-            print(f"[shipment-matrix] Mapbox error {resp.status_code}")
-            return None
-        body = resp.json()
-        durations = body.get("durations")
-        if body.get("code") != "Ok" or not durations or len(durations) != len(coords):
-            print(f"[shipment-matrix] Invalid Mapbox response: {body.get('code')}")
-            return None
-        return durations
-    except Exception as exc:
-        print(f"[shipment-matrix] Exception: {exc}")
-        return None
 
 
 def _shipment_response(

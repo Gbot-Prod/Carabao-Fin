@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
+from app.schemas.pagination import MAX_OFFSET
 from app.api.dependencies import get_current_user, get_db
 from app.models.notification import Notification
 from app.models.user import User
@@ -46,7 +47,7 @@ def _view(n: Notification) -> NotificationItem:
 @router.get("/users/me/notifications", response_model=NotificationList)
 def my_notifications(
     limit: int = Query(30, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     unread_only: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
