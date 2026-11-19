@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 10    target: 20
+branch: improve/mobile-loop    push: no    iteration: 11    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0108) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0109) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 3/#6 · STRENGTHEN 3/#9 · SECURITY 2/#10 · AUDIT 2/#8
+PARITY 4/#11 · STRENGTHEN 3/#9 · SECURITY 2/#10 · AUDIT 2/#8
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #37) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -30,7 +30,7 @@ PARITY 3/#6 · STRENGTHEN 3/#9 · SECURITY 2/#10 · AUDIT 2/#8
 | `farms/[merchantID]` farm detail | `merchant` → `MerchantScreen` | partial | `/merchants/:id`, `/merchants/:id/produce` ✓; `/merchants/:id/reviews`, `/merchants/:id/shoppage` not called | no reviews list, no published shop page (banner/logo/about) |
 | `order` produce search | `OrderScreen` search | partial | `/produce/search` ✓ (only `q`, `in_stock`, `page_size`) | no category/price filters, no sort, no paging |
 | `saved` saved produce | `saved` → `SavedScreen` + `SaveHeart` | done | `/users/me/saved-produce`, `/users/me/saved-produce/ids`, `PUT/DELETE /produce/:id/save` ✓ (since #5) | hearts on farm produce rows and search hits; entry in Profile |
-| `cart` | `(tabs)/cart` → `CartScreen` | partial | `/carts/me` only written at checkout | memory only (lost on restart, not merged on sign-in), totals computed on the phone, no CF-0042 price/stock warnings (M33); owned by the user ID and wiped on sign-out since #10 |
+| `cart` | `(tabs)/cart` → `CartScreen` | done | `GET/PUT /carts/me` ✓ (since #11) | server cart: survives restart, same as web; `unavailable_reason` (CF-0052) per line blocks checkout; fees and prices from the server lines; owned by user ID, wiped on sign-out (#10). Loop-branch CF-0042 `issue` / `previous_price` after the web merge (M35) |
 | `checkout` | `checkout` → `CheckoutScreen` | partial | `/orders/me/place`, `/payments/checkout/:id` ✓; `/users/me/addresses`, `/payments/checkout/:id/cancel` not called | no address book / default address, no cancel of pending payment |
 | `confirmation`, `orders/success` | `confirmation` → `ConfirmationScreen` | done | `/payments/transactions/order/:id` | checks status with server |
 | `orders` history | `(tabs)/history` → `HistoryScreen` | done | `/orders/me/history/page` ✓ (since #3) | status filter, search, infinite scroll; unpaged route now unused by mobile (M30) |
@@ -56,7 +56,7 @@ PARITY 3/#6 · STRENGTHEN 3/#9 · SECURITY 2/#10 · AUDIT 2/#8
 | merchant `shop` page | — | missing | `/merchants/me/shoppage` (+ banner, logo, publish, discard) exist | |
 | merchant `settings` | — | missing | `/merchants/me` exists | |
 
-Parity score: 8 / 26 done (9 partial, 9 missing; 3 rows n/a; 1 row blocked). #8: cart moved done → partial (memory-only cart, phone totals).
+Parity score: 9 / 26 done (8 partial, 9 missing; 3 rows n/a; 1 row blocked) since #11. #8: cart moved done → partial (memory-only cart, phone totals).
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
@@ -64,7 +64,6 @@ Parity score: 8 / 26 done (9 partial, 9 missing; 3 rows n/a; 1 row blocked). #8:
 | M12 | SECURITY | S | 3 | 1 | payments | — | Allow-list hosts before `WebBrowser.openBrowserAsync(checkout.checkout_url)` (PayMongo checkout host only; `CheckoutScreen:84`, `ConfirmationScreen:40,142`) — test: pure host check refuses off-list URLs. |
 | M34 | STRENGTHEN | S | 2 | 1 | types | — | **New (#8).** `ApiMerchant` types `address`, `barangay` as present and `contact_number` as `string`; after the web loop merge the public farm routes leave the first two out (CF-0048) and `contact_number` is nullable. No screen reads them, so only the types are wrong. Make them match `PublicMerchantResponse` — test: tsc passes; farm screen hides the contact row when null. |
 | M29 | SECURITY | M | 4 | 2 | auth | — | `ProtectedScreen` accepts `requiredRole` but never checks it (its doc comment says it does). Nothing passes it today, so merchant screens rely on the server 404 → "not a merchant" state. Implement the role check from the server profile, use it on merchant routes, test the pure decision — test: a buyer who opens `/listings` sees the not-allowed state with no merchant API call. |
-| M33 | PARITY | M | 4 | 2 | cart | parity | **New (#8, was web B34 part / B14).** Mobile cart is memory only: lost on app restart, not merged with the server cart (`/carts/me`) on sign-in, and the cart / checkout totals are computed on the phone with a guessed ₱40 fee (`DEFAULT_DELIVERY_FEE`). Load the server cart on sign-in, write changes back, show the CF-0042 `issue` / `previous_price` per line and block checkout while any line has one; show the server's totals — test: add item, restart app, item still there; price change shows a warning. |
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 7 rows that do nothing on tap (`onPress={() => {}}`: Address, Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target or remove it — test: every Profile row opens something or is gone. |
 | M07 | PARITY | M | 3 | 2 | discovery | parity | Farm detail: reviews list (`/merchants/:id/reviews`, with merchant replies) + published shop page (banner, logo, about) (web B54/B63 part) — test: farm with reviews shows them with stars and replies. |
 | M18 | PARITY | M | 3 | 2 | merchant | parity | Merchant reviews + reply (`/merchants/me/reviews`) — test: reply shows under the review on farm detail. |
@@ -76,7 +75,7 @@ Parity score: 8 / 26 done (9 partial, 9 missing; 3 rows n/a; 1 row blocked). #8:
 | M15 | PARITY | M | 3 | 3 | merchant | parity | Merchant dashboard (performance + demand + stock alert counts) — test: totals match the web dashboard. |
 | M39 | PARITY | S | 2 | 1 | merchant | parity | **New (#9).** Listing form has no `min_order_qty` and no `price_tiers` (bulk prices, max 5) although the backend and web support both — test: set min order 5 → buyer cannot add 4. Batch with M17. |
 | M17 | PARITY | M | 3 | 3 | merchant | parity | Listing photo upload via `/produce/:id/image` (expo-image-picker — check Expo Go support first) — test: new listing shows the uploaded photo. |
-| M35 | PARITY | M | 3 | 3 | checkout | after-web-merge | **New (#8). Blocked until `improve/loop` is merged.** Web-loop features with backend routes only on that branch: voucher code at checkout + discount on order/receipt (CF-0058/0061, web B70), order receipt (`GET /orders/me/{id}/receipt`, CF-0049, web B63), recently viewed farms (CF-0052). — test: place-order sends `voucher_code`; receipt opens from order detail. |
+| M35 | PARITY | M | 3 | 3 | checkout | after-web-merge | **New (#8). Blocked until `improve/loop` is merged.** Web-loop features with backend routes only on that branch: cart line `issue` / `previous_price` (CF-0042, show in `CartScreen` next to `unavailable_reason`), voucher code at checkout + discount on order/receipt (CF-0058/0061, web B70), order receipt (`GET /orders/me/{id}/receipt`, CF-0049, web B63), recently viewed farms (CF-0052). — test: place-order sends `voucher_code`; receipt opens from order detail. |
 | M36 | STRENGTHEN | S | 2 | 1 | checkout | — | **New (#8, web B63 part).** Check that checkout shows the backend's 409 (stock / limits, CF-0045) and 429 messages, not a generic error; batch with M25 — test: place an order above stock → the server's message shows. |
 | M16 | PARITY | L | 4 | 4 | merchant | merchant-shipments | Merchant shipments list + shipment route view (`/merchants/me/shipments`, `/shipments/:id`) — slice 1: list; slice 2: map / stop order. |
 | M19 | PARITY | L | 3 | 4 | merchant | merchant-earnings | Earnings and cash-out (payout info, available balance, request) honoring the payout destination lock — one slice per screen. |
@@ -92,6 +91,8 @@ Parity score: 8 / 26 done (9 partial, 9 missing; 3 rows n/a; 1 row blocked). #8:
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #11 — PARITY — cart — CF-0109 — M
+What: the mobile cart is the server cart (M33, web cart page). `CartContext` loads `GET /carts/me` once per sign-in (keyed by user ID, not token), each change shows at once and then sends the whole list with `PUT /carts/me` (produce_id + quantity only); only the newest answer is applied (sequence number) and it replaces the lines, so prices, delivery fees and `unavailable_reason` come from the server. A refused change (e.g. "'Kale' is no longer available", 50-line limit) shows the server message and reloads the server cart. `CartScreen`: skeleton while loading, pull to refresh, red reason per line, a banner, and the checkout button stays off while any line has a reason. `CheckoutScreen`: refuses with the reasons too; after placing it reloads the cart instead of emptying it — the server keeps lines until their order is paid (`release_superseded_orders`), so a failed payment no longer loses the cart. "Buy again" no longer copies lines by hand (the reorder route writes the server cart; the old code could add them twice) — it reloads. Pure `src/lib/cartSync.ts`: `fromServerLine`, `toServerItems` (one line per produce, bounds = backend `MAX_CART_ITEMS` 50 / `MAX_ITEM_QUANTITY` 10 000, a test reads `schemas/cart.py`), `checkoutBlockers`, `blockerText`. Note: on `main` the reason field is `unavailable_reason`; the loop branch adds `issue` / `previous_price` (moved to M35). Why: parity on the buyer "cart" step; cart was memory only. Tests: `cartSync.test.ts` 4. Manual check: add 2 items → close and reopen the app → still there; same account on the website shows the same cart; hide a listing as admin → cart line says "This item is no longer available", button off; History → Buy again → cart shows the items once; place an order, close the payment page → cart still holds the lines. Checks: npm test 60/60, lint 0/0, tsc pass. Not run on a device.
 ### #10 — SECURITY — auth — CF-0108 — M
 What: fixed M38: the in-memory cart survived every sign-out path (button, idle sign-out, refused session in `loadUser`) and account switches, so on a shared phone the next account saw — and could check out — the previous account's cart. New pure `src/lib/ownedState.ts` (`valueFor`, `mustWipe`, `updateFor`): per-account state is stored with the user ID that owns it; another owner (or none) sees empty, and the provider wipes it during render when the owner changes (React's "adjust state on prop change", no effect). `CartContext` uses it (signed out → no cart can be held). `SavedContext` now uses it too, keyed by user ID instead of the token: the token is refreshed every 60 s (`AuthContext:194`), which emptied the hearts until the next fetch; ids now load once per sign-in. Removed `idsFor` (replaced). Checked: AsyncStorage holds only `LEFT_AT_KEY`, removed by `clearLocal` (M11 narrowed). Security review of the diff (inline, small diff): no findings. Why: privacy on shared phones (MASVS storage: clear user data on sign-out). Tests: `ownedState.test.ts` 4 incl. the shared-phone story; savedProduce test moved there. Manual check: sign in as A → add 2 items → sign out → sign in as B → cart empty, badge 0, hearts empty; sign back in as A → empty too (wiped, not hidden); leave the app past the idle limit → come back → signed out and cart empty; stay signed in 2+ minutes → hearts stay filled. Checks: npm test 56/56, lint 0/0, tsc pass. Not run on a device.
 ### #9 — STRENGTHEN — merchant — CF-0107 — M
@@ -114,7 +115,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #8)
-- Mobile tests: 56 in 14 files since #10 (`npm test` runs every `src/lib/**/*.test.ts`).
+- Mobile tests: 60 in 15 files since #11 (`npm test` runs every `src/lib/**/*.test.ts`).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #6 `expo export --platform android` OK (next: #10 or #12).

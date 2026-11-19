@@ -21,35 +21,17 @@ import {
 function HistoryCard({ order }: { order: ApiHistoryOrder }) {
   const [expanded, setExpanded] = useState(false);
   const { token } = useAuth();
-  const { items: cartItems, addItem, updateQuantity } = useCart();
+  const { reload: reloadCart } = useCart();
   const [reordering, setReordering] = useState(false);
   const router = useRouter();
 
-  // "Buy again" (U3): the server checks what can still be ordered; the app's
-  // cart is local, so its returned lines are copied in.
+  // "Buy again" (U3): the server checks what can still be ordered and adds it to the
+  // server cart itself; the app only reads that cart again (CF-0109).
   const buyAgain = async () => {
     setReordering(true);
     try {
       const res = await api.reorder.order(token, order.order_id);
-      for (const added of res.added) {
-        const line = res.cart.items.find((l) => Number(l.produce_id ?? l.id) === added.produce_id);
-        const id = String(added.produce_id);
-        const existing = cartItems.find((i) => i.id === id);
-        if (existing) {
-          updateQuantity(id, Math.max(existing.quantity, added.quantity));
-        } else {
-          addItem({
-            id,
-            produceId: added.produce_id,
-            merchantId: line?.merchant_id != null ? Number(line.merchant_id) : null,
-            farm: String(line?.farm ?? order.merchant),
-            produce: added.name,
-            unit: String(line?.unit ?? 'kg'),
-            price: added.price,
-            deliveryFee: line?.delivery_fee != null ? Number(line.delivery_fee) : null,
-          }, added.quantity);
-        }
-      }
+      await reloadCart();
       const lines = [
         res.added.length > 0
           ? `Added ${res.added.length} item${res.added.length === 1 ? '' : 's'} to your cart.`

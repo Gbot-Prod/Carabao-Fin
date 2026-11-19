@@ -3,6 +3,7 @@ import type { ApiReferencePrice } from './referencePrices';
 import { getAccessToken } from './authClient';
 import { API_BASE } from './config';
 import { historyQueryString, type HistoryQuery } from './orderHistory';
+import type { ServerCartLine } from './cartSync';
 
 export { API_BASE, WEB_BASE } from './config';
 
@@ -273,23 +274,12 @@ export function defaultAddress(addresses: ApiUserAddress[] | null | undefined): 
   return addresses?.find((a) => a.is_default) ?? addresses?.[0] ?? null;
 }
 
-// Shape stored in the server-side cart (PUT /carts/me). /orders/me/place
-// reads this cart, not the request body, and needs produce_id on each item.
-export type ServerCartItem = {
-  id: string;
-  produce_id: number;
-  merchant_id?: number | null;
-  produce: string;
-  farm: string;
-  unit: string;
-  price: number;
-  quantity: number;
-};
-
+// The server-side cart (GET/PUT /carts/me). /orders/me/place reads this cart,
+// not the request body. Line shape: src/lib/cartSync.ts ServerCartLine (CF-0109).
 export type ApiCart = {
   id: number;
   user_id: number;
-  items: ServerCartItem[];
+  items: ServerCartLine[];
   total_items: number;
   total_price: number;
 };

@@ -11,6 +11,7 @@ import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
 import { api } from '../lib/api';
 import { cartTotals, groupCartByFarm, type PendingOrder } from '../lib/cartGroups';
+import { blockerText, checkoutBlockers } from '../lib/cartSync';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Button, Divider, StatRow } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -28,7 +29,7 @@ const TIME_WINDOWS = [
 
 function CheckoutScreenContent() {
   const router = useRouter();
-  const { items, clearCart } = useCart();
+  const { items, reload: reloadCart } = useCart();
   const { token } = useAuth();
   const [payment, setPayment] = useState('online');
   const [timeWindow, setTimeWindow] = useState(TIME_WINDOWS[0]);
@@ -49,6 +50,11 @@ function CheckoutScreenContent() {
     }
     if (items.length === 0) {
       Alert.alert('Cart Empty', 'Add some produce before checking out.');
+      return;
+    }
+    const blocked = checkoutBlockers(items);
+    if (blocked.length > 0) {
+      Alert.alert('Check your cart', blocked.map(blockerText).join('\n'));
       return;
     }
     setLoading(true);
@@ -74,7 +80,9 @@ function CheckoutScreenContent() {
         farm: o.merchant_name,
         total: o.total_price,
       }));
-      clearCart();
+      // Lines stay in the server cart until their order is paid (backend
+      // release_superseded_orders); read it again instead of emptying it here.
+      void reloadCart();
       // The order exists now, so go to confirmation even if PayMongo fails;
       // that screen polls the transaction and offers "Pay now" to retry.
       try {
