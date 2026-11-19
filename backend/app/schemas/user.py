@@ -48,6 +48,8 @@ class AccountDeleteCodeRequest(BaseModel):
     # have none).
     password: str | None = Field(default=None, max_length=128)
 
+    model_config = ConfigDict(extra="forbid")  # CF-0085
+
 
 class AccountDeleteCodeSent(BaseModel):
     sent_to: str  # last 4 digits of the number the code went to
@@ -55,6 +57,8 @@ class AccountDeleteCodeSent(BaseModel):
 
 class AccountDeleteConfirm(BaseModel):
     code: str = Field(min_length=4, max_length=10)
+
+    model_config = ConfigDict(extra="forbid")  # CF-0085
 
 
 class UserMerchantInfo(BaseModel):
