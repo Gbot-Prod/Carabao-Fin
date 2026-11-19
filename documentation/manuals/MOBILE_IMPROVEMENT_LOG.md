@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 9    target: 20
+branch: improve/mobile-loop    push: no    iteration: 10    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0107) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0108) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 3/#6 · STRENGTHEN 3/#9 · SECURITY 1/#4 · AUDIT 2/#8
+PARITY 3/#6 · STRENGTHEN 3/#9 · SECURITY 2/#10 · AUDIT 2/#8
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #37) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -30,7 +30,7 @@ PARITY 3/#6 · STRENGTHEN 3/#9 · SECURITY 1/#4 · AUDIT 2/#8
 | `farms/[merchantID]` farm detail | `merchant` → `MerchantScreen` | partial | `/merchants/:id`, `/merchants/:id/produce` ✓; `/merchants/:id/reviews`, `/merchants/:id/shoppage` not called | no reviews list, no published shop page (banner/logo/about) |
 | `order` produce search | `OrderScreen` search | partial | `/produce/search` ✓ (only `q`, `in_stock`, `page_size`) | no category/price filters, no sort, no paging |
 | `saved` saved produce | `saved` → `SavedScreen` + `SaveHeart` | done | `/users/me/saved-produce`, `/users/me/saved-produce/ids`, `PUT/DELETE /produce/:id/save` ✓ (since #5) | hearts on farm produce rows and search hits; entry in Profile |
-| `cart` | `(tabs)/cart` → `CartScreen` | partial | `/carts/me` only written at checkout | memory only (lost on restart, not merged on sign-in), totals computed on the phone, no CF-0042 price/stock warnings (M33); not cleared on sign-out (M38) |
+| `cart` | `(tabs)/cart` → `CartScreen` | partial | `/carts/me` only written at checkout | memory only (lost on restart, not merged on sign-in), totals computed on the phone, no CF-0042 price/stock warnings (M33); owned by the user ID and wiped on sign-out since #10 |
 | `checkout` | `checkout` → `CheckoutScreen` | partial | `/orders/me/place`, `/payments/checkout/:id` ✓; `/users/me/addresses`, `/payments/checkout/:id/cancel` not called | no address book / default address, no cancel of pending payment |
 | `confirmation`, `orders/success` | `confirmation` → `ConfirmationScreen` | done | `/payments/transactions/order/:id` | checks status with server |
 | `orders` history | `(tabs)/history` → `HistoryScreen` | done | `/orders/me/history/page` ✓ (since #3) | status filter, search, infinite scroll; unpaged route now unused by mobile (M30) |
@@ -61,7 +61,6 @@ Parity score: 8 / 26 done (9 partial, 9 missing; 3 rows n/a; 1 row blocked). #8:
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
-| M38 | SECURITY | S | 4 | 1 | auth | — | **New (#8).** Sign-out (and idle sign-out, and the 403 path in `loadUser`) does not clear `CartContext` (memory only): on a shared phone the next account sees and can check out the previous account's cart. Clear the cart (and future per-user state) on every sign-out path; one pure "on sign-out" list with a test — test: sign out with items → sign in as another user → cart empty. |
 | M12 | SECURITY | S | 3 | 1 | payments | — | Allow-list hosts before `WebBrowser.openBrowserAsync(checkout.checkout_url)` (PayMongo checkout host only; `CheckoutScreen:84`, `ConfirmationScreen:40,142`) — test: pure host check refuses off-list URLs. |
 | M34 | STRENGTHEN | S | 2 | 1 | types | — | **New (#8).** `ApiMerchant` types `address`, `barangay` as present and `contact_number` as `string`; after the web loop merge the public farm routes leave the first two out (CF-0048) and `contact_number` is nullable. No screen reads them, so only the types are wrong. Make them match `PublicMerchantResponse` — test: tsc passes; farm screen hides the contact row when null. |
 | M29 | SECURITY | M | 4 | 2 | auth | — | `ProtectedScreen` accepts `requiredRole` but never checks it (its doc comment says it does). Nothing passes it today, so merchant screens rely on the server 404 → "not a merchant" state. Implement the role check from the server profile, use it on merchant routes, test the pure decision — test: a buyer who opens `/listings` sees the not-allowed state with no merchant API call. |
@@ -69,7 +68,7 @@ Parity score: 8 / 26 done (9 partial, 9 missing; 3 rows n/a; 1 row blocked). #8:
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 7 rows that do nothing on tap (`onPress={() => {}}`: Address, Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target or remove it — test: every Profile row opens something or is gone. |
 | M07 | PARITY | M | 3 | 2 | discovery | parity | Farm detail: reviews list (`/merchants/:id/reviews`, with merchant replies) + published shop page (banner, logo, about) (web B54/B63 part) — test: farm with reviews shows them with stars and replies. |
 | M18 | PARITY | M | 3 | 2 | merchant | parity | Merchant reviews + reply (`/merchants/me/reviews`) — test: reply shows under the review on farm detail. |
-| M11 | SECURITY | M | 3 | 2 | auth | — | Verify a 401 that survives the token retry signs the user out cleanly, and that sign-out clears every AsyncStorage key with PII (with M38) — test: unit test on the clear-keys list + manual check. |
+| M11 | SECURITY | S | 3 | 1 | auth | — | Verify a 401 that survives the token retry signs the user out cleanly (today `request` throws and the screen shows an error, the session stays). Storage half checked at #10: AsyncStorage holds only the idle timestamp (`LEFT_AT_KEY`), removed by `clearLocal`; cart and saved ids are wiped by owner (CF-0108) — test: an expired session → one sign-out, back to sign-in. |
 | M13 | STRENGTHEN | M | 3 | 2 | cleanup | — | Cleanup batch (merged M14, M26 at #8): remove Expo starter files (`app/modal.tsx` + its Stack entry, `app/(tabs)/App.tsx` — a stray route that duplicates providers, `hello-wave`, `parallax-scroll-view`, `external-link`, `collapsible`, themed-* if unused); merge `constants/theme.ts` into `src/lib/theme.ts`; move the `Farm` type out of `mockData.ts` and delete it; local placeholder instead of the hot-linked Unsplash image; "New" instead of "⭐ 0" for unrated farms; `ConfirmationScreen` logs only status/message in `__DEV__` — test: lint + tsc pass, app boots, grep finds no `mockData` / raw error logs. |
 | M05 | PARITY | M | 4 | 3 | checkout | parity | Address book on checkout and profile (`/users/me/addresses`, default address) — test: add 2 addresses, set default, checkout uses default. |
 | M08 | PARITY | M | 3 | 3 | orders | parity | Leave / edit a review for a delivered order (`/orders/me/:id/review`) from `OrderDetailScreen` (replace the "review on the website" line; edit while `editable_until`) (web B54) — test: delivered order → write review → detail shows it. |
@@ -93,6 +92,8 @@ Parity score: 8 / 26 done (9 partial, 9 missing; 3 rows n/a; 1 row blocked). #8:
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #10 — SECURITY — auth — CF-0108 — M
+What: fixed M38: the in-memory cart survived every sign-out path (button, idle sign-out, refused session in `loadUser`) and account switches, so on a shared phone the next account saw — and could check out — the previous account's cart. New pure `src/lib/ownedState.ts` (`valueFor`, `mustWipe`, `updateFor`): per-account state is stored with the user ID that owns it; another owner (or none) sees empty, and the provider wipes it during render when the owner changes (React's "adjust state on prop change", no effect). `CartContext` uses it (signed out → no cart can be held). `SavedContext` now uses it too, keyed by user ID instead of the token: the token is refreshed every 60 s (`AuthContext:194`), which emptied the hearts until the next fetch; ids now load once per sign-in. Removed `idsFor` (replaced). Checked: AsyncStorage holds only `LEFT_AT_KEY`, removed by `clearLocal` (M11 narrowed). Security review of the diff (inline, small diff): no findings. Why: privacy on shared phones (MASVS storage: clear user data on sign-out). Tests: `ownedState.test.ts` 4 incl. the shared-phone story; savedProduce test moved there. Manual check: sign in as A → add 2 items → sign out → sign in as B → cart empty, badge 0, hearts empty; sign back in as A → empty too (wiped, not hidden); leave the app past the idle limit → come back → signed out and cart empty; stay signed in 2+ minutes → hearts stay filled. Checks: npm test 56/56, lint 0/0, tsc pass. Not run on a device.
 ### #9 — STRENGTHEN — merchant — CF-0107 — M
 What: fixed M32 (broken): creating a listing on mobile always failed with 422, because backend `ProduceCreate` requires `harvest_date` and `best_before` and the form sent neither. The edit route also runs `freshness_error` on the merged listing, so editing a listing without dates failed too. `ListingForm` now has both dates (YYYY-MM-DD text fields, no new dependency; chips Today / Yesterday and +3 / +7 / +14 days; hint that buyers stop seeing it after best-before). Edit prefills the stored dates; a listing without dates starts at today / +7 days. All checks moved to pure `src/lib/listingForm.ts`: `phToday` (UTC+8, = backend `ph_today`), `parseYmd` (real dates only), `addDays`, `freshnessError` (backend messages word for word), `checkListing` (name ≤ 100, price 1…1 000 000, stock 0…10 000 000 = backend bounds; a test reads `schemas/produce.py` to keep them in step). `ProduceCreatePayload` gets the two date fields. Why: broken first (§1.1). Tests: `listingForm.test.ts` 6. Manual check: My listings → + → fill name / price / stock, tap "Today" and "+7 days" → Create → listing shows "Harvested …"; type 2026-02-30 → "must be a real date"; harvest tomorrow → "cannot be in the future"; edit an old listing → dates prefilled → Save works. Checks: npm test 53/53, lint 0/0, tsc pass. Not run on a device. Follow-ups: M39 (min order qty, price tiers).
 ### #8 — AUDIT — all — (no CF ID) — M
@@ -113,7 +114,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #8)
-- Mobile tests: 53 in 13 files since #9 (`npm test` runs every `src/lib/**/*.test.ts`).
+- Mobile tests: 56 in 14 files since #10 (`npm test` runs every `src/lib/**/*.test.ts`).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #6 `expo export --platform android` OK (next: #10 or #12).

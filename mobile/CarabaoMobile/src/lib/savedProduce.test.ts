@@ -1,8 +1,8 @@
 /// <reference types="node" />
-// Run with `npm test`. CF-0104. The first three tests are the web's lib/saved-produce.test.ts.
+// Run with `npm test`. CF-0104. The web's lib/saved-produce.test.ts; account ownership is tested in ownedState.test.ts.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { idsFor, withSaved } from './savedProduce.ts';
+import { withSaved } from './savedProduce.ts';
 
 test('saving puts the id first without duplicates', () => {
   assert.deepEqual(withSaved([], 4, true), [4]);
@@ -20,12 +20,4 @@ test('the input list is not changed', () => {
   withSaved(ids, 3, true);
   withSaved(ids, 1, false);
   assert.deepEqual(ids, [1, 2]);
-});
-
-test('ids show only for the account they were loaded for', () => {
-  const loaded = { token: 'tok-a', ids: [5, 6] };
-  assert.deepEqual(idsFor(loaded, 'tok-a'), [5, 6]);
-  assert.deepEqual(idsFor(loaded, 'tok-b'), []); // another account
-  assert.deepEqual(idsFor(loaded, null), []); // signed out
-  assert.deepEqual(idsFor(null, 'tok-a'), []); // not loaded yet
 });

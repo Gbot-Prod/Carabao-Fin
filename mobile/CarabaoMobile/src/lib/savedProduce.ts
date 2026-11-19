@@ -8,15 +8,4 @@ export function withSaved(ids: readonly number[], id: number, saved: boolean): n
   return saved ? [id, ...rest] : rest;
 }
 
-// ---- mobile only ----
-
-/**
- * The ids to show for the signed-in account. The list is stored with the token it
- * was loaded for, so after sign-out or an account switch no old hearts show.
- */
-export function idsFor(
-  loaded: { token: string; ids: readonly number[] } | null,
-  token: string | null,
-): readonly number[] {
-  return token && loaded?.token === token ? loaded.ids : [];
-}
+// Which account the ids belong to: src/lib/ownedState.ts (CF-0108).

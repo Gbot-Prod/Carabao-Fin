@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { useAuth } from './AuthContext';
+import { mustWipe, updateFor, valueFor, type Owned } from './ownedState';
 
 export interface CartItem {
   id: string;
@@ -27,8 +29,18 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | null>(null);
 
+const NO_ITEMS: CartItem[] = [];
+
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([]);
+  // CF-0108: the cart belongs to the signed-in user ID. Sign-out (any path: button,
+  // idle, refused session) or another account wipes it during render.
+  const { user } = useAuth();
+  const owner = user?.id ?? null;
+  const [cart, setCart] = useState<Owned<CartItem[]>>(null);
+  if (mustWipe(cart, owner)) setCart(null);
+  const items = valueFor(cart, owner, NO_ITEMS);
+  const setItems = (change: (prev: CartItem[]) => CartItem[]) =>
+    setCart((prev) => updateFor(prev, owner, NO_ITEMS, change));
 
   const addItem = (newItem: Omit<CartItem, 'quantity'>, quantity = 1) => {
     setItems((prev) => {
@@ -56,7 +68,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     );
   };
 
-  const clearCart = () => setItems([]);
+  const clearCart = () => setItems(() => []);
 
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
   const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
