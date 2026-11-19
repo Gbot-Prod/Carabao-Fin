@@ -8,6 +8,7 @@ import { historyQueryString, type HistoryQuery } from './orderHistory';
 import type { ServerCartLine } from './cartSync';
 import type { AddressPayload } from './addresses';
 import type { MerchantReviews, MyMerchantReviews } from './reviews';
+import type { DemandInsight, MerchantPerformance } from './dashboard';
 import { UNREAD_COUNT_QUERY } from './polling';
 
 export { API_BASE, WEB_BASE } from './config';
@@ -459,6 +460,9 @@ export const api = {
       request<ApiProduce[]>('/merchants/me/produce', token),
     myOrders: (token: string | null) =>
       request<ApiMerchantOrder[]>('/merchants/me/orders', token),
+    // CF-0125: dashboard numbers and province demand.
+    performance: (token: string | null) => request<MerchantPerformance>('/merchants/me/performance', token),
+    demand: (token: string | null) => request<DemandInsight>('/merchants/me/demand', token),
     // CF-0119: query from src/lib/reviews.ts myReviewsQuery.
     myReviews: (token: string | null, query: string) =>
       request<MyMerchantReviews>(`/merchants/me/reviews?${query}`, token),

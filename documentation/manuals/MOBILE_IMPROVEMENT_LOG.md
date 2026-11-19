@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 28    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
+branch: improve/mobile-loop    push: no    iteration: 29    target: none (2026-11-19: the user asked to run indefinitely, 15 min cadence; first target of 20 reached at #20)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0124) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0125) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 14/#28 · STRENGTHEN 6/#27 · SECURITY 4/#23 · AUDIT 4/#24
+PARITY 15/#29 · STRENGTHEN 6/#27 · SECURITY 4/#23 · AUDIT 4/#24
 
 ## Needs human
 - **Merge the web loop.** `improve/loop` (web iteration #53 at mobile #24) is not merged into `main`; this branch is based on `main`. Vouchers, receipt and recently viewed farms (M35) wait for that merge. Merge order suggestion: web loop first, then rebase or merge this branch; conflicts expected only in `documentation/manuals/SYSTEM_REFERENCE.md` (§3, §4.3).
@@ -44,7 +44,7 @@ PARITY 14/#28 · STRENGTHEN 6/#27 · SECURITY 4/#23 · AUDIT 4/#24
 | `email-verified`, `landing` | — | n/a — web-only | | |
 | merchant `auth` | `AuthScreen` (shared) | done | Better Auth | |
 | merchant `onboarding` | `onboarding` → `OnboardingScreen` | partial | opens web `/merchantOnboarding` in browser; `/merchant-onboarding/me`, `/merchant-applications/me` not called | no native onboarding / application status |
-| merchant dashboard | — | missing | `/merchants/me/performance`, `/merchants/me/demand` exist | |
+| merchant dashboard | `merchant-dashboard` → `MerchantDashboardScreen` | done | `/merchants/me/performance`, `/merchants/me/demand`, `/merchants/me/stock-alerts` ✓ (since #29) | 6 number tiles, rating / cancel rate, stock alerts, province demand (most ordered, unmet searches), links to orders / listings / reviews with counts |
 | merchant `produce` | `listings` → `ListingsScreen` + `ListingForm` | partial | `/merchants/me/produce`, `POST /produce/`, `PATCH` / `DELETE /produce/:id` ✓ (#9, #19); `/produce/:id/image` not called | create, edit, delete, dates, min order, bulk prices; no photo upload (M17) |
 | merchant `inventory` / stock alerts | `ListingsScreen` | partial | `/merchants/me/stock-alerts` ✓ | alerts shown inline, no inventory view |
 | merchant `orders` | `merchant-orders` → `MerchantOrdersScreen` | done | `/merchants/me/orders`, `/merchants/me/orders/:id/status` | |
@@ -56,7 +56,7 @@ PARITY 14/#28 · STRENGTHEN 6/#27 · SECURITY 4/#23 · AUDIT 4/#24
 | merchant `shop` page | — | missing | `/merchants/me/shoppage` (+ banner, logo, publish, discard) exist | |
 | merchant `settings` | — | missing | `/merchants/me` exists | |
 
-Parity score: 14 / 26 done (4 partial, 8 missing; 3 rows n/a; 1 row blocked) since #28. #8: cart moved done → partial (memory-only cart, phone totals).
+Parity score: 15 / 26 done (4 partial, 7 missing; 3 rows n/a; 1 row blocked) since #29. #8: cart moved done → partial (memory-only cart, phone totals).
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
@@ -66,7 +66,6 @@ Parity score: 14 / 26 done (4 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | M47 | STRENGTHEN | S | 2 | 1 | chat | — | **New (#24).** `OrderChatScreen` keeps polling every 10 s after the server says the thread is `closed` (7 days after delivery). Pass `enabled = !closed` to `usePolling`; batch with M46 — test: closed chat → no more requests. |
 | M49 | STRENGTHEN | M | 2 | 2 | refactor | — | **New (#24).** Largest screens: `AuthScreen` 457 lines, `MerchantScreen` 449, `CheckoutScreen` 431. Move their pure logic and sub-views out (e.g. `CheckoutScreen` address / date / payment sections into components, `MerchantScreen` hero + products into components); batch with M37 (`api.ts` 637 lines) — test: tsc, lint, npm test, android export pass, no behavior change. |
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 6 rows that do nothing on tap (Address fixed #12; `onPress={() => {}}`: Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target or remove it — test: every Profile row opens something or is gone. |
-| M15 | PARITY | M | 3 | 3 | merchant | parity | Merchant dashboard (performance + demand + stock alert counts) — test: totals match the web dashboard. |
 | M17 | PARITY | M | 3 | 3 | merchant | parity | Listing photo upload via `/produce/:id/image` (expo-image-picker — check Expo Go support first) — test: new listing shows the uploaded photo. |
 | M35 | PARITY | M | 3 | 3 | checkout | after-web-merge | **New (#8). Blocked until `improve/loop` is merged.** Web-loop features with backend routes only on that branch: review `merchant_reply` (show under each review in `FarmReviews`, reply from M18), cart line `issue` / `previous_price` (CF-0042, show in `CartScreen` next to `unavailable_reason`), holiday mode on the farm screen + pause switch for merchants (`paused_until`, `pause_message`, CF-0066, web B77), "download my data" on Profile (CF-0069), hide an order from history (CF-0070), holiday badge on browse / search cards (CF-0072), voucher code at checkout + discount on order/receipt (CF-0058/0061, web B70), order receipt (`GET /orders/me/{id}/receipt`, CF-0049, web B63), recently viewed farms (CF-0052). — test: place-order sends `voucher_code`; receipt opens from order detail. |
 | M40 | STRENGTHEN | S | 2 | 2 | checkout | — | **New (#12).** Editing a saved address on mobile leaves its `region` and map pin (`lat`/`lng`) as they were, so a street changed on the phone can keep the old pin; mobile also has no region field (web sets it with a picker). Clear the pin when street/city/province change, or add a region picker — test: edit street → saved pin is null. |
@@ -83,6 +82,8 @@ Parity score: 14 / 26 done (4 partial, 8 missing; 3 rows n/a; 1 row blocked) sin
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #29 — PARITY — merchant — CF-0125 — M
+What: merchant dashboard (M15, web merchant shell home). New `merchant-dashboard` route → `MerchantDashboardScreen` (Profile → "Dashboard" for merchants; `requiredRole="merchant"`, CF-0120): 6 tiles (open orders, sales and orders in the last 30 days, delivered, sales all time, listings), rating + total orders + cancel rate, links with counts to Incoming orders / My listings (alert count) / Reviews, a stock-alert card (low stock ≤ threshold, best-before soon, expired = hidden from buyers), and "Buyers in <province>, last 30 days": most ordered and searches that found nothing (what buyers want and no one lists). Stock alerts and demand are optional (the dashboard shows without them); pull to refresh; skeleton / retry. New `api.merchants.performance / demand`. Pure `src/lib/dashboard.ts`: `statTiles`, `peso`, `cancelRate`, `alertCounts`, `unmetSearches`; field names checked against `schemas/merchant_performance.py` and `routes/demand_insight.py`. Why: merchant parity; the mobile merchant had no overview. Tests: `dashboard.test.ts` 4. Manual check: merchant → Profile → Dashboard → open orders match Incoming orders; set a listing's stock to 1 → alert card shows "1 listing low on stock"; buyer account → farm-account message. Checks: npm test 119/119, lint 0/0, tsc pass. Not run on a device.
 ### #28 — PARITY — checkout — CF-0124 — M
 What: cancel an unpaid order (M25; web calls `POST /payments/checkout/{id}/cancel` when PayMongo sends the buyer back without paying; on mobile the in-app browser just closes and the order stayed "pending" until it expired). Confirmation screen (pending view): "Cancel this order" → confirm → the route → "Order cancelled. The produce is back on sale, and it is still in your cart." (the server keeps cart lines until an order is paid; the cart is read again); server refusals (409 "Order has already been paid" / "A payment for this order is already in progress") show as the server says, then the status is re-checked. Order detail: `orderActions` gets `canCancelUnpaid` (`pending` only; the other cancel route is `processing` only) → "Cancel unpaid order" behind the same confirm, then the order is re-read. New `api.payments.cancel`. Why: buyers could not release an unpaid order (stock stayed held until expiry) — parity with web checkout. With this the checkout row is done (map pin picker logged as a native extra). Tests: `orderDetail.test.ts` updated (`canCancelUnpaid` for pending, false for every other status). Manual check: place an order, close the payment page → Cancel this order → message; History → that order shows Cancelled; cart still has the produce; pay first, then try → "Order has already been paid". Checks: npm test 115/115, lint 0/0, tsc pass, expo-doctor 20/20, android export OK (4th iteration). Not run on a device.
 ### #27 — STRENGTHEN — forms — CF-0123 — M
@@ -141,7 +142,7 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT, last #24)
-- Mobile tests: 115 in 27 files since #27 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
+- Mobile tests: 119 in 28 files since #29 (`npm test` runs every `src/lib/**/*.test.ts`; 11 of them read backend / web files to keep values in step).
 - `tsc --noEmit`: pass. Lint: pass, 0 / 0 (since #2).
 - `npm audit --omit=dev`: 3 moderate, unchanged (minimatch via `@expo/fingerprint`, see Needs human).
 - `expo-doctor`: 20/20. Last bundle check: #28 `expo export --platform android` OK (5 MB), expo-doctor 20/20 (next: #32).
