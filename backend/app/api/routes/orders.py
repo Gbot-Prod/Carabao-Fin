@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -14,7 +14,6 @@ from app.models.order import Order
 from app.models.produce import Produce
 from app.models.review import Review
 from app.models.statuses import OrderStatus
-from app.models.transaction import Transaction
 from app.models.user import User
 from app.models.voucher import Voucher
 from app.schemas.order import (
@@ -436,19 +435,11 @@ def delete_order_from_history(
         raise HTTPException(
             status_code=400, detail="Only completed orders can be removed"
         )
-    # Stopgap until history uses a hide flag: transactions.order_id is a
-    # non-nullable FK, and payment records must outlive the buyer's view.
-    has_payment = (
-        db.query(Transaction.id).filter(Transaction.order_id == order.id).first()
-    )
-    if has_payment:
-        raise HTTPException(
-            status_code=409,
-            detail="Orders with a payment record can't be removed yet",
-        )
-
-    db.delete(order)
-    db.commit()
+    # CF-0070 (B10): hide, never delete. Payments (a non-null FK), the farm's
+    # sales, refunds and the review all keep their order. Hiding twice is fine.
+    if order.hidden_by_buyer_at is None:
+        order.hidden_by_buyer_at = datetime.now(UTC)
+        db.commit()
 
 
 @router.get("/orders/me/current", response_model=list[CurrentOrderResponse])

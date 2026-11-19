@@ -65,6 +65,9 @@ class Order(Base):
     # total_price is already net of it: subtotal + delivery_fee - discount.
     discount = Column(Integer, nullable=False, default=0, server_default="0")
     voucher_code = Column(String(32), nullable=True)
+    # CF-0070 (B10): the buyer removed it from their history. The row stays
+    # for the farm, admins, payments and reviews; only the buyer's lists skip it.
+    hidden_by_buyer_at = Column(DateTime(timezone=True), nullable=True)
     image = Column(String, nullable=True)
 
     user = relationship("User")

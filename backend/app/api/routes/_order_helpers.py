@@ -129,10 +129,11 @@ def get_or_create_cart(db: Session, user_id: int) -> Cart:
 
 
 def buyer_orders_query(db: Session, user_id: int) -> Query[Order]:
-    """The buyer's orders, newest first, sorted by the database (CF-0036)."""
+    """The buyer's orders, newest first, sorted by the database (CF-0036).
+    Orders the buyer hid from history are left out (CF-0070)."""
     return (
         db.query(Order)
-        .filter(Order.user_id == user_id)
+        .filter(Order.user_id == user_id, Order.hidden_by_buyer_at.is_(None))
         .order_by(Order.ordered_at.desc().nulls_last(), Order.id.desc())
     )
 

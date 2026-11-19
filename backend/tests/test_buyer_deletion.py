@@ -223,30 +223,39 @@ def test_account_delete_succeeds_for_merchant_without_sales(db, seller):
 
 
 @pytest.mark.parametrize("txn_status", ["paid", "expired", "refunded"])
-def test_history_remove_blocked_when_order_has_payment(db, seller, buyer, txn_status):
+def test_history_remove_hides_an_order_with_payment(db, seller, buyer, txn_status):
+    """CF-0070 (B10): was a 409 stopgap; the order is hidden, never deleted,
+    so the payment record and the farm's view keep it."""
     _, merchant = seller
     user, _ = buyer
     status = "delivered" if txn_status == "paid" else "cancelled"
     order = _order(db, merchant, buyer, status)
     _transaction(db, order, txn_status)
     db.commit()
+    client = _client(db, user)
 
-    resp = _client(db, user).delete(f"/orders/me/history/{order.id}")
+    resp = client.delete(f"/orders/me/history/{order.id}")
 
-    assert resp.status_code == 409
+    assert resp.status_code == 204
     db.expire_all()
-    assert db.get(Order, order.id) is not None
+    kept = db.get(Order, order.id)
+    assert kept is not None and kept.hidden_by_buyer_at is not None
     assert db.query(Transaction).count() == 1
+    assert order.id not in [o["id"] for o in client.get("/orders/me/history").json()]
 
 
-def test_history_remove_succeeds_for_unpaid_cancelled_order(db, seller, buyer):
+def test_history_remove_hides_an_unpaid_cancelled_order(db, seller, buyer):
     _, merchant = seller
     user, _ = buyer
     order = _order(db, merchant, buyer, "cancelled")
     db.commit()
+    client = _client(db, user)
 
-    resp = _client(db, user).delete(f"/orders/me/history/{order.id}")
+    resp = client.delete(f"/orders/me/history/{order.id}")
+    again = client.delete(f"/orders/me/history/{order.id}")  # idempotent
 
-    assert resp.status_code == 204
+    assert (resp.status_code, again.status_code) == (204, 204)
     db.expire_all()
-    assert db.get(Order, order.id) is None
+    kept = db.get(Order, order.id)
+    assert kept is not None and kept.hidden_by_buyer_at is not None
+    assert client.get("/orders/me/history").json() == []

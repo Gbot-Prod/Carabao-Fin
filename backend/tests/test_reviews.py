@@ -253,7 +253,8 @@ def test_review_survives_buyer_removing_order_from_history(db, merchant, buyer):
 
     db.expire_all()
     review = db.query(Review).one()
-    assert review.order_id is None
+    # CF-0070: the order is hidden, not deleted, so the review keeps it.
+    assert review.order_id == order.id
     assert db.get(Merchant, merchant.id).rating_count == 1
 
 
