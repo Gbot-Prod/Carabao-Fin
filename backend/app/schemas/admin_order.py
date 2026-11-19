@@ -12,6 +12,9 @@ class AdminOrderSummary(BaseModel):
     payment_status: PaymentStatus
     total_price: int
     delivery_fee: int
+    # CF-0065 (B72): farm voucher on the order (total_price is net of it).
+    discount: int = 0
+    voucher_code: str | None = None
     ordered_at: datetime
     merchant_id: int | None
     merchant_name: str | None

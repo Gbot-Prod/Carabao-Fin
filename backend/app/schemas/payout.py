@@ -23,6 +23,10 @@ class MerchantOrderResponse(BaseModel):
     status: OrderStatus
     payment_status: PaymentStatus
     total_price: int
+    # CF-0065 (B72): why a total can be lower than its lines + delivery fee.
+    delivery_fee: int = 0
+    discount: int = 0
+    voucher_code: str | None = None
     items: list[Any]
     delivery_address: str | None = None
     ordered_at: datetime

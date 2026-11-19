@@ -63,6 +63,8 @@ def _summary_fields(order: Order) -> dict:
         "payment_status": payment_status(order),
         "total_price": order.total_price,
         "delivery_fee": order.delivery_fee or 0,
+        "discount": order.discount or 0,
+        "voucher_code": order.voucher_code,
         "ordered_at": order.ordered_at,
         "merchant_id": order.merchant_id,
         "merchant_name": order.merchant.merchant_name if order.merchant else None,

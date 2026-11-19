@@ -422,6 +422,10 @@ export type MerchantOrder = {
   status: OrderStatus;
   payment_status: PaymentStatus;
   total_price: number;
+  /** CF-0065: why the total can be lower than lines + delivery fee. */
+  delivery_fee?: number;
+  discount?: number;
+  voucher_code?: string | null;
   items: Array<{ id?: string; produce?: string; quantity?: number; price?: number; unit?: string; farm?: string }>;
   delivery_address: string | null;
   ordered_at: string;

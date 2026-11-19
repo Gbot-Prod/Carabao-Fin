@@ -143,6 +143,16 @@ export default function OrderCard({ order, today, focused, updating, onUpdateSta
             ))}
           </div>
 
+          {(order.discount ?? 0) > 0 && (
+            <div className={styles.orderAddress}>
+              <span className={styles.orderBuyerLabel}>Voucher</span>
+              <span>
+                {order.voucher_code ?? "Voucher"}: −{formatPeso(order.discount ?? 0)} (your farm pays it; the total
+                and your payout already include it)
+              </span>
+            </div>
+          )}
+
           {isInTransit(order.status) && (
             <span className={styles.orderAwaiting}>
               Awaiting buyer confirmation

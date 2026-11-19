@@ -43,6 +43,9 @@ EXPORT_COLUMNS = [
     "unit_price",
     "line_total",
     "order_delivery_fee",
+    # CF-0065 (B71): a farm voucher; lines + delivery fee - discount = total.
+    "order_discount",
+    "order_voucher_code",
     "order_total",
 ]
 
@@ -254,7 +257,12 @@ def sales_export_rows(
             _manila(cast(datetime, order.ordered_at)).isoformat(timespec="minutes"),
             str(order.status),
         ]
-        tail: list[object] = [order.delivery_fee or 0, order.total_price or 0]
+        tail: list[object] = [
+            order.delivery_fee or 0,
+            order.discount or 0,
+            order.voucher_code or "",
+            order.total_price or 0,
+        ]
         rows.extend(head + line + tail for line in lines)
     return rows
 

@@ -239,6 +239,9 @@ export type AdminOrderSummary = {
   payment_status: AdminPaymentStatus;
   total_price: number;
   delivery_fee: number;
+  /** CF-0065: farm voucher; total_price is already net of it. */
+  discount?: number;
+  voucher_code?: string | null;
   ordered_at: string;
   merchant_id: number | null;
   merchant_name: string | null;

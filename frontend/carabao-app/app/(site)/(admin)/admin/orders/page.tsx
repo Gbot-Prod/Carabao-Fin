@@ -232,7 +232,7 @@ function OrderDetailPanel({ orderId, onClose }: { orderId: number; onClose: () =
                 <dt>Buyer</dt><dd>{d.buyer_name ?? "—"}{d.buyer_email ? ` · ${d.buyer_email}` : ""}</dd>
                 <dt>Merchant</dt><dd>{d.merchant_name ?? "—"}</dd>
                 <dt>Placed</dt><dd>{when(d.ordered_at)}</dd>
-                <dt>Total</dt><dd>{peso(d.total_price)} (delivery fee {peso(d.delivery_fee)})</dd>
+                <dt>Total</dt><dd>{peso(d.total_price)} (delivery fee {peso(d.delivery_fee)}{(d.discount ?? 0) > 0 ? `, voucher ${d.voucher_code ?? ""} −${peso(d.discount ?? 0)}` : ""})</dd>
                 {d.notes && (<><dt>Notes</dt><dd>{d.notes}</dd></>)}
               </dl>
             </section>
