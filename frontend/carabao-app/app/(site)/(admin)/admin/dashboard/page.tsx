@@ -25,7 +25,6 @@ import {
   fetchAdminPayoutBatches,
   type AdminStats,
   type DailyRevenue,
-  type PayoutBatch,
 } from "@/util/api/admin";
 import { ORDER_STATUS_LABELS, PAYOUT_STATUS_LABELS, type OrderStatus } from "@/util/api/statuses";
 import styles from "./page.module.css";
@@ -181,15 +180,16 @@ function AttentionRow({
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [batches, setBatches] = useState<PayoutBatch[]>([]);
+  const [pendingBatchCount, setPendingBatchCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [range, setRange] = useState<Range>(30);
 
   useEffect(() => {
-    Promise.all([fetchAdminStats(), fetchAdminPayoutBatches()])
-      .then(([s, b]) => { setStats(s); setBatches(b); setError(null); })
+    // CF-0067: the batch list is a window, so ask for the pending ones only.
+    Promise.all([fetchAdminStats(), fetchAdminPayoutBatches("pending", { limit: 500 })])
+      .then(([s, pending]) => { setStats(s); setPendingBatchCount(pending.length); setError(null); })
       .catch(() => setError("We couldn't load the dashboard. Check your connection and try again."))
       .finally(() => setLoading(false));
   }, [attempt]);
@@ -233,7 +233,6 @@ export default function AdminDashboard() {
     );
   }
 
-  const pendingBatchCount = batches.filter((b) => b.status === "pending").length;
   const sortedPayoutSummary = [...stats.payout_summary].sort(
     (a, b) => PAYOUT_STATUS_ORDER.indexOf(a.status) - PAYOUT_STATUS_ORDER.indexOf(b.status),
   );

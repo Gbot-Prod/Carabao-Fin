@@ -9,6 +9,11 @@ import {
   type MerchantApplication,
 } from "@/util/api/admin";
 import styles from "./page.module.css";
+import { ADMIN_LIST_LIMIT, ADMIN_LIST_MAX, mayHaveMore, mergeById } from "@/lib/admin-window";
+
+// CF-0067: always load every application waiting for a decision; the reviewed
+// ones come a window at a time.
+const OPEN_STATUSES = ["submitted", "clarification"];
 import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
@@ -292,15 +297,39 @@ function Field({
 
 export default function AdminReviewPage() {
   const [applications, setApplications] = useState<MerchantApplication[]>([]);
+  const [recentLoaded, setRecentLoaded] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchAdminMerchantApplications()
-      .then(setApplications)
+    Promise.all([
+      fetchAdminMerchantApplications({ status: OPEN_STATUSES, limit: ADMIN_LIST_MAX }),
+      fetchAdminMerchantApplications({ limit: ADMIN_LIST_LIMIT }),
+    ])
+      .then(([open, recent]) => {
+        setApplications(mergeById(open, recent));
+        setRecentLoaded(recent.length);
+        setHasMore(mayHaveMore(recent.length));
+      })
       .catch(() => setError("Failed to load applications."))
       .finally(() => setLoading(false));
   }, []);
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const rows = await fetchAdminMerchantApplications({ limit: ADMIN_LIST_LIMIT, offset: recentLoaded });
+      setApplications((prev) => mergeById(prev, rows));
+      setRecentLoaded((n) => n + rows.length);
+      setHasMore(mayHaveMore(rows.length));
+    } catch {
+      setError("Failed to load more applications.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleUpdate = (updated: MerchantApplication) => {
     setApplications((prev) =>
@@ -347,6 +376,13 @@ export default function AdminReviewPage() {
             <ApplicationCard key={a.id} app={a} onUpdate={handleUpdate} />
           ))}
         </section>
+      )}
+      {hasMore && (
+        <p>
+          <button type="button" onClick={() => void loadMore()} disabled={loadingMore}>
+            {loadingMore ? "Loading…" : "Load older applications"}
+          </button>
+        </p>
       )}
     </div>
   );

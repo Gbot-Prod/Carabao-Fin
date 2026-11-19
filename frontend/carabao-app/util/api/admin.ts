@@ -136,8 +136,16 @@ export const fetchAdminMerchantsPage = async (page = 1, pageSize = ADMIN_PAGE_SI
   return res.data;
 };
 
-export const fetchAdminMerchantApplications = async (): Promise<MerchantApplication[]> => {
-  const res = await apiClient.get<MerchantApplication[]>('/admin/merchant-applications');
+export type AdminListWindow = { limit?: number; offset?: number };
+
+/** Newest first, one window (CF-0067). `status` repeats: ?status=a&status=b. */
+export const fetchAdminMerchantApplications = async (
+  { status, ...window }: { status?: string[] } & AdminListWindow = {},
+): Promise<MerchantApplication[]> => {
+  const res = await apiClient.get<MerchantApplication[]>('/admin/merchant-applications', {
+    params: { ...window, ...(status?.length ? { status } : {}) },
+    paramsSerializer: { indexes: null },
+  });
   return res.data;
 };
 
@@ -151,8 +159,9 @@ export const fetchAdminStats = async (): Promise<AdminStats> => {
   return res.data;
 };
 
-export const fetchAdminPayoutBatches = async (status?: string): Promise<PayoutBatch[]> => {
-  const res = await apiClient.get<PayoutBatch[]>('/admin/batches', { params: status ? { status } : {} });
+/** Newest first, one window (CF-0067). */
+export const fetchAdminPayoutBatches = async (status?: string, window: AdminListWindow = {}): Promise<PayoutBatch[]> => {
+  const res = await apiClient.get<PayoutBatch[]>('/admin/batches', { params: { ...window, ...(status ? { status } : {}) } });
   return res.data;
 };
 

@@ -16,6 +16,7 @@ import {
   type PayoutType,
 } from "@/util/api/merchants";
 import styles from "./page.module.css";
+import { ADMIN_LIST_LIMIT, mayHaveMore, mergeById } from "@/lib/admin-window";
 import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
@@ -50,6 +51,9 @@ const netOf = (b: PayoutBatch) => b.net_amount ?? b.gross_amount - (b.transfer_f
 
 export default function PayoutsPage() {
   const [batches, setBatches] = useState<PayoutBatch[]>([]);
+  // CF-0067: newest batches first, a window at a time.
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,12 +77,28 @@ export default function PayoutsPage() {
     setBatches((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
 
   useEffect(() => {
-    fetchAdminPayoutBatches()
-      .then(setBatches)
+    fetchAdminPayoutBatches(undefined, { limit: ADMIN_LIST_LIMIT })
+      .then((rows) => {
+        setBatches(rows);
+        setHasMore(mayHaveMore(rows.length));
+      })
       .catch(() => setError("Failed to load payout data."))
       .finally(() => setLoading(false));
     void loadWallet();
   }, []);
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const rows = await fetchAdminPayoutBatches(undefined, { limit: ADMIN_LIST_LIMIT, offset: batches.length });
+      setBatches((prev) => mergeById(prev, rows));
+      setHasMore(mayHaveMore(rows.length));
+    } catch {
+      setError("Failed to load more payout batches.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleSend = async (batch: PayoutBatch) => {
     setConfirming(null);
@@ -302,6 +322,13 @@ export default function PayoutsPage() {
           </tbody>
         </table>
       </div>
+      {hasMore && (
+        <p>
+          <button type="button" className={styles.secondaryBtn} onClick={() => void loadMore()} disabled={loadingMore}>
+            {loadingMore ? "Loading…" : "Load older batches"}
+          </button>
+        </p>
+      )}
 
       {c && (
         <div className={styles.modalBackdrop} onClick={() => setConfirming(null)}>

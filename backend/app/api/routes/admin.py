@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, datetime, time, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,7 +23,7 @@ from app.schemas.merchant_application import (
     AdminMerchantApplicationResponse,
     ApplicationReviewPayload,
 )
-from app.schemas.pagination import Page
+from app.schemas.pagination import MAX_OFFSET, Page
 from app.schemas.payout import (
     AdminPayoutBatchResponse,
     PayoutDestinationPreview,
@@ -274,17 +275,36 @@ def reinstate_account(
     return reinstate_user(db, user, admin=current_admin)
 
 
+# CF-0067: windows of the two admin lists that are not Page[...] yet.
+ADMIN_LIST_DEFAULT = 200
+ADMIN_LIST_MAX = 500
+ApplicationStatus = Literal[
+    "submitted", "clarification", "approved", "rejected", "suspended"
+]
+
+
 @router.get(
     "/admin/merchant-applications",
     response_model=list[AdminMerchantApplicationResponse],
 )
 def list_all_merchant_applications(
+    # CF-0067 (B73): the review page asks for the open ones (submitted,
+    # clarification) separately, so a window never hides one waiting for review.
+    status: list[ApplicationStatus] | None = Query(None),
+    limit: int = Query(ADMIN_LIST_DEFAULT, ge=1, le=ADMIN_LIST_MAX),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
+    q = db.query(MerchantApplication)
+    if status:
+        q = q.filter(MerchantApplication.status.in_(status))
     return (
-        db.query(MerchantApplication)
-        .order_by(MerchantApplication.submitted_at.desc())
+        q.order_by(
+            MerchantApplication.submitted_at.desc(), MerchantApplication.id.desc()
+        )
+        .offset(offset)
+        .limit(limit)
         .all()
     )
 
@@ -583,6 +603,9 @@ def get_wallet_balance(admin: User = Depends(_require_admin)):
 @router.get("/admin/batches", response_model=list[AdminPayoutBatchResponse])
 def list_payout_batches(
     status: PayoutStatus | None = None,
+    # CF-0067 (B73): newest first, a window at a time (batches grow weekly).
+    limit: int = Query(ADMIN_LIST_DEFAULT, ge=1, le=ADMIN_LIST_MAX),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
     db: Session = Depends(get_db),
     admin: User = Depends(_require_admin),
 ):
@@ -592,7 +615,12 @@ def list_payout_batches(
     )
     if status:
         q = q.filter(PayoutBatch.status == status)
-    rows = q.order_by(PayoutBatch.created_at.desc()).all()
+    rows = (
+        q.order_by(PayoutBatch.created_at.desc(), PayoutBatch.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
     return [_admin_batch_view(batch, name) for batch, name in rows]
 
 

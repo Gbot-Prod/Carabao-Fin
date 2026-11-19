@@ -75,7 +75,12 @@ function AdminUsersContent() {
     } catch (err) {
       setNotice({ text: getApiErrorDetail(err) || "Could not change the role.", error: true });
       // A 502 means the role changed but the link was not sent: reload the list.
-      fetchAdminUsers(page).then((res) => setUsers(res.items)).catch(() => {});
+      fetchAdminUsers(page)
+        .then((res) => setUsers(res.items))
+        .catch(() =>
+          // CF-0067 (B74): say so, instead of leaving stale rows without a word.
+          setNotice({ text: "Could not reload the list. Refresh the page to see the current roles.", error: true }),
+        );
     } finally {
       setToggling(null);
     }
