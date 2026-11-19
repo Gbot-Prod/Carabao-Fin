@@ -6,7 +6,7 @@ import { makeSurfaces } from './urls.ts';
 
 test('the plain dashboard link opens the page for its kind', () => {
   assert.equal(merchantPageForNotification('/merchantDashboard', 'new_order'), '/sales');
-  assert.equal(merchantPageForNotification('/merchantDashboard', 'chat_message'), '/sales');
+  assert.equal(merchantPageForNotification('/merchantDashboard', 'chat_message'), '/chats');
   assert.equal(merchantPageForNotification('/merchantDashboard', 'review_received'), '/reviews');
   assert.equal(merchantPageForNotification('/merchantDashboard', 'payout_released'), '/earnings');
   assert.equal(merchantPageForNotification('/merchantDashboard/', 'payout_destination_changed'), '/earnings');

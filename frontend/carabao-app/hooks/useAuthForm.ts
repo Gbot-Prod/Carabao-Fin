@@ -6,8 +6,9 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { safeNextPath } from "@/lib/next-path";
 import { normalizePhMobile } from "@/lib/phone";
 import { useResendCooldown } from "@/hooks/useResendCooldown";
+import { PASSWORD_MIN_LENGTH, isStrongPassword } from "@/lib/password-policy";
 
-export const MIN_PASSWORD = 8;
+export const MIN_PASSWORD = PASSWORD_MIN_LENGTH;
 
 export type AuthMode = "signin" | "signup";
 export type AuthProvider = "google" | "facebook";
@@ -122,7 +123,7 @@ export function useAuthForm({ defaultNext, onSuccess, socialUrls }: Options) {
       return setStep("details");
     }
     if (authMode === "signup" && step === "details") {
-      if (form.password.length < MIN_PASSWORD) return setError(t.auth.passwordTooShort);
+      if (!isStrongPassword(form.password)) return setError(t.auth.passwordWeak);
       if (form.password !== form.confirmPassword) return setError(t.auth.passwordMismatch);
       // Back from the code step within the minute: the code already sent still works.
       if (cooldown.secondsLeft(codeTarget) > 0) return setStep("code");

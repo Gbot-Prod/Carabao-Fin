@@ -49,7 +49,6 @@ for _module in pkgutil.iter_modules(models_pkg.__path__):
 MIN_ADMIN_PASSWORD = 12
 MAX_PASSWORD = 128  # Better Auth's maximum
 
-
 def _find_identity(db, contact: str) -> AuthIdentity | None:
     if "@" in contact:
         return (
@@ -64,7 +63,6 @@ def _find_identity(db, contact: str) -> AuthIdentity | None:
     return (
         db.query(AuthIdentity).filter(AuthIdentity.phone_number == f"+{number}").first()
     )
-
 
 def _ask_password() -> str:
     """Asked twice, without echo."""

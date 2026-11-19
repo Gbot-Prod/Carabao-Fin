@@ -90,6 +90,19 @@ def place_order_from_cart(
     cart_items = cart.items or []
     if not cart_items:
         raise HTTPException(status_code=400, detail="Cart is empty")
+    if payload.produce_ids is not None:
+        # Check out only the ticked lines; the rest stay in the cart.
+        selected = set(payload.produce_ids)
+        cart_items = [
+            item
+            for item in cart_items
+            if isinstance(item, dict)
+            and _extract_item_int(item, "produce_id", "produceId", "id") in selected
+        ]
+        if not cart_items:
+            raise HTTPException(
+                status_code=400, detail="None of the selected items are in your cart"
+            )
     if payload.delivery_date is not None and payload.delivery_date < datetime.now(_PH_TZ).date():
         raise HTTPException(
             status_code=400, detail="Delivery date cannot be in the past"

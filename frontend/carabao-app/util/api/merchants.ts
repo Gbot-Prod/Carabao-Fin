@@ -83,6 +83,18 @@ export type ShopPage = {
   description: string | null;
 };
 
+/** The owner's view: the live page plus the unpublished draft. */
+export type MyShopPage = ShopPage & {
+  draft_title: string;
+  draft_description: string | null;
+  draft_logo_url: string | null;
+  draft_banner_image_url: string | null;
+  /** Time of the last publish. null: buyers cannot see the shop yet. */
+  published_at: string | null;
+  is_published: boolean;
+  has_unpublished_changes: boolean;
+};
+
 export type MerchantPerformance = {
   merchant_id: number;
   merchant_name: string;
@@ -101,6 +113,12 @@ export type MerchantPerformance = {
 
 export const fetchMerchants = async (): Promise<Merchant[]> => {
   const response = await apiClient.get<Merchant[]>('/merchants');
+  return response.data;
+};
+
+/** The owner's own farm. Works before the shop page is published. */
+export const fetchMyMerchant = async (): Promise<Merchant> => {
+  const response = await apiClient.get<Merchant>('/merchants/me');
   return response.data;
 };
 
@@ -228,27 +246,50 @@ export const fetchMerchantShopPage = async (merchantId: number): Promise<ShopPag
   return response.data;
 };
 
-export const createMyShopPage = async (payload: { title: string; slug: string; description?: string | null }): Promise<ShopPage> => {
-  const response = await apiClient.post<ShopPage>('/merchants/me/shoppage', payload);
+// The owner's shop page routes edit a draft. Buyers see it only after publish.
+
+export const fetchMyShopPage = async (): Promise<MyShopPage> => {
+  const response = await apiClient.get<MyShopPage>('/merchants/me/shoppage');
   return response.data;
 };
 
-export const updateMyShopPage = async (payload: { title?: string; slug?: string; description?: string | null }): Promise<ShopPage> => {
-  const response = await apiClient.patch<ShopPage>('/merchants/me/shoppage', payload);
+export const createMyShopPage = async (payload: { title: string; slug: string; description?: string | null }): Promise<MyShopPage> => {
+  const response = await apiClient.post<MyShopPage>('/merchants/me/shoppage', payload);
   return response.data;
 };
 
-export const uploadBannerImage = async (file: File): Promise<ShopPage> => {
+export const updateMyShopPage = async (payload: {
+  title?: string;
+  slug?: string;
+  description?: string | null;
+  logo_url?: string | null;
+  banner_image_url?: string | null;
+}): Promise<MyShopPage> => {
+  const response = await apiClient.patch<MyShopPage>('/merchants/me/shoppage', payload);
+  return response.data;
+};
+
+export const publishMyShopPage = async (): Promise<MyShopPage> => {
+  const response = await apiClient.post<MyShopPage>('/merchants/me/shoppage/publish');
+  return response.data;
+};
+
+export const discardMyShopPageDraft = async (): Promise<MyShopPage> => {
+  const response = await apiClient.post<MyShopPage>('/merchants/me/shoppage/discard');
+  return response.data;
+};
+
+export const uploadBannerImage = async (file: File): Promise<MyShopPage> => {
   const formData = new FormData();
   formData.append('banner', file);
-  const response = await apiClient.post<ShopPage>('/merchants/me/shoppage/banner', formData);
+  const response = await apiClient.post<MyShopPage>('/merchants/me/shoppage/banner', formData);
   return response.data;
 };
 
-export const uploadShopLogo = async (file: File): Promise<ShopPage> => {
+export const uploadShopLogo = async (file: File): Promise<MyShopPage> => {
   const formData = new FormData();
   formData.append('logo', file);
-  const response = await apiClient.post<ShopPage>('/merchants/me/shoppage/logo', formData);
+  const response = await apiClient.post<MyShopPage>('/merchants/me/shoppage/logo', formData);
   return response.data;
 };
 
@@ -489,4 +530,23 @@ export const followFarm = async (merchantId: number): Promise<void> => {
 
 export const unfollowFarm = async (merchantId: number): Promise<void> => {
   await apiClient.delete(`/merchants/${merchantId}/follow`);
+};
+
+/** One order chat in the farm's chat list (GET /merchants/me/chats). */
+export type MerchantChatSummary = {
+  order_id: number;
+  order_ref: string;
+  order_status: OrderStatus;
+  buyer_name: string | null;
+  closed: boolean;
+  last_body: string;
+  last_sender_role: string;
+  last_mine: boolean;
+  last_at: string;
+  unread: number;
+};
+
+export const fetchMyMerchantChats = async (): Promise<MerchantChatSummary[]> => {
+  const response = await apiClient.get<MerchantChatSummary[]>('/merchants/me/chats');
+  return response.data;
 };

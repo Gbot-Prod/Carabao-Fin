@@ -9,8 +9,7 @@ import "../auth/page.css";
 import { useSignInPath } from "@/hooks/useSignInPath";
 import { formatCountdown, useResendCooldown } from "@/hooks/useResendCooldown";
 import { normalizePhMobile } from "@/lib/phone";
-
-const MIN_PASSWORD = 8;
+import { PASSWORD_MIN_LENGTH as MIN_PASSWORD, isStrongPassword } from "@/lib/password-policy";
 
 /**
  * Forgot password (E6): a texted code by default; an emailed link for accounts
@@ -57,7 +56,7 @@ export default function ForgotPasswordPage() {
       });
     }
     if (!codeSent) return void sendResetCode();
-    if (password.length < MIN_PASSWORD) return setError(t.reset.tooShort);
+    if (!isStrongPassword(password)) return setError(t.reset.weak);
     if (password !== confirm) return setError(t.reset.mismatch);
     void run(async () => {
       await resetPasswordWithPhone({ phoneNumber, code, newPassword: password });

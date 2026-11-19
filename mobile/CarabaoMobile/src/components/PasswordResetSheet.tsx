@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { authClient } from '../lib/authClient';
 import { codeMessage, requirePhone } from '../lib/AuthContext';
+import { PASSWORD_RULE_MESSAGE, isStrongPassword } from '../lib/passwordPolicy';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 
 type Props = {
@@ -68,7 +69,7 @@ export function PasswordResetSheet({ visible, initialIdentifier, onClose, onDone
         setCodeSent(true);
       });
     }
-    if (password.length < 8) return setError('Use at least 8 characters.');
+    if (!isStrongPassword(password)) return setError(PASSWORD_RULE_MESSAGE);
     void run(async () => {
       const { error: err } = await authClient.phoneNumber.resetPassword({
         phoneNumber: requirePhone(value),

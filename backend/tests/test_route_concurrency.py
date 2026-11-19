@@ -1,6 +1,7 @@
 """Guards against the event-loop deadlock and per-row query loops coming back."""
 
 import inspect
+from datetime import UTC, datetime
 import os
 import subprocess
 import sys
@@ -97,7 +98,14 @@ def _add_merchants(session, count):
                 gov_id_document_path="gov-id/x.pdf",
             )
         )
-        session.add(ShopPage(merchant_id=i, title=f"Farm {i}", slug=f"farm-{i}"))
+        session.add(
+            ShopPage(
+                merchant_id=i,
+                title=f"Farm {i}",
+                slug=f"farm-{i}",
+                published_at=datetime.now(UTC),
+            )
+        )
         session.add(Produce(merchant_id=i, name="Mango", price=10))
     session.commit()
 

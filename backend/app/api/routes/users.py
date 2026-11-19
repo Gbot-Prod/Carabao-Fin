@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -13,8 +13,19 @@ from app.models.payout_batch import PayoutBatch
 from app.models.shipment import Shipment
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.schemas.user import UserResponse, UserUpdate
-from app.services import better_auth_store, r2_service, upload_validation
+from app.schemas.user import (
+    AccountDeleteCodeRequest,
+    AccountDeleteCodeSent,
+    AccountDeleteConfirm,
+    UserResponse,
+    UserUpdate,
+)
+from app.services import (
+    account_deletion_otp,
+    better_auth_store,
+    r2_service,
+    upload_validation,
+)
 from app.services.order_status import ACTIVE_ORDER_STATUSES
 
 router = APIRouter(tags=["users"])
@@ -108,14 +119,10 @@ def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
     return {key: int(value) for key, value in blockers.items() if value}
 
 
-@router.delete("/users/me", status_code=204)
-def delete_my_account(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+def _refuse_if_blocked(db: Session, user: User) -> None:
     # Stopgap until accounts are anonymized instead of hard-deleted: refuse
     # rather than 500 on the FK violation or wipe financial records.
-    blockers = _account_deletion_blockers(db, current_user)
+    blockers = _account_deletion_blockers(db, user)
     if blockers:
         raise HTTPException(
             status_code=409,
@@ -127,6 +134,36 @@ def delete_my_account(
                 "blockers": blockers,
             },
         )
+
+
+@router.post("/users/me/delete-code", response_model=AccountDeleteCodeSent)
+def send_account_delete_code(
+    request: Request,
+    payload: AccountDeleteCodeRequest | None = Body(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Text the code that confirms deleting the account, after the account's
+    password (when it has one). Refuses (409) first when the account can't be
+    deleted, so no SMS is spent on it."""
+    _refuse_if_blocked(db, current_user)
+    account_deletion_otp.check_password(
+        db, request, current_user, payload.password if payload else None
+    )
+    sent_to = account_deletion_otp.send_code(db, request, current_user)
+    return AccountDeleteCodeSent(sent_to=sent_to)
+
+
+@router.delete("/users/me", status_code=204)
+def delete_my_account(
+    request: Request,
+    payload: AccountDeleteConfirm = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete the account, confirmed with the code from /users/me/delete-code."""
+    _refuse_if_blocked(db, current_user)
+    account_deletion_otp.check_code(db, request, current_user, payload.code)
 
     # MerchantApplication and MerchantPayoutInfo have no cascade on the User
     # or Merchant side, delete them manually.

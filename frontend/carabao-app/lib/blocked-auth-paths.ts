@@ -39,6 +39,8 @@ const ADMIN_SURFACE_ENDPOINTS = [
   "/request-password-reset",
   "/reset-password",
   "/change-password",
+  // Profile page: whether the account has a password (read-only, own account).
+  "/list-accounts",
   "/list-sessions",
   "/revoke-session",
   "/revoke-sessions",

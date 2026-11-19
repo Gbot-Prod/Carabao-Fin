@@ -58,6 +58,8 @@ export type PlaceOrderPayload = {
   // The server refuses unknown fields; items, prices and fees come from the
   // server-side cart and listings.
   notes?: string | null;
+  // The cart lines ticked in the cart, by produce ID. Omit for the whole cart.
+  produce_ids?: number[];
 };
 
 export type PlacedOrder = {
