@@ -106,8 +106,16 @@ export type MerchantPerformance = {
   last_30_days_revenue: number;
 };
 
-export const fetchMerchants = async (): Promise<Merchant[]> => {
-  const response = await apiClient.get<Merchant[]>('/merchants');
+/**
+ * Every public farm. CF-0062: the browse page needs no listings, so the
+ * default asks for the slim list (`produces` is then always []).
+ */
+export const fetchMerchants = async (
+  { withProduce = false }: { withProduce?: boolean } = {},
+): Promise<Merchant[]> => {
+  const response = await apiClient.get<Merchant[]>('/merchants', {
+    params: withProduce ? undefined : { include_produce: false },
+  });
   return response.data;
 };
 

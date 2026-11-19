@@ -59,7 +59,8 @@ export const getPublicFarm = cache(async (merchantId: number) => {
   return { merchant, shopPage };
 });
 
-export const getPublicFarms = () => getPublic<Merchant[]>("/merchants");
+// CF-0062: the sitemap needs ids and dates only, not every listing.
+export const getPublicFarms = () => getPublic<Merchant[]>("/merchants?include_produce=false");
 
 /** "Lipa, Batangas" from the parts that are set. */
 export function farmLocation(m: Pick<Merchant, "city" | "province">): string {

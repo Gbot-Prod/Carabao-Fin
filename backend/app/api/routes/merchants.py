@@ -2,11 +2,19 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, raiseload, selectinload
 
 from app.api.dependencies import get_current_user, get_db
 from app.core.errors import upstream_error
@@ -33,6 +41,7 @@ from app.schemas.merchant import (
     PublicMerchantResponse,
 )
 from app.schemas.merchant_performance import MerchantPerformanceResponse
+from app.schemas.pagination import MAX_OFFSET
 from app.schemas.payout import (
     AvailablePayout,
     MerchantOrderResponse,
@@ -100,6 +109,9 @@ router = APIRouter(tags=["merchants"])
 # CF-0059: one copy of the Mapbox call, in services/mapbox_routing.
 _get_leg_durations = mapbox_routing.leg_durations
 
+
+# CF-0062: largest window of GET /merchants?limit=.
+MAX_PUBLIC_FARMS_PAGE = 500
 
 class MerchantOrderStatusUpdate(BaseModel):
     status: OrderStatus
@@ -216,14 +228,27 @@ def _compute_and_store_route(db: Session, order: Order) -> None:
 
 
 @router.get("/merchants", response_model=list[PublicMerchantResponse])
-def list_merchants(db: Session = Depends(get_db)):
-    return (
+def list_merchants(
+    # CF-0062 (B60): the browse page and the sitemap need no listings; false
+    # sends every farm with `produces: []` and does not load them at all.
+    include_produce: bool = Query(True),
+    # Optional window, oldest farm first. Without a limit the whole list comes
+    # back as before (the mobile app reads it so).
+    limit: int | None = Query(None, ge=1, le=MAX_PUBLIC_FARMS_PAGE),
+    offset: int = Query(0, ge=0, le=MAX_OFFSET),
+    db: Session = Depends(get_db),
+):
+    # Slim: listings are never loaded; raiseload makes a stray access fail
+    # loudly instead of costing one query per farm.
+    produce_option = (
+        selectinload(Merchant.produces.and_(is_listed(ph_today())))
+        if include_produce
+        else raiseload(Merchant.produces)
+    )
+    query = (
         db.query(Merchant)
         # The response includes both; without this each merchant costs 2 queries.
-        .options(
-            selectinload(Merchant.shop_page),
-            selectinload(Merchant.produces.and_(is_listed(ph_today()))),
-        )
+        .options(selectinload(Merchant.shop_page), produce_option)
         .outerjoin(MerchantApplication, MerchantApplication.user_id == Merchant.user_id)
         .filter(
             merchant_is_public(),
@@ -233,7 +258,26 @@ def list_merchants(db: Session = Depends(get_db)):
             ),
         )
         .order_by(Merchant.id.asc())
-        .all()
+    )
+    if offset:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    rows = query.all()
+    if include_produce:
+        return rows
+    return [_slim_public_farm(row) for row in rows]
+
+
+_SLIM_FIELDS = tuple(
+    name for name in PublicMerchantResponse.model_fields if name != "produces"
+)
+
+
+def _slim_public_farm(merchant: Merchant) -> PublicMerchantResponse:
+    data = {name: getattr(merchant, name) for name in _SLIM_FIELDS}
+    return PublicMerchantResponse.model_validate(
+        {**data, "produces": []}, from_attributes=True
     )
 
 
