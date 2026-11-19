@@ -103,9 +103,15 @@ function HistoryCard({ order }: { order: ApiHistoryOrder }) {
               <Text style={styles.detailValue}>{order.items.length} item{order.items.length !== 1 ? 's' : ''}</Text>
             </View>
           )}
-          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
-            <TouchableOpacity style={styles.buyAgain} onPress={buyAgain} disabled={reordering}>
-              <Text style={styles.buyAgainText}>{reordering ? 'Adding…' : 'Buy again'}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm }}>
+            <TouchableOpacity
+              style={styles.buyAgain}
+              onPress={() => router.push({ pathname: '/order-detail', params: { orderId: String(order.order_id) } })}
+            >
+              <Text style={styles.buyAgainText}>View details</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.buyAgain, styles.chatBtn]} onPress={buyAgain} disabled={reordering}>
+              <Text style={[styles.buyAgainText, styles.chatBtnText]}>{reordering ? 'Adding…' : 'Buy again'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.buyAgain, styles.chatBtn]}

@@ -1,16 +1,16 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: no    iteration: 5    target: 20
+branch: improve/mobile-loop    push: no    iteration: 6    target: 20
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0104) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0105) to avoid collisions.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 2/#5 · STRENGTHEN 1/#2 · SECURITY 1/#4 · AUDIT 1/#1
+PARITY 3/#6 · STRENGTHEN 1/#2 · SECURITY 1/#4 · AUDIT 1/#1
 
 ## Needs human
 - `npm audit --omit=dev`: 3 moderate (minimatch ReDoS via `@expo/fingerprint` ← `expo`). The only
@@ -31,7 +31,7 @@ PARITY 2/#5 · STRENGTHEN 1/#2 · SECURITY 1/#4 · AUDIT 1/#1
 | `checkout` | `checkout` → `CheckoutScreen` | partial | `/orders/me/place`, `/payments/checkout/:id` ✓; `/users/me/addresses`, `/payments/checkout/:id/cancel` not called | no address book / default address, no cancel of pending payment |
 | `confirmation`, `orders/success` | `confirmation` → `ConfirmationScreen` | done | `/payments/transactions/order/:id` | checks status with server |
 | `orders` history | `(tabs)/history` → `HistoryScreen` | done | `/orders/me/history/page` ✓ (since #3) | status filter, search, infinite scroll; unpaged route now unused by mobile (M30) |
-| `orders/[orderId]` order detail | — | missing | `/orders/me/:id`, `/orders/me/:id/cancel`, `/orders/me/:id/confirm-received`, `/orders/me/:id/review` exist | reorder exists from history only |
+| `orders/[orderId]` order detail | `order-detail` → `OrderDetailScreen` | partial | `/orders/me/:id`, `/orders/me/:id/cancel`, `/orders/me/:id/confirm-received` ✓ (since #6); `/orders/me/:id/review` not called | review shown read-only; writing a review is M08 |
 | `track` | `(tabs)/track` → `TrackScreen` | partial | `/tracking/:id` ✓; `/shipments/:id` not called | |
 | `notifications` | `notifications` → `NotificationsScreen` | partial | list, read, read-all ✓; delete, unread, bulk read not called | |
 | `profile` account | `(tabs)/profile` → `ProfileScreen` | partial | `/users/me` ✓; `/users/me/addresses`, `/users/me/avatar`, `/users/me/delete-code`, `/email/otp/*` not called | no address book, avatar, account deletion |
@@ -53,7 +53,7 @@ PARITY 2/#5 · STRENGTHEN 1/#2 · SECURITY 1/#4 · AUDIT 1/#1
 | merchant `shop` page | — | missing | `/merchants/me/shoppage` (+ banner, logo, publish, discard) exist | |
 | merchant `settings` | — | missing | `/merchants/me` exists | |
 
-Parity score: 9 / 26 done (7 partial, 10 missing; 3 rows n/a)
+Parity score: 9 / 26 done (8 partial, 9 missing; 3 rows n/a)
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
@@ -62,10 +62,9 @@ Parity score: 9 / 26 done (7 partial, 10 missing; 3 rows n/a)
 | M02 | STRENGTHEN | M | 3 | 2 | tests | — | `npm test` exists since #3 (`node --test`, Node 24 strips TS types; test files need `/// <reference types="node" />` and `.ts` import paths). Add test files for `cartGroups`, `orderStatus`, `phone`, `passwordPolicy`, `referencePrices`, `idle` and register each in the script; compare values with web/backend while there — test: `npm test` runs ≥ 7 files. |
 | M31 | STRENGTHEN | M | 3 | 2 | account | — | Profile has 7 rows that do nothing on tap (`onPress={() => {}}`: Address, Payment Methods, Language, Theme, Help Center, Terms & Privacy, Rate the App) and shows "Payment Methods: No cards saved" although the app has no saved cards. Wire each to a real target (Address → M05 address book; Terms/Help → web pages via allow-listed `WebBrowser`) or remove it — test: every Profile row either opens something or is gone. |
 | M30 | STRENGTHEN | S | 2 | 1 | orders | — | Retire unpaged `GET /orders/me/history` (backend `orders.py:325`): no mobile screen calls it after #3, but the mobile wrapper `api.orders.history` and a web fetcher (`util/api/orders.ts:84`) still exist; check web callers first (fixed in #4: #3 said the web no longer used it). Remove route + wrappers + backend test, add a line to the web log — test: backend pytest passes, `grep` finds no caller. Batch with other backend S items or do with the web loop. |
-| M03 | PARITY | M | 4 | 3 | orders | parity | Order detail screen `orders/[orderId]` (items, status, totals from server, cancel, confirm received) — test: open from history, cancel a pending order, see the new status. |
 | M05 | PARITY | M | 4 | 3 | checkout | parity | Address book on checkout and profile (`/users/me/addresses`, default address) — test: add 2 addresses, set default, checkout uses default. |
 | M07 | PARITY | M | 3 | 2 | discovery | parity | Farm detail: reviews list + published shop page (banner, logo, about) — test: farm with reviews shows them with stars. |
-| M08 | PARITY | M | 3 | 3 | orders | parity | Leave a review for a delivered order (`/orders/me/:id/review`) — test: delivered order shows "Review", submit, farm rating updates. |
+| M08 | PARITY | M | 3 | 3 | orders | parity | Leave / edit a review for a delivered order (`/orders/me/:id/review`) from `OrderDetailScreen` (it now shows "You can review this order on the website" when `can_review`; replace that line with the form; edit while `editable_until`) — test: delivered order → write review → detail shows it. |
 | M09 | PARITY | M | 3 | 3 | discovery | parity | Produce search filters/sort/paging matching web `produceSearch.ts` — test: sort by price ascending, page 2 loads. |
 | M11 | SECURITY | M | 3 | 2 | auth | — | Verify a 401 that survives the token retry signs the user out and clears cart/user data; verify sign-out clears every AsyncStorage key with PII — test: unit test on the clear-keys list + manual check. |
 | M12 | SECURITY | S | 3 | 1 | payments | — | Allow-list hosts before `WebBrowser.openBrowserAsync(checkout.checkout_url)` (PayMongo host only) — test: off-list URL refused. |
@@ -87,6 +86,8 @@ Parity score: 9 / 26 done (7 partial, 10 missing; 3 rows n/a)
 | M28 | PARITY | M | 2 | 3 | onboarding | parity | Native merchant application status (`/merchant-applications/me`) instead of only opening web — test: pending applicant sees "under review". |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #6 — PARITY — orders — CF-0105 — M
+What: order detail screen (M03, web `orders/[orderId]`). New route `order-detail?orderId=` → `OrderDetailScreen`: reference `CB-YYYY-NNNN`, farm, status badge, pending-payment and delivered notes, item lines, delivery fee and total from the server (`total_amount`, not summed on the phone), delivery address / requested date + window / notes, the buyer's review (read only), and actions: "Order received" (shipped / out for delivery, with the auto-confirm date), "Cancel order" (processing only), both behind a confirm dialog, then the detail is re-read so the screen shows the server's status also after a refusal; "Live tracking", "Message farm". 404 → "Order not found" (also for another buyer's id). `api.orders.detail/cancel/confirmReceived` + `ApiOrderDetail`. History cards get "View details". Notification links `/orders/<id>` (backend chat, refund, order notifications) now open that order; mapping moved to pure `src/lib/notificationLinks.ts`; bad ids fall back to the history list, full URLs open nothing. Pure `src/lib/orderDetail.ts`: `orderActions` (same rules as backend cancel / confirm routes), `orderRef` (same as backend `order_ref`), `parseOrderId` (plain positive integer only — route params can come from deep links). Why: parity on the buyer "track" path; cancel and confirm existed only on the web. Tests: `orderDetail.test.ts` 3, `notificationLinks.test.ts` 3. Manual check: History → expand → View details; processing order → Cancel order → confirm → badge "Cancelled"; shipped order → Order received → "Delivered … confirmed by you"; open `carabaomobile://order-detail?orderId=abc` → "Order not found"; tap a chat notification → opens that order. Checks: npm test 22/22, lint 0/0, tsc pass, android export OK. Not run on a device. Follow-ups: M08 now targets this screen.
 ### #5 — PARITY — discovery — CF-0104 — M
 What: saved produce (M06, web `saved` page / web B38). `api.saved` (`ids`, `list`, `save` PUT, `unsave` DELETE) on the existing CF-0038 routes. New `SavedProvider` (`src/lib/SavedContext.tsx`, in `app/_layout.tsx`): loads the ids once per sign-in, a tap updates the heart at once and puts it back with an alert if the server refuses (200-item limit, own listing, 404). Ids are stored with the token they were loaded for (`idsFor`), so after sign-out or an account switch no old hearts show. New `SaveHeart` (44 pt target, a11y label + selected state; signed-out tap → sign in) on farm produce rows (`MerchantScreen`) and search hits (`OrderScreen`). New `saved` route → `SavedScreen` (FlatList, pull to refresh, skeleton, retry, empty state, unsaved rows hide at once, tap → farm). Profile: "Saved produce" row. `src/lib/savedProduce.ts`: `withSaved` copied from web `lib/saved-produce.ts` (marked to keep in step) + mobile `idsFor`. Why: parity on the buyer "find" path. Tests: `savedProduce.test.ts` 4 (web's 3 + ids only for the account they were loaded for). Manual check: farm page → tap heart (fills) → Profile → Saved produce shows it → tap heart there (row goes) → back on farm page heart is empty; signed out → heart opens sign in; merchant taps heart on own listing → "Not saved: You can't save your own listing" and heart empties. Checks: npm test 16/16, lint 0/0, tsc pass. Not run on a device. Found: M31 (7 dead Profile rows).
 ### #4 — SECURITY — config — CF-0103 — M
@@ -99,8 +100,8 @@ What: `npm run lint` from 30 errors + 7 warnings to 0/0 with code fixes only (no
 What: created this log, branch `improve/mobile-loop` (own worktree), parity matrix (29 rows), 28-item backlog. Compared mobile `src/lib/api.ts` routes with web `util/api/*`. Found by reading code (not from §2): M01 lint red (30 errors), M14 `mockData.ts` kept only for a type + Unsplash hot-link + "⭐ 0" rating, M13 `app/(tabs)/App.tsx` is a stray route that duplicates providers, M12 checkout URL opened with no host check, M26 raw error logging, M10 no https guard. Checked and NOT a bug: `OnboardingScreen` opens `/merchantOnboarding`, the web redirects it to `/merchant/onboarding` (`lib/urls.ts:145`). Web log: B34 (area `mobile`, epic `parity`) copied as M04 + M06. Why: no state file existed. Tests: none (survey). Checks: tsc pass; lint FAIL (pre-existing, 30 errors / 7 warnings); no mobile tests yet; expo-doctor 20/20. Follow-ups: #2 must be M01 (broken first), then M02, then PARITY M04/M03.
 
 ## Health (refreshed on AUDIT)
-- Mobile tests: 16 in 3 files since #5 (`npm test`).
-- Last bundle check: #4, `expo export --platform android` OK; expo-doctor 20/20.
+- Mobile tests: 22 in 5 files since #6 (`npm test`).
+- Last bundle check: #6 (android export OK, also proves Metro resolves `./x.ts` imports in app code); before: #4, `expo export --platform android` OK; expo-doctor 20/20.
 - `tsc --noEmit`: pass.
 - Lint: pass, 0 errors / 0 warnings since #2 (was 30 + 7 at #1).
 - `npm audit --omit=dev`: 3 moderate (minimatch via `@expo/fingerprint`, see Needs human).

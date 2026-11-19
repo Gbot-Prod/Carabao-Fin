@@ -188,6 +188,43 @@ export type ApiHistoryOrder = {
   items: ApiCartItem[];
 };
 
+// GET /orders/me/{id} (backend OrderDetailResponse). CF-0105.
+export type ApiOrderReview = {
+  id: number;
+  rating: number; // 1-5
+  comment: string | null;
+  reviewer_name: string;
+  created_at: string;
+  updated_at: string;
+  editable_until: string | null;
+};
+
+export type ApiOrderDetail = {
+  id: number;
+  order_id: number;
+  merchant: string;
+  merchant_id: number | null;
+  shipped: boolean;
+  date_bought: string;
+  time_of_arrival: string | null;
+  shipped_at: string | null;
+  auto_confirm_at: string | null;
+  delivery_fee: number;
+  status: string;
+  payment_status: string;
+  items: ApiCartItem[];
+  total_amount: number;
+  delivery_address: string | null;
+  requested_delivery_date: string | null;
+  delivery_window: string | null;
+  notes: string | null;
+  delivered_at: string | null;
+  delivery_confirmed_by: string | null;
+  review: ApiOrderReview | null;
+  can_review: boolean;
+  review_deadline: string | null;
+};
+
 export type ApiCartItem = {
   id: string;
   farm: string;
@@ -443,6 +480,13 @@ export const api = {
     // CF-0102: one page, newest first, filtered by status group and/or search.
     historyPage: (token: string | null, query: HistoryQuery) =>
       request<ApiPage<ApiHistoryOrder>>(`/orders/me/history/page?${historyQueryString(query)}`, token),
+    detail: (token: string | null, orderId: number) =>
+      request<ApiOrderDetail>(`/orders/me/${orderId}`, token),
+    // Both return the order as /orders/me/current does; the screen re-reads the detail after.
+    cancel: (token: string | null, orderId: number) =>
+      request<ApiCurrentOrder>(`/orders/me/${orderId}/cancel`, token, { method: 'POST' }),
+    confirmReceived: (token: string | null, orderId: number) =>
+      request<ApiCurrentOrder>(`/orders/me/${orderId}/confirm-received`, token, { method: 'POST' }),
     place: (token: string | null, payload: PlaceOrderPayload) =>
       request<PlaceOrderResponse>('/orders/me/place', token, {
         method: 'POST',

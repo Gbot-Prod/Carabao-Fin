@@ -5,21 +5,13 @@ import {
   View, Text, FlatList, StyleSheet, SafeAreaView, TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
+import { appRoute } from '../lib/notificationLinks';
 import { useAuth } from '../lib/AuthContext';
 import { api, type ApiNotification } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { EmptyState } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { Ionicons } from '@expo/vector-icons';
-
-// Notification links are web paths; open the matching app screen.
-function appRoute(link: string | null): Href | null {
-  if (!link) return null;
-  if (link.startsWith('/track')) return '/(tabs)/track';
-  if (link.startsWith('/orders')) return '/(tabs)/history';
-  if (link.startsWith('/merchantDashboard')) return '/merchant-orders';
-  return null;
-}
 
 function NotificationsContent() {
   const router = useRouter();
@@ -46,7 +38,7 @@ function NotificationsContent() {
       void api.notifications.markRead(token, n.id).catch(() => {});
     }
     const route = appRoute(n.link);
-    if (route) router.push(route);
+    if (route) router.push(route as Href);
   };
 
   const markAll = () => {
