@@ -283,12 +283,16 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
             metadata={"payout_batch_id": str(batch.id)},
         )
     except paymongo.TransferRejected as exc:
-        logger.warning("Payout batch %s rejected by PayMongo: %s", batch.id, exc)
+        # CF-0074: codes only; the detail (kept in failure_reason) can hold
+        # the destination account number or name.
+        logger.warning(
+            "Payout batch %s rejected by PayMongo: %s", batch.id, exc.codes or "-"
+        )
         _mark_failed(batch, f"PayMongo rejected the transfer: {exc}")
         db.commit()
         return batch
     except paymongo.TransferOutcomeUnknown as exc:
-        logger.error("Payout batch %s outcome unknown: %s", batch.id, exc)
+        logger.error("Payout batch %s outcome unknown: %s", batch.id, exc.codes or "-")
         batch.failure_reason = (
             f"No clear answer from PayMongo ({exc}). Left as processing until "
             "PayMongo's webhook reports the result; do not resend."

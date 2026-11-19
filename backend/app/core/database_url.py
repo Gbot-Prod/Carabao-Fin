@@ -56,8 +56,14 @@ def _ca_file(env: Mapping[str, str]) -> str | None:
 
 
 def create_db_engine(url: str, env: Mapping[str, str] | None = None, **kwargs: Any) -> Engine:
-    """create_engine() with verified TLS for any non-local Postgres host."""
+    """create_engine() with verified TLS for any non-local Postgres host.
+
+    CF-0074: ``hide_parameters`` by default, so a database error's text (and
+    every log or traceback that prints it) shows the SQL without its values:
+    those are emails, phone numbers, names and addresses.
+    """
     env = os.environ if env is None else env
+    kwargs.setdefault("hide_parameters", True)
     sa_url = make_url(normalize_database_url(url))
     if sa_url.get_backend_name() != "postgresql":
         return create_engine(sa_url, **kwargs)

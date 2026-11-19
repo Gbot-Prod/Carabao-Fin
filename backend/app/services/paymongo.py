@@ -4,6 +4,7 @@ import hmac
 import os
 import time
 from dataclasses import dataclass
+from typing import Any
 
 import requests
 
@@ -182,12 +183,34 @@ INSTITUTIONS_CACHE_SECONDS = 6 * 60 * 60
 _institutions_cache: dict[str, tuple[float, list[dict]]] = {}
 
 
-class TransferRejected(Exception):
+class _TransferError(Exception):
+    """CF-0074: ``str()`` is PayMongo's detail, for the admin's failure reason;
+    it can repeat the destination account. ``codes`` holds only PayMongo's
+    error codes, for logs."""
+
+    def __init__(self, detail: str, codes: str = "") -> None:
+        super().__init__(detail)
+        self.codes = codes
+
+
+class TransferRejected(_TransferError):
     """PayMongo refused the transfer (4xx): nothing was sent, safe to retry."""
 
 
-class TransferOutcomeUnknown(Exception):
+class TransferOutcomeUnknown(_TransferError):
     """Timeout, network error or 5xx: the transfer may or may not exist."""
+
+
+def _error_codes(response: Any) -> str:
+    """PayMongo's error codes only (no detail text), or the HTTP status."""
+    try:
+        errors = response.json().get("errors") or []
+        codes = sorted({str(e.get("code") or "error") for e in errors})
+        if codes:
+            return f"HTTP {response.status_code}: " + ", ".join(codes)
+    except (ValueError, AttributeError):
+        pass
+    return f"HTTP {response.status_code}"
 
 
 def _error_detail(response) -> str:
@@ -303,7 +326,10 @@ def create_transfer(
     try:
         source = get_wallet_account()
     except Exception as exc:  # nothing has been sent yet
-        raise TransferRejected(f"could not read the PayMongo wallet: {exc}") from exc
+        raise TransferRejected(
+            f"could not read the PayMongo wallet: {exc}",
+            codes=f"wallet: {type(exc).__name__}",
+        ) from exc
     transfer: dict = {
         "source_account": source,
         "destination_account": destination,
@@ -325,12 +351,14 @@ def create_transfer(
             timeout=30,
         )
     except requests.RequestException as exc:
-        raise TransferOutcomeUnknown(str(exc)) from exc
+        raise TransferOutcomeUnknown(str(exc), codes=type(exc).__name__) from exc
 
     if response.status_code >= 500:
-        raise TransferOutcomeUnknown(_error_detail(response))
+        raise TransferOutcomeUnknown(
+            _error_detail(response), codes=_error_codes(response)
+        )
     if response.status_code >= 400:
-        raise TransferRejected(_error_detail(response))
+        raise TransferRejected(_error_detail(response), codes=_error_codes(response))
 
     try:
         transfers = (response.json().get("data") or {}).get("transfers") or []
