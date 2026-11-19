@@ -132,11 +132,11 @@ def _transaction(db, order, status):
     ("order_status", "txn_status", "expected"),
     [
         ("pending", None, {"active_orders": 1}),
-        ("shipped", "paid", {"active_orders": 1, "payment_records": 1}),
-        ("delivered", "paid", {"payment_records": 1}),
-        ("cancelled", "expired", {"payment_records": 1}),
+        ("shipped", "paid", {"active_orders": 1}),
+        # CF-0041: money still owed to the buyer keeps the account.
+        ("cancelled", "refund_pending", {"refunds_pending": 1}),
     ],
-    ids=["pending-order", "in-transit", "delivered-paid", "expired-checkout"],
+    ids=["pending-order", "in-transit", "refund-owed"],
 )
 def test_account_delete_blocked_by_order_history(
     db, seller, buyer, order_status, txn_status, expected
@@ -223,6 +223,105 @@ def test_account_delete_succeeds_for_merchant_without_sales(db, seller):
     assert db.query(MerchantPayoutInfo).count() == 0
 
 
+
+def test_account_delete_removes_identity_documents(db, seller, r2_deleted):
+    """CF-0040: the ID scans leave R2 with the account."""
+    user, _ = seller
+    db.add(
+        MerchantApplication(
+            user_id=user.id,
+            status="rejected",
+            merchant_name="Dela Cruz Farm",
+            business_type="individual",
+            contact_email="farmer@example.com",
+            contact_number="639171234567",
+            rsbsa_document_path="rsbsa/2.pdf",
+            gov_id_type="Passport",
+            gov_id_document_path="gov-id/y.pdf",
+            region="Region III",
+            province="Bulacan",
+            city="Malolos",
+            address="Purok 1",
+            postal_code="3000",
+            available_days=["mon"],
+        )
+    )
+    db.commit()
+
+    assert delete_account(_client(db, user)).status_code == 204
+    assert sorted(r2_deleted) == [
+        "gov-id/x.pdf",
+        "gov-id/y.pdf",
+        "rsbsa/1.pdf",
+        "rsbsa/2.pdf",
+    ]
+
+
+def test_account_is_kept_when_documents_cannot_be_deleted(db, seller, monkeypatch):
+    from app.services import r2_service
+
+    user, _ = seller
+
+    def fail(_path):
+        raise RuntimeError("R2 down")
+
+    monkeypatch.setattr(r2_service, "delete_private_document", fail)
+
+    assert delete_account(_client(db, user)).status_code == 502
+    db.expire_all()
+    assert db.get(User, user.id) is not None
+
+
+@pytest.mark.parametrize(
+    ("order_status", "txn_status"),
+    [("delivered", "paid"), ("cancelled", "refunded"), ("cancelled", "expired")],
+)
+def test_account_delete_keeps_payment_records_without_the_buyer(
+    db, seller, buyer, order_status, txn_status
+):
+    """CF-0041: closed orders with money history stay, anonymized."""
+    from app.models.chat import ChatMessage, Conversation
+
+    _, merchant = seller
+    user, _ = buyer
+    order = _order(db, merchant, buyer, order_status)
+    order.delivery_address = "12 Mabini St"
+    order.delivery_lat, order.delivery_lng = 14.8, 120.8
+    order.notes = "Gate 2"
+    txn = _transaction(db, order, txn_status)
+    convo = Conversation(kind="order", order_id=order.id)
+    db.add(convo)
+    db.flush()
+    db.add(
+        ChatMessage(
+            conversation_id=convo.id,
+            sender_id=user.id,
+            sender_role="buyer",
+            body="My number is 0917...",
+        )
+    )
+    unpaid = _order(db, merchant, buyer, "cancelled")
+    db.commit()
+    order_id, txn_id, unpaid_id = order.id, txn.id, unpaid.id
+
+    resp = delete_account(_client(db, user))
+
+    assert resp.status_code == 204, resp.text
+    db.expire_all()
+    assert db.get(User, user.id) is None
+    kept = db.get(Order, order_id)
+    assert kept is not None
+    assert kept.user_id is None
+    assert (kept.delivery_address, kept.delivery_lat, kept.notes) == (None, None, None)
+    assert kept.total_price == 1000
+    record = db.get(Transaction, txn_id)
+    assert record.user_id is None
+    assert record.amount == 1000 and record.status == txn_status
+    assert db.query(Conversation).count() == 0
+    assert db.query(ChatMessage).count() == 0
+    assert db.get(Order, unpaid_id) is None
+
+
 @pytest.mark.parametrize("txn_status", ["paid", "expired", "refunded"])
 def test_history_remove_blocked_when_order_has_payment(db, seller, buyer, txn_status):
     _, merchant = seller
@@ -284,7 +383,7 @@ def test_account_delete_code_is_not_sent_when_blocked(db, seller, buyer):
 
     _, merchant = seller
     user, _ = buyer
-    _transaction(db, _order(db, merchant, buyer, "delivered"), "paid")
+    _transaction(db, _order(db, merchant, buyer, "shipped"), "paid")
     db.commit()
 
     resp = _client(db, user).post("/users/me/delete-code")

@@ -223,3 +223,22 @@ def test_failed_gov_id_upload_removes_the_rsbsa_upload(db, monkeypatch):  # noqa
     assert res.status_code == 502
     assert deleted == ["rsbsa/x.pdf"]
     assert db.query(MerchantApplication).count() == 0
+
+
+def test_resubmit_deletes_the_replaced_documents(db, monkeypatch):  # noqa: F811
+    """CF-0040: a resubmit does not leave the old ID scans in R2."""
+    user = make_user(db, NORMALIZED, phone_number="+639171234567")
+    db.commit()
+    assert _apply(db, user, contact_email=NORMALIZED).status_code == 200
+    application = db.query(MerchantApplication).one()
+    application.status = "rejected"
+    application.rsbsa_document_path = "rsbsa/old.pdf"
+    application.gov_id_document_path = "gov-id/old.pdf"
+    db.commit()
+    deleted: list[str] = []
+    monkeypatch.setattr(r2_service, "delete_private_document", deleted.append)
+
+    res = _apply(db, user, contact_email=NORMALIZED)
+
+    assert res.status_code == 200, res.text
+    assert sorted(deleted) == ["gov-id/old.pdf", "rsbsa/old.pdf"]

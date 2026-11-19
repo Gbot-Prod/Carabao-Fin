@@ -61,6 +61,14 @@ class AdminOrderDetail(AdminOrderSummary):
     delivery: AdminOrderDelivery
 
 
+class CancelOrderPayload(BaseModel):
+    """CF-0045: why an admin cancels the order; shown to the buyer."""
+
+    model_config = {"extra": "forbid"}
+
+    reason: str = Field(min_length=3, max_length=300)
+
+
 RefundMethod = Literal["paymongo", "gcash", "maya", "bank_transfer", "cash"]
 
 

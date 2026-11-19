@@ -12,7 +12,7 @@ from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.produce import Produce
 from app.models.review import Review
-from app.models.statuses import OrderStatus
+from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.order import (
@@ -28,12 +28,14 @@ from app.services import notifications
 from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
     expire_stale_reservations,
+    release_order_reservation,
     reservation_ttl_minutes,
 )
 from app.services.order_status import (
     ACTIVE_ORDER_STATUSES,
     CLOSED_ORDER_STATUSES,
     IN_TRANSIT_STATUSES,
+    cancel_paid_order,
     mark_delivered,
     money_received_clause,
 )
@@ -58,6 +60,7 @@ from ._order_helpers import (
     buyer_orders_query,
     get_buyer_orders,
     get_or_create_cart,
+    is_own_produce,
     merchant_takes_orders,
     order_item_load,
     order_line,
@@ -69,6 +72,50 @@ router = APIRouter(tags=["orders"])
 
 # Buyers pick delivery dates on the Philippine calendar (UTC+8, no DST).
 _PH_TZ = timezone(timedelta(hours=8))
+# Furthest a buyer may schedule delivery (CF-0050).
+MAX_DELIVERY_DAYS_AHEAD = 30
+
+
+def _order_produce_ids(items: list[Any] | None) -> set[int]:
+    return {
+        produce_id
+        for item in items or []
+        if isinstance(item, dict)
+        and (produce_id := _extract_item_int(item, "produce_id", "produceId", "id"))
+        is not None
+    }
+
+
+def release_superseded_orders(db: Session, user_id: int, produce_ids: set[int]) -> None:
+    """Cancel the buyer's unpaid orders for any of ``produce_ids`` (CF-0047).
+
+    Cart lines stay in the cart until their order is paid, so checking out
+    again would otherwise hold the same stock twice and let the buyer pay
+    twice. The new checkout replaces the old unpaid order: its stock comes
+    back and its PayMongo session is closed. Raises 409 while a payment for
+    the old order may still go through.
+    """
+    pending = (
+        db.query(Order)
+        .filter(Order.user_id == user_id, Order.status == OrderStatus.PENDING)
+        .order_by(Order.id)
+        .with_for_update()
+        .populate_existing()
+        .all()
+    )
+    for order in pending:
+        if not _order_produce_ids(order.items) & produce_ids:
+            continue
+        if not release_order_reservation(
+            order, db, transaction_status=TransactionStatus.EXPIRED
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"A payment for order {notifications.order_ref(order)} is still "
+                    "in progress. Wait a minute, then try again."
+                ),
+            )
 
 @router.post("/orders/me/place", response_model=PlaceOrderResponse)
 def place_order_from_cart(
@@ -107,6 +154,18 @@ def place_order_from_cart(
         raise HTTPException(
             status_code=400, detail="Delivery date cannot be in the past"
         )
+    if (
+        payload.delivery_date is not None
+        and payload.delivery_date
+        > datetime.now(_PH_TZ).date() + timedelta(days=MAX_DELIVERY_DAYS_AHEAD)
+    ):
+        # CF-0050: bounds how long payout can wait on the requested date.
+        raise HTTPException(
+            status_code=400,
+            detail=f"Delivery date must be within {MAX_DELIVERY_DAYS_AHEAD} days",
+        )
+
+    release_superseded_orders(db, current_user.id, _order_produce_ids(cart_items))
 
     today = ph_today()
     # Lock stock rows in id order so two carts sharing items can't deadlock.
@@ -152,6 +211,12 @@ def place_order_from_cart(
             raise HTTPException(
                 status_code=400,
                 detail=f"'{produce.name}' is past its best-before date",
+            )
+        if is_own_produce(produce, current_user.id):
+            # CF-0039: no buying (and then reviewing) your own farm's produce.
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{produce.name}' is from your own farm",
             )
 
         quantity = max(_to_int(item.get("quantity"), 0), 0)
@@ -435,6 +500,44 @@ def confirm_order_received(
         )
 
     mark_delivered(order, confirmed_by="buyer")
+    db.commit()
+    db.refresh(order)
+    return to_current_order_item(order)
+
+
+@router.post("/orders/me/{order_id}/cancel", response_model=CurrentOrderResponse)
+def cancel_my_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Buyer cancels a paid order the farm has not shipped yet (CF-0045).
+
+    The stock goes back on sale and the payment goes to the refund queue.
+    """
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
+        .with_for_update(of=Order)
+        .first()
+    )
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.status != OrderStatus.PROCESSING:
+        raise HTTPException(
+            status_code=409,
+            detail="You can cancel an order only before the farm ships it",
+        )
+
+    cancel_paid_order(order, db, "You cancelled this order.")
+    notifications.notify(
+        db,
+        notifications.merchant_user_id(order),
+        notifications.ORDER_CANCELLED,
+        f"Order {notifications.order_ref(order)} was cancelled",
+        "The buyer cancelled it before shipping. The stock is back on sale.",
+        "/merchantDashboard",
+    )
     db.commit()
     db.refresh(order)
     return to_current_order_item(order)

@@ -13,12 +13,12 @@
     "auth:migrate:apply": "node scripts/better-auth-migrate.mjs --apply"
   },
   "dependencies": {
-    "@better-auth/core": "^1.6.5",
-    "@better-auth/expo": "^1.6.5",
+    "@better-auth/core": "^1.7.26",
+    "@better-auth/expo": "^1.7.26",
     "@turf/along": "^7.3.5",
     "@turf/length": "^7.3.5",
     "axios": "^1.13.6",
-    "better-auth": "^1.6.5",
+    "better-auth": "^1.7.26",
     "lucide-react": "^1.49.0",
     "mapbox-gl": "^3.19.0",
     "next": "16.1.6",
@@ -36,6 +36,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "typescript": "^5"
+    "typescript": "~6.0.3"
   }
 }

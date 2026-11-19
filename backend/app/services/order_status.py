@@ -8,12 +8,13 @@ Payouts depend on ``delivered``, so merchants never set it.
 """
 
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta, timezone
 
 from sqlalchemy import exists
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.models.order import Order
+from app.models.shipment import Shipment
 from app.models.statuses import OrderStatus, PaymentStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.services import notifications
@@ -105,10 +106,7 @@ def apply_merchant_transition(order: Order, new_status: OrderStatus, db: Session
         )
 
     if new_status == OrderStatus.CANCELLED:
-        if not cancel_order(order, db):
-            raise PaymentInProgress(
-                "A payment for this order is in progress; try again shortly"
-            )
+        cancel_paid_order(order, db, "The farm cancelled this order.")
     elif new_status == OrderStatus.SHIPPED:
         mark_shipped(order)
     else:
@@ -124,16 +122,111 @@ def apply_merchant_transition(order: Order, new_status: OrderStatus, db: Session
             )
 
 
+def cancel_paid_order(order: Order, db: Session, reason: str) -> None:
+    """Cancel ``order`` and tell the buyer; the caller commits (CF-0051).
+
+    Raises PaymentInProgress, leaving the order unchanged, while a payment for
+    an unpaid order may still go through.
+    """
+    # Only payment moves an order out of pending, so any other status was paid.
+    was_paid = order.status != OrderStatus.PENDING
+    if not cancel_order(order, db):
+        raise PaymentInProgress(
+            "A payment for this order is in progress; try again shortly"
+        )
+    refund_note = " Your payment will be refunded." if was_paid else ""
+    close_shipment_if_done(order)
+    notifications.notify(
+        db,
+        notifications.buyer_id(order),
+        notifications.ORDER_CANCELLED,
+        f"Order {notifications.order_ref(order)} was cancelled",
+        f"{reason}{refund_note}",
+        notifications.order_link(order),
+    )
+
+
+def unshipped_cancel_days() -> int:
+    """Days a paid order may wait in processing before it is cancelled (CF-0045)."""
+    return int(os.getenv("ORDER_UNSHIPPED_CANCEL_DAYS", "5"))
+
+
+def cancel_unshipped_orders(db: Session, days: int) -> int:
+    """Cancel paid orders the merchant did not ship within ``days`` (CF-0045).
+
+    The clock starts when the payment landed. The order's money moves to
+    ``refund_pending``, so an admin can refund the buyer. The row lock makes
+    this safe when multiple API workers run the sweep.
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    due_order_ids = [
+        order_id
+        for (order_id,) in (
+            db.query(Order.id)
+            .filter(
+                Order.status == OrderStatus.PROCESSING,
+                exists().where(
+                    Transaction.order_id == Order.id,
+                    Transaction.status == TransactionStatus.PAID,
+                    Transaction.paid_at < cutoff,
+                ),
+            )
+            .all()
+        )
+    ]
+    cancelled = 0
+
+    for order_id in due_order_ids:
+        order = (
+            db.query(Order).filter(Order.id == order_id).with_for_update().first()
+        )
+        if not order or order.status != OrderStatus.PROCESSING:
+            continue
+        cancel_paid_order(
+            order,
+            db,
+            f"The farm did not ship it within {days} days of payment.",
+        )
+        notifications.notify(
+            db,
+            notifications.merchant_user_id(order),
+            notifications.ORDER_CANCELLED,
+            f"Order {notifications.order_ref(order)} was cancelled",
+            f"It was not shipped within {days} days of payment. "
+            "The buyer will be refunded.",
+            "/merchantDashboard",
+        )
+        cancelled += 1
+
+    return cancelled
+
+
 def auto_confirm_days() -> int:
     """Days after shipping before an unconfirmed order counts as received."""
     return int(os.getenv("ORDER_AUTO_CONFIRM_DAYS", "7"))
 
 
-def auto_confirm_at(order: Order) -> datetime | None:
-    """When an in-transit order will auto-confirm, or None if it won't."""
+# Requested delivery dates are Philippine calendar days (UTC+8, no DST).
+_PH_TZ = timezone(timedelta(hours=8))
+
+
+def auto_confirm_at(order: Order, days: int | None = None) -> datetime | None:
+    """When an in-transit order will auto-confirm, or None if it won't.
+
+    The window starts at shipping or at the start of the requested delivery
+    day, whichever is later, so an order shipped early cannot confirm (and
+    become payable) before the buyer could get it (CF-0050).
+    """
     if order.status not in IN_TRANSIT_STATUSES or order.shipped_at is None:
         return None
-    return order.shipped_at + timedelta(days=auto_confirm_days())
+    start = order.shipped_at
+    if start.tzinfo is None:  # SQLite drops the zone
+        start = start.replace(tzinfo=UTC)
+    requested = getattr(order, "requested_delivery_date", None)
+    if requested is not None:
+        delivery_day = datetime.combine(requested, time.min, tzinfo=_PH_TZ)
+        start = max(start, delivery_day)
+    return start + timedelta(days=auto_confirm_days() if days is None else days)
 
 
 def mark_shipped(order: Order) -> None:
@@ -150,10 +243,43 @@ def mark_shipped(order: Order) -> None:
     )
 
 
+SHIPMENT_COMPLETED = "completed"
+
+
+def close_shipment_if_done(order: Order) -> None:
+    """Mark the order's shipment completed once none of its orders is open.
+
+    Shipment.status was never advanced, so a finished batch read in_transit
+    forever (CF-0053).
+    """
+    shipment_id = getattr(order, "shipment_id", None)
+    try:
+        db = object_session(order) if shipment_id else None
+    except Exception:  # not a database row (a test double)
+        db = None
+    if db is None:
+        return
+    db.flush()
+    still_open = (
+        db.query(Order.id)
+        .filter(
+            Order.shipment_id == shipment_id,
+            Order.status.in_(ACTIVE_ORDER_STATUSES),
+        )
+        .first()
+    )
+    if still_open is None:
+        db.query(Shipment).filter(Shipment.id == shipment_id).update(
+            {Shipment.status: SHIPMENT_COMPLETED}, synchronize_session=False
+        )
+
+
 def mark_delivered(order: Order, confirmed_by: str) -> None:
     order.status = OrderStatus.DELIVERED
     order.delivered_at = datetime.now(UTC)
+    order.closed_at = order.delivered_at
     order.delivery_confirmed_by = confirmed_by
+    close_shipment_if_done(order)
     notifications.notify(
         order,
         notifications.buyer_id(order),
@@ -193,6 +319,9 @@ def auto_confirm_delivered_orders(db: Session, days: int) -> int:
         )
         if not order or order.status not in IN_TRANSIT_STATUSES:
             continue
+        due_at = auto_confirm_at(order, days)
+        if due_at is None or due_at > datetime.now(UTC):
+            continue  # waits for its requested delivery day (CF-0050)
         mark_delivered(order, confirmed_by="auto")
         confirmed += 1
 

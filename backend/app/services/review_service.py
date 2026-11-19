@@ -45,6 +45,11 @@ def ensure_reviewable(order, now: datetime | None = None) -> None:
         raise ReviewError(400, "Only delivered orders can be reviewed")
     if order.merchant_id is None:
         raise ReviewError(400, "This merchant is no longer on Carabao")
+    # CF-0039: a merchant may not rate their own farm.
+    merchant = getattr(order, "merchant", None)
+    owner_id = getattr(merchant, "user_id", None)
+    if owner_id is not None and owner_id == getattr(order, "user_id", None):
+        raise ReviewError(403, "You cannot review your own farm")
     deadline = review_deadline(order)
     if (now or datetime.now(UTC)) > deadline:
         raise ReviewError(400, "The review window for this order has closed")

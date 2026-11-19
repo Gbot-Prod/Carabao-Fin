@@ -1,6 +1,13 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+# CF-0043: limits for the shop page. A slug is lowercase words joined by
+# hyphens, e.g. "dela-cruz-farm", so it is safe in a URL and cannot imitate one.
+MAX_TITLE = 100
+MAX_DESCRIPTION = 2000
+SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+MIN_SLUG, MAX_SLUG = 3, 80
 
 
 class ShopPageBase(BaseModel):
@@ -12,19 +19,25 @@ class ShopPageBase(BaseModel):
 
 
 class ShopPageCreate(BaseModel):
-    title: str
-    slug: str
-    description: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=MAX_TITLE)
+    slug: str = Field(min_length=MIN_SLUG, max_length=MAX_SLUG, pattern=SLUG_PATTERN)
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION)
 
 
 class ShopPageUpdate(BaseModel):
     """Changes to the draft. Buyers see them only after publish."""
 
-    title: str | None = None
-    slug: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, max_length=MAX_TITLE)
+    slug: str | None = Field(
+        default=None, min_length=MIN_SLUG, max_length=MAX_SLUG, pattern=SLUG_PATTERN
+    )
     banner_image_url: str | None = None
     logo_url: str | None = None
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION)
 
 
 class ShopPageResponse(ShopPageBase):

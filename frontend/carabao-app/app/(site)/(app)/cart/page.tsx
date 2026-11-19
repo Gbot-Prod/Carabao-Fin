@@ -22,6 +22,7 @@ type CartItem = {
   min_order_qty?: number;
   merchant_id?: number | null;
   delivery_fee?: number | null;
+  unavailable_reason?: string | null;
 };
 
 // A checkbox that also shows the "some ticked" state.
@@ -78,10 +79,11 @@ export default function CartPage() {
             min_order_qty: item.min_order_qty,
             merchant_id: item.merchant_id,
             delivery_fee: item.delivery_fee,
+            unavailable_reason: item.unavailable_reason ?? null,
           }));
           setItems(loaded);
-          // Everything starts ticked, so the usual flow is unchanged.
-          setSelected(new Set(loaded.map((item) => item.id)));
+          // Every line checkout accepts starts ticked (CF-0052).
+          setSelected(new Set(loaded.filter((item) => !item.unavailable_reason).map((item) => item.id)));
         }
       } catch {
         // Keep local defaults when backend is unavailable.
@@ -118,6 +120,7 @@ export default function CartPage() {
               (s.image ?? null) !== (item.image ?? null) ||
               (s.merchant_id ?? null) !== (item.merchant_id ?? null) ||
               (s.delivery_fee ?? null) !== (item.delivery_fee ?? null) ||
+              (s.unavailable_reason ?? null) !== (item.unavailable_reason ?? null) ||
               s.farm !== item.farm)
           );
         });
@@ -134,6 +137,7 @@ export default function CartPage() {
                     min_order_qty: s.min_order_qty,
                     merchant_id: s.merchant_id,
                     delivery_fee: s.delivery_fee,
+                    unavailable_reason: s.unavailable_reason ?? null,
                     farm: s.farm || item.farm,
                   }
                 : item;
@@ -306,6 +310,11 @@ export default function CartPage() {
                               <p className={styles.unitLine}>{item.unit}</p>
                               {(item.min_order_qty ?? 1) > 1 && (
                                 <p className={styles.unitLine}>{fmt(t.cart.minOrder, { qty: item.min_order_qty ?? 1 })}</p>
+                              )}
+                              {item.unavailable_reason && (
+                                <p className={styles.unavailable} role="note">
+                                  {item.produce} {item.unavailable_reason}. Remove it to check out.
+                                </p>
                               )}
                             </div>
                           </div>

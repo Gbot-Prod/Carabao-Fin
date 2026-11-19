@@ -23,6 +23,7 @@ NEW_ORDER = "new_order"  # to the merchant
 ORDER_SHIPPED = "order_shipped"
 ORDER_OUT_FOR_DELIVERY = "order_out_for_delivery"
 ORDER_DELIVERED = "order_delivered"
+ORDER_CANCELLED = "order_cancelled"  # CF-0051
 REVIEW_RECEIVED = "review_received"
 PAYOUT_RELEASED = "payout_released"
 REFUND = "refund"

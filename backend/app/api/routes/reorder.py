@@ -19,6 +19,7 @@ from ._order_helpers import (
     _to_int,
     cart_line,
     get_or_create_cart,
+    is_own_produce,
     merchant_takes_orders,
 )
 
@@ -87,6 +88,9 @@ def reorder(
             skipped.append(
                 ReorderSkip(name=name, reason="the farm isn't taking orders")
             )
+            continue
+        if is_own_produce(produce, current_user.id):
+            skipped.append(ReorderSkip(name=name, reason="it is from your own farm"))
             continue
         existing = by_id.get(produce.id)
         if existing is None and len(lines) >= MAX_CART_ITEMS:

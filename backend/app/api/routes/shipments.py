@@ -26,7 +26,7 @@ from app.schemas.shipment import (
     TrackingPosition,
     Waypoint,
 )
-from app.services.merchant_service import get_active_merchant
+from app.services.merchant_service import get_active_merchant, get_editable_merchant
 from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
 from app.services.pinned_location import delivery_point, merchant_point
 from app.utils.geocoding import _geocode
@@ -169,7 +169,7 @@ def create_merchant_shipment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -462,8 +462,8 @@ def list_my_shipments(
         .all()
     )
 
-    # Shipment.status is never advanced after creation, so the merchant's
-    # active/past split is derived from how many of its orders are closed.
+    # The active/past split is derived from how many of its orders are closed.
+    # Shipment.status turns "completed" when the last one closes (CF-0053).
     closed_counts = dict(
         db.query(Order.shipment_id, func.count(Order.id))
         .filter(

@@ -20,7 +20,7 @@ class AdminTransactionRow(BaseModel):
     paid_at: datetime | None
     merchant_id: int
     merchant_name: str | None
-    buyer_id: int
+    buyer_id: int | None  # None after the buyer deleted their account
     buyer_name: str | None
     buyer_email: str | None
     refund_method: str | None

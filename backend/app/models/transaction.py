@@ -18,8 +18,15 @@ class Transaction(Base):
     merchant_id = Column(
         Integer, ForeignKey("merchants.id"), nullable=False, index=True
     )
+    # The buyer. NULL after the buyer deleted their account: the payment
+    # record is kept, the person is not (CF-0041; migration b9e4c7a2d5f1).
     user_id = Column(
-        Integer, ForeignKey("backend_users.id"), nullable=False, index=True
+        Integer,
+        ForeignKey(
+            "backend_users.id", ondelete="SET NULL", name="fk_transactions_user_id"
+        ),
+        nullable=True,
+        index=True,
     )
 
     amount = Column(Integer, nullable=False)  # pesos

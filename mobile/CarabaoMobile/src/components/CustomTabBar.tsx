@@ -1,7 +1,7 @@
 // src/components/CustomTabBar.tsx
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarProps } from 'expo-router/tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, Shadow } from '../lib/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,7 @@ const TAB_CONFIG: Record<string, { icon: IoniconName; iconActive: IoniconName; l
   profile: { icon: 'person-outline',       iconActive: 'person',        label: 'Profile' },
 };
 
-export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export default function CustomTabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
   const visibleRoutes = state.routes.filter((r) => r.name in TAB_CONFIG);
@@ -33,9 +33,9 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
           };
 
           const onPress = () => {
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
             if (!isActive && !event.defaultPrevented) {
-              navigation.navigate(route.name);
+              navigateToTab(route.key);
             }
           };
 

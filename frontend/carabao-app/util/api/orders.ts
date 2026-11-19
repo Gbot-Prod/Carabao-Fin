@@ -115,6 +115,12 @@ export const confirmOrderReceived = async (orderId: number): Promise<CurrentOrde
   return response.data;
 };
 
+/** Cancel a paid order the farm has not shipped yet; the payment goes to the refund queue. */
+export const cancelMyOrder = async (orderId: number): Promise<CurrentOrderItem> => {
+  const response = await apiClient.post<CurrentOrderItem>(`/orders/me/${orderId}/cancel`);
+  return response.data;
+};
+
 export const deleteOrderFromHistory = async (orderId: number): Promise<void> => {
   await apiClient.delete(`/orders/me/history/${orderId}`);
 };

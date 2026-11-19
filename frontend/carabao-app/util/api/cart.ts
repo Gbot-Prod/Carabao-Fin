@@ -15,6 +15,8 @@ export type CartItem = {
   min_order_qty?: number;
   merchant_id?: number | null;
   delivery_fee?: number | null;
+  // Why checkout would refuse this line now (CF-0052); null when it can be bought.
+  unavailable_reason?: string | null;
 };
 
 export type Cart = {

@@ -46,6 +46,9 @@ class CartItem(BaseModel):
     stock_quantity: int = 0
     # The merchant's delivery fee for its order (C1).
     delivery_fee: int = 0
+    # Why checkout would refuse this line now, e.g. "is no longer available"
+    # (CF-0052). None when the line can be bought.
+    unavailable_reason: str | None = None
 
 
 class CartResponse(BaseModel):

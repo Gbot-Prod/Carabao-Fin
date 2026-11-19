@@ -63,6 +63,7 @@ from app.services.account_suspension import merchant_is_public
 from app.services.merchant_service import (
     find_deletion_blockers,
     get_active_merchant,
+    get_editable_merchant,
     soft_delete_merchant,
 )
 from app.services.order_status import (
@@ -76,7 +77,10 @@ from app.services.order_status import (
     payment_status,
 )
 from app.services.payout_service import (
+    PROVIDER_LABELS,
+    PROVIDER_MAX_PESOS,
     claimable_transactions,
+    fit_to_transfer_limit,
     get_payout_info,
     move_failed_batches,
     payout_info_problem,
@@ -316,7 +320,7 @@ def update_my_merchant(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -516,7 +520,7 @@ def create_produce(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -549,19 +553,40 @@ def update_produce(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
+    # CF-0049: locked like checkout locks it, so a stock edit and a checkout
+    # decrement cannot overwrite each other.
     produce = (
         db.query(Produce)
         .filter(Produce.id == produce_id, Produce.merchant_id == merchant.id)
+        .with_for_update()
+        .populate_existing()
         .first()
     )
     if not produce:
         raise HTTPException(status_code=404, detail="Produce item not found")
 
-    changes = produce_update.model_dump(exclude_unset=True, exclude={"price_tiers"})
+    expected = produce_update.expected_stock_quantity
+    if (
+        produce_update.stock_quantity is not None
+        and expected is not None
+        and expected != produce.stock_quantity
+    ):
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Stock changed to {produce.stock_quantity} since you opened this "
+                "listing (orders came in or were cancelled). Check it and save again."
+            ),
+        )
+
+    changes = produce_update.model_dump(
+        exclude_unset=True, exclude={"price_tiers", "expected_stock_quantity"}
+    )
     upload_validation.check_image_url_fields(
         changes, {"image_url": produce.image_url}
     )
@@ -595,7 +620,7 @@ def delete_produce(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -620,8 +645,12 @@ def delete_produce(
 # ---------------------------------------------------------------------------
 
 
-def _my_shop_page(db: Session, user: User) -> tuple[Merchant, ShopPage]:
-    merchant = get_active_merchant(db, user.id)
+def _my_shop_page(
+    db: Session, user: User, *, editable: bool = False
+) -> tuple[Merchant, ShopPage]:
+    """``editable`` for a change: refused while the shop is suspended (CF-0054)."""
+    get = get_editable_merchant if editable else get_active_merchant
+    merchant = get(db, user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
     shop_page = merchant.shop_page
@@ -666,7 +695,7 @@ def create_my_shoppage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -701,7 +730,7 @@ def update_my_shoppage(
     current_user: User = Depends(get_current_user),
 ):
     """Change the draft. Buyers see the change only after publish."""
-    _, shop_page = _my_shop_page(db, current_user)
+    _, shop_page = _my_shop_page(db, current_user, editable=True)
 
     updates = shop_page_update.model_dump(exclude_unset=True)
     if "slug" in updates:
@@ -742,7 +771,7 @@ def publish_my_shoppage(
     current_user: User = Depends(get_current_user),
 ):
     """Copy the draft to the live page. The first publish makes the shop public."""
-    _, shop_page = _my_shop_page(db, current_user)
+    _, shop_page = _my_shop_page(db, current_user, editable=True)
     if not (shop_page.draft_title or "").strip():
         raise HTTPException(status_code=422, detail="Add a title before you publish")
     for field in DRAFT_FIELDS:
@@ -757,7 +786,7 @@ def discard_my_shoppage_draft(
     current_user: User = Depends(get_current_user),
 ):
     """Copy the live page back to the draft."""
-    _, shop_page = _my_shop_page(db, current_user)
+    _, shop_page = _my_shop_page(db, current_user, editable=True)
     if not shop_page.is_published:
         raise HTTPException(
             status_code=400, detail="The shop is not live yet. Nothing to go back to."
@@ -776,7 +805,7 @@ def _upload_draft_image(
     field: str,
     send: Callable[[int, upload_validation.CheckedFile], str],
 ) -> ShopPage:
-    merchant, shop_page = _my_shop_page(db, user)
+    merchant, shop_page = _my_shop_page(db, user, editable=True)
     checked = upload_validation.check_image_upload(file, label)
     try:
         url = send(merchant.id, checked)
@@ -828,7 +857,7 @@ def upload_produce_image(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -933,7 +962,7 @@ def send_payout_info_code(
     current_user: User = Depends(get_current_user),
 ):
     """CF-0004: text a code that confirms exactly this payout method."""
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
     values = _payout_values(payload)
@@ -955,11 +984,11 @@ def update_my_payout_info(
     """
     # CF-0024: the PayMongo call and the code check (which commits) come
     # first. The row lock is then held only for the write, until one commit.
-    if not get_active_merchant(db, current_user.id):
+    if not get_editable_merchant(db, current_user.id):
         raise HTTPException(status_code=404, detail="Merchant profile not found")
     values = _payout_values(payload)
     payout_otp.check_code(db, request, current_user, values, payload.code)
-    merchant = get_active_merchant(db, current_user.id, for_update=True)
+    merchant = get_editable_merchant(db, current_user.id, for_update=True)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
@@ -1096,8 +1125,22 @@ def request_my_payout(
             detail="No delivered orders with unpaid earnings to cash out",
         )
 
-    total = sum(t.merchant_amount for t in unpaid_txns)
     fee = transfer_fee()
+    destination = resolve_destination(info)
+    # CF-0046: never more than one transfer can carry; the rest waits.
+    unpaid_txns = fit_to_transfer_limit(unpaid_txns, destination.provider, fee)
+    if not unpaid_txns:
+        provider = destination.provider
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"An order's earnings are above the {PROVIDER_LABELS[provider]} "
+                f"limit of ₱{PROVIDER_MAX_PESOS[provider]:,} per transfer. "
+                "Contact support to cash it out."
+            ),
+        )
+
+    total = sum(t.merchant_amount for t in unpaid_txns)
     if total <= fee:
         raise HTTPException(
             status_code=400,
@@ -1114,7 +1157,7 @@ def request_my_payout(
         status=PayoutStatus.PENDING,
     )
     # CF-0004: fixed now; sending never reads the payout method again.
-    save_destination(batch, resolve_destination(info))
+    save_destination(batch, destination)
     db.add(batch)
     db.flush()
 
@@ -1199,7 +1242,7 @@ def update_my_merchant_order_status(
     current_user: User = Depends(get_current_user),
 ):
     status = body.status
-    merchant = get_active_merchant(db, current_user.id)
+    merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 

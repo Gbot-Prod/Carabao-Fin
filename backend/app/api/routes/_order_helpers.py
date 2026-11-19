@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from sqlalchemy import func
@@ -16,6 +16,7 @@ from app.services.order_status import (
     auto_confirm_at,
     payment_status,
 )
+from app.services.produce_freshness import is_expired
 
 
 def _to_int(value: Any, default: int = 0) -> int:
@@ -35,7 +36,42 @@ def merchant_takes_orders(merchant: Merchant | None) -> bool:
     )
 
 
-def cart_line(produce: Produce, quantity: int, unit_price: int) -> dict[str, Any]:
+def is_own_produce(produce: Produce, buyer_id: int | None) -> bool:
+    """The buyer owns the farm that sells ``produce`` (CF-0039)."""
+    merchant = produce.merchant
+    return (
+        merchant is not None and buyer_id is not None and merchant.user_id == buyer_id
+    )
+
+
+def line_problem(
+    produce: Produce, quantity: int, buyer_id: int | None, today: date
+) -> str | None:
+    """Why checkout would refuse this cart line, or None (CF-0052).
+
+    The same rules place-order applies, so the cart cannot hold a line that
+    fails checkout. Stock is not checked here: it changes all the time, and the
+    cart shows ``stock_quantity`` for the client to cap the quantity.
+    """
+    if produce.hidden_at is not None:
+        return "is no longer available"
+    if is_expired(produce, today):
+        return "is past its best-before date"
+    if not merchant_takes_orders(produce.merchant):
+        return "is from a farm that isn't taking orders"
+    if is_own_produce(produce, buyer_id):
+        return "is from your own farm"
+    if quantity < (produce.min_order_qty or 1):
+        return f"has a minimum order of {produce.min_order_qty}"
+    return None
+
+
+def cart_line(
+    produce: Produce,
+    quantity: int,
+    unit_price: int,
+    unavailable_reason: str | None = None,
+) -> dict[str, Any]:
     """One cart line, built only from the produce row (CF-0008).
 
     The client sends produce_id and quantity; name, price, image and the
@@ -43,6 +79,7 @@ def cart_line(produce: Produce, quantity: int, unit_price: int) -> dict[str, Any
     """
     merchant = produce.merchant
     return {
+        "unavailable_reason": unavailable_reason,
         "id": str(produce.id),
         "produce_id": produce.id,
         "produce": produce.name,

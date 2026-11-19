@@ -291,6 +291,12 @@ def submit_my_merchant_onboarding_route(
             502, "Document upload failed", log="R2 government ID upload failed", exc=exc
         ) from exc
 
+    # CF-0040: the files this resubmit replaces, deleted once it is saved.
+    replaced_paths = (
+        [application.rsbsa_document_path, application.gov_id_document_path]
+        if application is not None
+        else []
+    )
     if application is None:
         application = MerchantApplication(user_id=current_user.id)
         db.add(application)
@@ -335,7 +341,6 @@ def submit_my_merchant_onboarding_route(
     try:
         db.commit()
         db.refresh(application)
-        return application
     except IntegrityError as exc:
         db.rollback()
         _discard_uploads(saved_path, gov_id_path)
@@ -352,3 +357,30 @@ def submit_my_merchant_onboarding_route(
         db.rollback()
         _discard_uploads(saved_path, gov_id_path)
         raise
+
+    _discard_uploads(*_unreferenced(db, replaced_paths))
+    return application
+
+
+def _unreferenced(db: Session, paths: list[str | None]) -> list[str]:
+    """``paths`` that no merchant row still points at (CF-0040).
+
+    A closed merchant keeps the documents it was approved with; a resubmit
+    must not delete those.
+    """
+    wanted = {path for path in paths if path}
+    if not wanted:
+        return []
+    in_use = {
+        path
+        for row in db.query(
+            Merchant.rsbsa_document_path, Merchant.gov_id_document_path
+        )
+        .filter(
+            Merchant.rsbsa_document_path.in_(wanted)
+            | Merchant.gov_id_document_path.in_(wanted)
+        )
+        .all()
+        for path in row
+    }
+    return sorted(wanted - in_use)

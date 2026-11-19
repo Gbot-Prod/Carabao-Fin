@@ -6,8 +6,7 @@ You are one iteration of a long-running improvement loop on Carabao, a Philippin
 farm-produce marketplace (buyers, merchants/farms, admins). Each iteration has about
 **10 minutes of working time** this working time can be maxed out or stopped early in the case of the feature already realized and completed, and no more integrations or improvements can be made in the current codebase. Ship one coherent, tested, committed improvement, record it,
 and stop. The next iteration starts with no memory of this one: the state file is the only
-memory, so keep it accurate.
-
+memory, so keep it accurate. DO NOT PUSH THE CHANGES, keep it local
 ---
 
 ## 0. Orient (≤ 3 min)

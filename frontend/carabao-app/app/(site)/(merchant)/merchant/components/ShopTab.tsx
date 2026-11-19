@@ -200,9 +200,14 @@ function ShopPageCreateForm({ onCreated }: { onCreated: (page: MyShopPage) => vo
 
   const handleCreate = async () => {
     if (!draft.title.trim()) return;
+    // Lowercase words joined by hyphens, 3 to 80 characters (CF-0043).
+    const slug = draft.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 80).replace(/^-+|-+$/g, "");
+    if (slug.length < 3) {
+      setError("Use a shop name with at least 3 letters or numbers.");
+      return;
+    }
     setCreating(true);
     setError(null);
-    const slug = draft.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     try {
       onCreated(await createMyShopPage({ title: draft.title.trim(), slug, description: draft.description.trim() || null }));
       setDraft({ title: "", description: "" });
@@ -218,8 +223,8 @@ function ShopPageCreateForm({ onCreated }: { onCreated: (page: MyShopPage) => vo
       <p className={`${styles.emptyText} ${styles.spaceBelow}`}>
         Set up your shop page. Buyers do not see your farm until you publish it, so you can add a logo, banner and description first.
       </p>
-      <label className={styles.formLabel}>Title *<input className={styles.formInput} value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="e.g. Dela Cruz Farm" /></label>
-      <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Short description shown on your shop page" /></label>
+      <label className={styles.formLabel}>Title *<input className={styles.formInput} value={draft.title} maxLength={100} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="e.g. Dela Cruz Farm" /></label>
+      <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} value={draft.description} maxLength={2000} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Short description shown on your shop page" /></label>
       {error && <p className={`${styles.errorText} ${styles.spaceAbove}`}>{error}</p>}
       <div className={`${styles.formActions} ${styles.spaceAboveLg}`}>
         <button className={styles.primaryBtn} disabled={creating || !draft.title.trim()} onClick={() => void handleCreate()}>{creating ? "Creating…" : "Start shop page draft"}</button>
@@ -297,8 +302,8 @@ function ShopPageEditor({ shopPage, onChange }: { shopPage: MyShopPage; onChange
 
         {editing ? (
           <div className={styles.shopInfoForm}>
-            <label className={styles.formLabel}>Title<input className={styles.formInput} value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} /></label>
-            <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} /></label>
+            <label className={styles.formLabel}>Title<input className={styles.formInput} value={draft.title} maxLength={100} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} /></label>
+            <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} value={draft.description} maxLength={2000} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} /></label>
             <div className={`${styles.formActions} ${styles.spaceAbove}`}>
               <button className={styles.primaryBtn} disabled={saving} onClick={() => void handleSave()}>{saving ? "Saving…" : "Save draft"}</button>
               <button className={styles.secondaryBtn} onClick={() => { setEditing(false); setError(null); }}>Cancel</button>

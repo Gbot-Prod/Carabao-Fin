@@ -485,3 +485,11 @@ a.farmGroupName:hover {
     min-height: 44px;
   }
 }
+
+/* CF-0052: a line checkout would refuse */
+.unavailable {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b42318;
+}

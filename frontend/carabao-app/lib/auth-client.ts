@@ -400,6 +400,8 @@ export const enableTwoFactor = async (enrolmentToken: string, password?: string)
     fetchOptions: { headers: { [ENROLMENT_TOKEN_HEADER]: enrolmentToken } },
   });
   if (error || !data) throw new Error(getErrorMessage(error, "Could not start two-step verification"));
+  // BetterAuth 1.7 can also answer { method: "otp" }; Carabao enrols TOTP only.
+  if (data.method !== "totp") throw new Error("Could not start two-step verification");
   return data;
 };
 

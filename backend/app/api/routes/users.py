@@ -1,16 +1,18 @@
 import logging
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
-from sqlalchemy import func
+from sqlalchemy import exists, func
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.core.errors import upstream_error
+from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.merchant_application import MerchantApplication
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
 from app.models.payout_batch import PayoutBatch
 from app.models.shipment import Shipment
+from app.models.statuses import TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.user import (
@@ -75,11 +77,13 @@ def upload_my_avatar(
 
 
 def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
-    """Dont delete
+    """What stops the account being deleted now. Only non-zero counts.
 
-    Transactions, shipments and payout batches hold non-nullable FKs to the
-    user, their orders or their merchant row, so the delete cannot proceed
-    while any exist. Returns only the non-zero counts.
+    A buyer's closed, paid orders do not block (CF-0041): the payment records
+    are kept without the person. Open orders and refunds still owed do, since
+    the buyer must be reachable until they are settled. A merchant's sales,
+    shipments and payouts still block: the cascade would delete the merchant row
+    they point at.
     """
     active_orders = (
         db.query(func.count(Order.id))
@@ -89,13 +93,15 @@ def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
         )
         .scalar()
     )
-    payment_records = (
+    refunds_pending = (
         db.query(func.count(Transaction.id))
-        .join(Order, Order.id == Transaction.order_id)
-        .filter((Transaction.user_id == user.id) | (Order.user_id == user.id))
+        .filter(
+            Transaction.user_id == user.id,
+            Transaction.status == TransactionStatus.REFUND_PENDING,
+        )
         .scalar()
     )
-    blockers = {"active_orders": active_orders, "payment_records": payment_records}
+    blockers = {"active_orders": active_orders, "refunds_pending": refunds_pending}
 
     # Includes a soft-deleted merchant row: the cascade would still hard-delete it.
     if user.merchant:
@@ -120,20 +126,80 @@ def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
 
 
 def _refuse_if_blocked(db: Session, user: User) -> None:
-    # Stopgap until accounts are anonymized instead of hard-deleted: refuse
-    # rather than 500 on the FK violation or wipe financial records.
     blockers = _account_deletion_blockers(db, user)
     if blockers:
         raise HTTPException(
             status_code=409,
             detail={
                 "message": (
-                    "Accounts with order or payment history can't be deleted "
-                    "yet. Contact support to close your account."
+                    "Finish or cancel your open orders, and wait for any refund, "
+                    "before you delete your account. A farm with sales must be "
+                    "closed through support."
                 ),
                 "blockers": blockers,
             },
         )
+
+
+def _identity_documents(db: Session, user: User) -> list[str]:
+    """Every private ID document stored for this user (CF-0040)."""
+    paths: set[str] = set()
+    for rsbsa, gov_id in db.query(
+        MerchantApplication.rsbsa_document_path,
+        MerchantApplication.gov_id_document_path,
+    ).filter(MerchantApplication.user_id == user.id):
+        paths.update((rsbsa, gov_id))
+    if user.merchant:
+        paths.update(
+            (user.merchant.rsbsa_document_path, user.merchant.gov_id_document_path)
+        )
+    return sorted(path for path in paths if path)
+
+
+def _anonymize_kept_orders(db: Session, user: User) -> None:
+    """Keep the buyer's paid orders as payment records, without the person.
+
+    An order with a transaction stays (accounting); its delivery address, map
+    pin, notes and chat go. Orders that never had a transaction are deleted.
+    """
+    has_txn = exists().where(Transaction.order_id == Order.id)
+    kept_ids = [
+        order_id
+        for (order_id,) in db.query(Order.id).filter(
+            Order.user_id == user.id, has_txn
+        )
+    ]
+    if kept_ids:
+        conversation_ids = db.query(Conversation.id).filter(
+            Conversation.order_id.in_(kept_ids)
+        )
+        db.query(ChatMessage).filter(
+            ChatMessage.conversation_id.in_(conversation_ids.scalar_subquery())
+        ).delete(synchronize_session=False)
+        db.query(ConversationRead).filter(
+            ConversationRead.conversation_id.in_(conversation_ids.scalar_subquery())
+        ).delete(synchronize_session=False)
+        db.query(Conversation).filter(Conversation.order_id.in_(kept_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(Order).filter(Order.id.in_(kept_ids)).update(
+            {
+                Order.user_id: None,
+                Order.delivery_address: None,
+                Order.delivery_lat: None,
+                Order.delivery_lng: None,
+                Order.notes: None,
+                Order.route_waypoints: None,
+            },
+            synchronize_session=False,
+        )
+    db.query(Transaction).filter(Transaction.user_id == user.id).update(
+        {Transaction.user_id: None}, synchronize_session=False
+    )
+    # What is left never reached payment.
+    db.query(Order).filter(Order.user_id == user.id).delete(
+        synchronize_session=False
+    )
 
 
 @router.post("/users/me/delete-code", response_model=AccountDeleteCodeSent)
@@ -165,6 +231,19 @@ def delete_my_account(
     _refuse_if_blocked(db, current_user)
     account_deletion_otp.check_code(db, request, current_user, payload.code)
 
+    # CF-0040: the ID scans go first. If R2 cannot delete them, nothing is
+    # deleted, so no file is left with no row pointing at it.
+    try:
+        for path in _identity_documents(db, current_user):
+            r2_service.delete_private_document(path)
+    except Exception as exc:
+        raise upstream_error(
+            502,
+            "Could not delete your documents. Try again later.",
+            log="R2 delete of identity documents failed",
+            exc=exc,
+        ) from exc
+
     # MerchantApplication and MerchantPayoutInfo have no cascade on the User
     # or Merchant side, delete them manually.
     db.query(MerchantApplication).filter(
@@ -182,11 +261,8 @@ def delete_my_account(
             {"merchant_id": None}, synchronize_session=False
         )
 
-    # The buyer's own orders go with the account (formerly via the
-    # order_histories cascade). The blockers above leave only closed, unpaid ones.
-    db.query(Order).filter(Order.user_id == current_user.id).delete(
-        synchronize_session=False
-    )
+    # CF-0041: paid orders stay as payment records without the buyer.
+    _anonymize_kept_orders(db, current_user)
 
     # The backend row first (with the ORM cascades), then the login, or the next
     # sign-in would bring back an empty account. In this order the database

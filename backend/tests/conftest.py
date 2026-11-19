@@ -36,6 +36,16 @@ def otp_db():
 
 
 @pytest.fixture(autouse=True)
+def r2_deleted(monkeypatch):
+    """CF-0040: R2 deletes are recorded, never sent to a real bucket."""
+    from app.services import r2_service
+
+    deleted: list[str] = []
+    monkeypatch.setattr(r2_service, "delete_private_document", deleted.append)
+    return deleted
+
+
+@pytest.fixture(autouse=True)
 def _field_keys(monkeypatch):
     """CF-0007: fixed test keys for TIN / RSBSA number encryption."""
     monkeypatch.setenv("FIELD_ENCRYPTION_KEY", base64.b64encode(b"e" * 32).decode())

@@ -24,6 +24,7 @@ PAYOUT_RELEASE = "payout.release"
 REFUND = "transaction.refund"
 PRODUCE_HIDE = "produce.hide"
 PRODUCE_UNHIDE = "produce.unhide"
+ORDER_CANCEL = "order.cancel"  # CF-0045
 
 ACTIONS = (
     ROLE_CHANGE,
@@ -35,6 +36,7 @@ ACTIONS = (
     REFUND,
     PRODUCE_HIDE,
     PRODUCE_UNHIDE,
+    ORDER_CANCEL,
 )
 
 

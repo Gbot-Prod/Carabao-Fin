@@ -120,6 +120,7 @@ def restore_order_stock(order: Order, db: Session) -> None:
 
 def _mark_cancelled(order: Order) -> None:
     order.status = OrderStatus.CANCELLED
+    order.closed_at = datetime.now(UTC)
 
 
 def cancel_order(order: Order, db: Session) -> bool:
@@ -129,13 +130,18 @@ def cancel_order(order: Order, db: Session) -> bool:
     returns False (order unchanged) while a payment for it may still go through.
     Paid transactions move to ``refund_pending`` so they are never paid out to
     the merchant.
+
+    Stock comes back only while the produce is still at the farm
+    (``processing``). A shipped or out-for-delivery order has left the farm, so
+    its units are not sold again (CF-0048).
     """
     if order.status == OrderStatus.PENDING:
         return release_order_reservation(
             order, db, transaction_status=TransactionStatus.EXPIRED
         )
 
-    restore_order_stock(order, db)
+    if order.status == OrderStatus.PROCESSING:
+        restore_order_stock(order, db)
     _mark_cancelled(order)
 
     (
@@ -176,6 +182,7 @@ def _flag_payment_mismatch(
     txn.status = TransactionStatus.REFUND_PENDING
     restore_order_stock(order, db)
     order.status = OrderStatus.PAYMENT_MISMATCH
+    order.closed_at = datetime.now(UTC)
     ref = notifications.order_ref(order)
     logger.error(
         "Payment mismatch on order %s (transaction %s, payment %s): %s",

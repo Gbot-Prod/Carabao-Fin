@@ -445,18 +445,35 @@ def test_maya_and_banks_go_by_instapay(db, merchant, buyer, transfers, monkeypat
     assert transfers.calls[-1]["destination"]["bic"] == "BNORPHMMXXX"
 
 
-def test_instapay_cap_blocks_large_bank_payouts(db, merchant, buyer, transfers):  # noqa: F811
+def test_instapay_cap_is_checked_at_request(db, merchant, buyer, transfers):  # noqa: F811
+    """CF-0046: a batch above the cap could never be sent and blocked every
+    later request, so the request refuses it instead of creating it."""
     client = _merchant_client(db, merchant)
     save_payout_info(client, {**GCASH, "payout_type": "maya"})
     _delivered_sale(db, merchant, buyer, merchant_amount=60_000)
-    batch = client.post("/merchants/me/payouts/request").json()
 
-    resp = _admin_client(db).patch(f"/admin/batches/{batch['id']}/release")
+    resp = client.post("/merchants/me/payouts/request")
 
     assert resp.status_code == 400
     assert "InstaPay" in resp.json()["detail"]
+    assert db.query(PayoutBatch).count() == 0
     assert transfers.calls == []
-    assert db.get(PayoutBatch, batch["id"]).status == PayoutStatus.PENDING
+
+
+def test_request_takes_only_what_one_transfer_can_send(db, merchant, buyer):  # noqa: F811
+    """CF-0046: earnings above the cap are split over later payouts."""
+    client = _merchant_client(db, merchant)
+    save_payout_info(client, {**GCASH, "payout_type": "maya"})
+    for _ in range(3):
+        _delivered_sale(db, merchant, buyer, merchant_amount=20_000)
+
+    batch = client.post("/merchants/me/payouts/request").json()
+
+    assert batch["transaction_count"] == 2
+    assert batch["gross_amount"] == 40_000
+    # The third sale waits for the next payout.
+    available = client.get("/merchants/me/payouts/available").json()
+    assert available["transaction_count"] == 1
 
 
 def test_admin_sees_wallet_balance_in_pesos(db, monkeypatch):  # noqa: F811

@@ -241,7 +241,7 @@ function OrderScreenContent() {
                 ))}
                 <Text style={styles.hitsTitle}>Farms</Text>
               </View>
-            ) : null
+            ) : undefined
           }
           ListEmptyComponent={
             <View style={styles.empty}>

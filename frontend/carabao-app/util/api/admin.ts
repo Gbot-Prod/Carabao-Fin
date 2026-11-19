@@ -317,6 +317,12 @@ export const fetchAdminOrder = async (orderId: number): Promise<AdminOrderDetail
   return res.data;
 };
 
+// CF-0045: cancel an order the farm cannot complete; a paid order goes to the refund queue.
+export const cancelAdminOrder = async (orderId: number, reason: string): Promise<AdminOrderDetail> => {
+  const res = await apiClient.post<AdminOrderDetail>(`/admin/orders/${orderId}/cancel`, { reason });
+  return res.data;
+};
+
 // ── Transactions ledger ──────────────────────────────────────────────────────
 
 export type AdminTransaction = {

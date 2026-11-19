@@ -284,6 +284,7 @@ export default function CheckoutPage() {
                   type="date"
                   value={deliveryDate}
                   min={localIsoDate()}
+                  max={localIsoDate(30)}
                   onChange={(event) => setDeliveryDate(event.target.value)}
                   required
                 />
