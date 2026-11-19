@@ -89,6 +89,8 @@ ACTION_LIMITS: dict[str, Limit] = {
     "image_upload": Limit(60, 3600),
     # CF-0064: checking a voucher code before checkout. Bounds code guessing.
     "voucher_preview": Limit(30, 3600),
+    # CF-0069: a data export reads every order, message and review of a person.
+    "data_export": Limit(5, 3600),
 }
 
 

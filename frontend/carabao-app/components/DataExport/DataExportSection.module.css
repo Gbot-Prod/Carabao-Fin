@@ -1,0 +1,38 @@
+.section {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border-strong, #d5dcd6);
+  border-radius: 12px;
+  background: var(--bg-white, #ffffff);
+}
+
+.title {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.text {
+  margin: 0 0 0.75rem;
+  color: var(--text-muted, #4a5e4d);
+  line-height: 1.5;
+}
+
+.button {
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong, #d5dcd6);
+  background: var(--bg-white, #ffffff);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.error {
+  margin: 0.5rem 0 0;
+  color: #ba2f2f;
+  font-weight: 600;
+}

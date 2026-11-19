@@ -411,6 +411,7 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
     - `shipment_create`: 30 per merchant per hour (CF-0060); each create geocodes stops and calls Mapbox Matrix + Directions
     - `image_upload`: 60 per user per hour across avatar, shop logo, shop banner and produce photo uploads (CF-0060)
     - `voucher_preview`: 30 voucher checks per buyer per hour (CF-0064)
+    - `data_export`: 5 personal data downloads per user per hour (CF-0069)
   - Open unpaid orders: a buyer with `MAX_OPEN_PENDING_ORDERS` (10, `services/order_reservations.py`) PENDING orders gets 409 from place-order until they pay, cancel, or the reservation TTL releases them (CF-0045)
 - Better Auth admin plugin HTTP endpoints are blocked (404). Server-side `auth.api.*` calls still work.
 
@@ -534,6 +535,7 @@ Startup runs `_check_field_encryption_keys`:
 - On an unhandled exception, the server logs `[request_id=...]` with the traceback. The client gets 500 `"Internal server error (ref ...)"` plus `request_id`.
 - The request-ID middleware sits inside CORS, so 500 and 413 responses keep their CORS headers.
 - Admin actions go to the audit log (`services/audit_log.py`).
+- Personal data export (CF-0069, `services/data_export.py`, `GET /users/me/export`, web profile → "Download my data"): one JSON file with the caller's account, addresses, orders + their payments, reviews written, followed farms, saved produce, the messages they sent, and their own farm profile. Not included: other people's personal data (the other side of an order is the farm name only), other people's messages, payout account numbers, TIN, RSBSA numbers. Keep this list in step when a new table holds personal data.
 - Security headers on every API response (CF-0068, `app/core/security_headers.py`, inside CORS and outside the request-ID and body-limit middleware, so 413 and 500 get them too): `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'` (not on the development-only `/docs`, `/redoc`, `/openapi.json`). A request with `Authorization` or the internal secret header gets `Cache-Control: no-store`. A header a route sets itself is kept. No HSTS on the API yet (the web app sends it).
 - Mapbox calls (`utils/geocoding.py`, `services/mapbox_routing.py`) log only the HTTP status or the exception type (CF-0059). They never log the address, the coordinates or the exception text: the text of a `requests` error can contain the URL with `access_token`, and addresses are buyers' home addresses. `app/` has no `print()` left. Use a module logger.
 

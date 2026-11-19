@@ -1,6 +1,8 @@
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -14,8 +16,15 @@ from app.models.shipment import Shipment
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdate
-from app.services import better_auth_store, r2_service, rate_limit, upload_validation
+from app.services import (
+    better_auth_store,
+    data_export,
+    r2_service,
+    rate_limit,
+    upload_validation,
+)
 from app.services.order_status import ACTIVE_ORDER_STATUSES
+from app.services.produce_freshness import PH_TZ
 
 router = APIRouter(tags=["users"])
 logger = logging.getLogger(__name__)
@@ -109,6 +118,21 @@ def _account_deletion_blockers(db: Session, user: User) -> dict[str, int]:
         )
 
     return {key: int(value) for key, value in blockers.items() if value}
+
+
+@router.get("/users/me/export")
+def export_my_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> JSONResponse:
+    """CF-0069 (B18): the caller's own data as a JSON download."""
+    rate_limit.enforce_action(db, "data_export", str(current_user.id))
+    body = data_export.build_export(db, current_user)
+    filename = f"carabao-my-data-{datetime.now(PH_TZ).strftime('%Y%m%d')}.json"
+    return JSONResponse(
+        body,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/users/me", status_code=204)

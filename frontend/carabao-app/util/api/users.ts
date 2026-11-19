@@ -104,6 +104,21 @@ export const deleteMyAccount = async (): Promise<void> => {
   await apiClient.delete('/users/me');
 };
 
+/** CF-0069: download the caller's own data as a JSON file (5 per hour). */
+export const downloadMyData = async (): Promise<void> => {
+  const res = await apiClient.get<Blob>('/users/me/export', { responseType: 'blob' });
+  const disposition = String(res.headers['content-disposition'] ?? '');
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'carabao-my-data.json';
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
 export const uploadProfilePicture = async (file: File): Promise<UserProfile> => {
   const formData = new FormData();
   formData.append('avatar', file);
