@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import Field
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -151,8 +153,11 @@ def update_order_review(
 # Registered before /merchants/{merchant_id}/reviews so "me" isn't parsed as an id.
 @router.get("/merchants/me/reviews", response_model=MyMerchantReviewsResponse)
 def list_my_merchant_reviews(
-    rating: list[int] | None = Query(
-        default=None, description="Only these star ratings; repeat to pass several"
+    # CF-0094 (B102): at most the 5 star values, each 1-5.
+    rating: list[Annotated[int, Field(ge=1, le=5)]] | None = Query(
+        default=None,
+        max_length=5,
+        description="Only these star ratings; repeat to pass several",
     ),
     has_comment: bool | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),

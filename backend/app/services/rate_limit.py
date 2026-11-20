@@ -76,6 +76,10 @@ ACTION_LIMITS: dict[str, Limit] = {
     "support_chat_send": Limit(20, 60),
     # Every search also writes a search_log row (demand insight).
     "produce_search": Limit(120, 60),
+    # CF-0094 (B101): public, per client IP; each call reads and scores the
+    # whole reference_prices table. No client calls it in a loop (the web and
+    # mobile forms read GET /reference-prices once and match locally).
+    "reference_price_match": Limit(60, 60),
     # CF-0045 (B50): each place locks stock rows and holds stock for the
     # reservation TTL; each checkout call can open a PayMongo session. A buyer
     # retrying a failed payment stays well under these.

@@ -9,6 +9,14 @@ MAX_OFFSET = 10_000
 # gave the same 500 (bigint out of range) and deep scans on public search.
 MAX_PAGE = 10_000
 
+# CF-0094 (B102): upper bound for id filters in query params (merchant_id,
+# admin_id, target_id, after_id). The id columns are Postgres `integer`, so
+# no row has a larger id; a bound keeps odd values out of the SQL.
+MAX_ID = 2**31 - 1
+
+# CF-0094 (B102): upper bound for free-text filters with no other limit.
+MAX_FILTER_TEXT = 100
+
 
 class Page[T](BaseModel):
     items: list[T]

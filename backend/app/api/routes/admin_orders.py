@@ -22,7 +22,7 @@ from app.schemas.admin_order import (
     CancelOrderPayload,
     RecordRefundPayload,
 )
-from app.schemas.pagination import MAX_PAGE, Page
+from app.schemas.pagination import MAX_ID, MAX_PAGE, Page
 from app.services import audit_log
 from app.services.order_status import (
     ACTIVE_ORDER_STATUSES,
@@ -85,7 +85,7 @@ def _summary_fields(order: Order) -> dict:
 @router.get("/admin/orders", response_model=Page[AdminOrderSummary])
 def list_all_orders(
     status: OrderStatus | None = None,
-    merchant_id: int | None = None,
+    merchant_id: int | None = Query(None, ge=1, le=MAX_ID),
     payment: PaymentStatus | None = Query(None, alias="payment_status"),
     date_from: date | None = None,
     date_to: date | None = None,

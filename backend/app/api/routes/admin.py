@@ -1,6 +1,6 @@
 import logging
 from datetime import UTC, datetime, time, timedelta
-from typing import Literal
+from typing import Literal, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -51,6 +51,9 @@ from app.services.produce_freshness import PH_TZ
 
 router = APIRouter(tags=["admin"])
 logger = logging.getLogger(__name__)
+
+# CF-0094 (B102): the release note an admin can put on a payout batch.
+MAX_PAYOUT_NOTES = 500
 
 
 ADMIN_2FA_DETAIL = (
@@ -288,6 +291,8 @@ ADMIN_LIST_MAX = 500
 ApplicationStatus = Literal[
     "submitted", "clarification", "approved", "rejected", "suspended"
 ]
+# CF-0094 (B102): a status filter names each status at most once.
+_STATUS_COUNT = len(get_args(ApplicationStatus))
 
 
 @router.get(
@@ -297,7 +302,7 @@ ApplicationStatus = Literal[
 def list_all_merchant_applications(
     # CF-0067 (B73): the review page asks for the open ones (submitted,
     # clarification) separately, so a window never hides one waiting for review.
-    status: list[ApplicationStatus] | None = Query(None),
+    status: list[ApplicationStatus] | None = Query(None, max_length=_STATUS_COUNT),
     limit: int = Query(ADMIN_LIST_DEFAULT, ge=1, le=ADMIN_LIST_MAX),
     offset: int = Query(0, ge=0, le=MAX_OFFSET),
     db: Session = Depends(get_db),
@@ -636,7 +641,8 @@ def list_payout_batches(
 )
 def release_payout_batch(
     batch_id: int,
-    notes: str | None = None,
+    # CF-0094 (B102): stored on the batch; an admin note, not a document.
+    notes: str | None = Query(None, max_length=MAX_PAYOUT_NOTES),
     db: Session = Depends(get_db),
     admin: User = Depends(_require_admin),
 ):

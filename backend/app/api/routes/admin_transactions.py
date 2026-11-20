@@ -22,7 +22,7 @@ from app.schemas.admin_transaction import (
     AdminTransactionRow,
     AdminTransactionTotals,
 )
-from app.schemas.pagination import MAX_PAGE
+from app.schemas.pagination import MAX_ID, MAX_PAGE
 from app.services.produce_freshness import PH_TZ, ph_day_start
 
 router = APIRouter(tags=["admin"])
@@ -56,7 +56,7 @@ class TransactionFilters:
     def __init__(
         self,
         status: TransactionStatus | None = None,
-        merchant_id: int | None = None,
+        merchant_id: int | None = Query(None, ge=1, le=MAX_ID),
         date_from: date | None = None,
         date_to: date | None = None,
         q: str | None = Query(None, max_length=200),
