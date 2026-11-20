@@ -25,3 +25,9 @@ test('long titles are cut without a trailing dash', () => {
   assert.match(slug, API_PATTERN);
   assert.equal(shopSlug('', ''), 'shop-1');
 });
+
+test('a title of only digits gets a farm- prefix (a bare number is a farm id)', () => {
+  assert.equal(shopSlug('1990', 'x'), 'farm-1990');
+  assert.equal(shopSlug('Farm 1990', 'x'), 'farm-1990');
+  assert.equal(shopSlug('12 34', 'x'), '12-34');
+});

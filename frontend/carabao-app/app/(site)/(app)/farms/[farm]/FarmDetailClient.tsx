@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import styles from '../page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import FarmReviews from '@/components/FarmReviews/FarmReviews';
@@ -21,6 +21,9 @@ import { formatRequestedDate } from '@/app/(site)/(merchant)/merchant/lib/format
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
 
 type Props = {
+  // The farm's id. The URL may name it by slug (/farms/<slug>), so the server
+  // wrapper resolves it. Null when the API could not be reached to look up a slug.
+  merchantId: number | null;
   // From the server wrapper (page.tsx): the first HTML has the farm in it, so
   // crawlers and slow phones see content, not a spinner. Null when the server
   // could not reach the API; the browser then loads it as before.
@@ -28,10 +31,9 @@ type Props = {
   initialShopPage?: ShopPage | null;
 };
 
-export default function FarmDetailClient({ initialMerchant = null, initialShopPage = null }: Props) {
-  const params = useParams<{ merchantID?: string }>();
-  const merchantID = Number(params?.merchantID ?? '0');
-  const hasValidMerchantId = Number.isFinite(merchantID) && merchantID > 0;
+export default function FarmDetailClient({ merchantId, initialMerchant = null, initialShopPage = null }: Props) {
+  const merchantID = merchantId ?? 0;
+  const hasValidMerchantId = Number.isInteger(merchantID) && merchantID > 0;
   const router = useRouter();
   const { t } = useLanguage();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -66,7 +68,7 @@ export default function FarmDetailClient({ initialMerchant = null, initialShopPa
 
   const [merchant, setMerchant] = useState<Merchant | undefined>(initialMerchant ?? undefined);
   const [shopPage, setShopPage] = useState<ShopPage | null>(initialShopPage);
-  const [error, setError] = useState<string | null>(hasValidMerchantId ? null : 'Invalid merchant ID.');
+  const [error, setError] = useState<string | null>(hasValidMerchantId ? null : 'Unable to load merchant profile right now.');
   // Town level only: the public API has no street or barangay (CF-0048).
   const merchantLocation = [
     merchant?.city,

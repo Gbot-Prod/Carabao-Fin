@@ -10,22 +10,35 @@ import { useSavedProduce } from "@/components/SaveProduceButton/useSavedProduce"
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt } from "@/lib/i18n/format";
 import { activePause, shortDay } from "@/lib/store-pause";
+import { farmPath } from "@/lib/farm-path";
 import { getApiErrorStatus } from "@/util/errorHelper";
 import { fetchListing, type ListingDetail } from "@/util/api/produceSearch";
 import styles from "./page.module.css";
 
+type Props = {
+  // From the server wrapper (page.tsx), so the first HTML has the listing.
+  // Null when the server could not reach the API; the browser loads it then.
+  initialData?: ListingDetail | null;
+};
+
 /** CF-0081 (B64): one listing, its farm, and other farms selling the same produce. */
-export default function ListingClient() {
+export default function ListingClient({ initialData = null }: Props) {
   const params = useParams<{ id: string }>();
   const produceId = Number(params.id);
   const valid = Number.isInteger(produceId) && produceId > 0;
   const { t } = useLanguage();
   const s = t.listingPage;
   const saved = useSavedProduce();
-  const [data, setData] = useState<ListingDetail | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
+  const [data, setData] = useState<ListingDetail | null>(initialData);
+  const [state, setState] = useState<"loading" | "ready" | "missing" | "error">(
+    initialData ? "ready" : "loading",
+  );
   const [attempt, setAttempt] = useState(0);
 
+  // Always refetch in the browser: the server copy can be up to 5 minutes old
+  // (lib/seo.ts), and stock and price matter. With server data on screen this
+  // is a quiet refresh: only a 404 replaces it (the listing just went away).
+  const hasInitial = initialData != null;
   useEffect(() => {
     if (!valid) return;
     let live = true;
@@ -36,12 +49,15 @@ export default function ListingClient() {
         setState("ready");
       })
       .catch((err) => {
-        if (live) setState(getApiErrorStatus(err) === 404 ? "missing" : "error");
+        if (!live) return;
+        const missing = getApiErrorStatus(err) === 404;
+        if (missing) setState("missing");
+        else if (!hasInitial || attempt > 0) setState("error");
       });
     return () => {
       live = false;
     };
-  }, [produceId, valid, attempt]);
+  }, [produceId, valid, attempt, hasInitial]);
 
   if (valid && state === "loading") return <PageLoader label={s.loading} />;
   if (state === "error") {
@@ -112,7 +128,7 @@ export default function ListingClient() {
             </p>
           )}
           {listing.description && <p className={styles.description}>{listing.description}</p>}
-          <Link href={`/farms/${farm.id}`} className={styles.primary}>
+          <Link href={farmPath(farm.id, farm.slug)} className={styles.primary}>
             {s.orderHere}
           </Link>
         </div>

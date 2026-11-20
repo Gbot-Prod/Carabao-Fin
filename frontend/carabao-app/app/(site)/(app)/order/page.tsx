@@ -8,6 +8,7 @@ import styles from './page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import { fetchMerchants, fetchMyCart } from '@/util/api';
 import { farmImages } from '@/lib/farm-images';
+import { farmPath } from '@/lib/farm-path';
 import { fetchMyFollows } from '@/util/api/merchants';
 import { activePause, shortDay } from '@/lib/store-pause';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
@@ -18,6 +19,7 @@ import type { Strings } from '@/lib/i18n/strings/en';
 
 type FarmView = {
   merchantId: number;
+  slug: string | null;
   name: string;
   rating: number;
   deliveryTimeDays: number | null;
@@ -46,6 +48,7 @@ const SORT_OPTIONS: { value: SortKey; label: keyof Strings['browse'] }[] = [
 
 const toFarmView = (merchant: Awaited<ReturnType<typeof fetchMerchants>>[number]): FarmView => ({
   merchantId: merchant.id,
+  slug: merchant.shop_page?.slug ?? null,
   name: merchant.merchant_name,
   rating: merchant.rating ?? 0,
   deliveryTimeDays: merchant.delivery_time ?? null,
@@ -302,7 +305,7 @@ function OrderContent() {
           {filteredFarms.map((farm) => (
             <Link
               key={farm.merchantId}
-              href={`/farms/${farm.merchantId}`}
+              href={farmPath(farm.merchantId, farm.slug)}
               className={styles.farmCard}
             >
               <div className={styles.cardImage}>

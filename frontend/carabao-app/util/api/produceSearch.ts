@@ -36,6 +36,8 @@ export type ListingFarm = {
   rating: number | null;
   rating_count: number;
   paused_until: string | null;
+  /** The shop's slug, for the /farms/<slug> link. */
+  slug?: string | null;
 };
 
 export type ListingDetail = {

@@ -58,6 +58,8 @@ def test_listing_with_its_farm_and_cheapest_other_farms(
     body = res.json()
     assert body["listing"]["id"] == mine.id
     assert body["farm"]["merchant_name"] == merchant.merchant_name
+    # The listing links to the farm by slug: /farms/<slug>.
+    assert body["farm"]["slug"] == merchant.shop_page.slug
     assert "address" not in body["farm"] and "contact_number" not in body["farm"]
     others = [(o["id"], o["price"]) for o in body["other_farms"]]
     assert others == [(cheap.id, 45), (paused.id, 70), (dear.id, 80)]

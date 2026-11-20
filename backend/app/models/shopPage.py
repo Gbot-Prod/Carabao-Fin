@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -56,3 +56,27 @@ class ShopPage(Base):
             getattr(self, f"draft_{field}") != getattr(self, field)
             for field in DRAFT_FIELDS
         )
+
+
+class ShopSlugHistory(Base):
+    """A slug a shop used before (/farms/<slug> links shared or indexed then).
+
+    The web page redirects an old slug to the shop's current one, so a rename
+    keeps old links and search ranking. A current slug always wins: when a
+    shop takes a slug, any history row holding it is removed (it now names
+    that shop).
+    """
+
+    __tablename__ = "shop_slug_history"
+
+    id = Column(Integer, primary_key=True)
+    slug = Column(String, nullable=False, unique=True, index=True)
+    merchant_id = Column(
+        Integer,
+        ForeignKey("merchants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

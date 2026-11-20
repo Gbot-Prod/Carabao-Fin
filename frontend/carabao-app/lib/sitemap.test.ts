@@ -59,3 +59,15 @@ test('help sitemap lists every help page through the given URL builder', () => {
   assert.equal(oneHost[1].url, `${BASE}/help/contact`);
   assert.equal(onHelpHost.length, HELP_PATHS.length);
 });
+
+test('buyer sitemap uses the farm slug URL, the id only without a usable slug', () => {
+  const entries = buyerSitemap(BASE, [
+    { id: 1, shop_page: { slug: 'la-trinidad-highland' } },
+    { id: 2, shop_page: null },
+    { id: 3, shop_page: { slug: '12345' } },
+  ]);
+  assert.deepEqual(
+    entries.map((e) => e.url),
+    [`${BASE}/`, `${BASE}/farms`, `${BASE}/farms/la-trinidad-highland`, `${BASE}/farms/2`, `${BASE}/farms/3`],
+  );
+});

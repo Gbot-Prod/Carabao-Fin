@@ -7,6 +7,8 @@
 // pin location and contact details are left out on purpose (many farms are
 // someone's home).
 
+import { farmPath } from './farm-path.ts';
+
 export type JsonLdProduce = {
   id: number;
   name: string | null;
@@ -157,6 +159,7 @@ export function farmJsonLd(
 // CF-0088 (B91): one public listing page (/listings/{id}).
 export type JsonLdListingFarm = {
   id: number;
+  slug?: string | null;
   merchant_name: string;
   city: string | null;
   province: string | null;
@@ -219,7 +222,7 @@ export function listingDescription(data: JsonLdListing): string {
  */
 export function listingJsonLd(data: JsonLdListing, pageUrl: string): Record<string, unknown> {
   const { listing, farm } = data;
-  const farmUrl = new URL(`/farms/${farm.id}`, pageUrl).toString();
+  const farmUrl = new URL(farmPath(farm.id, farm.slug), pageUrl).toString();
   const farmId = `${farmUrl}#farm`;
   const name = clean(listing.name) ?? 'Produce';
 

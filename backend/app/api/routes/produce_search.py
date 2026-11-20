@@ -160,6 +160,9 @@ class ListingFarm(BaseModel):
     rating: float | None = None
     rating_count: int = 0
     paused_until: date | None = None
+    # The shop's slug, for the /farms/<slug> link (a public farm always has
+    # a published shop page; None only if that ever changes).
+    slug: str | None = None
 
 
 class ListingDetail(BaseModel):
@@ -179,6 +182,7 @@ def _farm(merchant: Merchant, today: date) -> ListingFarm:
         rating=cast(Any, merchant.rating),
         rating_count=int(cast(Any, merchant.rating_count) or 0),
         paused_until=store_pause.paused_until(merchant, today),
+        slug=merchant.shop_page.slug if merchant.shop_page is not None else None,
     )
 
 

@@ -7,7 +7,9 @@
 // farm's `updated_at` (GET /merchants); listings have no date column, so their
 // entries have no lastModified.
 
-export type SitemapFarm = { id: number; updated_at?: string | null };
+import { farmPath } from './farm-path.ts';
+
+export type SitemapFarm = { id: number; updated_at?: string | null; shop_page?: { slug?: string | null } | null };
 
 export type SitemapEntry = {
   url: string;
@@ -43,7 +45,7 @@ export function buyerSitemap(
   const farmEntries: SitemapEntry[] = ordered.map((farm) => {
     const lastModified = validDate(farm.updated_at);
     return {
-      url: url(`/farms/${farm.id}`),
+      url: url(farmPath(farm.id, farm.shop_page?.slug)),
       ...(lastModified ? { lastModified } : {}),
       changeFrequency: 'daily',
       priority: 0.8,

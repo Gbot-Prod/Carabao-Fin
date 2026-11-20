@@ -16,20 +16,24 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Path,
     UploadFile,
 )
+from sqlalchemy import ColumnElement
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.core.errors import upstream_error
 from app.models.merchant import Merchant
-from app.models.shopPage import DRAFT_FIELDS, ShopPage
+from app.models.shopPage import DRAFT_FIELDS, ShopPage, ShopSlugHistory
 from app.models.user import User
 from app.schemas.shopPage import (
+    MAX_SLUG,
     ShopPageCreate,
     ShopPageOwnerResponse,
     ShopPageResponse,
     ShopPageUpdate,
+    ShopSlugLookup,
 )
 from app.services import (
     r2_service,
@@ -61,6 +65,40 @@ def _my_shop_page(
             status_code=404, detail="Shop page not found — create one first"
         )
     return merchant, shop_page
+
+
+def _claim_slug(db: Session, slug: str) -> None:
+    """A shop takes ``slug``: an old slug of any shop stops pointing there."""
+    db.query(ShopSlugHistory).filter(ShopSlugHistory.slug == slug).delete(
+        synchronize_session=False
+    )
+
+
+def _public_page(db: Session, where: ColumnElement[bool]) -> ShopPage | None:
+    return (
+        db.query(ShopPage)
+        .join(Merchant, Merchant.id == ShopPage.merchant_id)
+        .filter(where, merchant_is_public())  # type: ignore[no-untyped-call]
+        .first()
+    )
+
+
+@router.get("/shops/{slug}", response_model=ShopSlugLookup)
+def find_shop_by_slug(
+    slug: str = Path(min_length=1, max_length=MAX_SLUG),
+    db: Session = Depends(get_db),
+) -> ShopSlugLookup:
+    """Which public farm /farms/<slug> names: by its current slug, else by a
+    slug it used before (the web page then redirects to the current one)."""
+    slug = slug.lower()
+    page = _public_page(db, ShopPage.slug == slug)
+    if page is None:
+        old = db.query(ShopSlugHistory).filter(ShopSlugHistory.slug == slug).first()
+        if old is not None:
+            page = _public_page(db, ShopPage.merchant_id == old.merchant_id)
+    if page is None:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return ShopSlugLookup(merchant_id=page.merchant_id, slug=page.slug)
 
 
 def _save(db: Session, shop_page: ShopPage) -> ShopPage:
@@ -113,6 +151,7 @@ def create_my_shoppage(
     if existing_slug:
         raise HTTPException(status_code=400, detail="Slug already taken")
 
+    _claim_slug(db, shop_page_in.slug)
     # A new page is a draft only. The live title column cannot be empty, but
     # buyers see nothing until the first publish.
     shop_page = ShopPage(
@@ -159,9 +198,16 @@ def update_my_shoppage(
         if field in updates:
             updates[field] = upload_validation.blank_to_none(updates[field])
 
-    # The slug is not part of the draft. It only names the page.
+    # The slug is not part of the draft. It only names the page, and changes
+    # at once: the old one is kept so /farms/<old> links redirect.
     if "slug" in updates:
-        shop_page.slug = updates.pop("slug")
+        new_slug = updates.pop("slug")
+        if new_slug is not None and new_slug != shop_page.slug:
+            _claim_slug(db, new_slug)
+            db.add(
+                ShopSlugHistory(slug=shop_page.slug, merchant_id=shop_page.merchant_id)
+            )
+            shop_page.slug = new_slug
     for field, value in updates.items():
         setattr(shop_page, f"draft_{field}", value)
 

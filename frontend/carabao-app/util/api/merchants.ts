@@ -41,7 +41,7 @@ export type Merchant = {
   paused_until?: string | null;
   pause_message?: string | null;
   /** The public list and detail include the shop page (CF-0056). */
-  shop_page?: Pick<ShopPage, 'logo_url' | 'banner_image_url'> | null;
+  shop_page?: Pick<ShopPage, 'logo_url' | 'banner_image_url' | 'slug'> | null;
   produces: Produce[];
 };
 

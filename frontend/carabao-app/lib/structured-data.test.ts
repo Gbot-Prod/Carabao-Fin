@@ -218,3 +218,10 @@ test('listingTitle and listingDescription', () => {
   const long: JsonLdListing = { ...listingData, listing: { ...tomato, description: 'a'.repeat(300) } };
   assert.equal(listingDescription(long).length, 198);
 });
+
+test('listingJsonLd: the seller links to the farm by slug when it has one', () => {
+  const data = { ...listingData, farm: { ...listingData.farm, slug: 'dela-cruz-farm' } };
+  const nodes = graph(listingJsonLd(data, LISTING_URL));
+  const farmNode = nodes.find((n) => (n['@type'] as unknown) === 'LocalBusiness')!;
+  assert.equal(farmNode.url, 'https://carabao.example/farms/dela-cruz-farm');
+});
