@@ -11,6 +11,7 @@ import type { MerchantReviews, MyMerchantReviews } from './reviews';
 import type { DemandInsight, MerchantPerformance } from './dashboard';
 import type { ChatSummary } from './chatInbox';
 import type { VoucherPreview } from './vouchers';
+import type { NotificationPrefs } from './notificationPrefs';
 import { UNREAD_COUNT_QUERY } from './polling';
 
 export { API_BASE, WEB_BASE } from './config';
@@ -274,6 +275,8 @@ export type ApiUserProfile = {
   cart: { id: number; total_items: number; total_price: number } | null;
   // Saved delivery addresses, default first.
   addresses: ApiUserAddress[];
+  // Raw stored switches; read them with readNotificationPrefs (CF-0132).
+  notifications_preferences?: Record<string, unknown> | null;
 };
 
 export type ApiUserAddress = {
@@ -651,6 +654,12 @@ export const api = {
   users: {
     me: (token: string | null) =>
       request<ApiUserProfile>('/users/me', token),
+    // CF-0132: body from togglePrefs (src/lib/notificationPrefs.ts), the three known keys only.
+    updateNotificationPrefs: (token: string | null, prefs: NotificationPrefs) =>
+      request<ApiUserProfile>('/users/me', token, {
+        method: 'PATCH',
+        body: JSON.stringify({ notifications_preferences: prefs }),
+      }),
     // CF-0122: account deletion (texted code, then DELETE with the code).
     deleteCode: (token: string | null, body: { password: string | null }) =>
       request<{ sent_to: string }>('/users/me/delete-code', token, { method: 'POST', body: JSON.stringify(body) }),
