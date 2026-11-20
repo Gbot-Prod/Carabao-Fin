@@ -23,7 +23,9 @@ def _client(db, user=None) -> TestClient:
 
 
 def _staff(db) -> User:
-    staff = make_user(db, "admin@example.com", is_admin=True, notifications_preferences={})
+    staff = make_user(
+        db, "admin@example.com", is_admin=True, notifications_preferences={}
+    )
     db.add(staff)
     db.commit()
     return staff

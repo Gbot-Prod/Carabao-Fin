@@ -81,7 +81,8 @@ def test_paid_intent_counts_as_paid(monkeypatch, settled):
 
 
 def test_failed_payment_leaves_txn_pending(monkeypatch, settled):
-    _session(monkeypatch, "active", [{"id": "pay_1", "attributes": {"status": "failed"}}])
+    failed = [{"id": "pay_1", "attributes": {"status": "failed"}}]
+    _session(monkeypatch, "active", failed)
     txn, db = _txn(), FakeDB()
 
     payments._reconcile_transaction_from_paymongo(txn, db)
@@ -102,7 +103,8 @@ def test_unpaid_session_leaves_txn_pending(monkeypatch, settled):
 
 
 @pytest.mark.parametrize(
-    "status", [TransactionStatus.PAID, TransactionStatus.EXPIRED, TransactionStatus.FAILED]
+    "status",
+    [TransactionStatus.PAID, TransactionStatus.EXPIRED, TransactionStatus.FAILED],
 )
 def test_settled_txn_is_not_rechecked(monkeypatch, settled, status):
     def boom(_id):

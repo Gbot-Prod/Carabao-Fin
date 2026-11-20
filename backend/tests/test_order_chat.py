@@ -48,7 +48,9 @@ def _post(client, order_id, body):
 
 def test_buyer_and_farm_talk_and_admin_can_join(db, merchant, buyer, order):  # noqa: F811
     farmer = db.get(User, merchant.user_id)
-    admin = make_user(db, "admin@example.com", is_admin=True, notifications_preferences={})
+    admin = make_user(
+        db, "admin@example.com", is_admin=True, notifications_preferences={}
+    )
     db.add(admin)
     db.commit()
 

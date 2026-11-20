@@ -46,7 +46,8 @@ def test_load_replaces_the_table(db, tmp_path):  # noqa: F811
 @pytest.mark.parametrize(
     "body",
     [
-        "commodity,unit,low,high,source,as_of\nTalong,kg,1,2,X,2026-01-01\n",  # no aliases
+        # no aliases column
+        "commodity,unit,low,high,source,as_of\nTalong,kg,1,2,X,2026-01-01\n",
         "commodity,aliases,unit,low,high,source,as_of\nTalong,,kg,9,2,X,2026-01-01\n",
         "commodity,aliases,unit,low,high,source,as_of\nTalong,,kg,1,2,X,yesterday\n",
         "commodity,aliases,unit,low,high,source,as_of\nTalong,,kg,1,2,,2026-01-01\n",

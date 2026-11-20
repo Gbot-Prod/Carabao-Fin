@@ -36,7 +36,9 @@ def _order(db, merchant, buyer, status, shipment_id=None):
 
 
 def _shipment(db, merchant, stop_count):
-    shipment = Shipment(merchant_id=merchant.id, stop_count=stop_count, route_waypoints=[])
+    shipment = Shipment(
+        merchant_id=merchant.id, stop_count=stop_count, route_waypoints=[]
+    )
     db.add(shipment)
     db.commit()
     return shipment
@@ -94,7 +96,8 @@ def test_shipment_list_counts_completed_stops(db, merchant, buyer):  # noqa: F81
 
     empty = _shipment(db, merchant, stop_count=1)
 
-    rows = {s["id"]: s for s in _client(db, merchant).get("/merchants/me/shipments").json()}
+    shipments = _client(db, merchant).get("/merchants/me/shipments").json()
+    rows = {s["id"]: s for s in shipments}
 
     assert rows[done.id]["completed_stop_count"] == 2
     assert rows[active.id]["completed_stop_count"] == 1

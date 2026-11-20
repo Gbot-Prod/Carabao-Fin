@@ -68,7 +68,9 @@ def test_create_then_list_own_produce(db, merchant):  # noqa: F811
 
 
 def test_update_changes_only_sent_fields(db, merchant):  # noqa: F811
-    produce = Produce(**ROW_DATES, merchant_id=merchant.id, name="Kamatis", price=60, stock_quantity=5)
+    produce = Produce(
+        **ROW_DATES, merchant_id=merchant.id, name="Kamatis", price=60, stock_quantity=5
+    )
     db.add(produce)
     db.commit()
 
@@ -83,11 +85,15 @@ def test_update_changes_only_sent_fields(db, merchant):  # noqa: F811
 
 def test_cannot_update_another_merchants_produce(db, merchant):  # noqa: F811
     other = _other_merchant(db)
-    theirs = Produce(**ROW_DATES, merchant_id=other.id, name="Sitaw", price=50, stock_quantity=3)
+    theirs = Produce(
+        **ROW_DATES, merchant_id=other.id, name="Sitaw", price=50, stock_quantity=3
+    )
     db.add(theirs)
     db.commit()
 
-    res = _client(db, merchant.user_id).patch(f"/produce/{theirs.id}", json={"price": 1})
+    res = _client(db, merchant.user_id).patch(
+        f"/produce/{theirs.id}", json={"price": 1}
+    )
 
     assert res.status_code == 404
     db.refresh(theirs)
@@ -98,7 +104,11 @@ def test_mobile_edit_form_payload_is_accepted(db, merchant):  # noqa: F811
     """The mobile form always sends all five fields; category may be cleared."""
     produce = Produce(
         **ROW_DATES,
-        merchant_id=merchant.id, name="Okra", price=40, stock_quantity=2, category="Vegetables"
+        merchant_id=merchant.id,
+        name="Okra",
+        price=40,
+        stock_quantity=2,
+        category="Vegetables",
     )
     db.add(produce)
     db.commit()
@@ -116,9 +126,8 @@ def test_mobile_edit_form_payload_is_accepted(db, merchant):  # noqa: F811
 
     assert res.status_code == 200, res.text
     body = res.json()
-    assert (body["name"], body["price"], body["stock_quantity"], body["unit"], body["category"]) == (
-        "Okra (fresh)", 45, 0, "lbs", None,
-    )
+    fields = ("name", "price", "stock_quantity", "unit", "category")
+    assert tuple(body[f] for f in fields) == ("Okra (fresh)", 45, 0, "lbs", None)
 
 
 def test_mobile_create_form_payload_is_accepted(db, merchant):  # noqa: F811
@@ -136,7 +145,8 @@ def test_mobile_create_form_payload_is_accepted(db, merchant):  # noqa: F811
 
     assert res.status_code == 200, res.text
     assert res.json()["merchant_id"] == merchant.id
-    assert db.query(Produce).filter_by(merchant_id=merchant.id, name="Ampalaya").count() == 1
+    rows = db.query(Produce).filter_by(merchant_id=merchant.id, name="Ampalaya")
+    assert rows.count() == 1
 
 
 def test_non_merchant_cannot_create_produce(db, merchant):  # noqa: F811
@@ -144,7 +154,9 @@ def test_non_merchant_cannot_create_produce(db, merchant):  # noqa: F811
     db.add(buyer)
     db.commit()
 
-    res = _client(db, buyer.id).post("/produce/", json={"name": "Mais", "price": 30, **DATES})
+    res = _client(db, buyer.id).post(
+        "/produce/", json={"name": "Mais", "price": 30, **DATES}
+    )
 
     assert res.status_code == 404
     assert db.query(Produce).filter_by(name="Mais").count() == 0

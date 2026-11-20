@@ -68,6 +68,11 @@ indent-style = "space"
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+# CF-0092: tests/conftest.py registers sqlite3 datetime/date adapters; a raw
+# datetime that skips them fails the run instead of a hidden warning.
+filterwarnings = [
+    "error:The default (date|datetime) adapter is deprecated:DeprecationWarning",
+]
 
 [dependency-groups]
 dev = [

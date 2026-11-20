@@ -120,7 +120,7 @@ def test_refund_is_logged_and_failed_refund_is_not(db, merchant, monkeypatch):
     assert entry.after["refund_reference"] == "GC-1"
 
 
-def test_payout_release_is_logged(db, merchant, buyer, transfers):
+def test_payout_release_is_logged(db, merchant, buyer, transfers):  # noqa: F811
     batch = _requested_batch(db, merchant, buyer)
     staff = _staff(db, email="payouts-admin@example.com")
     res = _client(db, staff).patch(f"/admin/batches/{batch['id']}/release")

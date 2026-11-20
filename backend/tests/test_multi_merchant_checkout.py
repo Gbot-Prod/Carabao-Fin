@@ -129,7 +129,9 @@ def test_selected_lines_only_are_ordered(db, merchant, buyer):  # noqa: F811
 def test_selection_not_in_cart_is_refused(db, merchant, buyer):  # noqa: F811
     _setup(db, merchant, buyer)
 
-    resp = _client(db, buyer[0]).post("/orders/me/place", json={"produce_ids": [999999]})
+    resp = _client(db, buyer[0]).post(
+        "/orders/me/place", json={"produce_ids": [999999]}
+    )
 
     assert resp.status_code == 400
     assert db.query(Order).count() == 0

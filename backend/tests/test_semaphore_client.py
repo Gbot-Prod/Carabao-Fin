@@ -44,7 +44,9 @@ def test_send_otp_restores_leading_zeros(posted):
     _, response = posted
     response["payload"] = [{"code": 12345}]  # JSON number for "012345"
     assert (
-        semaphore.send_otp(number="639123456789", message="{otp}", code="012345", config=CFG)
+        semaphore.send_otp(
+            number="639123456789", message="{otp}", code="012345", config=CFG
+        )
         == "012345"
     )
 
@@ -53,7 +55,9 @@ def test_send_otp_returns_semaphore_code_when_it_differs(posted):
     _, response = posted
     response["payload"] = [{"code": "999999"}]
     assert (
-        semaphore.send_otp(number="639123456789", message="{otp}", code="111111", config=CFG)
+        semaphore.send_otp(
+            number="639123456789", message="{otp}", code="111111", config=CFG
+        )
         == "999999"
     )
 
@@ -62,14 +66,18 @@ def test_send_otp_falls_back_to_our_code_when_absent(posted):
     _, response = posted
     response["payload"] = [{"status": "Pending"}]
     assert (
-        semaphore.send_otp(number="639123456789", message="{otp}", code="111111", config=CFG)
+        semaphore.send_otp(
+            number="639123456789", message="{otp}", code="111111", config=CFG
+        )
         == "111111"
     )
 
 
 def test_send_otp_requires_placeholder(posted):
     with pytest.raises(semaphore.SemaphoreError):
-        semaphore.send_otp(number="639123456789", message="Code 123456", code="123456", config=CFG)
+        semaphore.send_otp(
+            number="639123456789", message="Code 123456", code="123456", config=CFG
+        )
 
 
 def test_send_sms_still_uses_messages_route(posted):

@@ -216,7 +216,9 @@ def _submit(db, user, raw_payload=None, **overrides):  # noqa: F811
     payload = {**PAYLOAD, "contact_email": user.email, **overrides}
     return TestClient(app).post(
         "/merchant-onboarding/me",
-        data={"payload": raw_payload if raw_payload is not None else json.dumps(payload)},
+        data={
+            "payload": raw_payload if raw_payload is not None else json.dumps(payload)
+        },
         files=onboarding_files(),
     )
 
@@ -260,11 +262,23 @@ def test_onboarding_refuses_bad_payloads(db, applicant, overrides):  # noqa: F81
     ("overrides", "field", "expected"),
     [
         ({"postal_code": ""}, "postal_code", "Postal code is required."),
-        ({"merchant_name": "ab"}, "merchant_name", "Merchant name must be at least 3 characters."),
+        (
+            {"merchant_name": "ab"},
+            "merchant_name",
+            "Merchant name must be at least 3 characters.",
+        ),
         ({"tin": "123"}, "tin", "TIN must be at least 6 characters."),
-        ({"business_type": "Pirate"}, "business_type", "Business type is not one of the allowed options."),
+        (
+            {"business_type": "Pirate"},
+            "business_type",
+            "Business type is not one of the allowed options.",
+        ),
         ({"lat": 999, "lng": 999}, "pin", None),
-        ({"merchant_name": "x" * 51}, "merchant_name", "Merchant name must be at most 50 characters."),
+        (
+            {"merchant_name": "x" * 51},
+            "merchant_name",
+            "Merchant name must be at most 50 characters.",
+        ),
         (
             {"legal_business_name": "x" * 51},
             "legal_business_name",
