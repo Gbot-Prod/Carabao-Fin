@@ -35,9 +35,8 @@ def notify_order_shipped(
 
     try:
         send_sms(number=phone_number, message=message)
-        logger.info(
-            "[sms] Sent ship notification to %s for order %s", phone_number, order_ref
-        )
+        # CF-0087: the order ref only; the buyer's number is personal data.
+        logger.info("[sms] Sent ship notification for order %s", order_ref)
     except SemaphoreError as exc:
         logger.warning(
             "[sms] Could not send ship notification for %s: %s", order_ref, exc
