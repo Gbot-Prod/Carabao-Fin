@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { deliveryFeeLabel, deliveryTimeLabel, ratingLabel, type Farm } from '../lib/farms';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
+import { safeImageUri } from '../lib/imageUri';
 
 interface FarmCardProps {
   farm: Farm;
@@ -11,6 +12,8 @@ interface FarmCardProps {
 }
 
 export default function FarmCard({ farm, onPress }: FarmCardProps) {
+  // CF-0130: only a plain https image link is loaded.
+  const image = safeImageUri(farm.image, __DEV__);
   const time = deliveryTimeLabel(farm.deliveryDays);
   const fee = deliveryFeeLabel(farm.deliveryFee);
   const rating = ratingLabel(farm.rating);
@@ -22,8 +25,8 @@ export default function FarmCard({ farm, onPress }: FarmCardProps) {
       accessibilityRole="button"
       accessibilityLabel={`${farm.name}, ${farm.location || 'farm'}, rating ${rating}`}
     >
-      {farm.image ? (
-        <Image source={{ uri: farm.image }} style={styles.image} contentFit="cover" />
+      {image ? (
+        <Image source={{ uri: image }} style={styles.image} contentFit="cover" />
       ) : (
         // CF-0111: no hot-linked stock photo for farms without a banner.
         <View style={[styles.image, styles.placeholder]}>

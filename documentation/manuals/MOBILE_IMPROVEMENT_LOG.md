@@ -1,10 +1,10 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: final-only    iteration: 34    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
+branch: improve/mobile-loop    push: final-only    iteration: 35    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0129) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0130) to avoid collisions.
 
 ## Session rules (2026-11-20, the user is away)
 - Run until **15:00 (Asia/Manila) on 2026-11-20**. The PC force-shuts down at 15:00. One iteration every 15 min.
@@ -19,11 +19,12 @@ takes IDs from **CF-0101 upward** (last used: CF-0129) to avoid collisions.
 - #34 (PARITY): a cart `issue` code that this build does not know still blocks checkout (with "Kale can’t be ordered now"), as on the web (SYSTEM_REFERENCE §3 row). Reason: place-order refuses it anyway; blocking early is the safe side. Undo: `checkoutBlockers` back to `unavailableReason` only.
 - #34: the cart "−" button stops at the listing's minimum order and "+" at the stock the server reported, the same as the web cart. Reason: a quantity outside them only makes a blocked line. "Remove" still removes a line. Undo: drop the `disabled` props in `CartScreen`.
 
+- #35 (SECURITY): M64 was already fixed (CF-0111: the one console call returns early when `!__DEV__`). Closed with a guard test instead of a code change. Development builds also load `http` image links (a local API can serve them); release builds load only `https`. Reason: dev needs local images; the release path is the one buyers use. Undo: delete `logGuard.test.ts`, or pass `false` in place of `__DEV__`.
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 17/#34 · STRENGTHEN 7/#33 · SECURITY 5/#30 · AUDIT 5/#32
+PARITY 17/#34 · STRENGTHEN 7/#33 · SECURITY 6/#35 · AUDIT 5/#32
 
 ## Needs human
 - **Web loop merged (2026-11-20)**: done at #32. The "web loop only" row is replaced by real rows and M35 is split into M51–M60. Web log items B34 / B54 / B63 / B70 / B77 / B90 are covered here (M04 / M06 / M13 / M51–M60); mark them "moved to mobile log" in `IMPROVEMENT_LOG.md` when the web loop is not running (it edits that file at the same time).
@@ -84,7 +85,6 @@ Parity score: 12 / 32 done (10 partial, 10 missing; 3 rows n/a) since #34 (cart 
 | M59 | PARITY | S | 2 | 1 | orders | after-web-merge | **From M35.** "Hide from history" on finished orders in `HistoryScreen` (`DELETE /orders/me/history/:id`, same wording as web) — test: hidden order leaves the list and does not come back on refresh. Batch with M61 / M62 for an M. |
 | M54 | PARITY | M | 3 | 2 | orders | after-web-merge | **From M35 (web B63).** Receipt view (`GET /orders/me/:id/receipt`) from order detail — test: receipt totals equal the order totals. |
 | M53 | PARITY | M | 3 | 3 | discovery | after-web-merge | **New (#32, web CF-0081).** Listing detail screen (`GET /produce/:id`): listing, farm, and up to 10 other farms with the same produce; open from search hits — test: route param checked as a positive int; screen renders. |
-| M64 | SECURITY | S | 2 | 1 | logs | — | **New (#32).** `ConfirmationScreen.tsx:21` `console.warn` prints server error text in release builds. Put all console calls behind `__DEV__` and sweep the app — test: grep finds no console call outside `__DEV__`. |
 | M60 | PARITY | S | 2 | 2 | account | after-web-merge | **From M35.** Download my data (`GET /users/me/export`) from Profile; save or share the JSON (check first if `expo-sharing` works in Expo Go) — test: export opens a share sheet with the file. |
 | M56 | PARITY | S | 2 | 2 | discovery | after-web-merge | **From M35.** Recently viewed farms: port web `lib/recently-viewed.ts` (+ its test) to `src/lib/`, store with AsyncStorage keyed by user ID, wipe on sign-out (#10 rule) — test: copied test passes; sign-out clears it. |
 | M58 | PARITY | M | 2 | 3 | merchant | after-web-merge | **From M35.** Merchant vouchers list / create / edit / delete (`/merchants/me/vouchers`) — test: a created voucher works in M52. |
@@ -107,6 +107,8 @@ Parity score: 12 / 32 done (10 partial, 10 missing; 3 rows n/a) since #34 (cart 
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #35 — SECURITY — images / logs — CF-0130 — M
+What: §2C sweep (no open SECURITY item: M64 was already done at CF-0111). (1) New pure `src/lib/imageUri.ts` `safeImageUri`: an image URL from the server is loaded only when it is a plain `https://host[:port]/path` link, ≤ 2048 chars, no `user:password@`, no spaces, backslashes or control characters; `file:`, `content:`, `data:`, `javascript:`, protocol-relative and site paths give null and the leaf placeholder. `http` only in development builds (`__DEV__`). Used at all 5 `<Image uri>` sites: `FarmCard` banner, `MerchantScreen` banner / logo / produce photos, `SavedScreen` photos. Why: the backend writes image URLs only from its upload routes (CF-0034), but an old row, an import or a changed API must not make every buyer's phone load a local file, a cleartext link or a tracking link with credentials. (2) `logGuard.test.ts`: fails when any console call in `src/` or `app/` has no `__DEV__` guard in the 4 lines above it (makes M64 permanent). Security review of the diff (inline): only stricter display checks and a test; no findings. Tests: `imageUri.test.ts` 3, `logGuard.test.ts` 1. Manual check: set a listing's `image_url` to `http://…` or `file:///…` in the local DB → a release build shows the leaf placeholder; an R2 `https` link shows the photo. Checks: npm test 138/138, lint 0/0, tsc pass. Not run on a device. Follow-ups: next PARITY M52 (voucher code at checkout).
 ### #34 — PARITY — cart — CF-0129 — M
 What: M51. New pure `src/lib/cartIssues.ts` (port of web `lib/cart-issues.ts`, the web English texts word for word): issue code → message with {qty}, "Price changed from ₱n." from `previous_price`, and the "+" stock cap. `cartSync` reads `issue` and `previous_price` from the server line; `checkoutBlockers` now blocks on any `issue` too (so `exceeds_stock`, which has no `unavailable_reason`, closes checkout and the checkout alert says "Kale: Only 2 left…"). `CartScreen` shows the issue text and the price change, and "−" / "+" stop at the minimum order / stock (with accessibility labels). SYSTEM_REFERENCE §3 cart-issue row names the mobile file. Why: after the merge the server flagged lines that the phone let through to a place-order 400. Tests: `cartIssues.test.ts` +6 (message per code, unknown code still blocks, price-change text, stock cap, in-step: codes = backend `CartIssue` + `schemas/cart.py`, texts = web `en.ts`); `cartSync.test.ts` updated for the two new fields. Manual check: put 5 of a listing with 2 left in the cart (or lower the stock on the web) → pull to refresh → line says "Only 2 left…", banner shows, Checkout is closed; "+" is grey at 2; change the price on the web → line says "Price changed from ₱old.". Checks: npm test 134/134, lint 0/0, tsc pass. Not run on a device. Follow-ups: next PARITY M52 (voucher code at checkout).
 ### #33 — STRENGTHEN — orders / types — CF-0128 — M

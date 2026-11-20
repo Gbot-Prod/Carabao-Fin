@@ -16,6 +16,7 @@ import { FarmReviews } from '../components/FarmReviews';
 import { deliveryFeeLabel, deliveryTimeLabel, ratingLabel } from '../lib/farms';
 import { parseOrderId as parseRouteId } from '../lib/orderDetail';
 import { routeText } from '../lib/inputLimits';
+import { safeImageUri } from '../lib/imageUri';
 
 // "YYYY-MM-DD" → "Nov 20", read as a calendar date so no timezone shifts the day.
 function formatDay(ymd: string): string {
@@ -114,6 +115,9 @@ function MerchantScreenContent() {
 
   // CF-0126: the route's farmName (a deep link can set it) is only a placeholder while
   // loading, checked first; the server's name replaces it.
+  // CF-0130: only plain https image links are loaded.
+  const banner = safeImageUri(merchant?.shop_page?.banner_image_url, __DEV__);
+  const logo = safeImageUri(merchant?.shop_page?.logo_url, __DEV__);
   const displayName = merchant?.merchant_name ?? (loading ? routeText(farmName) : null) ?? 'Farm';
 
   // Favourite farms (U4)
@@ -190,16 +194,16 @@ function MerchantScreenContent() {
         <ScrollView showsVerticalScrollIndicator={false}>
           {/* Hero */}
           <View style={styles.heroContainer}>
-            {merchant?.shop_page?.banner_image_url ? (
-              <Image source={{ uri: merchant.shop_page.banner_image_url }} style={styles.heroImage} resizeMode="cover" />
+            {banner ? (
+              <Image source={{ uri: banner }} style={styles.heroImage} resizeMode="cover" />
             ) : (
               // CF-0112: the farm's own banner, or a plain placeholder (no hot-linked stock photo).
               <View style={[styles.heroImage, styles.heroPlaceholder]}>
                 <Ionicons name="leaf-outline" size={56} color={Colors.primary} />
               </View>
             )}
-            {merchant?.shop_page?.logo_url ? (
-              <Image source={{ uri: merchant.shop_page.logo_url }} style={styles.heroLogo} accessibilityLabel={`${displayName} logo`} />
+            {logo ? (
+              <Image source={{ uri: logo }} style={styles.heroLogo} accessibilityLabel={`${displayName} logo`} />
             ) : null}
             <View style={styles.heroGradient} />
             <View style={styles.heroBadge}>
@@ -280,10 +284,11 @@ function MerchantScreenContent() {
               products.map((product) => {
                 const isAdded = addedIds.has(product.id);
                 const terms = orderTermsLabel(product);
+                const image = safeImageUri(product.image_url, __DEV__);
                 return (
                   <View key={product.id} style={styles.productRow}>
-                    {product.image_url ? (
-                      <Image source={{ uri: product.image_url }} style={styles.productImage} resizeMode="cover" />
+                    {image ? (
+                      <Image source={{ uri: image }} style={styles.productImage} resizeMode="cover" />
                     ) : (
                       <View style={[styles.productImage, styles.productImagePlaceholder]}>
                         <Ionicons name="leaf-outline" size={28} color={Colors.textLight} />
