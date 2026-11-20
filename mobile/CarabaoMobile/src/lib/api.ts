@@ -10,6 +10,7 @@ import type { AddressPayload } from './addresses';
 import type { MerchantReviews, MyMerchantReviews } from './reviews';
 import type { DemandInsight, MerchantPerformance } from './dashboard';
 import type { ChatSummary } from './chatInbox';
+import type { VoucherPreview } from './vouchers';
 import { UNREAD_COUNT_QUERY } from './polling';
 
 export { API_BASE, WEB_BASE } from './config';
@@ -318,7 +319,11 @@ export type PlaceOrderPayload = {
   delivery_lng?: number;
   delivery_time?: string | null;
   notes?: string | null;
+  // CF-0131: one farm voucher code (≤ 40); the server works out the discount.
+  voucher_code?: string | null;
 };
+
+export type { VoucherPreview };
 
 export type PlacedOrder = {
   order_id: number;
@@ -519,6 +524,12 @@ export const api = {
       request<ApiOrderReview>(`/orders/me/${orderId}/review`, token, { method: 'PATCH', body: JSON.stringify(body) }),
     confirmReceived: (token: string | null, orderId: number) =>
       request<ApiCurrentOrder>(`/orders/me/${orderId}/confirm-received`, token, { method: 'POST' }),
+    // CF-0131: what a farm voucher code takes off the server cart now (no hold).
+    previewVoucher: (token: string | null, voucherCode: string) =>
+      request<VoucherPreview>('/orders/me/voucher-preview', token, {
+        method: 'POST',
+        body: JSON.stringify({ voucher_code: voucherCode }),
+      }),
     place: (token: string | null, payload: PlaceOrderPayload) =>
       request<PlaceOrderResponse>('/orders/me/place', token, {
         method: 'POST',
