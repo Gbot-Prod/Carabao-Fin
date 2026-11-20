@@ -16,6 +16,7 @@ import { SkeletonList, LoadError } from '../components/Skeleton';
 import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
 import { HIDDEN_REVIEW_NOTICE, orderActions, orderRef, parseOrderId, voucherLine } from '../lib/orderDetail';
 import { canEditReview } from '../lib/reviewForm';
+import { hasReceipt } from '../lib/receipt';
 import { OrderReviewForm } from '../components/OrderReviewForm';
 
 type Load = { kind: 'ok'; order: ApiOrderDetail } | { kind: 'notFound' } | { kind: 'error'; message: string };
@@ -291,6 +292,17 @@ function OrderDetailContent() {
           {actions.canTrack && (
             <TouchableOpacity style={styles.btn} onPress={() => router.push('/(tabs)/track')}>
               <Text style={styles.btnText}>Live tracking</Text>
+            </TouchableOpacity>
+          )}
+          {hasReceipt(order.payment_status) && (
+            // CF-0135: same rule as web orders/[orderId] (money landed, refunded or not).
+            <TouchableOpacity
+              style={styles.btn}
+              onPress={() =>
+                router.push({ pathname: '/order-receipt', params: { orderId: String(order.order_id) } })
+              }
+            >
+              <Text style={styles.btnText}>View receipt</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity

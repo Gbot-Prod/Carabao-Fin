@@ -251,6 +251,38 @@ export type ApiOrderDetail = {
   review_deadline: string | null;
 };
 
+// CF-0135 (M54): the buyer's receipt for a paid order (backend schemas/receipt.py, web OrderReceipt).
+export type ApiReceiptLine = {
+  name: string;
+  unit: string | null;
+  quantity: number;
+  unit_price: number; // whole pesos
+  line_total: number;
+};
+
+export type ApiReceipt = {
+  receipt_number: string;
+  order_id: number;
+  order_status: string;
+  ordered_at: string | null;
+  paid_at: string | null;
+  payment_status: string; // paid | refund_pending | refunded
+  payment_reference: string | null;
+  buyer_name: string | null;
+  farm_name: string | null;
+  farm_town: string | null;
+  farm_contact_number: string | null;
+  delivery_address: string | null;
+  requested_delivery_date: string | null;
+  delivery_window: string | null;
+  lines: ApiReceiptLine[];
+  subtotal: number;
+  delivery_fee: number;
+  discount?: number;
+  voucher_code?: string | null;
+  total: number;
+};
+
 export type ApiCartItem = {
   id: string;
   farm: string;
@@ -523,6 +555,9 @@ export const api = {
       request<ApiPage<ApiHistoryOrder>>(`/orders/me/history/page?${historyQueryString(query)}`, token),
     detail: (token: string | null, orderId: number) =>
       request<ApiOrderDetail>(`/orders/me/${orderId}`, token),
+    // CF-0135: 404 when not the caller's order, 409 when it has no payment yet.
+    receipt: (token: string | null, orderId: number) =>
+      request<ApiReceipt>(`/orders/me/${orderId}/receipt`, token),
     // Both return the order as /orders/me/current does; the screen re-reads the detail after.
     cancel: (token: string | null, orderId: number) =>
       request<ApiCurrentOrder>(`/orders/me/${orderId}/cancel`, token, { method: 'POST' }),

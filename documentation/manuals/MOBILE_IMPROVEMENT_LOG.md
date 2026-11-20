@@ -1,10 +1,10 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: final-only    iteration: 40    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
+branch: improve/mobile-loop    push: final-only    iteration: 41    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0134) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0135) to avoid collisions.
 
 ## Session rules (2026-11-20, the user is away)
 - Run until **15:00 (Asia/Manila) on 2026-11-20**. The PC force-shuts down at 15:00. One iteration every 15 min.
@@ -27,12 +27,13 @@ takes IDs from **CF-0101 upward** (last used: CF-0134) to avoid collisions.
 - #39 (STRENGTHEN in place of SECURITY): the rotation pointed at SECURITY, but the backlog has no SECURITY item and a short §2C check found no new weakness: every signed-in screen is in `ProtectedScreen` (merchant ones with `requiredRole`), browser opens go through checked URLs, AsyncStorage holds only the idle time, and Better Auth's expo client empties the SecureStore cookie before the sign-out request is sent (`@better-auth/expo` `init` → `clearSessionCache`), so sign-out offline still clears the phone. Reason: do not invent a fix. The next non-PARITY turn should be SECURITY. Undo: none needed.
 - #39: the track screen sends one extra tracking request when an order is first shown (the first-load effect and the poll start together). Reason: it keeps the one-time load for orders that do not poll (not shipped / finished); one request per order switch is cheap. Undo: drop the first-load effect when `shouldRefreshTracking` is true.
 - #40 (AUDIT): M65 retired (all its limits are now in `inStep.test.ts`; a new limit is part of the item that adds it). M49 now names `CheckoutScreen` (561 lines after #36) first. Next turn: PARITY (19 vs 9 STRENGTHEN), then SECURITY as #39 said. Reason: keep the backlog true. Undo: restore the rows from git.
+- #41 (PARITY): M54. The web "Print or save as PDF" button is a share button on the phone (React Native `Share`, no new dependency): it shares a plain-text receipt with the receipt number, farm, paid time, lines, totals and refund note, but **not** the buyer name, address or phone. Reason: the buyer picks the target app, so the copy carries only what proves the sale; the screen itself still shows the full receipt. Undo: add the "Billed to" lines in `receiptShareText`.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 19/#38 · STRENGTHEN 9/#39 · SECURITY 6/#35 · AUDIT 6/#40
+PARITY 20/#41 · STRENGTHEN 9/#39 · SECURITY 6/#35 · AUDIT 6/#40
 
 ## Needs human
 - **Web loop merged (2026-11-20)**: done at #32. The "web loop only" row is replaced by real rows and M35 is split into M51–M60. Web log items B34 / B54 / B63 / B70 / B77 / B90 are covered here (M04 / M06 / M13 / M51–M60); mark them "moved to mobile log" in `IMPROVEMENT_LOG.md` when the web loop is not running (it edits that file at the same time).
@@ -63,7 +64,7 @@ PARITY 19/#38 · STRENGTHEN 9/#39 · SECURITY 6/#35 · AUDIT 6/#40
 | `auth`, `forgot-password`, `reset-password` | `auth` → `AuthScreen` + `PasswordResetSheet`, `PhoneVerifySheet`, `AddEmailSheet` | done | Better Auth | |
 | `two-factor`, `two-factor/enrol` | — | n/a — web-only | | admin second step (web #58 rules are for the admin surface); not re-checked for buyers at #32 |
 | `listings/[id]` listing + other farms | — | missing | `GET /produce/:id` ✓ (CF-0081) | open from search hits and farm produce rows (M53) |
-| `orders/[orderId]/receipt` | — | missing | `GET /orders/me/:id/receipt` ✓ (CF-0049) | link from order detail (M54) |
+| `orders/[orderId]/receipt` | `order-receipt` → `ReceiptScreen` | done | `GET /orders/me/:id/receipt` ✓ (CF-0049) | #41 CF-0135: "View receipt" on order detail; share sheet in place of print |
 | recently viewed farms | — | missing | none (web `lib/recently-viewed.ts`, browser storage only) | port with AsyncStorage, per user, wipe on sign-out (M56) |
 | download my data | — | missing | `GET /users/me/export` ✓ (CF-0069) | Profile row (M60) |
 | `email-verified`, `landing` | — | n/a — web-only | | |
@@ -89,7 +90,6 @@ Parity score: 14 / 32 done (8 partial, 10 missing; 3 rows n/a), rechecked at #40
 |----|------|------|--------|--------|------|------|------------------------|
 | M57 | PARITY | M | 3 | 2 | merchant | after-web-merge | **From M35 (web B77).** Holiday mode: notice on `MerchantScreen` and farm cards (`paused_until`, `pause_message`); merchant pause switch (`PUT/DELETE /merchants/me/pause`) as the first slice of merchant settings — test: paused farm shows the notice; switch round-trips. |
 | M59 | PARITY | S | 2 | 1 | orders | after-web-merge | **From M35.** "Hide from history" on finished orders in `HistoryScreen` (`DELETE /orders/me/history/:id`, same wording as web) — test: hidden order leaves the list and does not come back on refresh. Batch with M61 / M62 for an M. |
-| M54 | PARITY | M | 3 | 2 | orders | after-web-merge | **From M35 (web B63).** Receipt view (`GET /orders/me/:id/receipt`) from order detail — test: receipt totals equal the order totals. |
 | M53 | PARITY | M | 3 | 3 | discovery | after-web-merge | **New (#32, web CF-0081).** Listing detail screen (`GET /produce/:id`): listing, farm, and up to 10 other farms with the same produce; open from search hits — test: route param checked as a positive int; screen renders. |
 | M60 | PARITY | S | 2 | 2 | account | after-web-merge | **From M35.** Download my data (`GET /users/me/export`) from Profile; save or share the JSON (check first if `expo-sharing` works in Expo Go) — test: export opens a share sheet with the file. |
 | M56 | PARITY | S | 2 | 2 | discovery | after-web-merge | **From M35.** Recently viewed farms: port web `lib/recently-viewed.ts` (+ its test) to `src/lib/`, store with AsyncStorage keyed by user ID, wipe on sign-out (#10 rule) — test: copied test passes; sign-out clears it. |
@@ -115,6 +115,8 @@ Parity score: 14 / 32 done (8 partial, 10 missing; 3 rows n/a), rechecked at #40
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #41 — PARITY — orders — CF-0135 — M
+What: M54 (web B63, CF-0049). New `ReceiptScreen` (route `order-receipt`, in `ProtectedScreen`): `GET /orders/me/:id/receipt` → receipt no., paid / ordered time (Asia/Manila), short payment ref., Sold by (farm, town, contact), Billed to (buyer, address, delivery date / window), item lines, Subtotal / Delivery / Voucher (when used) / Total paid, refund note, PayMongo footer: all amounts from the server. 404 → "Order not found.", 409 → "This order has no payment yet, so there is no receipt.", else "The receipt could not be loaded." with retry (web texts word for word). Share button → system share sheet with a text copy (see Decisions). `OrderDetailScreen` shows "View receipt" when `payment_status` is paid / refund_pending / refunded (web rule). New pure `src/lib/receipt.ts` (copy of web `lib/receipt.ts` + `receiptFailure`, `receiptSummaryRows`, `receiptShareText`); `ApiReceipt` type, `api.orders.receipt`. Why: buyers could get a receipt only on the web. Tests: `receipt.test.ts` 7 (web cases copied; failure map; summary rows and voucher; share text has no address; in step: states = backend `MONEY_RECEIVED_STATUSES` = web, texts = web page, route and 409 text in backend). Manual check (not run on a device): open a paid order → View receipt → totals equal the order detail total; Share → text in the share sheet; an unpaid order has no button. Checks: npm test 165/165, lint clean, tsc pass. Parity: 15 / 32 done. Follow-ups: none new; next non-PARITY turn SECURITY (#39 note), next PARITY M57 (holiday mode).
 ### #40 — AUDIT — all — (no CF ID) — M
 What: re-survey after #33–#39. Web loop: `improve/loop` is at web CF-0092 (9 commits past the merge base 3bb875b: CF-0085 account-delete bodies `extra="forbid"`, CF-0086 web i18n merchant texts, CF-0087 no buyer phones in ship-SMS logs, CF-0088 / CF-0091 SEO, CF-0089 payout types, CF-0090 CSP report endpoint, CF-0092 backend tests). Only CF-0085 reaches mobile: checked, `DeleteAccountSheet` sends only `{password}` and `{code}`, so nothing breaks. The web log has no new `mobile` / `parity` item (B90 / B77 / B70 / B63 / B54 / B47 / B34 are already here). Parity matrix rechecked (track and profile notes updated); score unchanged 14 / 32 done. Backlog: 6 new items from code reading (M66 keyboard on checkout and search, M67 silent catches, M68 merchant orders do not refresh, M69 RN `Image` on the farm screen, M70 dead `api.orders.history`, M71 language), M65 retired, M49 and M30 updated. Unused-wrapper scan of `api.ts`: only `orders.history` has no caller. Checks: npm test 158/158, lint clean, tsc pass, expo-doctor 20/20, `expo export --platform android` OK (9.8 MB), `npm audit --omit=dev` 3 moderate (unchanged). Follow-ups: next iteration PARITY (M57 holiday mode or M54 receipt).
 ### #39 — STRENGTHEN — track / chat — CF-0134 — M
