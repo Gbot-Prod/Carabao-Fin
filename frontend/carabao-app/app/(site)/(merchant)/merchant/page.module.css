@@ -1351,6 +1351,23 @@
   flex-wrap: wrap;
 }
 
+.dangerError {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--danger);
+  max-width: 60ch;
+}
+
+.dangerError p {
+  margin: 0;
+}
+
+.dangerError ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
 .dangerConfirmBtn {
   padding: 10px 16px;
   border-radius: var(--radius-sm);

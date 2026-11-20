@@ -47,15 +47,15 @@ def _setup(db, merchant, buyer, status="processing", paid_days_ago=1):
 
 def _cancel_notices(db, user_id):
     return (
-        db.query(Notification)
-        .filter_by(user_id=user_id, kind="order_cancelled")
-        .all()
+        db.query(Notification).filter_by(user_id=user_id, kind="order_cancelled").all()
     )
 
 
 def test_cancel_processing_order_restores_stock(db, merchant, buyer):
     order, produce, txn = _setup(db, merchant, buyer, "processing")
-    order_status.apply_merchant_transition(order, "cancelled", db)
+    order_status.apply_merchant_transition(
+        order, "cancelled", db, cancel_reason="Out of stock"
+    )
     db.commit()
     db.refresh(produce)
     db.refresh(txn)
@@ -66,7 +66,9 @@ def test_cancel_processing_order_restores_stock(db, merchant, buyer):
 @pytest.mark.parametrize("status", ["shipped", "out_for_delivery"])
 def test_cancel_after_shipping_does_not_restore_stock(db, merchant, buyer, status):
     order, produce, txn = _setup(db, merchant, buyer, status)
-    order_status.apply_merchant_transition(order, "cancelled", db)
+    order_status.apply_merchant_transition(
+        order, "cancelled", db, cancel_reason="Out of stock"
+    )
     db.commit()
     db.refresh(produce)
     db.refresh(txn)
@@ -78,13 +80,36 @@ def test_cancel_after_shipping_does_not_restore_stock(db, merchant, buyer, statu
 def test_merchant_cancel_notifies_buyer(db, merchant, buyer):
     user, _ = buyer
     order, _, _ = _setup(db, merchant, buyer)
-    order_status.apply_merchant_transition(order, "cancelled", db)
+    order_status.apply_merchant_transition(
+        order, "cancelled", db, cancel_reason="Out of stock"
+    )
     db.commit()
     [notice] = _cancel_notices(db, user.id)
     ref = f"CB-{order.ordered_at.year}-{order.id:04d}"
     assert notice.title == f"Order {ref} was cancelled"
+    assert notice.body.startswith(
+        "The farm cancelled this order. Reason: Out of stock."
+    )
     assert "refunded" in notice.body
     assert notice.link == f"/orders/{order.id}"
+    assert order.cancel_reason == "Out of stock"
+
+
+def test_merchant_cannot_cancel_without_reason(db, merchant, buyer):
+    order, _, txn = _setup(db, merchant, buyer)
+    with pytest.raises(order_status.InvalidTransition):
+        order_status.apply_merchant_transition(order, "cancelled", db)
+    assert order.status == "processing"
+
+
+def test_merchant_cancel_text():
+    text = order_status.merchant_cancel_text
+    assert text("out_of_stock", None) == "Out of stock"
+    assert (
+        text("out_of_stock", "  rain hit the crop ")
+        == "Out of stock: rain hit the crop"
+    )
+    assert text("other", "Truck broke down") == "Truck broke down"
 
 
 def test_sweep_cancels_paid_orders_not_shipped_in_time(db, merchant, buyer):

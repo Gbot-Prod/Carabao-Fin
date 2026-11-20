@@ -1,5 +1,6 @@
 from sqlalchemy import (
     JSON,
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -75,6 +76,11 @@ class Merchant(Base):
     # The nearest road point to the pin; routing uses it.
     road_lat = Column(Float, nullable=True)
     road_lng = Column(Float, nullable=True)
+    # True once the person placed or moved the pin themselves; false while it
+    # is only where the typed address geocoded to (approximate).
+    pin_confirmed = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     available_days = Column(JSON, nullable=False, default=list)
     operating_hours = Column(JSON, nullable=False)

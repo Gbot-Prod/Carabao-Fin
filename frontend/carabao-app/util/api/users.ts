@@ -42,6 +42,9 @@ export type UserProfile = {
 
 export type UserAddressFields = {
   label: string | null;
+  // Who receives deliveries here, and a PH mobile number (+639XXXXXXXXX) the rider can call.
+  recipient_name?: string | null;
+  recipient_phone?: string | null;
   region: string | null;
   province: string | null;
   city: string | null;
@@ -51,6 +54,8 @@ export type UserAddressFields = {
   // Map pin for the address (U1).
   lat: number | null;
   lng: number | null;
+  /** The person placed or moved the pin themselves; false = only where the address geocoded to. */
+  pin_confirmed?: boolean;
 };
 
 export type UserAddress = UserAddressFields & {
@@ -160,3 +165,30 @@ export const fetchMyChats = async (): Promise<BuyerChatSummary[]> => {
   const response = await apiClient.get<BuyerChatSummary[]>('/users/me/chats');
   return response.data;
 };
+
+/**
+ * A question a buyer sent a farm before (or without) buying. Listed only once
+ * it has a message (GET /users/me/inquiries, GET /merchants/me/inquiries).
+ */
+export type InquirySummary = {
+  conversation_id: number;
+  merchant_id: number;
+  farm_name: string | null;
+  farm_logo_url: string | null;
+  buyer_name: string | null;
+  /** The farm was removed or suspended: readable, no new messages. */
+  closed: boolean;
+  last_body: string;
+  last_sender_role: string;
+  last_mine: boolean;
+  last_at: string;
+  unread: number;
+};
+
+export const fetchMyInquiries = async (): Promise<InquirySummary[]> => {
+  const response = await apiClient.get<InquirySummary[]>('/users/me/inquiries');
+  return response.data;
+};
+
+/** The buyer's side of an inquiry thread with a farm: GET to read, POST to ask. */
+export const farmInquiryEndpoint = (merchantId: number) => `/merchants/${merchantId}/inquiry/messages`;

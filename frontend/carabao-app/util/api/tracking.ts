@@ -25,6 +25,8 @@ export type ShipmentStop = {
   estimated_arrival_at?: string | null;
   /** The rider reported that this stop's pin could not be reached. */
   pin_unreachable?: boolean;
+  /** The buyer never placed this pin; it is where their address geocoded to. */
+  pin_approximate?: boolean;
 };
 
 // 'estimated': progress and ETA come from the planned route schedule (no live GPS).

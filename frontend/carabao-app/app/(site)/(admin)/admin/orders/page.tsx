@@ -297,6 +297,7 @@ function OrderDetailPanel({ orderId, onClose }: { orderId: number; onClose: () =
                 <dt>Shipped</dt><dd>{when(d.delivery.shipped_at)}</dd>
                 <dt>Delivered</dt><dd>{when(d.delivery.delivered_at)}</dd>
                 <dt>Confirmed by</dt><dd>{d.delivery.delivery_confirmed_by ?? "Not confirmed"}</dd>
+                {d.delivery.cancel_reason && (<><dt>Cancel reason</dt><dd>{d.delivery.cancel_reason}</dd></>)}
               </dl>
             </section>
 

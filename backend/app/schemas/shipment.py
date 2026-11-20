@@ -33,6 +33,17 @@ class ShipmentStop(BaseModel):
     estimated_arrival_at: str | None = None
     # The rider reported that this stop's pin could not be reached (control 6).
     pin_unreachable: bool = False
+    # The buyer never placed this pin: it is where the address geocoded to.
+    pin_approximate: bool = False
+
+
+class SkippedStop(BaseModel):
+    """An order left off a new shipment; it stays ready to ship."""
+
+    order_id: int
+    # no_location: no pin and the address could not be found on the map.
+    # no_road: no road route reaches it from the pickup or the other stops.
+    reason: Literal["no_location", "no_road"]
 
 
 class ShipmentTrackingResponse(BaseModel):
@@ -52,6 +63,8 @@ class ShipmentTrackingResponse(BaseModel):
     # Planned drive time for the whole route (merchant view only).
     total_duration_seconds: float | None = None
     tracking_state: TrackingState = "estimated"
+    # Only on create: orders left out because they could not be routed.
+    skipped_orders: list[SkippedStop] = []
 
 
 # Pickup + 20 stops = 21 points, inside the Mapbox Matrix API's 25-point

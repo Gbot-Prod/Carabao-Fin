@@ -469,6 +469,7 @@ function OrdersList() {
         </form>
       </div>
 
+      <div className={styles.scroll}>
       {loading ? (
         <SkeletonList label="Loading your orders…" rows={3} />
       ) : error ? (
@@ -499,6 +500,7 @@ function OrdersList() {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }

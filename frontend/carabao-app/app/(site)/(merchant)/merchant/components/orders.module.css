@@ -411,3 +411,61 @@
     order: 3;
   }
 }
+
+/* ── Cancel prompt ───────────────────────────────────────────────────────── */
+.cancelForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 20px 18px 36px;
+  border-top: 1px solid rgba(185, 28, 28, 0.12);
+  background: rgba(185, 28, 28, 0.03);
+}
+
+.cancelIntro {
+  margin: 0;
+  font-size: 13px;
+  color: #7f1d1d;
+  line-height: 1.5;
+  max-width: 60ch;
+}
+
+.cancelReasons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.cancelReasons legend {
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.cancelReason {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green-900);
+  cursor: pointer;
+}
+
+.cancelledReason {
+  margin: 0;
+  padding: 0 20px 12px 36px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 600px) {
+  .cancelForm,
+  .cancelledReason {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

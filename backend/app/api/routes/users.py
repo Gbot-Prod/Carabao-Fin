@@ -3,7 +3,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
-from sqlalchemy import exists, func
+from sqlalchemy import exists, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -179,6 +179,25 @@ def _identity_documents(db: Session, user: User) -> list[str]:
     return sorted(path for path in paths if path)
 
 
+def _delete_inquiries(db: Session, user: User) -> None:
+    """Shop inquiries have no order to keep: they go with either side's account."""
+    sides = [Conversation.user_id == user.id]
+    if user.merchant:
+        sides.append(Conversation.merchant_id == user.merchant.id)
+    conversation_ids = db.query(Conversation.id).filter(
+        Conversation.kind == "shop", or_(*sides)
+    )
+    db.query(ChatMessage).filter(
+        ChatMessage.conversation_id.in_(conversation_ids.scalar_subquery())
+    ).delete(synchronize_session=False)
+    db.query(ConversationRead).filter(
+        ConversationRead.conversation_id.in_(conversation_ids.scalar_subquery())
+    ).delete(synchronize_session=False)
+    db.query(Conversation).filter(
+        Conversation.kind == "shop", or_(*sides)
+    ).delete(synchronize_session=False)
+
+
 def _anonymize_kept_orders(db: Session, user: User) -> None:
     """Keep the buyer's paid orders as payment records, without the person.
 
@@ -213,6 +232,7 @@ def _anonymize_kept_orders(db: Session, user: User) -> None:
                 Order.delivery_lng: None,
                 Order.delivery_road_lat: None,
                 Order.delivery_road_lng: None,
+                Order.delivery_pin_confirmed: False,
                 Order.pin_unreachable_note: None,
                 Order.notes: None,
                 Order.route_waypoints: None,
@@ -289,6 +309,9 @@ def delete_my_account(
 
     # CF-0041: paid orders stay as payment records without the buyer.
     _anonymize_kept_orders(db, current_user)
+
+    # Shop inquiries this person asked, or that buyers asked their farm.
+    _delete_inquiries(db, current_user)
 
     # The backend row first (with the ORM cascades), then the login, or the next
     # sign-in would bring back an empty account. In this order the database

@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import styles from "../page.module.css";
 import s from "./orders.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
-import getApiErrorMessage from "@/util/errorHelper";
-import { ORDER_STATUS_LABELS, updateMerchantOrderStatus, type OrderStatus } from "@/util/api";
+import { ORDER_STATUS_LABELS, cancelMerchantOrder, type MerchantCancelReason } from "@/util/api";
 import { todayInManila } from "../lib/format";
 import type { MerchantOrdersState } from "../hooks/useMerchantOrders";
 import OrderCard from "./OrderCard";
@@ -25,9 +24,6 @@ export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOp
   const today = useMemo(() => todayInManila(), []);
 
   const [filter, setFilter] = useState<OrderFilter>("all");
-  const [updatingOrderId, setUpdatingOrderId] = useState<number | null>(null);
-  // CF-0053: a refused status change (e.g. 409 payment in progress) is shown.
-  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (focusOrderId == null || !loaded) return;
@@ -42,14 +38,10 @@ export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOp
     return c;
   }, [orders]);
 
-  const handleUpdateStatus = async (orderId: number, status: OrderStatus) => {
-    setUpdatingOrderId(orderId);
-    setActionError(null);
-    try {
-      replaceOrder(await updateMerchantOrderStatus(orderId, status));
-    } catch (err) {
-      setActionError(getApiErrorMessage(err, "The order status could not be changed. Try again."));
-    } finally { setUpdatingOrderId(null); }
+  // CF-0053: a refused cancel (e.g. 409 payment in progress) is thrown back to
+  // the cancel form, which shows it.
+  const handleCancel = async (orderId: number, reason: MerchantCancelReason, note: string) => {
+    replaceOrder(await cancelMerchantOrder(orderId, reason, note));
   };
 
   // A focused order must be visible whatever filter was last used.
@@ -60,7 +52,6 @@ export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOp
     <div className={styles.ordersLayout}>
       <div className={styles.ordersHeader}>
         <h2 className={`${styles.sectionTitle} ${styles.flush}`}>Customer Orders</h2>
-        {actionError && <p role="alert" className={styles.errorText}>{actionError}</p>}
         <div className={styles.orderFilterRow}>
           {ORDER_FILTERS.map((f) => (
             <button
@@ -98,8 +89,7 @@ export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOp
             order={order}
             today={today}
             focused={focusOrderId === order.id}
-            updating={updatingOrderId === order.id}
-            onUpdateStatus={(status) => void handleUpdateStatus(order.id, status)}
+            onCancel={(reason, note) => handleCancel(order.id, reason, note)}
           />
         ))}
       </div>

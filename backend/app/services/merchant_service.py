@@ -153,6 +153,7 @@ def create_merchant_from_application(
         "lng": application.lng,
         "road_lat": application.road_lat,
         "road_lng": application.road_lng,
+        "pin_confirmed": application.pin_confirmed,
         "available_days": application.available_days,
         "rsbsa_number": application.rsbsa_number,
         "rsbsa_document_path": application.rsbsa_document_path,

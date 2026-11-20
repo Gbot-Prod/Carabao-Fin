@@ -13,8 +13,6 @@ import { merchantUrl } from "@/lib/urls";
 import styles from "./page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
-import { usePinAutofill } from "@/components/MapPinPicker/usePinAutofill";
-import { mergeLocation } from "@/lib/pin-autofill";
 import ContactCodeField from "./ContactCodeField";
 import DocumentDropzone, { documentError } from "./DocumentDropzone";
 import {
@@ -35,7 +33,7 @@ type StepId = "ops" | "legal";
 type FieldKey = keyof MerchantOnboardingPayload | "pin" | "rsbsa_file" | "gov_id_file";
 
 const OPS_FIELDS = new Set<string>([
-  "address", "region", "province", "city", "barangay", "postal_code", "pin", "lat", "lng",
+  "address", "region", "province", "city", "barangay", "postal_code", "pin", "lat", "lng", "pin_confirmed",
   "available_days", "contact_email", "contact_number", "email_verification_token", "phone_verification_token",
 ]);
 const stepOfField = (field: string): StepId => (OPS_FIELDS.has(field) ? "ops" : "legal");
@@ -45,6 +43,7 @@ const SERVER_FIELD_ALIASES: Record<string, FieldKey> = {
   phone_verification_token: "contact_number",
   lat: "pin",
   lng: "pin",
+  pin_confirmed: "pin",
 };
 // Fields that show a message under themselves (keep in step with the JSX below).
 const SHOWN_FIELDS = new Set<string>([
@@ -117,7 +116,6 @@ export default function MerchantOnboardingPage() {
   const [phoneVerificationToken, setPhoneVerificationToken] = useState<string | null>(null);
   const [emailVerificationToken, setEmailVerificationToken] = useState<string | null>(null);
 
-  const autofill = usePinAutofill();
   const [form, setForm] = useState<MerchantOnboardingPayload>({
     merchant_name: "",
     legal_business_name: "",
@@ -265,12 +263,15 @@ export default function MerchantOnboardingPage() {
   const validateStep = (id: StepId): FieldErrors<FieldKey> => {
     const errors: FieldErrors<FieldKey> = {};
     if (id === "ops") {
-      if (!form.address.trim()) errors.address = "Address is required.";
+      if (!form.address.trim()) errors.address = "Enter your street / house no.";
       if (!form.region.trim()) errors.region = "Select your region.";
       else if (!form.province.trim() && !isNcrRegion(form.region)) errors.province = "Select your province.";
       if (form.region.trim() && !form.city?.trim()) errors.city = "Select your city / municipality.";
       if (form.city?.trim() && !form.barangay?.trim()) errors.barangay = "Select your barangay.";
       if (!form.postal_code?.trim()) errors.postal_code = "Postal code is required.";
+      // The farm needs a pin (deliveries start there); a suggested one counts only once confirmed.
+      if (form.lat == null) errors.pin = "Place your pin on the map at your gate or door.";
+      else if (!form.pin_confirmed) errors.pin = "Move the pin to your gate or door, or tap “This pin is correct”.";
       if (!Array.isArray(form.available_days) || form.available_days.length === 0)
         errors.available_days = "Select at least one available day.";
       if (!form.contact_email.trim()) errors.contact_email = "Contact email is required.";
@@ -425,12 +426,6 @@ export default function MerchantOnboardingPage() {
         <div className={styles.body}>
           {step.id === "ops" && (
             <div className={styles.grid}>
-              <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.address)}`}>
-                <label htmlFor="merchantonboarding-address" className={styles.label}>Address</label>
-                <input id="merchantonboarding-address" className={styles.input} value={form.address} onChange={setField("address")} placeholder="Street, Barangay" {...invalidProps("merchantonboarding-address", fieldErrors.address)} />
-                <FieldError id="merchantonboarding-address" message={fieldErrors.address} />
-              </div>
-
               <LocationSelects
                 value={{
                   region: form.region,
@@ -459,26 +454,24 @@ export default function MerchantOnboardingPage() {
                 <FieldError id="merchantonboarding-postal-code" message={fieldErrors.postal_code} />
               </div>
 
+              <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.address)}`}>
+                <label htmlFor="merchantonboarding-address" className={styles.label}>Street / House No.</label>
+                <input id="merchantonboarding-address" className={styles.input} value={form.address} onChange={setField("address")} placeholder="123 Rizal Ave, Unit 4B" {...invalidProps("merchantonboarding-address", fieldErrors.address)} />
+                <FieldError id="merchantonboarding-address" message={fieldErrors.address} />
+              </div>
+
               {/* Farm pickup point (U1c): deliveries start from this pin. */}
-              <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.pin)}`}>
+              <div className={`${styles.field} ${styles.fieldFull}`}>
                 <MapPinPicker
                   value={form.lat != null && form.lng != null ? { lat: form.lat, lng: form.lng } : null}
-                  onChange={(pin, found) => {
-                    setForm((prev) => ({
-                      ...prev,
-                      ...(found?.location ? mergeLocation(prev, found.location) : {}),
-                      lat: pin.lat,
-                      lng: pin.lng,
-                      address: autofill("address", prev.address, found?.street),
-                      postal_code: autofill("postal_code", prev.postal_code ?? "", found?.postcode),
-                    }));
-                    clearErrors("pin");
-                    if (found?.street) clearErrors("address");
-                    if (found?.postcode) clearErrors("postal_code");
-                    if (found?.location) clearErrors("region", "province", "city", "barangay");
+                  confirmed={form.pin_confirmed}
+                  onChange={(pin, confirmed) => {
+                    setForm((prev) => ({ ...prev, lat: pin.lat, lng: pin.lng, pin_confirmed: confirmed }));
+                    if (confirmed) clearErrors("pin");
                   }}
+                  error={fieldErrors.pin}
+                  address={{ street: form.address, postalCode: form.postal_code ?? "", province: form.province, city: form.city, barangay: form.barangay }}
                 />
-                <FieldError id="merchantonboarding-pin" message={fieldErrors.pin} />
               </div>
 
               <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.available_days)}`}>

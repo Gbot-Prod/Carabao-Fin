@@ -58,6 +58,7 @@ export default function SavedProducePage() {
         <h1 className={styles.title}>{s.title}</h1>
       </div>
 
+      <div className={styles.scroll}>
       {authLoading ? (
         <SkeletonList label={s.loading} rows={3} />
       ) : !isAuthenticated ? (
@@ -116,6 +117,7 @@ export default function SavedProducePage() {
           <p className={styles.note}>{s.hiddenNote}</p>
         </>
       )}
+      </div>
     </div>
   );
 }

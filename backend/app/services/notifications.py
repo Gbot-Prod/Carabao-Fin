@@ -35,6 +35,30 @@ PAYOUT_DESTINATION_CHANGED = "payout_destination_changed"  # CF-0004
 PIN_UNREACHABLE = "pin_unreachable"  # to the buyer (pin quality, control 6)
 
 
+# Who a notification is for, on an account that is both buyer and farm owner.
+BUYER = "buyer"
+MERCHANT = "merchant"
+ADMIN = "admin"
+AUDIENCES = (BUYER, MERCHANT, ADMIN)
+
+
+def audience_for(link: str | None) -> str:
+    """The audience a stored link belongs to.
+
+    Merchant notifications all link to ``/merchantDashboard`` (the apps route
+    on that base), admin ones to ``/admin/...``; everything else is the buyer's.
+    The migration that added ``audience`` used the same rule for old rows.
+    """
+    path = link or ""
+    if path == "/merchantDashboard" or path.startswith(
+        ("/merchantDashboard?", "/merchantDashboard/")
+    ):
+        return MERCHANT
+    if path == "/admin" or path.startswith(("/admin/", "/admin?")):
+        return ADMIN
+    return BUYER
+
+
 def wants(user, channel: str) -> bool:
     """Whether ``user`` accepts ``channel`` ("sms" or "email")."""
     if user is None:
@@ -51,7 +75,9 @@ def notify(
     title: str,
     body: str | None = None,
     link: str | None = None,
+    audience: str | None = None,
 ) -> None:
+    """Add an in-app notification. ``audience`` defaults to ``audience_for(link)``."""
     if user_id is None:
         return
     if isinstance(session_or_obj, Session):
@@ -70,6 +96,7 @@ def notify(
             title=title[:120],
             body=(body or None) and body[:500],
             link=link,
+            audience=audience or audience_for(link),
         )
     )
 

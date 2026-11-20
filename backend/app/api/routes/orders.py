@@ -46,7 +46,11 @@ from app.services.order_status import (
     mark_delivered,
     money_received_clause,
 )
-from app.services.pinned_location import enforce_not_flagged, validate_pin
+from app.services.pinned_location import (
+    enforce_not_flagged,
+    saved_pin_confirmed,
+    validate_pin,
+)
 from app.services.produce_freshness import is_expired, ph_today
 from app.services.produce_pricing import unit_price_for
 from app.services.receipts import build_receipt, receipt_payment
@@ -125,6 +129,7 @@ def release_superseded_orders(db: Session, user_id: int, produce_ids: set[int]) 
                 ),
             )
 
+
 @router.post("/orders/me/place", response_model=PlaceOrderResponse)
 def place_order_from_cart(
     payload: PlaceOrderRequest,
@@ -140,6 +145,13 @@ def place_order_from_cart(
         raise HTTPException(status_code=400, detail=DELIVERY_OUTSIDE_LUZON_DETAIL)
     delivery_pin = validate_pin(payload.delivery_lat, payload.delivery_lng)
     road = delivery_pin.road if delivery_pin else None
+    if payload.delivery_pin_confirmed is not None:
+        pin_confirmed = bool(delivery_pin and payload.delivery_pin_confirmed)
+    else:
+        pin_confirmed = any(
+            saved_pin_confirmed(saved, delivery_pin.pin if delivery_pin else None)
+            for saved in current_user.addresses
+        )
     # Control 6: a place riders reported more than once must be re-pinned.
     enforce_not_flagged(
         db, cast(int, current_user.id), delivery_pin.pin if delivery_pin else None
@@ -177,11 +189,9 @@ def place_order_from_cart(
         raise HTTPException(
             status_code=400, detail="Delivery date cannot be in the past"
         )
-    if (
-        payload.delivery_date is not None
-        and payload.delivery_date
-        > datetime.now(_PH_TZ).date() + timedelta(days=MAX_DELIVERY_DAYS_AHEAD)
-    ):
+    if payload.delivery_date is not None and payload.delivery_date > datetime.now(
+        _PH_TZ
+    ).date() + timedelta(days=MAX_DELIVERY_DAYS_AHEAD):
         # CF-0050: bounds how long payout can wait on the requested date.
         raise HTTPException(
             status_code=400,
@@ -335,6 +345,7 @@ def place_order_from_cart(
             delivery_lng=delivery_pin.pin[1] if delivery_pin else None,
             delivery_road_lat=road[0] if road else None,
             delivery_road_lng=road[1] if road else None,
+            delivery_pin_confirmed=pin_confirmed,
             requested_delivery_date=payload.delivery_date,
             delivery_window=(payload.delivery_time or "").strip() or None,
             notes=(payload.notes or "").strip() or None,
@@ -629,6 +640,7 @@ def get_my_order(
         **{**item, "id": order.id, "status": order.status},
         delivered_at=order.delivered_at,
         delivery_confirmed_by=order.delivery_confirmed_by,
+        cancel_reason=order.cancel_reason,
         review=to_review_response(review, order) if review else None,
         can_review=review is None and can_review(order),
         review_deadline=review_deadline(order),

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import styles from '../page.module.css';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import FarmReviews from '@/components/FarmReviews/FarmReviews';
@@ -20,10 +20,19 @@ import ReferencePriceHint, { useReferencePrices } from '@/components/ReferencePr
 import { formatRequestedDate } from '@/app/(site)/(merchant)/merchant/lib/format';
 import { fetchMerchantById, fetchMerchantShopPage, fetchMyCart, replaceMyCart, type CartItem, type Merchant, type Produce, type ShopPage } from '@/util/api';
 
-export default function FarmDetailClient() {
+type Props = {
+  // From the server wrapper (page.tsx): the first HTML has the farm in it, so
+  // crawlers and slow phones see content, not a spinner. Null when the server
+  // could not reach the API; the browser then loads it as before.
+  initialMerchant?: Merchant | null;
+  initialShopPage?: ShopPage | null;
+};
+
+export default function FarmDetailClient({ initialMerchant = null, initialShopPage = null }: Props) {
   const params = useParams<{ merchantID?: string }>();
   const merchantID = Number(params?.merchantID ?? '0');
   const hasValidMerchantId = Number.isFinite(merchantID) && merchantID > 0;
+  const router = useRouter();
   const { t } = useLanguage();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { showPrompt } = useAuthPrompt();
@@ -55,8 +64,8 @@ export default function FarmDetailClient() {
   // Market reference ranges (P1), fetched once and matched per card.
   const referencePrices = useReferencePrices();
 
-  const [merchant, setMerchant] = useState<Merchant | undefined>(undefined);
-  const [shopPage, setShopPage] = useState<ShopPage | null>(null);
+  const [merchant, setMerchant] = useState<Merchant | undefined>(initialMerchant ?? undefined);
+  const [shopPage, setShopPage] = useState<ShopPage | null>(initialShopPage);
   const [error, setError] = useState<string | null>(hasValidMerchantId ? null : 'Invalid merchant ID.');
   // Town level only: the public API has no street or barangay (CF-0048).
   const merchantLocation = [
@@ -67,8 +76,13 @@ export default function FarmDetailClient() {
   .filter(Boolean)
   .join(", ");
 
+  // Always refetch in the browser: the server copy can be up to 5 minutes old
+  // (revalidate in lib/seo.ts), and stock and price matter for the cart. With
+  // server data on screen this is a quiet refresh: a failure keeps what is shown.
   useEffect(() => {
     if (!hasValidMerchantId) return;
+    const hasInitial = initialMerchant != null;
+    let cancelled = false;
 
     const loadMerchant = async () => {
       try {
@@ -76,26 +90,29 @@ export default function FarmDetailClient() {
           fetchMerchantById(merchantID),
           fetchMerchantShopPage(merchantID),
         ]);
+        if (cancelled) return;
         if (found.status === 'fulfilled') setMerchant(found.value);
-        else { setError('Unable to load merchant profile right now.'); setMerchant(undefined); }
+        else if (!hasInitial) { setError('Unable to load merchant profile right now.'); setMerchant(undefined); }
         if (page.status === 'fulfilled') setShopPage(page.value);
-        if (found.status === 'fulfilled') {
-          // CF-0052: remember the visit for "Recently viewed farms" (this browser only).
-          const m = found.value;
+        // CF-0052: remember the visit for "Recently viewed farms" (this browser only).
+        const m = found.status === 'fulfilled' ? found.value : initialMerchant;
+        if (m) {
+          const logo = page.status === 'fulfilled' ? page.value.logo_url : initialShopPage?.logo_url;
           recordFarmVisit({
             id: m.id,
             name: m.merchant_name,
             town: [m.city, m.province].filter(Boolean).join(', ') || null,
-            logo: page.status === 'fulfilled' ? page.value.logo_url ?? null : null,
+            logo: logo ?? null,
           });
         }
       } catch {
-        setError('Unable to load merchant profile right now.');
+        if (!cancelled && !hasInitial) setError('Unable to load merchant profile right now.');
       }
     };
 
     void loadMerchant();
-  }, [hasValidMerchantId, merchantID]);
+    return () => { cancelled = true; };
+  }, [hasValidMerchantId, merchantID, initialMerchant, initialShopPage]);
 
   const produces = merchant?.produces ?? [];
   // CF-0052 (B37): save hearts on this farm's produce, as on the browse page.
@@ -205,6 +222,17 @@ export default function FarmDetailClient() {
                     title={following ? t.follow.unfollow : undefined}
                   >
                     {following ? `✓ ${t.follow.following}` : `+ ${t.follow.follow}`}
+                  </button>
+                  {/* Ask before buying: no order needed. */}
+                  <button
+                    type="button"
+                    className={styles.followBtn}
+                    onClick={() => {
+                      if (!isAuthenticated) showPrompt();
+                      else router.push(`/chats?farm=${merchant.id}`);
+                    }}
+                  >
+                    {t.shop.messageFarm}
                   </button>
                 </div>
                 {pausedThrough && (

@@ -51,14 +51,31 @@ async function getPublic<T>(path: string): Promise<T | null> {
   }
 }
 
-/** One request per render, shared by generateMetadata and the page. */
+/**
+ * One request per render, shared by generateMetadata and the page.
+ * ``missing`` is true only when the API answered 404 (no such farm, or hidden:
+ * deleted, suspended, unpublished). An unreachable API or a 5xx leaves it
+ * false, so the page does not answer 404 and drop the farm from search during
+ * an outage.
+ */
 export const getPublicFarm = cache(async (merchantId: number) => {
-  const [merchant, shopPage] = await Promise.all([
-    getPublic<Merchant>(`/merchants/${merchantId}`),
+  const [merchantRes, shopPage] = await Promise.all([
+    fetchPublic<Merchant>(`/merchants/${merchantId}`),
     getPublic<ShopPage>(`/merchants/${merchantId}/shoppage`),
   ]);
-  return { merchant, shopPage };
+  return { merchant: merchantRes.data, shopPage, missing: merchantRes.missing };
 });
+
+async function fetchPublic<T>(path: string): Promise<{ data: T | null; missing: boolean }> {
+  try {
+    const res = await fetch(`${apiBase}${path}`, { next: { revalidate: 300 } });
+    if (res.status === 404) return { data: null, missing: true };
+    if (!res.ok) return { data: null, missing: false };
+    return { data: (await res.json()) as T, missing: false };
+  } catch {
+    return { data: null, missing: false };
+  }
+}
 
 /**
  * CF-0088 (B91): one listing for the server-rendered /listings/{id} page.

@@ -354,7 +354,8 @@
   color: var(--danger);
 }
 
-.reportedNote {
+.reportedNote,
+.approximateNote {
   margin: 10px 0 0;
   padding-left: 40px;
   font-size: 0.85rem;

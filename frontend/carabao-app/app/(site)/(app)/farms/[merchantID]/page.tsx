@@ -1,18 +1,24 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import FarmDetailClient from './FarmDetailClient';
 import { farmDescription, getPublicFarm, siteUrl } from '@/lib/seo';
 import { farmJsonLd, serializeJsonLd } from '@/lib/structured-data';
 
 // Server wrapper: a shared farm link must show the farm name and banner in the
 // Facebook / Messenger preview, and crawlers do not run client JavaScript.
-// The page itself is still the client component.
+// The farm data fetched here is also handed to the client component, so the
+// first HTML already has the name, description and produce (not a spinner).
 
 type Props = { params: Promise<{ merchantID: string }> };
 
+function parseId(raw: string): number | null {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { merchantID } = await params;
-  const id = Number(merchantID);
-  if (!Number.isInteger(id) || id <= 0) return { title: 'Farm not found · Carabao', robots: { index: false } };
+  const id = parseId((await params).merchantID);
+  if (!id) return { title: 'Farm not found · Carabao', robots: { index: false } };
 
   const { merchant, shopPage } = await getPublicFarm(id);
   if (!merchant) return { title: 'Farm not found · Carabao', robots: { index: false } };
@@ -48,11 +54,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function FarmPage({ params }: Props) {
-  const { merchantID } = await params;
-  const id = Number(merchantID);
+  const id = parseId((await params).merchantID);
+  // A real 404 (not a 200 "not found" page) so search engines drop a farm
+  // that never existed or was deleted, suspended or unpublished.
+  if (!id) notFound();
+
   // Same cached request as generateMetadata, so no extra API call.
-  const farm = Number.isInteger(id) && id > 0 ? await getPublicFarm(id) : null;
-  const jsonLd = farm?.merchant
+  const farm = await getPublicFarm(id);
+  if (farm.missing) notFound();
+
+  // API down or erroring: no 404 (the farm may well exist); the client
+  // component tries again in the browser and shows its own error.
+  const jsonLd = farm.merchant
     ? serializeJsonLd(farmJsonLd(farm.merchant, farm.shopPage, new URL(`/farms/${id}`, siteUrl).toString()))
     : null;
 
@@ -63,7 +76,8 @@ export default async function FarmPage({ params }: Props) {
         // script, so CSP does not apply; serializeJsonLd escapes "<".
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
       ) : null}
-      <FarmDetailClient />
+      {/* key: going from one farm to another remounts, so state starts from the new farm. */}
+      <FarmDetailClient key={id} initialMerchant={farm.merchant} initialShopPage={farm.shopPage} />
     </>
   );
 }

@@ -88,6 +88,8 @@ def build_export(db: Session, user: User) -> dict[str, Any]:
             a,
             (
                 "label",
+                "recipient_name",
+                "recipient_phone",
                 "region",
                 "province",
                 "city",
@@ -98,6 +100,7 @@ def build_export(db: Session, user: User) -> dict[str, Any]:
                 "lng",
                 "road_lat",
                 "road_lng",
+                "pin_confirmed",
                 "is_default",
                 "created_at",
             ),
@@ -196,6 +199,7 @@ def build_export(db: Session, user: User) -> dict[str, Any]:
             Conversation.order_id,
             ChatMessage.body,
             ChatMessage.created_at,
+            Conversation.merchant_id,
         )
         .select_from(ChatMessage)
         .join(Conversation, Conversation.id == ChatMessage.conversation_id)
@@ -204,7 +208,14 @@ def build_export(db: Session, user: User) -> dict[str, Any]:
         .all()
     )
     messages = [
-        {"conversation": r[0], "order_id": r[1], "body": r[2], "sent_at": _iso(r[3])}
+        {
+            "conversation": r[0],
+            "order_id": r[1],
+            # Shop inquiries name the farm asked instead of an order.
+            "farm": merchant_names.get(int(r[4])) if r[4] is not None else None,
+            "body": r[2],
+            "sent_at": _iso(r[3]),
+        }
         for r in message_rows
     ]
 

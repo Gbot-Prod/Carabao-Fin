@@ -1,4 +1,4 @@
-"""Order chat (CH1) and support chat (CH2) share these tables."""
+"""Order chat (CH1), support chat (CH2) and shop inquiries share these tables."""
 
 from sqlalchemy import (
     Column,
@@ -17,9 +17,16 @@ from app.core.database import Base
 
 class Conversation(Base):
     __tablename__ = "conversations"
+    # One inquiry per buyer and farm (kind "shop"). Other kinds leave merchant_id
+    # empty, and empty values never clash.
+    __table_args__ = (
+        UniqueConstraint(
+            "kind", "user_id", "merchant_id", name="uq_conversations_shop"
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
-    kind = Column(String(16), nullable=False, index=True)  # "order" | "support"
+    kind = Column(String(16), nullable=False, index=True)  # order | support | shop
     # One conversation per order (kind "order").
     order_id = Column(
         Integer,
@@ -27,10 +34,18 @@ class Conversation(Base):
         nullable=True,
         unique=True,
     )
-    # Who opened a support conversation (kind "support").
+    # Who opened a support conversation (kind "support"), or the buyer asking a
+    # farm before buying (kind "shop").
     user_id = Column(
         Integer,
         ForeignKey("backend_users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    # The farm a buyer is asking (kind "shop").
+    merchant_id = Column(
+        Integer,
+        ForeignKey("merchants.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
     )
@@ -41,6 +56,7 @@ class Conversation(Base):
     messages = relationship(
         "ChatMessage", back_populates="conversation", order_by="ChatMessage.id"
     )
+    merchant = relationship("Merchant")
 
 
 class ChatMessage(Base):

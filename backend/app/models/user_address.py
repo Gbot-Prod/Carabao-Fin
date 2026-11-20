@@ -30,6 +30,9 @@ class UserAddress(Base):
     )
     # Optional name the buyer gives it, e.g. "Home" or "Office".
     label = Column(String, nullable=True)
+    # Who receives deliveries here and how the rider reaches them (+639XXXXXXXXX).
+    recipient_name = Column(String(100), nullable=True)
+    recipient_phone = Column(String(20), nullable=True)
     region = Column(String, nullable=True)
     province = Column(String, nullable=True)
     city = Column(String, nullable=True)
@@ -42,6 +45,11 @@ class UserAddress(Base):
     # The nearest road point to the pin; routing uses it.
     road_lat = Column(Float, nullable=True)
     road_lng = Column(Float, nullable=True)
+    # True once the person placed or moved the pin themselves; false while it
+    # is only where the typed address geocoded to (approximate).
+    pin_confirmed = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

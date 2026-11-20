@@ -110,6 +110,12 @@ def test_each_message_notifies_the_other_side(db, merchant, buyer, order):  # no
     }
     assert kinds[farmer.id] == [f"The buyer wrote about CB-2026-{order.id:04d}"]
     assert kinds[buyer[0].id] == [f"The farm wrote about CB-2026-{order.id:04d}"]
+    # A tap opens this order's chat on either side.
+    links = {
+        n.user_id: n.link for n in db.query(Notification).filter_by(kind="chat_message")
+    }
+    assert links[buyer[0].id] == f"/chats?order={order.id}"
+    assert links[farmer.id] == f"/merchantDashboard?order={order.id}"
 
 
 def test_chat_closes_seven_days_after_delivery(db, buyer, order):  # noqa: F811

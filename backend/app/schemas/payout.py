@@ -42,6 +42,8 @@ class MerchantOrderResponse(BaseModel):
     requested_delivery_date: date | None = None
     delivery_window: str | None = None
     notes: str | None = None
+    # Why it was cancelled, as the buyer was told; None otherwise.
+    cancel_reason: str | None = None
 
     model_config = {"from_attributes": True}
 

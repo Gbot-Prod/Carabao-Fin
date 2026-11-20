@@ -99,9 +99,22 @@ export default function ShipmentsTab({ ordersState, selection, onOpenOrders }: P
     setMessage(null);
     try {
       const created = await createMerchantShipment(ids);
+      const stopCount = created.order_ids.length;
+      const skipped = created.skipped_orders ?? [];
+      const lostNames = (reason: "no_location" | "no_road") =>
+        skipped.filter((sk) => sk.reason === reason).map((sk) => `#${sk.order_id}`).join(", ");
+      const notes = [
+        lostNames("no_location") &&
+          `Left out ${lostNames("no_location")}: the delivery location could not be found on the map.`,
+        lostNames("no_road") && `Left out ${lostNames("no_road")}: no road route reaches it.`,
+        skipped.length > 0 && "They stay in Ready to ship; message the buyer to check their pin.",
+      ].filter(Boolean);
       setMessage({
         type: "success",
-        text: `Shipment #${created.shipment_id} created with ${ids.length} stop${ids.length === 1 ? "" : "s"}.`,
+        text: [
+          `Shipment #${created.shipment_id} created with ${stopCount} stop${stopCount === 1 ? "" : "s"}.`,
+          ...notes,
+        ].join(" "),
         shipmentId: created.shipment_id,
       });
       selection.clear();

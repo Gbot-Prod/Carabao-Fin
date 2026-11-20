@@ -25,13 +25,19 @@ export default function OrderChat({
   title,
   emptyText,
   fill = false,
+  onSent,
+  closedText,
 }: {
   orderId?: number;
   endpoint?: string;
   title?: string;
   emptyText?: string;
+  /** Shown instead of the message box when the chat is closed. */
+  closedText?: string;
   /** Fill the parent's height; the message list grows instead of stopping at 320px. */
   fill?: boolean;
+  /** After a message is sent, e.g. so a chat list shows a newly started chat. */
+  onSent?: () => void;
 }) {
   const { t } = useLanguage();
   const c = t.chat;
@@ -97,6 +103,7 @@ export default function OrderChat({
       lastId.current = Math.max(lastId.current, res.data.id);
       setMessages((prev) => [...prev, res.data]);
       setDraft("");
+      onSent?.();
     } catch (err) {
       if (isPhoneVerificationRequired(err)) setNeedsPhone(true);
       else setError(getApiErrorMessage(err) ?? c.sendError);
@@ -128,7 +135,7 @@ export default function OrderChat({
       )}
 
       {closed ? (
-        <p className={styles.note}>{c.closed}</p>
+        <p className={styles.note}>{closedText ?? c.closed}</p>
       ) : (
         <form className={styles.form} onSubmit={send}>
           <label className={styles.srOnly} htmlFor={inputId}>{c.placeholder}</label>

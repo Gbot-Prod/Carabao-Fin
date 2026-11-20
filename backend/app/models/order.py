@@ -1,5 +1,6 @@
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     Column,
     Date,
@@ -9,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -48,6 +50,11 @@ class Order(Base):
     # The nearest road point to the pin; routing and the rider use it.
     delivery_road_lat = Column(Float, nullable=True)
     delivery_road_lng = Column(Float, nullable=True)
+    # True once the person placed or moved the pin themselves; false while it
+    # is only where the typed address geocoded to (approximate).
+    delivery_pin_confirmed = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     # A rider reported that the pin could not be reached (pin quality, control 6).
     pin_unreachable_at = Column(DateTime(timezone=True), nullable=True)
     pin_unreachable_note = Column(String(200), nullable=True)
@@ -65,6 +72,8 @@ class Order(Base):
     # When the order became delivered, cancelled or payment_mismatch. The
     # retention sweep starts its clock here (CF-0044; migration d2a6f8c4e1b7).
     closed_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    # Why the order was cancelled, as the buyer is told (farm, admin or sweep).
+    cancel_reason = Column(String(400), nullable=True)
     # When the retention sweep removed the delivery details and chat.
     details_purged_at = Column(DateTime(timezone=True), nullable=True)
     # Pre-computed ALNS route stored when marked for shipping

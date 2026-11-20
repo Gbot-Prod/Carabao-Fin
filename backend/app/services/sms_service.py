@@ -43,6 +43,32 @@ def notify_order_shipped(
         )
 
 
+def notify_order_cancelled(
+    *,
+    phone_number: str | None,
+    merchant_name: str,
+    order_ref: str,
+    reason: str,
+) -> None:
+    """Fire-and-forget SMS to the buyer when the farm cancels. Never raises."""
+    if not phone_number:
+        return
+    # Keep the SMS short; the full reason is on the order page.
+    short_reason = reason if len(reason) <= 120 else reason[:117].rstrip() + "..."
+    message = (
+        f"Your Carabao order {order_ref} was cancelled by {merchant_name}. "
+        f"Reason: {short_reason.rstrip('.')}. Your payment will be refunded."
+    )
+
+    try:
+        send_sms(number=phone_number, message=message)
+        logger.info("[sms] Sent cancel notification for order %s", order_ref)
+    except SemaphoreError as exc:
+        logger.warning(
+            "[sms] Could not send cancel notification for %s: %s", order_ref, exc
+        )
+
+
 def notify_merchant_new_order(*, order: Order) -> None:
     """Fire-and-forget SMS to the farmer once an order is paid. Never raises."""
     merchant = order.merchant

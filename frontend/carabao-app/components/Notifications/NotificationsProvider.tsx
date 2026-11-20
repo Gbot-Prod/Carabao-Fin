@@ -46,7 +46,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const page = await fetchNotifications({ limit: 10 });
+      const page = await fetchNotifications({ limit: 10, audience: "buyer" });
       setUnread(page.unread);
       const newest = page.items.reduce((max, n) => Math.max(max, n.id), 0);
       const seen = lastSeenId.current;

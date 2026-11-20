@@ -72,6 +72,8 @@ class OrderDetailResponse(CurrentOrderResponse):
 
     delivered_at: datetime | None = None
     delivery_confirmed_by: str | None = None
+    # Why it was cancelled, as the buyer was told; None otherwise.
+    cancel_reason: str | None = None
     review: ReviewResponse | None = None
     can_review: bool = False
     review_deadline: datetime | None = None
@@ -91,6 +93,9 @@ class PlaceOrderRequest(BaseModel):
     # Map pin for the delivery address (U1), optional.
     delivery_lat: float | None = None
     delivery_lng: float | None = None
+    # The buyer placed or moved the pin themselves. Left out (mobile): it is
+    # confirmed when it is a confirmed pin of one of the buyer's saved addresses.
+    delivery_pin_confirmed: bool | None = None
     notes: str | None = Field(default=None, max_length=500)
     # CF-0058: one farm voucher code. The discount is worked out on the server.
     voucher_code: str | None = Field(default=None, max_length=40)

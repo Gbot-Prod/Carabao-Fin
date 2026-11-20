@@ -18,6 +18,12 @@ class Notification(Base):
         index=True,
     )
     kind = Column(String(40), nullable=False)
+    # Which side of the account it is about: "buyer", "merchant" or "admin".
+    # Set by services.notifications.notify from the link; the buyer site shows
+    # buyer (and admin) ones, the merchant site only merchant ones.
+    audience = Column(
+        String(10), nullable=False, server_default="buyer", default="buyer", index=True
+    )
     title = Column(String(120), nullable=False)
     body = Column(String(500), nullable=True)
     # In-app path to open, e.g. "/orders/12".

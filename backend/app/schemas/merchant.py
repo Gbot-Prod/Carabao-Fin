@@ -29,6 +29,8 @@ class MerchantUpdate(BaseModel):
     postal_code: str | None = Field(default=None, min_length=1, max_length=10)
     lat: float | None = None
     lng: float | None = None
+    # The owner placed or moved the pin themselves (not only geocoded).
+    pin_confirmed: bool | None = None
     available_days: list[Weekday] | None = Field(
         default=None, min_length=1, max_length=7
     )
@@ -81,6 +83,7 @@ class MerchantResponse(BaseModel):
     # Map pin (U1).
     lat: float | None = None
     lng: float | None = None
+    pin_confirmed: bool = False
 
     available_days: list[str]
     operating_hours: Any

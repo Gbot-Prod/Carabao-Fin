@@ -1,10 +1,15 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.services.phone_verification import normalize_ph_mobile
 
 
 class UserAddressBase(BaseModel):
     label: str | None = Field(default=None, max_length=50)
+    # Who receives deliveries here, and a PH mobile number the rider can call.
+    recipient_name: str | None = Field(default=None, max_length=100)
+    recipient_phone: str | None = Field(default=None, max_length=20)
     region: str | None = Field(default=None, max_length=100)
     province: str | None = Field(default=None, max_length=100)
     city: str | None = Field(default=None, max_length=100)
@@ -14,6 +19,23 @@ class UserAddressBase(BaseModel):
     # Map pin for the address (U1).
     lat: float | None = None
     lng: float | None = None
+    # The person placed or moved the pin themselves (not only geocoded).
+    pin_confirmed: bool = False
+
+    @field_validator("recipient_name")
+    @classmethod
+    def _clean_name(cls, value: str | None) -> str | None:
+        return " ".join(value.split()) or None if value is not None else None
+
+    @field_validator("recipient_phone")
+    @classmethod
+    def _ph_mobile(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        digits = normalize_ph_mobile(value)
+        if digits is None:
+            raise ValueError("Enter a PH mobile number, e.g. 0917 123 4567")
+        return f"+{digits}"
 
 
 class UserAddressCreate(UserAddressBase):

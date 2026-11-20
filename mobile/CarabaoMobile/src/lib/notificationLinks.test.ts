@@ -24,3 +24,18 @@ test('other links keep their old targets, unknown links open nothing', () => {
   assert.equal(appRoute('/admin/refunds'), null);
   assert.equal(appRoute('https://evil.example/orders/1'), null);
 });
+
+test('a chat message opens that order chat', () => {
+  const chat = { pathname: '/order-chat', params: { orderId: '12' } };
+  assert.deepEqual(appRoute('/chats?order=12', 'chat_message'), chat);
+  assert.deepEqual(appRoute('/merchantDashboard?order=12', 'chat_message'), chat);
+  assert.deepEqual(appRoute('/orders/12', 'chat_message'), chat); // older buyer notifications
+  // Farm questions: the merchant chat list; the buyer has no screen for them.
+  assert.deepEqual(appRoute('/merchantDashboard?inquiry=3', 'chat_message'), { pathname: '/merchant-chats' });
+  assert.deepEqual(appRoute('/merchantDashboard', 'chat_message'), { pathname: '/merchant-chats' });
+  assert.equal(appRoute('/chats?farm=4', 'chat_message'), null);
+  // A bad id is not opened.
+  assert.equal(appRoute('/chats?order=1e3', 'chat_message'), null);
+  // Other kinds keep their targets.
+  assert.deepEqual(appRoute('/merchantDashboard?order=12', 'new_order'), { pathname: '/merchant-orders' });
+});

@@ -64,6 +64,7 @@ export default function NotificationsPage() {
             limit: Math.min(limit - rows.length, MAX_RELOAD),
             offset: rows.length,
             unreadOnly: filter === "unread",
+            audience: "buyer",
           });
           rows.push(...page.items);
         } while (rows.length < limit && rows.length < page.total && page.items.length > 0);
@@ -99,7 +100,7 @@ export default function NotificationsPage() {
   const loadMore = async () => {
     setLoadingMore(true);
     try {
-      const page = await fetchNotifications({ limit: PAGE_SIZE, offset: items.length, unreadOnly: filter === "unread" });
+      const page = await fetchNotifications({ limit: PAGE_SIZE, offset: items.length, unreadOnly: filter === "unread", audience: "buyer" });
       setItems((prev) => {
         const have = new Set(prev.map((n) => n.id));
         return [...prev, ...page.items.filter((n) => !have.has(n.id))];
@@ -162,7 +163,7 @@ export default function NotificationsPage() {
           setItems((prev) => prev.map((x) => ({ ...x, read: true })));
         }
       },
-      markAllNotificationsRead
+      () => markAllNotificationsRead("buyer")
     );
     setBusy(false);
   };
@@ -170,7 +171,7 @@ export default function NotificationsPage() {
   const clearRead = async () => {
     if (!window.confirm(s.clearReadConfirm)) return;
     setBusy(true);
-    await run(() => {}, deleteReadNotifications);
+    await run(() => {}, () => deleteReadNotifications("buyer"));
     await load(PAGE_SIZE);
     setBusy(false);
   };
@@ -287,7 +288,7 @@ export default function NotificationsPage() {
 
       {actionError && <p className={styles.error} role="alert">{actionError}</p>}
 
-      {content}
+      <div className={styles.scroll}>{content}</div>
     </div>
   );
 }

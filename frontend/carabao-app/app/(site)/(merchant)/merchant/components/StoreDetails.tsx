@@ -2,8 +2,7 @@ import { useState } from "react";
 import styles from "../page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
-import { usePinAutofill } from "@/components/MapPinPicker/usePinAutofill";
-import { mergeLocation } from "@/lib/pin-autofill";
+import { focusFirstInvalid } from "@/components/FieldError/FieldError";
 import { sendOtp, updateMyMerchant, verifyOtp, type Merchant } from "@/util/api";
 import { formatCountdown, useResendCooldown } from "@/hooks/useResendCooldown";
 import errorHelper from "@/util/errorHelper";
@@ -27,6 +26,8 @@ type LocationDraft = {
   // Farm pickup point (U1c).
   lat: number | null;
   lng: number | null;
+  // The owner placed the pin themselves (not only geocoded from the address).
+  pin_confirmed: boolean;
 };
 
 const draftFromMerchant = (merchant: Merchant | null): LocationDraft => ({
@@ -38,6 +39,7 @@ const draftFromMerchant = (merchant: Merchant | null): LocationDraft => ({
   postal_code: merchant?.postal_code ?? "",
   lat: merchant?.lat ?? null,
   lng: merchant?.lng ?? null,
+  pin_confirmed: merchant?.pin_confirmed ?? false,
   contact_number: formatLocalPhone((merchant?.contact_number ?? "").replace(/^\+?63\s?/, "")),
   available_days: DAYS.filter((d) => merchant?.available_days?.includes(d)),
   delivery_price: merchant?.delivery_price != null ? String(merchant.delivery_price) : "",
@@ -54,9 +56,9 @@ type Props = {
 export default function StoreDetails({ merchant, onSaved }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<LocationDraft>(() => draftFromMerchant(null));
-  const autofill = usePinAutofill();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pinError, setPinError] = useState<string | null>(null);
   // CF-0030: a new contact number is saved only with a code sent to it.
   const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -110,6 +112,18 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
 
   const handleSave = async () => {
     setError(null);
+    // The farm needs a pin (deliveries start there); a suggested one counts only once confirmed.
+    if (draft.lat == null) {
+      setPinError("Place your pin on the map at your gate or door.");
+      requestAnimationFrame(focusFirstInvalid);
+      return;
+    }
+    if (!draft.pin_confirmed) {
+      setPinError("Move the pin to your gate or door, or tap “This pin is correct”.");
+      requestAnimationFrame(focusFirstInvalid);
+      return;
+    }
+    setPinError(null);
     if (draft.available_days.length === 0) {
       setError("Select at least one operating day.");
       return;
@@ -142,8 +156,9 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
         barangay: draft.barangay.trim() || null,
         address: draft.address.trim() || undefined,
         postal_code: draft.postal_code.trim() || undefined,
-        lat: draft.lat,
-        lng: draft.lng,
+        lat: draft.pin_confirmed ? draft.lat : null,
+        lng: draft.pin_confirmed ? draft.lng : null,
+        pin_confirmed: draft.lat != null && draft.pin_confirmed,
         ...(numberChanged && newNumber ? { contact_number: newNumber, phone_verification_token: token } : {}),
         available_days: draft.available_days,
         delivery_price: fee,
@@ -174,6 +189,27 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
       <h3 className={styles.shopDetailsSectionTitle}>Store Details</h3>
       {editing ? (
         <div className={styles.shopDetailsForm}>
+          <div className={styles.shopDetailsLocRow}>
+            <LocationSelects
+              value={{ region: draft.region, province: draft.province, city: draft.city, barangay: draft.barangay }}
+              onChange={(location) => setDraft((prev) => ({ ...prev, ...location }))}
+              selectClassName={styles.formInput}
+              labelClassName={styles.formLabel}
+              wrapClassName={styles.panelFormField}
+            />
+          </div>
+
+          <label className={styles.formLabel}>
+            Postal Code
+            <input
+              className={styles.formInput}
+              value={draft.postal_code}
+              onChange={(e) => setDraft((d) => ({ ...d, postal_code: e.target.value }))}
+              placeholder="e.g. 2600"
+              maxLength={10}
+            />
+          </label>
+
           <label className={styles.formLabel}>
             Street / House No.
             <input
@@ -185,13 +221,16 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
             />
           </label>
 
-          <div className={styles.shopDetailsLocRow}>
-            <LocationSelects
-              value={{ region: draft.region, province: draft.province, city: draft.city, barangay: draft.barangay }}
-              onChange={(location) => setDraft((prev) => ({ ...prev, ...location }))}
-              selectClassName={styles.formInput}
-              labelClassName={styles.formLabel}
-              wrapClassName={styles.panelFormField}
+          <div className={`${styles.formLabel} ${styles.formLabelLoose}`}>
+            <MapPinPicker
+              value={draft.lat != null && draft.lng != null ? { lat: draft.lat, lng: draft.lng } : null}
+              confirmed={draft.pin_confirmed}
+              onChange={(pin, confirmed) => {
+                setDraft((d) => ({ ...d, lat: pin.lat, lng: pin.lng, pin_confirmed: confirmed }));
+                if (confirmed) setPinError(null);
+              }}
+              error={pinError}
+              address={{ street: draft.address, postalCode: draft.postal_code, province: draft.province, city: draft.city, barangay: draft.barangay }}
             />
           </div>
 
@@ -249,17 +288,6 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
           </div>
 
           <label className={styles.formLabel}>
-            Postal Code
-            <input
-              className={styles.formInput}
-              value={draft.postal_code}
-              onChange={(e) => setDraft((d) => ({ ...d, postal_code: e.target.value }))}
-              placeholder="e.g. 2600"
-              maxLength={10}
-            />
-          </label>
-
-          <label className={styles.formLabel}>
             Delivery fee per order (₱)
             <input
               className={styles.formInput}
@@ -269,22 +297,6 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
               inputMode="numeric"
             />
           </label>
-
-          <div className={`${styles.formLabel} ${styles.formLabelLoose}`}>
-            <MapPinPicker
-              value={draft.lat != null && draft.lng != null ? { lat: draft.lat, lng: draft.lng } : null}
-              onChange={(pin, found) =>
-                setDraft((d) => ({
-                  ...d,
-                  ...(found?.location ? mergeLocation(d, found.location) : {}),
-                  lat: pin.lat,
-                  lng: pin.lng,
-                  address: autofill("address", d.address, found?.street),
-                  postal_code: autofill("postal_code", d.postal_code, found?.postcode),
-                }))
-              }
-            />
-          </div>
 
           <div className={`${styles.formLabel} ${styles.formLabelLoose}`}>
             <span>Operating Days</span>

@@ -1,7 +1,7 @@
 // Map pin -> region/province/city/barangay select values (pin autofill).
 // Turns Mapbox's place names into the exact PSGC names the selects use.
 
-import { findPlace, type LocationValue, type PlaceHints } from '@/lib/pin-autofill';
+import { findPlace, type LocationValue, type PlaceHints } from '@/lib/pin-area';
 import {
   fetchAllProvinces,
   fetchBarangaysByCity,

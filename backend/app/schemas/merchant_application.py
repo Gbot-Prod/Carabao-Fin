@@ -63,6 +63,8 @@ class MerchantOnboardingPayload(BaseModel):
     # Map pin for the farm (U1), optional.
     lat: float | None = None
     lng: float | None = None
+    # The person placed or moved the pin themselves (not only geocoded).
+    pin_confirmed: bool = False
     available_days: list[Weekday] = Field(min_length=1, max_length=7)
     contact_email: EmailStr
     contact_number: str = Field(min_length=6, max_length=20)

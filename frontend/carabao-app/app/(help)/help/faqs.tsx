@@ -65,7 +65,7 @@ export const FAQ_GROUPS: FaqGroup[] = [
         id: 'change-address',
         q: 'How do I change my delivery address?',
         keywords: 'address map pin location',
-        a: <>Go to <Link href={appUrl('/profile')}>Profile</Link> → Addresses → Edit address. Dropping a map pin helps riders find you.</>,
+        a: <>Go to <Link href={appUrl('/profile')}>Profile</Link> → Addresses → Edit address. Fill in the address first and we place the map pin from it; then drag the pin to your gate so riders find you.</>,
       },
       {
         id: 'delete-account',

@@ -14,6 +14,7 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
+import { CancelOrderSheet, type MerchantCancelReason } from '../components/CancelOrderSheet';
 
 const STATUS_LABELS: Record<MerchantOrderStatus, string> = {
   pending: 'Awaiting payment',
@@ -91,6 +92,9 @@ function OrderRow({
           {order.delivery_address ? <Text style={styles.detailMuted}>Deliver to: {order.delivery_address}</Text> : null}
           {order.buyer_phone ? <Text style={styles.detailMuted}>Phone: {order.buyer_phone}</Text> : null}
           <Text style={styles.detailMuted}>Ordered {new Date(order.ordered_at).toLocaleString('en-PH')}</Text>
+          {order.status === 'cancelled' && order.cancel_reason ? (
+            <Text style={styles.detailMuted}>Cancel reason: {order.cancel_reason}</Text>
+          ) : null}
           <TouchableOpacity style={styles.chatLink} onPress={() => onChat(order)}>
             <Text style={styles.chatLinkText}>Message buyer</Text>
           </TouchableOpacity>
@@ -150,6 +154,7 @@ function MerchantOrdersContent() {
   const [notMerchant, setNotMerchant] = useState(false);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('open');
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [cancelId, setCancelId] = useState<number | null>(null);
 
   const apply = useCallback((r: OrdersLoad) => {
     if (r.kind === 'notMerchant') {
@@ -177,7 +182,15 @@ function MerchantOrdersContent() {
     setRefreshing(false);
   };
 
-  const send = async (order: ApiMerchantOrder, to: MerchantOrderStatus) => {
+  const cancelOrder = async (reason: MerchantCancelReason, note: string) => {
+    if (cancelId == null) return;
+    // Errors are thrown back to the sheet, which shows them.
+    const updated = await api.merchants.cancelOrder(token, cancelId, reason, note);
+    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+    setCancelId(null);
+  };
+
+  const send = async (order: ApiMerchantOrder, to: Exclude<MerchantOrderStatus, 'cancelled'>) => {
     setBusyId(order.id);
     try {
       const updated = await api.merchants.updateOrderStatus(token, order.id, to);
@@ -190,17 +203,13 @@ function MerchantOrdersContent() {
   };
 
   const onUpdate = (order: ApiMerchantOrder, to: MerchantOrderStatus) => {
-    const message =
-      to === 'cancelled'
-        ? 'The buyer will be refunded by Carabao and the stock returned to your listing.'
-        : `Move order #${order.id} to "${STATUS_LABELS[to]}"?`;
-    Alert.alert(to === 'cancelled' ? `Cancel order #${order.id}?` : 'Update order', message, [
+    if (to === 'cancelled') {
+      setCancelId(order.id);
+      return;
+    }
+    Alert.alert('Update order', `Move order #${order.id} to "${STATUS_LABELS[to]}"?`, [
       { text: 'Back', style: 'cancel' },
-      {
-        text: to === 'cancelled' ? 'Cancel order' : 'Confirm',
-        style: to === 'cancelled' ? 'destructive' : 'default',
-        onPress: () => void send(order, to),
-      },
+      { text: 'Confirm', onPress: () => void send(order, to) },
     ]);
   };
 
@@ -286,6 +295,7 @@ function MerchantOrdersContent() {
         <View style={{ width: 22 }} />
       </View>
       {body}
+      <CancelOrderSheet orderId={cancelId} onClose={() => setCancelId(null)} onSubmit={cancelOrder} />
     </SafeAreaView>
   );
 }

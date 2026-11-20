@@ -1,4 +1,7 @@
-"""Order chat API (CH1). Clients poll GET every 10 seconds while the chat is open."""
+"""Order chat API (CH1) and shop inquiries (a buyer asks a farm before buying).
+
+Clients poll GET every 10 seconds while the chat is open.
+"""
 
 from datetime import datetime
 
@@ -15,6 +18,7 @@ from app.models.shopPage import ShopPage
 from app.models.user import User
 from app.schemas.pagination import MAX_ID
 from app.services import chat, notifications, rate_limit
+from app.services.account_suspension import merchant_is_public
 from app.services.merchant_service import get_active_merchant
 
 router = APIRouter(tags=["chat"])
@@ -283,3 +287,217 @@ def my_buyer_chats(
         (with_messages if last else without_messages).append(summary)
     with_messages.sort(key=lambda c: c.last_at, reverse=True)
     return (with_messages + without_messages)[:MAX_BUYER_CHATS]
+
+
+# --- Shop inquiries: a buyer asks a farm before buying -------------------------
+
+
+class InquiryThread(BaseModel):
+    conversation_id: int | None
+    merchant_id: int
+    my_role: str
+    closed: bool
+    closes_at: datetime | None = None
+    messages: list[ChatMessageOut]
+
+
+class InquirySummary(BaseModel):
+    conversation_id: int
+    merchant_id: int
+    farm_name: str | None
+    farm_logo_url: str | None
+    buyer_name: str | None
+    closed: bool
+    last_body: str
+    last_sender_role: str
+    last_mine: bool
+    last_at: datetime
+    unread: int
+
+
+MAX_INQUIRIES = 100
+
+
+def _inquiry_thread(
+    db: Session,
+    conv: Conversation | None,
+    merchant: Merchant,
+    user: User,
+    role: str,
+    after_id: int,
+) -> InquiryThread:
+    messages: list[ChatMessage] = []
+    if conv is not None:
+        messages = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.conversation_id == conv.id, ChatMessage.id > after_id)
+            .order_by(ChatMessage.id)
+            .limit(200)
+            .all()
+        )
+        if messages:
+            chat.mark_read(db, conv, user, messages[-1].id)
+            db.commit()
+    return InquiryThread(
+        conversation_id=conv.id if conv else None,
+        merchant_id=merchant.id,
+        my_role=role,
+        closed=chat.inquiry_is_closed(merchant),
+        messages=[_out(m, user) for m in messages],
+    )
+
+
+def _is_public(db: Session, merchant_id: int) -> bool:
+    return (
+        db.query(Merchant.id)
+        .filter(Merchant.id == merchant_id, merchant_is_public())
+        .first()
+        is not None
+    )
+
+
+def _farm_for_buyer(db: Session, merchant_id: int, user: User) -> Merchant:
+    merchant = db.get(Merchant, merchant_id)
+    if merchant is None:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+    if merchant.user_id == user.id:
+        raise HTTPException(status_code=400, detail="This is your own farm")
+    return merchant
+
+
+@router.get("/merchants/{merchant_id}/inquiry/messages", response_model=InquiryThread)
+def read_my_inquiry(
+    merchant_id: int,
+    after_id: int = Query(
+        0, ge=0, le=MAX_ID, description="Only messages newer than this id"
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The buyer's questions to a farm, no order needed. Empty until the first."""
+    merchant = _farm_for_buyer(db, merchant_id, current_user)
+    conv = chat.inquiry_for(db, current_user, merchant, create=False)
+    # A farm hidden from buyers (removed, suspended, unpublished) has no chat to
+    # start; one that already exists stays readable.
+    if conv is None and not _is_public(db, merchant.id):
+        raise HTTPException(status_code=404, detail="Merchant not found")
+    return _inquiry_thread(db, conv, merchant, current_user, "buyer", after_id)
+
+
+@router.post("/merchants/{merchant_id}/inquiry/messages", response_model=ChatMessageOut)
+def send_my_inquiry(
+    merchant_id: int,
+    payload: ChatPost,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rate_limit.enforce_action(db, "order_chat_send", str(current_user.id))
+    merchant = _farm_for_buyer(db, merchant_id, current_user)
+    conv = chat.inquiry_for(db, current_user, merchant, create=False)
+    if conv is None and not _is_public(db, merchant.id):
+        raise HTTPException(status_code=404, detail="Merchant not found")
+    ensure_phone_verified(current_user)
+    if conv is None:
+        conv = chat.inquiry_for(db, current_user, merchant, create=True)
+    message = chat.post_inquiry_message(db, conv, current_user, "buyer", payload.body)
+    db.commit()
+    db.refresh(message)
+    return _out(message, current_user)
+
+
+@router.get("/inquiries/{conversation_id}/messages", response_model=InquiryThread)
+def read_inquiry(
+    conversation_id: int,
+    after_id: int = Query(
+        0, ge=0, le=MAX_ID, description="Only messages newer than this id"
+    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """An inquiry by id, for the farm (and admins) answering it."""
+    conv = db.get(Conversation, conversation_id)
+    role = chat.require_inquiry_role(conv, current_user)
+    return _inquiry_thread(db, conv, conv.merchant, current_user, role, after_id)
+
+
+@router.post("/inquiries/{conversation_id}/messages", response_model=ChatMessageOut)
+def send_inquiry(
+    conversation_id: int,
+    payload: ChatPost,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rate_limit.enforce_action(db, "order_chat_send", str(current_user.id))
+    conv = db.get(Conversation, conversation_id)
+    role = chat.require_inquiry_role(conv, current_user)
+    if role == "buyer":
+        ensure_phone_verified(current_user)
+    message = chat.post_inquiry_message(db, conv, current_user, role, payload.body)
+    db.commit()
+    db.refresh(message)
+    return _out(message, current_user)
+
+
+def _inquiry_rows(db: Session):
+    return (
+        db.query(Conversation, Merchant, User)
+        .join(Merchant, Merchant.id == Conversation.merchant_id)
+        .outerjoin(ShopPage, ShopPage.merchant_id == Merchant.id)
+        .options(contains_eager(Merchant.shop_page))
+        .outerjoin(User, User.id == Conversation.user_id)
+        .filter(Conversation.kind == "shop")
+    )
+
+
+def _inquiry_summaries(db: Session, rows: list, user: User) -> list[InquirySummary]:
+    """Inquiries that have messages, newest message first."""
+    last_msgs, unread = _last_and_unread(db, [conv.id for conv, _, _ in rows], user)
+    out: list[InquirySummary] = []
+    for conv, merchant, buyer in rows:
+        last = last_msgs.get(conv.id)
+        if last is None:
+            continue
+        out.append(
+            InquirySummary(
+                conversation_id=conv.id,
+                merchant_id=merchant.id,
+                farm_name=merchant.merchant_name or None,
+                farm_logo_url=(
+                    merchant.shop_page.logo_url
+                    if merchant.shop_page is not None
+                    else None
+                ),
+                buyer_name=(buyer.name or None) if buyer else None,
+                closed=chat.inquiry_is_closed(merchant),
+                last_body=last.body,
+                last_sender_role=last.sender_role,
+                last_mine=last.sender_id == user.id,
+                last_at=last.created_at,
+                unread=unread.get(conv.id, 0),
+            )
+        )
+    out.sort(key=lambda s: s.last_at, reverse=True)
+    return out[:MAX_INQUIRIES]
+
+
+@router.get("/users/me/inquiries", response_model=list[InquirySummary])
+def my_buyer_inquiries(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The buyer's questions to farms (no order needed), newest message first."""
+    rows = _inquiry_rows(db).filter(Conversation.user_id == current_user.id).all()
+    return _inquiry_summaries(db, rows, current_user)
+
+
+@router.get("/merchants/me/inquiries", response_model=list[InquirySummary])
+def my_merchant_inquiries(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Questions buyers sent the farm before (or without) ordering."""
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    rows = _inquiry_rows(db).filter(Conversation.merchant_id == merchant.id).all()
+    return _inquiry_summaries(db, rows, current_user)

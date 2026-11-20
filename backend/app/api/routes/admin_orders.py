@@ -212,6 +212,7 @@ def _detail_view(order: Order) -> AdminOrderDetail:
             shipped_at=order.shipped_at,
             delivered_at=order.delivered_at,
             delivery_confirmed_by=order.delivery_confirmed_by,
+            cancel_reason=order.cancel_reason,
         ),
     )
 

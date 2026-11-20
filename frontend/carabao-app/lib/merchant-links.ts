@@ -19,7 +19,21 @@ export function merchantPageForNotification(link: string | null | undefined, kin
   if (!link) return null;
   const [path] = link.split(/[?#]/);
   if (path !== "/merchantDashboard" && path !== "/merchantDashboard/") return null;
-  return PAGE_BY_KIND[kind] ?? "/";
+  const page = PAGE_BY_KIND[kind] ?? "/";
+  // A chat message names its thread ("?order=12" or "?inquiry=3"): open it.
+  if (kind === "chat_message") {
+    const query = new URLSearchParams(link.split("?")[1]?.split("#")[0] ?? "");
+    const order = positiveId(query.get("order"));
+    if (order) return `${page}?order=${order}`;
+    const inquiry = positiveId(query.get("inquiry"));
+    if (inquiry) return `${page}?inquiry=${inquiry}`;
+  }
+  return page;
+}
+
+/** A link's id only when it is a plain positive integer. */
+export function positiveId(value: string | null | undefined): number | null {
+  return value && /^[1-9]\d{0,9}$/.test(value) ? Number(value) : null;
 }
 
 /**

@@ -210,18 +210,19 @@ export default function CartPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1>{t.cart.title}</h1>
-        <p>{t.cart.subtitle}</p>
+        <p className={styles.eyebrow}>{t.cart.eyebrow}</p>
+        <h1 className={styles.title}>{t.cart.title}</h1>
+        <p className={styles.description}>{t.cart.subtitle}</p>
       </header>
 
-      <div className={styles.layout}>
-        <section className={styles.itemsColumn}>
+      {/* One card: column heads, each farm's items, the bulk bar, then the summary. */}
+      <section className={styles.card}>
           {isHydrating || authLoading ? (
-            <div className={styles.card}>
+            <div className={styles.loadingState}>
               <SkeletonList label={t.cart.loading} rows={3} thumbnail />
             </div>
           ) : !isAuthenticated ? (
-            <div className={`${styles.card} ${styles.emptyState}`}>
+            <div className={styles.emptyState}>
               <h2>{t.cart.signedOutTitle}</h2>
               <p>{t.cart.signedOutBody}</p>
               <Link href="/auth" className={styles.primaryButton}>
@@ -232,7 +233,7 @@ export default function CartPage() {
               </Link>
             </div>
           ) : items.length === 0 ? (
-            <div className={`${styles.card} ${styles.emptyState}`}>
+            <div className={styles.emptyState}>
               <h2>{t.cart.emptyTitle}</h2>
               <p>{t.cart.emptyBody}</p>
               <Link href="/order" className={styles.secondaryButton}>
@@ -241,7 +242,7 @@ export default function CartPage() {
             </div>
           ) : (
             <>
-              <div className={`${styles.card} ${styles.tableHead}`}>
+              <div className={styles.tableHead}>
                 <label className={styles.selectCell}>
                   <TriCheckbox
                     checked={allSelected}
@@ -264,7 +265,7 @@ export default function CartPage() {
                 return (
                   <section
                     key={group.key}
-                    className={`${styles.card} ${styles.farmGroup}`}
+                    className={styles.farmGroup}
                     aria-label={fmt(t.cart.itemsFrom, { farm: group.farm })}
                   >
                     <header className={styles.farmGroupHeader}>
@@ -386,7 +387,7 @@ export default function CartPage() {
                 );
               })}
 
-              <div className={`${styles.card} ${styles.bulkBar}`}>
+              <div className={styles.bulkBar}>
                 <label className={styles.selectCell}>
                   <TriCheckbox
                     checked={allSelected}
@@ -406,56 +407,51 @@ export default function CartPage() {
                   {t.cart.removeSelected}
                 </button>
               </div>
+
+              <div className={styles.summary}>
+                <h2>{t.cart.summary}</h2>
+                <div className={styles.summaryLine}>
+                  <span>{t.cart.itemsTotal}</span>
+                  <strong>PHP {itemTotal.toFixed(2)}</strong>
+                </div>
+                <div className={styles.summaryLine}>
+                  <span>
+                    {selectedGroups.length > 1
+                      ? fmt(t.cart.deliveryFeesFarms, { count: selectedGroups.length })
+                      : t.cart.deliveryFees}
+                  </span>
+                  <strong>PHP {deliveryTotal.toFixed(2)}</strong>
+                </div>
+                {selectedGroups.length > 1 && (
+                  <p className={styles.multiFarmNote}>{fmt(t.cart.multiFarmNote, { count: selectedGroups.length })}</p>
+                )}
+                <div className={styles.summaryLineGrand}>
+                  <span>{t.cart.grandTotal}</span>
+                  <strong>PHP {grandTotal.toFixed(2)}</strong>
+                </div>
+
+                {selectedItems.length === 0 && (
+                  <p className={styles.multiFarmNote}>{t.cart.noneSelected}</p>
+                )}
+
+                <div className={styles.summaryActions}>
+                  {selectedItems.length === 0 ? (
+                    <button type="button" className={styles.primaryButton} disabled>
+                      {t.cart.proceed}
+                    </button>
+                  ) : (
+                    <Link href={checkoutHref} className={styles.primaryButton}>
+                      {t.cart.proceed} ({selectedItems.length})
+                    </Link>
+                  )}
+                  <Link href="/order" className={styles.secondaryButton}>
+                    {t.cart.continueShopping}
+                  </Link>
+                </div>
+              </div>
             </>
           )}
-        </section>
-
-        <aside className={`${styles.card} ${styles.summaryCard}`}>
-          <h2>{t.cart.summary}</h2>
-          <div className={styles.summaryLine}>
-            <span>{t.cart.itemsTotal}</span>
-            <strong>PHP {itemTotal.toFixed(2)}</strong>
-          </div>
-          <div className={styles.summaryLine}>
-            <span>
-              {selectedGroups.length > 1
-                ? fmt(t.cart.deliveryFeesFarms, { count: selectedGroups.length })
-                : t.cart.deliveryFees}
-            </span>
-            <strong>PHP {deliveryTotal.toFixed(2)}</strong>
-          </div>
-          {selectedGroups.length > 1 && (
-            <p className={styles.multiFarmNote}>{fmt(t.cart.multiFarmNote, { count: selectedGroups.length })}</p>
-          )}
-          <div className={styles.summaryLineGrand}>
-            <span>{t.cart.grandTotal}</span>
-            <strong>PHP {grandTotal.toFixed(2)}</strong>
-          </div>
-
-          {items.length > 0 && selectedItems.length === 0 && (
-            <p className={styles.multiFarmNote}>{t.cart.noneSelected}</p>
-          )}
-
-          <div className={styles.summaryActions}>
-            {items.length === 0 ? (
-              <Link href="/order" className={styles.primaryButton}>
-                {t.cart.addProducts}
-              </Link>
-            ) : selectedItems.length === 0 ? (
-              <button type="button" className={styles.primaryButton} disabled>
-                {t.cart.proceed}
-              </button>
-            ) : (
-              <Link href={checkoutHref} className={styles.primaryButton}>
-                {t.cart.proceed} ({selectedItems.length})
-              </Link>
-            )}
-            <Link href="/order" className={styles.secondaryButton}>
-              {t.cart.continueShopping}
-            </Link>
-          </div>
-        </aside>
-      </div>
+      </section>
     </div>
   );
 }

@@ -15,14 +15,13 @@ import {
 } from '@/util/api';
 import LocationSelects from '@/components/LocationSelects/LocationSelects';
 import MapPinPicker from '@/components/MapPinPicker/MapPinPicker';
-import { usePinAutofill } from '@/components/MapPinPicker/usePinAutofill';
-import { mergeLocation } from '@/lib/pin-autofill';
-import type { Pin } from '@/util/reverseGeocode';
+import type { Pin } from '@/util/geocode';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import TwoFactorSettings from '@/components/TwoFactorSettings/TwoFactorSettings';
 import DataExportSection from '@/components/DataExport/DataExportSection';
 import { addEmail, updateName } from '@/lib/auth-client';
-import { formatPhMobile } from '@/lib/phone';
+import { formatPhMobile, normalizePhMobile } from '@/lib/phone';
+import FieldError, { focusFirstInvalid, invalidClass, invalidProps, type FieldErrors } from '@/components/FieldError/FieldError';
 import PhoneVerifyDialog from '@/components/PhoneVerifyDialog/PhoneVerifyDialog';
 import LanguageToggle from '@/components/LanguageToggle/LanguageToggle';
 import NotificationsPanel from './components/NotificationsPanel';
@@ -109,9 +108,14 @@ function UserAvatar({ pictureUrl, initials, uploading, onUpload }: {
 // ─── Address panel ────────────────────────────────────────────────────────────
 const MAX_ADDRESSES = 10; // matches the backend cap
 
-type AddressForm = { label: string; address: string; barangay: string; city: string; province: string; region: string; postal_code: string };
+type AddressForm = { recipient_name: string; recipient_phone: string; label: string; address: string; barangay: string; city: string; province: string; region: string; postal_code: string };
 
-const formFromAddress = (a: UserAddress | null): AddressForm => ({
+/** Who the new address is for, until the person changes it: the account's own name and number. */
+type Recipient = { name: string; phone: string };
+
+const formFromAddress = (a: UserAddress | null, recipient?: Recipient): AddressForm => ({
+  recipient_name: a ? a.recipient_name ?? '' : recipient?.name ?? '',
+  recipient_phone: formatPhMobile(a ? a.recipient_phone : recipient?.phone),
   label: a?.label ?? '',
   address: a?.address ?? '',
   barangay: a?.barangay ?? '',
@@ -127,20 +131,28 @@ const pinFromAddress = (a: UserAddress | null): Pin | null =>
 const addressLine = (a: UserAddress) =>
   [a.address, a.barangay, a.city, a.province, a.postal_code].filter(Boolean).join(', ');
 
-function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | null; onChanged: () => Promise<void> }) {
+function AddressPanel({ addresses, recipient, onChanged }: {
+  addresses: UserAddress[] | null;
+  recipient: Recipient;
+  onChanged: () => Promise<void>;
+}) {
   // null: list view; 'new': adding; a number: editing that address.
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<'recipient_name' | 'recipient_phone' | 'pin'>>({});
   const [form, setForm] = useState<AddressForm>(() => formFromAddress(null));
   // Map pin for the address (U1b); null until the user drops one.
   const [pin, setPin] = useState<Pin | null>(null);
-  const autofill = usePinAutofill();
+  // Whether the person placed the pin (false: only where the address geocoded to).
+  const [pinConfirmed, setPinConfirmed] = useState(false);
 
   const startEdit = (a: UserAddress | null) => {
     setError(null);
-    setForm(formFromAddress(a));
+    setFieldErrors({});
+    setForm(formFromAddress(a, recipient));
     setPin(pinFromAddress(a));
+    setPinConfirmed(a?.pin_confirmed ?? false);
     setEditing(a ? a.id : 'new');
   };
   const cancel = () => { setEditing(null); setError(null); };
@@ -157,7 +169,22 @@ function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | nul
 
   const save = () => {
     const clean = (v: string) => v.trim() || null;
+    const phone = normalizePhMobile(form.recipient_phone);
+    const errors: FieldErrors<'recipient_name' | 'recipient_phone' | 'pin'> = {};
+    if (!form.recipient_name.trim()) errors.recipient_name = 'Enter the name of who receives the delivery.';
+    if (!form.recipient_phone.trim()) errors.recipient_phone = 'Enter a mobile number the rider can call.';
+    else if (!phone) errors.recipient_phone = 'Enter a PH mobile number, e.g. 0917 123 4567.';
+    // Every address needs a pin; a suggested one counts only once confirmed or moved.
+    if (!pin) errors.pin = 'Place your pin on the map at your gate or door.';
+    else if (!pinConfirmed) errors.pin = 'Move the pin to your gate or door, or tap “This pin is correct”.';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      requestAnimationFrame(focusFirstInvalid);
+      return;
+    }
     const payload = {
+      recipient_name: clean(form.recipient_name),
+      recipient_phone: phone,
       label: clean(form.label),
       region: clean(form.region),
       province: clean(form.province),
@@ -165,8 +192,9 @@ function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | nul
       barangay: clean(form.barangay),
       address: clean(form.address),
       postal_code: clean(form.postal_code),
-      lat: pin?.lat ?? null,
-      lng: pin?.lng ?? null,
+      lat: pin && pinConfirmed ? pin.lat : null,
+      lng: pin && pinConfirmed ? pin.lng : null,
+      pin_confirmed: !!pin && pinConfirmed,
     };
     const id = editing;
     void run(
@@ -175,8 +203,10 @@ function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | nul
     );
   };
 
-  const setField = (f: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const setField = (f: keyof AddressForm) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(p => ({ ...p, [f]: e.target.value }));
+    if (f === 'recipient_name' || f === 'recipient_phone') setFieldErrors(p => ({ ...p, [f]: undefined }));
+  };
 
   if (!addresses) return <PageLoader variant="compact" />;
 
@@ -185,9 +215,15 @@ function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | nul
       <div className={styles.panelForm}>
         <h3 className={styles.formTitle}>{editing === 'new' ? 'New address' : 'Edit address'}</h3>
         <div className={styles.addressForm}>
-          <div className={`${styles.panelFormField} ${styles.fieldFull}`}>
-            <label htmlFor="profile-address-label" className={styles.formLabel}>Label</label>
-            <input id="profile-address-label" className={styles.formInput} value={form.label} onChange={setField('label')} placeholder="Home, Office…" maxLength={50} />
+          <div className={`${styles.panelFormField}${invalidClass(fieldErrors.recipient_name)}`}>
+            <label htmlFor="profile-recipient-name" className={styles.formLabel}>Full name</label>
+            <input id="profile-recipient-name" className={styles.formInput} value={form.recipient_name} onChange={setField('recipient_name')} placeholder="Juan dela Cruz" autoComplete="name" maxLength={100} {...invalidProps('profile-recipient-name', fieldErrors.recipient_name)} />
+            <FieldError id="profile-recipient-name" message={fieldErrors.recipient_name} />
+          </div>
+          <div className={`${styles.panelFormField}${invalidClass(fieldErrors.recipient_phone)}`}>
+            <label htmlFor="profile-recipient-phone" className={styles.formLabel}>Phone number</label>
+            <input id="profile-recipient-phone" className={styles.formInput} value={form.recipient_phone} onChange={setField('recipient_phone')} placeholder="0917 123 4567" type="tel" inputMode="tel" autoComplete="tel" maxLength={20} {...invalidProps('profile-recipient-phone', fieldErrors.recipient_phone)} />
+            <FieldError id="profile-recipient-phone" message={fieldErrors.recipient_phone} />
           </div>
           <LocationSelects
             value={{ region: form.region, province: form.province, city: form.city, barangay: form.barangay }}
@@ -197,27 +233,29 @@ function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | nul
             wrapClassName={styles.panelFormField}
           />
           <div className={styles.panelFormField}>
-            <label htmlFor="profile-address" className={styles.formLabel}>Street / House No.</label>
-            <input id="profile-address" className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave, Unit 4B" />
-          </div>
-          <div className={styles.panelFormField}>
             <label htmlFor="profile-postal-code" className={styles.formLabel}>Postal code</label>
             <input id="profile-postal-code" className={styles.formInput} value={form.postal_code} onChange={setField('postal_code')} placeholder="1634" />
+          </div>
+          <div className={styles.panelFormField}>
+            <label htmlFor="profile-address" className={styles.formLabel}>Street / House No.</label>
+            <input id="profile-address" className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave, Unit 4B" />
           </div>
           <div className={`${styles.panelFormField} ${styles.fieldFull}`}>
             <MapPinPicker
               value={pin}
-              onChange={(next, found) => {
+              confirmed={pinConfirmed}
+              onChange={(next, confirmed) => {
                 setPin(next);
-                // Fill what the pin tells us; keep anything the user typed.
-                setForm(prev => ({
-                  ...prev,
-                  ...(found?.location ? mergeLocation(prev, found.location) : {}),
-                  address: autofill('address', prev.address, found?.street),
-                  postal_code: autofill('postal_code', prev.postal_code, found?.postcode),
-                }));
+                setPinConfirmed(confirmed);
+                if (confirmed) setFieldErrors(p => ({ ...p, pin: undefined }));
               }}
+              error={fieldErrors.pin}
+              address={{ street: form.address, postalCode: form.postal_code, province: form.province, city: form.city, barangay: form.barangay }}
             />
+          </div>
+          <div className={`${styles.panelFormField} ${styles.fieldFull}`}>
+            <label htmlFor="profile-address-label" className={styles.formLabel}>Label (optional)</label>
+            <input id="profile-address-label" className={styles.formInput} value={form.label} onChange={setField('label')} placeholder="Home, Office…" maxLength={50} />
           </div>
         </div>
         {error && <p className={styles.panelError}>{error}</p>}
@@ -247,6 +285,11 @@ function AddressPanel({ addresses, onChanged }: { addresses: UserAddress[] | nul
                   <span className={styles.addressLabel}>{a.label || 'Address'}</span>
                   {a.is_default && <span className={styles.badgeOk}><Check size={12} strokeWidth={3} aria-hidden="true" />Default</span>}
                 </div>
+                {(a.recipient_name || a.recipient_phone) && (
+                  <span className={styles.addressLine}>
+                    {[a.recipient_name, formatPhMobile(a.recipient_phone)].filter(Boolean).join(' · ')}
+                  </span>
+                )}
                 <span className={styles.addressLine}>{addressLine(a) || <NoData />}</span>
                 <span className={styles.addressMeta}>
                   {savedPin ? `Pin: ${savedPin.lat.toFixed(5)}, ${savedPin.lng.toFixed(5)}` : 'Not pinned on the map'}
@@ -535,6 +578,7 @@ export default function Profile() {
               <SectionHead title="Addresses" desc="Where we deliver your orders. The default address is used at checkout." />
               <AddressPanel
                 addresses={profile?.addresses ?? null}
+                recipient={{ name: profile?.name?.trim() ?? '', phone: profile?.phone_number ?? '' }}
                 onChanged={async () => {
                   const addresses = await fetchMyAddresses();
                   setProfile(p => (p ? { ...p, addresses } : p));

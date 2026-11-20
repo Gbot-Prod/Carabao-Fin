@@ -76,6 +76,7 @@ def purge_closed_order_details(db: Session, days: int) -> int:
             Order.delivery_lng: None,
             Order.delivery_road_lat: None,
             Order.delivery_road_lng: None,
+            Order.delivery_pin_confirmed: False,
             Order.pin_unreachable_note: None,
             Order.notes: None,
             Order.route_waypoints: None,

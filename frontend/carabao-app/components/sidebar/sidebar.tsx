@@ -273,6 +273,7 @@ export default function Sidebar() {
               {renderNavLink(appUrl("/orders"), t.nav.orders, <ReceiptIcon />, true, "/orders")}
               {renderNavLink(appUrl("/chats"), t.nav.chats, <ChatIcon />, true, "/chats", false, unreadChats)}
               {renderNavLink(appUrl("/saved"), t.nav.saved, <HeartIcon />, true, "/saved")}
+              {isAuthenticated && renderNavLink(appUrl("/notifications"), t.nav.notifications, <BellIcon />, true, "/notifications", false, unreadNotifications)}
             </ul>
           </div>
 
@@ -289,13 +290,6 @@ export default function Sidebar() {
             </div>
           )}
 
-          {isAuthenticated && (
-            <div className="sidebar__section sidebar__section--divided">
-              <ul className="sidebar__nav-list">
-                {renderNavLink(appUrl("/notifications"), t.nav.notifications, <BellIcon />, true, "/notifications", false, unreadNotifications)}
-              </ul>
-            </div>
-          )}
         </nav>
 
         <div className="sidebar__footer">

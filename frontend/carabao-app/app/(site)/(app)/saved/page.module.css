@@ -1,8 +1,41 @@
 /* Saved produce page (CF-0038). Header and cards follow the orders page and produce results. */
 
 .container {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1.25rem;
+  height: 100%;
+}
+
+/* Header and controls stay put; the rest fills the screen and scrolls. */
+.container > * {
+  flex-shrink: 0;
+}
+
+.scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room for card shadows and focus rings, which the scroll edge would
+     otherwise cut off; the negative margin keeps the cards lined up. */
+  margin: -8px;
+  padding: 8px;
+  display: grid;
+  align-content: start;
+  gap: 1.25rem;
+}
+
+/* Phones: the whole page scrolls instead. */
+@media (max-width: 768px) {
+  .container {
+    height: auto;
+  }
+
+  .scroll {
+    overflow: visible;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 .header {

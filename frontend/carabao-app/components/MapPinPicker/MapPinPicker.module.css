@@ -29,6 +29,20 @@
   cursor: pointer;
 }
 
+.confirm {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--green-600);
+  color: var(--bg-white);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirm:focus-visible,
 .locate:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -40,6 +54,20 @@
   border: 1px solid var(--green-border);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+.locked {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-subtle);
+  font-size: 13px;
+  text-align: center;
 }
 
 .note {

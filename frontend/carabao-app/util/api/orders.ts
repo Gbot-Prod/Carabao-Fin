@@ -67,6 +67,8 @@ export type PlaceOrderPayload = {
   // Map pin for the delivery address (U1).
   delivery_lat?: number | null;
   delivery_lng?: number | null;
+  /** The person placed or moved the pin themselves; false = only where the address geocoded to. */
+  delivery_pin_confirmed?: boolean;
   // The server refuses unknown fields; items, prices and fees come from the
   // server-side cart and listings.
   notes?: string | null;
@@ -159,6 +161,8 @@ export const deleteOrderFromHistory = async (orderId: number): Promise<void> => 
 export type OrderDetail = CurrentOrderItem & {
   delivered_at?: string | null;
   delivery_confirmed_by?: string | null;
+  /** Why it was cancelled (farm, admin or the unshipped sweep). */
+  cancel_reason?: string | null;
   review?: Review | null;
   can_review: boolean;
   review_deadline?: string | null;

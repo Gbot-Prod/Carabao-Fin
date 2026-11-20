@@ -227,6 +227,12 @@ export default function RoutingPage() {
                     <span className={`${styles.chip} ${chipClass(stop.status)}`}>{statusLabel(stop.status)}</span>
                   </div>
 
+                  {stop.pin_approximate && !stop.pin_unreachable && (
+                    <p className={styles.approximateNote}>
+                      <strong>{t.routing.approximate}.</strong> {t.routing.approximateNote}
+                    </p>
+                  )}
+
                   {stop.pin_unreachable && (
                     <p className={styles.reportedNote}>
                       <strong>{t.routing.reported}.</strong> {t.routing.reportedNote}

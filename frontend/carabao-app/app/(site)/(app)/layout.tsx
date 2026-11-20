@@ -3,7 +3,7 @@ import Sidebar from "@/components/sidebar/sidebar";
 import { AuthPromptProvider } from "@/components/AuthPrompt/AuthPromptContext";
 import { NotificationsProvider } from "@/components/Notifications/NotificationsProvider";
 import { BuyerChatsProvider } from "@/components/Chats/BuyerChatsProvider";
-import React, { Suspense } from 'react';
+import React from 'react';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -13,9 +13,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="app-shell">
             <Sidebar />
             <main className="app-shell__content">
-              <Suspense fallback={<div />}>
-                {children}
-              </Suspense>
+              {/* No Suspense here: it flushed a 200 before a page could call
+                  notFound() (farm pages need a real 404). Pages that use
+                  useSearchParams wrap themselves, e.g. chats/page.tsx. */}
+              {children}
             </main>
           </div>
         </BuyerChatsProvider>

@@ -54,6 +54,8 @@ class AdminOrderDelivery(BaseModel):
     delivered_at: datetime | None
     # Who confirmed delivery: buyer | auto | legacy (None while undelivered).
     delivery_confirmed_by: str | None
+    # Why it was cancelled, as the buyer was told; None otherwise.
+    cancel_reason: str | None = None
 
 
 class AdminOrderDetail(AdminOrderSummary):

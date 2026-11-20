@@ -2,13 +2,14 @@ import { useState } from "react";
 import styles from "../page.module.css";
 import s from "./orders.module.css";
 import OrderChat from "@/components/OrderChat/OrderChat";
+import CancelOrderForm from "./CancelOrderForm";
 import {
   ORDER_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
   isClosed,
   isInTransit,
+  type MerchantCancelReason,
   type MerchantOrder,
-  type OrderStatus,
 } from "@/util/api";
 import { addDays, formatDate, formatPeso, formatRequestedDate } from "../lib/format";
 
@@ -34,13 +35,14 @@ type Props = {
   order: MerchantOrder;
   today: string;
   focused: boolean;
-  updating: boolean;
-  onUpdateStatus: (status: OrderStatus) => void;
+  /** Cancels with the farm's reason; rejects with the API error. */
+  onCancel: (reason: MerchantCancelReason, note: string) => Promise<void>;
 };
 
 /** Collapsed to one summary line; click to see contact, address, note and items. */
-export default function OrderCard({ order, today, focused, updating, onUpdateStatus }: Props) {
+export default function OrderCard({ order, today, focused, onCancel }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   // An order jumped to from a review opens itself.
   const open = expanded || focused;
 
@@ -82,14 +84,31 @@ export default function OrderCard({ order, today, focused, updating, onUpdateSta
           <strong className={`${styles.orderTotal} ${s.summaryTotal}`}>{formatPeso(order.total_price)}</strong>
         </button>
 
-        {isOpenOrder && (
+        {isOpenOrder && !cancelling && (
           <div className={s.summaryActions}>
-            <button className={styles.orderCancelBtn} disabled={updating} onClick={() => onUpdateStatus("cancelled")}>
+            <button className={styles.orderCancelBtn} onClick={() => setCancelling(true)}>
               Cancel
             </button>
           </div>
         )}
       </div>
+
+      {isOpenOrder && cancelling && (
+        <CancelOrderForm
+          orderId={order.id}
+          onSubmit={async (reason, note) => {
+            await onCancel(reason, note);
+            setCancelling(false);
+          }}
+          onClose={() => setCancelling(false)}
+        />
+      )}
+
+      {order.status === "cancelled" && order.cancel_reason && (
+        <p className={s.cancelledReason}>
+          <span className={styles.orderBuyerLabel}>Cancel reason</span> {order.cancel_reason}
+        </p>
+      )}
 
       {open && (
         <div id={detailsId} className={s.orderDetails}>

@@ -12,6 +12,15 @@ test('the plain dashboard link opens the page for its kind', () => {
   assert.equal(merchantPageForNotification('/merchantDashboard/', 'payout_destination_changed'), '/earnings');
 });
 
+test('a chat message opens its thread', () => {
+  assert.equal(merchantPageForNotification('/merchantDashboard?order=12', 'chat_message'), '/chats?order=12');
+  assert.equal(merchantPageForNotification('/merchantDashboard?inquiry=3', 'chat_message'), '/chats?inquiry=3');
+  // A bad id, or a thread on another kind, opens the plain page.
+  assert.equal(merchantPageForNotification('/merchantDashboard?order=1e3', 'chat_message'), '/chats');
+  assert.equal(merchantPageForNotification('/merchantDashboard?order=<x>', 'chat_message'), '/chats');
+  assert.equal(merchantPageForNotification('/merchantDashboard?order=12', 'new_order'), '/sales');
+});
+
 test('an unknown kind opens the dashboard', () => {
   assert.equal(merchantPageForNotification('/merchantDashboard', 'something_new'), '/');
 });

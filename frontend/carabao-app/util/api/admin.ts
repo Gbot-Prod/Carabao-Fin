@@ -304,6 +304,7 @@ export type AdminOrderDetail = AdminOrderSummary & {
     shipped_at: string | null;
     delivered_at: string | null;
     delivery_confirmed_by: string | null;
+    cancel_reason?: string | null;
   };
 };
 

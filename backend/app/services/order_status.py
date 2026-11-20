@@ -60,6 +60,27 @@ MERCHANT_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
 }
 
 
+# Why a farm may cancel; the label is what the buyer reads. The web and mobile
+# cancel prompts offer these same keys. "other" needs a note.
+MERCHANT_CANCEL_REASONS: dict[str, str] = {
+    "out_of_stock": "Out of stock",
+    "quality": "The produce did not meet quality standards",
+    "cannot_deliver": "The farm cannot deliver to this address or date",
+    "buyer_request": "The buyer asked to cancel",
+    "other": "Other",
+}
+MERCHANT_CANCEL_NOTE_MAX = 300
+
+
+def merchant_cancel_text(reason: str, note: str | None) -> str:
+    """The reason as the buyer reads it, e.g. ``Out of stock: rain hit the crop``."""
+    note = (note or "").strip()
+    if reason == "other":
+        return note
+    label = MERCHANT_CANCEL_REASONS[reason]
+    return f"{label}: {note}" if note else label
+
+
 class InvalidTransition(ValueError):
     """The merchant asked for a move MERCHANT_TRANSITIONS doesn't allow."""
 
@@ -94,10 +115,17 @@ def money_received_clause():
     )
 
 
-def apply_merchant_transition(order: Order, new_status: OrderStatus, db: Session):
+def apply_merchant_transition(
+    order: Order,
+    new_status: OrderStatus,
+    db: Session,
+    cancel_reason: str | None = None,
+):
     """Move ``order`` to ``new_status`` for its merchant; the caller commits.
 
-    Raises InvalidTransition or PaymentInProgress, leaving the order unchanged.
+    ``cancel_reason`` is the buyer-facing text (``merchant_cancel_text``) and is
+    required to cancel. Raises InvalidTransition or PaymentInProgress, leaving
+    the order unchanged.
     """
     allowed = MERCHANT_TRANSITIONS.get(order.status, frozenset())
     if new_status not in allowed:
@@ -106,7 +134,14 @@ def apply_merchant_transition(order: Order, new_status: OrderStatus, db: Session
         )
 
     if new_status == OrderStatus.CANCELLED:
-        cancel_paid_order(order, db, "The farm cancelled this order.")
+        if not cancel_reason:
+            raise InvalidTransition("Give a reason to cancel this order")
+        cancel_paid_order(
+            order,
+            db,
+            f"The farm cancelled this order. Reason: {cancel_reason.rstrip('.')}.",
+            record=cancel_reason,
+        )
     elif new_status == OrderStatus.SHIPPED:
         mark_shipped(order)
     else:
@@ -122,11 +157,15 @@ def apply_merchant_transition(order: Order, new_status: OrderStatus, db: Session
             )
 
 
-def cancel_paid_order(order: Order, db: Session, reason: str) -> None:
+def cancel_paid_order(
+    order: Order, db: Session, reason: str, record: str | None = None
+) -> None:
     """Cancel ``order`` and tell the buyer; the caller commits (CF-0051).
 
-    Raises PaymentInProgress, leaving the order unchanged, while a payment for
-    an unpaid order may still go through.
+    ``reason`` is the notification text; ``record`` (default: ``reason``) is
+    kept on the order for the order page. Raises PaymentInProgress, leaving
+    the order unchanged, while a payment for an unpaid order may still go
+    through.
     """
     # Only payment moves an order out of pending, so any other status was paid.
     was_paid = order.status != OrderStatus.PENDING
@@ -134,6 +173,7 @@ def cancel_paid_order(order: Order, db: Session, reason: str) -> None:
         raise PaymentInProgress(
             "A payment for this order is in progress; try again shortly"
         )
+    order.cancel_reason = (record or reason)[:400]
     refund_note = " Your payment will be refunded." if was_paid else ""
     close_shipment_if_done(order)
     notifications.notify(
@@ -177,9 +217,7 @@ def cancel_unshipped_orders(db: Session, days: int) -> int:
     cancelled = 0
 
     for order_id in due_order_ids:
-        order = (
-            db.query(Order).filter(Order.id == order_id).with_for_update().first()
-        )
+        order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
         if not order or order.status != OrderStatus.PROCESSING:
             continue
         cancel_paid_order(
@@ -311,12 +349,7 @@ def auto_confirm_delivered_orders(db: Session, days: int) -> int:
     confirmed = 0
 
     for order_id in due_order_ids:
-        order = (
-            db.query(Order)
-            .filter(Order.id == order_id)
-            .with_for_update()
-            .first()
-        )
+        order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
         if not order or order.status not in IN_TRANSIT_STATUSES:
             continue
         due_at = auto_confirm_at(order, days)

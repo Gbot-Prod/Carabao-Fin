@@ -68,7 +68,12 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 
 function Progress({ order }: { order: OrderDetail }) {
   if (order.status === "cancelled") {
-    return <p className={styles.cancelledNote}>This order was cancelled.</p>;
+    return (
+      <p className={styles.cancelledNote}>
+        This order was cancelled.
+        {order.cancel_reason && <> Reason: {order.cancel_reason.replace(/\.$/, "")}.</>}
+      </p>
+    );
   }
   if (order.status === "payment_mismatch") {
     // Closed, not a step (CF-0026): the amount paid did not match, so it was never processed.

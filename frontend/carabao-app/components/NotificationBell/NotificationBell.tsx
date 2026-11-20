@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/util/api/client";
+import type { NotificationAudience } from "@/util/api/notifications";
 import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import styles from "./NotificationBell.module.css";
-import { merchantUrl, resolveStoredLink } from "@/lib/urls";
-import { merchantPageForNotification } from "@/lib/merchant-links";
+import { notificationTarget, openNotificationTarget } from "@/lib/notification-links";
 
 type Item = {
   id: number;
@@ -26,7 +26,14 @@ const POLL_MS = 60_000;
  * placement "up" (default) opens the list above the bell, for the bottom of the
  * buyer sidebar; "down" opens it below and to the left, for a top bar.
  */
-export default function NotificationBell({ placement = "up" }: { placement?: "up" | "down" } = {}) {
+export default function NotificationBell({
+  placement = "up",
+  audience,
+}: {
+  placement?: "up" | "down";
+  /** Which side's notifications to show (an account can be buyer and farm). */
+  audience: NotificationAudience;
+}) {
   const { t } = useLanguage();
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
@@ -37,14 +44,14 @@ export default function NotificationBell({ placement = "up" }: { placement?: "up
   const load = useCallback(async () => {
     try {
       const res = await apiClient.get<{ items: Item[]; unread: number }>("/users/me/notifications", {
-        params: { limit: 15 },
+        params: { limit: 15, audience },
       });
       setItems(res.data.items);
       setUnread(res.data.unread);
     } catch {
       // Signed out or offline: keep the last state.
     }
-  }, []);
+  }, [audience]);
 
   // CF-0047: paused while the tab is hidden, one poll when it is shown again.
   useVisibleInterval(load, POLL_MS);
@@ -70,23 +77,15 @@ export default function NotificationBell({ placement = "up" }: { placement?: "up
       void apiClient.post(`/users/me/notifications/${item.id}/read`).catch(() => {});
     }
     setOpen(false);
-    // R3: stored links are paths ("/merchantDashboard", "/admin/orders"); the
-    // mobile app reads them too. Map to the right host here, do not change them.
-    // A plain "/merchantDashboard" opens the merchant page for this kind (new order -> Orders).
-    const merchantPage = merchantPageForNotification(item.link, item.kind);
-    const target = merchantPage ? merchantUrl(merchantPage) : resolveStoredLink(item.link);
-    if (!target) return;
-    if (/^https?:\/\//.test(target) && new URL(target).origin !== window.location.origin) {
-      window.location.assign(target);
-    } else {
-      router.push(target);
-    }
+    // Same mapping as the notifications page (chat messages open their thread).
+    const target = notificationTarget(item);
+    if (target) openNotificationTarget(target, router.push);
   };
 
   const markAll = async () => {
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
     setUnread(0);
-    void apiClient.post("/users/me/notifications/read-all").catch(() => {});
+    void apiClient.post("/users/me/notifications/read-all", null, { params: { audience } }).catch(() => {});
   };
 
   return (

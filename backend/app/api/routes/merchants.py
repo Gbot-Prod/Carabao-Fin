@@ -10,7 +10,7 @@ from fastapi import (
     Query,
     UploadFile,
 )
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, raiseload, selectinload
@@ -59,11 +59,14 @@ from app.services.merchant_service import (
 from app.services.order_status import (
     ACTIVE_ORDER_STATUSES,
     CLOSED_ORDER_STATUSES,
+    MERCHANT_CANCEL_NOTE_MAX,
+    MERCHANT_CANCEL_REASONS,
     SHIPPED_STATUSES,
     InvalidTransition,
     PaymentInProgress,
     apply_merchant_transition,
     auto_confirm_at,
+    merchant_cancel_text,
     money_received_clause,
     payment_status,
 )
@@ -73,15 +76,14 @@ from app.services.phone_verification import (
     read_token,
 )
 from app.services.pinned_location import (
-    apply_pin,
     delivery_point,
     merchant_point,
-    validate_pin,
+    pin_update,
 )
 from app.services.produce_freshness import freshness_error, is_listed, ph_today
 from app.services.produce_pricing import parse_tiers, pricing_error, serialize_tiers
 from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
-from app.services.sms_service import notify_order_shipped
+from app.services.sms_service import notify_order_cancelled, notify_order_shipped
 from app.utils.geocoding import _geocode
 
 logger = logging.getLogger(__name__)
@@ -101,8 +103,30 @@ MAX_PUBLIC_FARMS_PAGE = 500
 
 class MerchantOrderStatusUpdate(BaseModel):
     status: OrderStatus
+    # Required to cancel (one of MERCHANT_CANCEL_REASONS); "other" needs a note.
+    cancel_reason: str | None = None
+    cancel_note: str | None = Field(default=None, max_length=MERCHANT_CANCEL_NOTE_MAX)
 
     model_config = ConfigDict(extra="forbid")  # CF-0063
+
+
+def _cancel_text(body: MerchantOrderStatusUpdate) -> str | None:
+    """The buyer-facing cancel reason, or None when not cancelling. 422 if missing."""
+    if body.status != OrderStatus.CANCELLED:
+        if body.cancel_reason or body.cancel_note:
+            raise HTTPException(
+                status_code=422, detail="A cancel reason is only sent when cancelling"
+            )
+        return None
+    if body.cancel_reason not in MERCHANT_CANCEL_REASONS:
+        raise HTTPException(
+            status_code=422, detail="Choose why you are cancelling this order"
+        )
+    if body.cancel_reason == "other" and not (body.cancel_note or "").strip():
+        raise HTTPException(
+            status_code=422, detail="Tell the buyer why you are cancelling"
+        )
+    return merchant_cancel_text(body.cancel_reason, body.cancel_note)
 
 
 def _compute_and_store_route(db: Session, order: Order) -> None:
@@ -362,14 +386,7 @@ def update_my_merchant(
     token = updates.pop("phone_verification_token", None)
     if "region" in updates and not is_luzon_region(updates["region"]):
         raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
-    pin_changed = "lat" in updates or "lng" in updates
-    if pin_changed:
-        apply_pin(
-            merchant,
-            validate_pin(
-                updates.pop("lat", merchant.lat), updates.pop("lng", merchant.lng)
-            ),
-        )
+    pin_update(merchant, updates)
     if "contact_number" in updates:
         number = updates.pop("contact_number")
         _set_contact_number(merchant, current_user, number, token)
@@ -621,9 +638,7 @@ def update_produce(
     changes = produce_update.model_dump(
         exclude_unset=True, exclude={"price_tiers", "expected_stock_quantity"}
     )
-    upload_validation.check_image_url_fields(
-        changes, {"image_url": produce.image_url}
-    )
+    upload_validation.check_image_url_fields(changes, {"image_url": produce.image_url})
     if "image_url" in changes:
         changes["image_url"] = upload_validation.blank_to_none(changes["image_url"])
     for field, value in changes.items():
@@ -748,6 +763,7 @@ def _to_merchant_order_response(
         requested_delivery_date=order.requested_delivery_date,
         delivery_window=order.delivery_window,
         notes=order.notes,
+        cancel_reason=order.cancel_reason,
     )
 
 
@@ -799,6 +815,7 @@ def update_my_merchant_order_status(
     current_user: User = Depends(get_current_user),
 ):
     status = body.status
+    cancel_text = _cancel_text(body)
     merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
@@ -813,7 +830,7 @@ def update_my_merchant_order_status(
         raise HTTPException(status_code=404, detail="Order not found")
 
     try:
-        apply_merchant_transition(order, status, db)
+        apply_merchant_transition(order, status, db, cancel_reason=cancel_text)
     except InvalidTransition as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PaymentInProgress as exc:
@@ -827,16 +844,24 @@ def update_my_merchant_order_status(
     db.commit()
 
     user = order.user
+    # U5: only when the buyer accepts SMS updates.
+    buyer_phone = (
+        user.phone_number if user and notifications.wants(user, "sms") else None
+    )
 
     notify_order_shipped(
-        # U5: only when the buyer accepts SMS updates.
-        phone_number=user.phone_number
-        if user and notifications.wants(user, "sms")
-        else None,
+        phone_number=buyer_phone,
         merchant_name=merchant.merchant_name or "Merchant",
         order_ref=notifications.order_ref(order),
         status=status,
     )
+    if cancel_text:
+        notify_order_cancelled(
+            phone_number=buyer_phone,
+            merchant_name=merchant.merchant_name or "Merchant",
+            order_ref=notifications.order_ref(order),
+            reason=cancel_text,
+        )
 
     return _to_merchant_order_response(order, user)
 

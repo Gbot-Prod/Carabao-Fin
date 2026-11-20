@@ -15,7 +15,7 @@ from app.schemas.user_address import (
     UserAddressResponse,
     UserAddressUpdate,
 )
-from app.services.pinned_location import apply_pin, validate_pin
+from app.services.pinned_location import apply_pin, pin_update, validate_pin
 
 router = APIRouter(tags=["users"])
 
@@ -61,11 +61,12 @@ def create_my_address(
     pin = validate_pin(payload.lat, payload.lng)
 
     data = payload.model_dump()
+    confirmed = data.pop("pin_confirmed")
     make_default = data.pop("is_default") or count == 0
     if make_default:
         _clear_default(db, current_user)
     address = UserAddress(user_id=current_user.id, is_default=make_default, **data)
-    apply_pin(address, pin)
+    apply_pin(address, pin, confirmed=confirmed)
     db.add(address)
     db.commit()
     db.refresh(address)
@@ -83,15 +84,9 @@ def update_my_address(
     updates = payload.model_dump(exclude_unset=True)
     make_default = updates.pop("is_default", None)
 
-    pin_changed = "lat" in updates or "lng" in updates
-    if pin_changed:
-        pin = validate_pin(
-            updates.pop("lat", address.lat), updates.pop("lng", address.lng)
-        )
+    pin_update(address, updates)
     for field, value in updates.items():
         setattr(address, field, value)
-    if pin_changed:
-        apply_pin(address, pin)
 
     if make_default and not address.is_default:
         _clear_default(db, current_user)

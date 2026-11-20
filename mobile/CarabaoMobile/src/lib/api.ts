@@ -438,6 +438,8 @@ export type ApiMerchantOrder = {
   requested_delivery_date: string | null;
   delivery_window: string | null;
   notes: string | null;
+  // Why it was cancelled, as the buyer was told.
+  cancel_reason?: string | null;
 };
 
 // GET /produce/search (U2).
@@ -529,10 +531,16 @@ export const api = {
       request<null>(`/merchants/me/reviews/${reviewId}/reply`, token, { method: 'DELETE' }),
     stockAlerts: (token: string | null) =>
       request<ApiStockAlerts>('/merchants/me/stock-alerts', token),
-    updateOrderStatus: (token: string | null, orderId: number, status: MerchantOrderStatus) =>
+    updateOrderStatus: (token: string | null, orderId: number, status: Exclude<MerchantOrderStatus, 'cancelled'>) =>
       request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/status`, token, {
         method: 'PATCH',
         body: JSON.stringify({ status }),
+      }),
+    // Cancelling needs a reason (src/components/CancelOrderSheet.tsx); "other" needs a note.
+    cancelOrder: (token: string | null, orderId: number, reason: string, note: string) =>
+      request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/status`, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'cancelled', cancel_reason: reason, cancel_note: note.trim() || null }),
       }),
   },
   cart: {

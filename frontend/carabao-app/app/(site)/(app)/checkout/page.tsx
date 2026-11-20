@@ -9,9 +9,8 @@ import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { clearPendingPayments, loadPendingPayments, savePendingPayments } from "@/util/pendingPayments";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
-import { usePinAutofill } from "@/components/MapPinPicker/usePinAutofill";
-import { mergeLocation } from "@/lib/pin-autofill";
-import type { Pin } from "@/util/reverseGeocode";
+import type { Pin } from "@/util/geocode";
+import { focusFirstInvalid } from "@/components/FieldError/FieldError";
 import { isLuzonRegion } from "@/util/serviceArea";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt } from "@/lib/i18n/format";
@@ -53,7 +52,9 @@ export default function CheckoutPage() {
   const [deliveryWindow, setDeliveryWindow] = useState(TIME_WINDOWS[0]);
   // Delivery pin (U1b): starts at the saved address's pin, if any.
   const [pin, setPin] = useState<Pin | null>(null);
-  const autofill = usePinAutofill();
+  // Whether the buyer placed the pin (false: only where the address geocoded to).
+  const [pinConfirmed, setPinConfirmed] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
   // Saved addresses; the default one pre-fills the form.
   const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
   const [savedAddressId, setSavedAddressId] = useState<number | null>(null);
@@ -69,6 +70,8 @@ export default function CheckoutPage() {
     setStreet(a?.address ?? "");
     setPostal(a?.postal_code ?? "");
     setPin(a?.lat != null && a?.lng != null ? { lat: a.lat, lng: a.lng } : null);
+    setPinConfirmed(a?.pin_confirmed ?? false);
+    setPinError(null);
     setAddressForm({
       region: a?.region ?? "",
       province: a?.province ?? "",
@@ -176,6 +179,13 @@ export default function CheckoutPage() {
       return;
     }
 
+    // Every delivery needs a pin; a suggested one counts only once confirmed or moved.
+    if (!pin || !pinConfirmed) {
+      setPinError(pin ? t.mapPin.confirmNeeded : t.mapPin.pinRequired);
+      requestAnimationFrame(focusFirstInvalid);
+      return;
+    }
+
     if (!isLuzonRegion(addressForm.region)) {
       setError(t.checkout.errOutsideLuzon);
       return;
@@ -197,8 +207,9 @@ export default function CheckoutPage() {
         delivery_time: deliveryWindow,
         delivery_address: deliveryAddress,
         delivery_region: addressForm.region,
-        delivery_lat: pin?.lat ?? null,
-        delivery_lng: pin?.lng ?? null,
+        delivery_lat: pin && pinConfirmed ? pin.lat : null,
+        delivery_lng: pin && pinConfirmed ? pin.lng : null,
+        delivery_pin_confirmed: !!pin && pinConfirmed,
         notes: notes || null,
         voucher_code: voucher?.code ?? null,
         // Send exactly what this page shows, so unticked lines stay in the cart.
@@ -265,16 +276,6 @@ export default function CheckoutPage() {
                 </select>
               </label>
             )}
-            <label>
-              {t.checkout.street}
-              <input
-                type="text"
-                value={street}
-                onChange={(e) => setStreet(e.target.value)}
-                placeholder="123 Rizal Ave, Unit 4B"
-              />
-            </label>
-
             <div className={styles.locationGrid}>
               <LocationSelects
                 value={addressForm}
@@ -295,15 +296,26 @@ export default function CheckoutPage() {
               />
             </label>
 
+            <label>
+              {t.checkout.street}
+              <input
+                type="text"
+                value={street}
+                onChange={(e) => setStreet(e.target.value)}
+                placeholder="123 Rizal Ave, Unit 4B"
+              />
+            </label>
+
             <MapPinPicker
               value={pin}
-              onChange={(next, found) => {
+              confirmed={pinConfirmed}
+              onChange={(next, confirmed) => {
                 setPin(next);
-                // The pin fills the address; text the buyer typed is kept.
-                setStreet((prev) => autofill("street", prev, found?.street));
-                setPostal((prev) => autofill("postal", prev, found?.postcode));
-                if (found?.location) setAddressForm((prev) => ({ ...prev, ...mergeLocation(prev, found.location) }));
+                setPinConfirmed(confirmed);
+                if (confirmed) setPinError(null);
               }}
+              error={pinError}
+              address={{ street, postalCode: postal, ...addressForm }}
             />
           </div>
 

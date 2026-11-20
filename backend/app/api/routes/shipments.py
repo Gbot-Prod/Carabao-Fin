@@ -22,13 +22,18 @@ from app.schemas.shipment import (
     PinUnreachableRequest,
     ShipmentStop,
     ShipmentTrackingResponse,
+    SkippedStop,
     TrackingPosition,
     Waypoint,
 )
 from app.services import mapbox_routing, notifications, rate_limit
 from app.services.merchant_service import get_active_merchant, get_editable_merchant
 from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
-from app.services.pinned_location import delivery_point, merchant_point
+from app.services.pinned_location import (
+    delivery_pin_confirmed,
+    delivery_point,
+    merchant_point,
+)
 from app.utils.geocoding import _geocode
 
 router = APIRouter(tags=["shipments"])
@@ -87,6 +92,8 @@ def _shipment_response(
             status=point.get("status", "in_transit"),
             estimated_arrival_at=point.get("estimated_arrival_at"),
             pin_unreachable=int(point["order_id"]) in flagged,
+            # Routes made before the flag existed only had hand-placed pins.
+            pin_approximate=not point.get("pin_confirmed", True),
         )
         for index, point in enumerate(stop_points)
     ]
@@ -115,6 +122,30 @@ def _shipment_response(
         active_stop_index=active_stop_index,
         total_duration_seconds=route_waypoints[0].get("total_duration_seconds"),
     )
+
+
+def _unroutable_indices(matrix: list[list[float | None]]) -> set[int]:
+    """The stops (indices >= 1; 0 is the pickup) to leave out so that every
+    remaining point reaches every other. Drops the stop with the most missing
+    routes first, so one stop with no road does not take the stops it cannot
+    reach with it."""
+    alive = set(range(len(matrix)))
+    removed: set[int] = set()
+    while True:
+        gaps = {
+            k: sum(
+                1
+                for j in alive
+                if j != k and (matrix[k][j] is None or matrix[j][k] is None)
+            )
+            for k in alive
+            if k > 0
+        }
+        worst = max(gaps, key=lambda k: (gaps[k], k), default=None)
+        if worst is None or gaps[worst] == 0:
+            return removed
+        alive.remove(worst)
+        removed.add(worst)
 
 
 @router.post("/merchants/me/shipments", response_model=ShipmentTrackingResponse)
@@ -153,8 +184,7 @@ def create_merchant_shipment(
     blocked = [
         order.id
         for order in orders
-        if order.status not in SHIPPABLE_ORDER_STATUSES
-        or order.shipment_id is not None
+        if order.status not in SHIPPABLE_ORDER_STATUSES or order.shipment_id is not None
     ]
     if blocked:
         raise HTTPException(
@@ -217,21 +247,28 @@ def create_merchant_shipment(
                 order_contexts,
             )
         )
-    if any(result is None for result in destination_results):
-        failed = [
-            str(order_contexts[index]["order"].id)
-            for index, result in enumerate(destination_results)
-            if result is None
-        ]
+    # One stop that cannot be found must not block the whole run: leave it
+    # out (it stays ready to ship) and route the rest.
+    skipped: list[SkippedStop] = [
+        SkippedStop(order_id=ctx["order"].id, reason="no_location")
+        for ctx, result in zip(order_contexts, destination_results, strict=True)
+        if result is None
+    ]
+    located = [
+        (ctx, result)
+        for ctx, result in zip(order_contexts, destination_results, strict=True)
+        if result is not None
+    ]
+    if not located:
         raise HTTPException(
             status_code=422,
-            detail=f"Could not geocode delivery address for orders: {
-                ', '.join(failed)
-            }",
+            detail="Could not find the delivery location for orders: "
+            f"{', '.join(str(s.order_id) for s in skipped)}",
         )
+    order_contexts = [ctx for ctx, _ in located]
 
     stops = []
-    for ctx, destination in zip(order_contexts, destination_results, strict=True):
+    for ctx, destination in located:
         order = ctx["order"]
         assert isinstance(order, Order)
         assert destination is not None
@@ -259,17 +296,33 @@ def create_merchant_shipment(
                 "Please try creating the shipment again later.",
             )
         # Index 0 is the pickup; index k is stops[k - 1].
-        unroutable: set[int] = set()
-        for i, row in enumerate(duration_matrix):
-            for j, value in enumerate(row):
-                if value is None:
-                    unroutable.update(stops[k - 1].order_id for k in (i, j) if k > 0)
+        unroutable = {
+            stops[k - 1].order_id for k in _unroutable_indices(duration_matrix)
+        }
         if unroutable:
-            raise HTTPException(
-                status_code=422,
-                detail="No road route found for orders: "
-                f"{', '.join(map(str, sorted(unroutable)))}",
-            )
+            if len(unroutable) == len(stops):
+                raise HTTPException(
+                    status_code=422,
+                    detail="No road route found for orders: "
+                    f"{', '.join(map(str, sorted(unroutable)))}",
+                )
+            # Leave those stops out and keep the matrix rows of the rest.
+            keep = [0] + [
+                k
+                for k, stop in enumerate(stops, start=1)
+                if stop.order_id not in unroutable
+            ]
+            duration_matrix = [[duration_matrix[i][j] for j in keep] for i in keep]
+            skipped += [
+                SkippedStop(order_id=order_id, reason="no_road")
+                for order_id in sorted(unroutable)
+            ]
+            stops = [s for s in stops if s.order_id not in unroutable]
+            order_contexts = [
+                ctx for ctx in order_contexts if ctx["order"].id not in unroutable
+            ]
+        if len(stops) == 1:
+            duration_matrix = None
 
     ordered_stops = compute_route(
         stops=stops,
@@ -316,6 +369,9 @@ def create_merchant_shipment(
                 "label": buyer_full_name or f"Order #{stop.order_id}",
                 "delivery_address": ctx["delivery_address"],
                 "buyer_name": buyer_full_name,
+                "pin_confirmed": delivery_pin_confirmed(
+                    ctx["order"], ctx["saved_address"]
+                ),
                 "type": "delivery",
                 "status": "in_transit",
             }
@@ -352,9 +408,11 @@ def create_merchant_shipment(
 
     selected_order = ordered_stops[0] if ordered_stops else stops[0]
     selected_destination = (selected_order.lat, selected_order.lng)
-    return _shipment_response(
+    response = _shipment_response(
         db, shipment, merchant_name, selected_order.order_id, selected_destination
     )
+    response.skipped_orders = skipped
+    return response
 
 
 @router.get("/shipments/{shipment_id}", response_model=ShipmentTrackingResponse)

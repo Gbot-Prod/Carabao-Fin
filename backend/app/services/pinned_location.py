@@ -10,6 +10,9 @@ Pin quality:
 * control 2: the point on that road is stored next to the pin (``road_lat`` /
   ``road_lng``). The buyer sees their own pin; routing and the rider use the
   road point, so no engine moves the pin without a check;
+* confirmed: the web forms place the first pin from the typed address, so a
+  pin is only exact once the person placed or moved it (``pin_confirmed``).
+  Riders see an unconfirmed pin as approximate;
 * control 6: a rider (the merchant) can report that a stop's pin could not be
   reached. After ``PIN_FLAG_LIMIT`` reports near the same place, that place
   can no longer be used for new orders until the buyer moves the pin.
@@ -80,14 +83,36 @@ def validate_pin(lat: float | None, lng: float | None) -> PinCheck | None:
     return PinCheck(pin=pin, road=road)
 
 
-def apply_pin(target, check: PinCheck | None, *, prefix: str = "") -> None:
-    """Write a checked pin (or no pin) to a model's lat/lng and road columns."""
+def apply_pin(
+    target, check: PinCheck | None, *, confirmed: bool = False, prefix: str = ""
+) -> None:
+    """Write a checked pin (or no pin) to a model's lat/lng, road and
+    confirmed columns. No pin is never confirmed."""
     pin = check.pin if check else (None, None)
     road = check.road if check and check.road else (None, None)
     setattr(target, f"{prefix}lat", pin[0])
     setattr(target, f"{prefix}lng", pin[1])
     setattr(target, f"{prefix}road_lat", road[0])
     setattr(target, f"{prefix}road_lng", road[1])
+    setattr(target, f"{prefix}pin_confirmed", bool(check and confirmed))
+
+
+def pin_update(target, updates: dict) -> bool:
+    """Apply a partial update's pin fields (lat, lng, pin_confirmed) to a
+    model and drop them from ``updates``. Returns whether anything changed.
+
+    A moved pin without ``pin_confirmed`` counts as unconfirmed; sending only
+    ``pin_confirmed`` confirms (or unconfirms) the pin already saved.
+    """
+    if not {"lat", "lng", "pin_confirmed"} & updates.keys():
+        return False
+    moved = "lat" in updates or "lng" in updates
+    confirmed = updates.pop("pin_confirmed", None)
+    if confirmed is None:
+        confirmed = False if moved else bool(target.pin_confirmed)
+    check = validate_pin(updates.pop("lat", target.lat), updates.pop("lng", target.lng))
+    apply_pin(target, check, confirmed=confirmed)
+    return True
 
 
 def stored(lat: float | None, lng: float | None) -> Coords | None:
@@ -125,6 +150,28 @@ def delivery_point(
         if pin:
             return pin
     return geocode(address) if address else None
+
+
+def saved_pin_confirmed(saved_address, pin: Coords | None) -> bool:
+    """Whether ``pin`` is a saved address's own confirmed pin. Apps that send
+    an order pin without saying whether it was confirmed (mobile) send a
+    saved address's pin; it keeps that address's flag."""
+    if pin is None or saved_address is None or not saved_address.pin_confirmed:
+        return False
+    own = stored(saved_address.lat, saved_address.lng)
+    return own is not None and distance_m(own, pin) < 1.0
+
+
+def delivery_pin_confirmed(order, saved_address) -> bool:
+    """Whether the point ``delivery_point`` routes to is a pin the buyer
+    placed: the order's own pin, or the saved address pin it fell back to.
+    A geocoded address is never confirmed."""
+    if stored(order.delivery_lat, order.delivery_lng):
+        return bool(order.delivery_pin_confirmed)
+    if not order.delivery_address and saved_address is not None:
+        if stored(saved_address.lat, saved_address.lng):
+            return bool(saved_address.pin_confirmed)
+    return False
 
 
 # --- Control 6: unreachable-pin reports -------------------------------------

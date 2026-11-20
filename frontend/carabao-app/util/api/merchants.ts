@@ -1,6 +1,7 @@
 import { MerchantApplication } from './admin';
 import { apiClient } from './client';
 import type { Produce } from './produce';
+import type { InquirySummary } from './users';
 import type { OrderStatus, PaymentStatus, PayoutStatus, TransactionStatus } from './statuses';
 
 export type Merchant = {
@@ -13,6 +14,8 @@ export type Merchant = {
   // Farm map pin (U1).
   lat?: number | null;
   lng?: number | null;
+  /** The person placed or moved the pin themselves; false = only where the address geocoded to. */
+  pin_confirmed?: boolean;
   legal_business_name?: string | null;
   merchant_name: string;
   region: string | null;
@@ -60,6 +63,8 @@ export type MerchantOnboardingPayload = {
   // Farm map pin (U1c), optional.
   lat?: number | null;
   lng?: number | null;
+  /** The person placed or moved the pin themselves; false = only where the address geocoded to. */
+  pin_confirmed?: boolean;
   available_days: string[];
   rsbsa_number?: string;
   gov_id_type: GovIdType;
@@ -156,6 +161,8 @@ export type MerchantUpdatePayload = {
   postal_code?: string | null;
   lat?: number | null;
   lng?: number | null;
+  /** The person placed or moved the pin themselves; false = only where the address geocoded to. */
+  pin_confirmed?: boolean;
   contact_email?: string | null;
   // A new number needs phone_verification_token from verifyOtp (CF-0030).
   contact_number?: string | null;
@@ -500,6 +507,8 @@ export type MerchantOrder = {
   requested_delivery_date: string | null; // YYYY-MM-DD
   delivery_window: string | null; // e.g. "08:00 – 10:00"
   notes: string | null;
+  /** Why it was cancelled, as the buyer was told. */
+  cancel_reason?: string | null;
 };
 
 export const fetchMyMerchantOrders = async (): Promise<MerchantOrder[]> => {
@@ -507,8 +516,33 @@ export const fetchMyMerchantOrders = async (): Promise<MerchantOrder[]> => {
   return response.data;
 };
 
-export const updateMerchantOrderStatus = async (orderId: number, status: OrderStatus): Promise<MerchantOrder> => {
+export const updateMerchantOrderStatus = async (orderId: number, status: Exclude<OrderStatus, "cancelled">): Promise<MerchantOrder> => {
   const response = await apiClient.patch<MerchantOrder>(`/merchants/me/orders/${orderId}/status`, { status });
+  return response.data;
+};
+
+// Same keys as MERCHANT_CANCEL_REASONS in backend/app/services/order_status.py.
+export const MERCHANT_CANCEL_REASONS = [
+  { key: "out_of_stock", label: "Out of stock" },
+  { key: "quality", label: "Produce didn't meet quality standards" },
+  { key: "cannot_deliver", label: "Can't deliver to this address or date" },
+  { key: "buyer_request", label: "The buyer asked to cancel" },
+  { key: "other", label: "Other" },
+] as const;
+export type MerchantCancelReason = (typeof MERCHANT_CANCEL_REASONS)[number]["key"];
+export const MERCHANT_CANCEL_NOTE_MAX = 300;
+
+/** Cancel with the reason the buyer is told; "other" needs a note. */
+export const cancelMerchantOrder = async (
+  orderId: number,
+  reason: MerchantCancelReason,
+  note: string,
+): Promise<MerchantOrder> => {
+  const response = await apiClient.patch<MerchantOrder>(`/merchants/me/orders/${orderId}/status`, {
+    status: "cancelled",
+    cancel_reason: reason,
+    cancel_note: note.trim() || null,
+  });
   return response.data;
 };
 
@@ -546,6 +580,8 @@ export type MerchantShipmentTracking = {
   progress: number;
   eta_minutes: number | null;
   active_stop_index: number;
+  /** On create: orders left out because they could not be routed; they stay ready to ship. */
+  skipped_orders?: { order_id: number; reason: 'no_location' | 'no_road' }[];
 };
 
 // Must match MAX_SHIPMENT_ORDERS in backend/app/schemas/shipment.py.
@@ -608,3 +644,12 @@ export const fetchMyMerchantChats = async (): Promise<MerchantChatSummary[]> => 
   const response = await apiClient.get<MerchantChatSummary[]>('/merchants/me/chats');
   return response.data;
 };
+
+/** Questions buyers sent the farm before (or without) ordering. */
+export const fetchMyMerchantInquiries = async (): Promise<InquirySummary[]> => {
+  const response = await apiClient.get<InquirySummary[]>('/merchants/me/inquiries');
+  return response.data;
+};
+
+/** The farm's side of an inquiry thread: GET to read, POST to reply. */
+export const inquiryEndpoint = (conversationId: number) => `/inquiries/${conversationId}/messages`;

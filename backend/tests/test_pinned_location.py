@@ -12,7 +12,15 @@ from app.models.cart import Cart
 from app.models.order import Order
 from app.models.produce import Produce
 from app.models.user import User
-from app.services.pinned_location import delivery_point, merchant_point, validate_pin
+from app.models.user_address import UserAddress
+from app.services.pinned_location import (
+    delivery_pin_confirmed,
+    delivery_point,
+    merchant_point,
+    pin_update,
+    saved_pin_confirmed,
+    validate_pin,
+)
 
 MALOLOS = (14.8433, 120.8114)
 DAVAO = (7.0731, 125.6128)
@@ -117,3 +125,131 @@ def test_order_stores_its_delivery_pin(db, merchant, buyer):  # noqa: F811
     assert res.status_code == 200, res.text
     order = db.get(Order, res.json()["order_id"])
     assert (order.delivery_lat, order.delivery_lng) == MALOLOS
+
+
+def test_pin_update_tracks_who_placed_the_pin():
+    target = SimpleNamespace(lat=None, lng=None, pin_confirmed=False)
+    assert pin_update(target, {"label": "Home"}) is False
+    updates = {"lat": MALOLOS[0], "lng": MALOLOS[1], "pin_confirmed": True}
+    assert pin_update(target, updates) is True
+    assert updates == {}  # pin fields consumed
+    assert ((target.lat, target.lng), target.pin_confirmed) == (MALOLOS, True)
+    # Moved without saying who moved it: no longer confirmed.
+    pin_update(target, {"lat": 14.84})
+    assert target.pin_confirmed is False
+    # Confirming the saved pin alone.
+    pin_update(target, {"pin_confirmed": True})
+    assert (target.lat, target.pin_confirmed) == (14.84, True)
+    # No pin is never confirmed.
+    pin_update(target, {"lat": None, "lng": None, "pin_confirmed": True})
+    assert (target.lat, target.pin_confirmed) == (None, False)
+
+
+def test_route_stop_confirmed_follows_the_pin_it_routes_to():
+    saved = SimpleNamespace(lat=14.7, lng=121.1, pin_confirmed=True)
+    own = SimpleNamespace(
+        delivery_lat=14.5,
+        delivery_lng=121.2,
+        delivery_address="X",
+        delivery_pin_confirmed=False,
+    )
+    assert delivery_pin_confirmed(own, saved) is False
+    from_profile = SimpleNamespace(
+        delivery_lat=None,
+        delivery_lng=None,
+        delivery_address=None,
+        delivery_pin_confirmed=False,
+    )
+    assert delivery_pin_confirmed(from_profile, saved) is True
+    typed = SimpleNamespace(
+        delivery_lat=None,
+        delivery_lng=None,
+        delivery_address="Typed",
+        delivery_pin_confirmed=False,
+    )
+    assert delivery_pin_confirmed(typed, saved) is False  # geocoded text
+
+    assert saved_pin_confirmed(saved, (14.7, 121.1)) is True
+    assert saved_pin_confirmed(saved, (14.71, 121.1)) is False
+    assert saved_pin_confirmed(saved, None) is False
+
+
+def test_addresses_save_pin_confirmed(db, buyer):  # noqa: F811
+    me = _client(db, buyer[0], user_addresses.router)
+    res = me.post(
+        "/users/me/addresses",
+        json={"lat": MALOLOS[0], "lng": MALOLOS[1], "pin_confirmed": True},
+    )
+    assert res.status_code == 201, res.text
+    assert res.json()["pin_confirmed"] is True
+    address_id = res.json()["id"]
+    moved = me.patch(
+        f"/users/me/addresses/{address_id}", json={"lat": 14.84, "lng": 120.81}
+    )
+    assert moved.json()["pin_confirmed"] is False
+    confirmed = me.patch(
+        f"/users/me/addresses/{address_id}", json={"pin_confirmed": True}
+    )
+    assert confirmed.json()["pin_confirmed"] is True
+
+    no_pin = me.post("/users/me/addresses", json={"pin_confirmed": True})
+    assert no_pin.json()["pin_confirmed"] is False
+
+
+def test_order_pin_confirmed_sent_or_from_a_saved_address(db, merchant, buyer):  # noqa: F811
+    talong = Produce(merchant_id=merchant.id, name="Talong", price=50, stock_quantity=5)
+    db.add(talong)
+    db.add(
+        UserAddress(
+            user_id=buyer[0].id,
+            is_default=True,
+            lat=MALOLOS[0],
+            lng=MALOLOS[1],
+            pin_confirmed=True,
+        )
+    )
+    db.flush()
+    client = _client(db, buyer[0], orders.router)
+
+    def place(**pin):
+        db.query(Cart).filter(Cart.user_id == buyer[0].id).delete()
+        db.add(
+            Cart(user_id=buyer[0].id, items=[{"produce_id": talong.id, "quantity": 1}])
+        )
+        db.commit()
+        res = client.post(
+            "/orders/me/place",
+            json={"delivery_address": "12 Mabini St, Malolos, Bulacan", **pin},
+        )
+        assert res.status_code == 200, res.text
+        return db.get(Order, res.json()["order_id"]).delivery_pin_confirmed
+
+    at_saved = {"delivery_lat": MALOLOS[0], "delivery_lng": MALOLOS[1]}
+    # Mobile sends a saved address's pin without the flag: it keeps the address's.
+    assert place(**at_saved) is True
+    assert place(**at_saved, delivery_pin_confirmed=False) is False
+    elsewhere = {"delivery_lat": 14.84, "delivery_lng": 120.81}
+    assert place(**elsewhere) is False
+    assert place(**elsewhere, delivery_pin_confirmed=True) is True
+
+
+def test_address_recipient_name_and_phone(db, buyer):  # noqa: F811
+    me = _client(db, buyer[0], user_addresses.router)
+    res = me.post(
+        "/users/me/addresses",
+        json={
+            "recipient_name": "  Juan   dela Cruz ",
+            "recipient_phone": "0917 123 4567",
+        },
+    )
+    assert res.status_code == 201, res.text
+    assert res.json()["recipient_name"] == "Juan dela Cruz"
+    assert res.json()["recipient_phone"] == "+639171234567"
+    bad = me.patch(
+        f"/users/me/addresses/{res.json()['id']}", json={"recipient_phone": "12345"}
+    )
+    assert bad.status_code == 422
+    cleared = me.patch(
+        f"/users/me/addresses/{res.json()['id']}", json={"recipient_phone": ""}
+    )
+    assert cleared.json()["recipient_phone"] is None

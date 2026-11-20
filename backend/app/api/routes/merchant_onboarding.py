@@ -333,7 +333,7 @@ def submit_my_merchant_onboarding_route(
     application.barangay = data.barangay
     application.address = data.address
     application.postal_code = data.postal_code
-    apply_pin(application, pin)
+    apply_pin(application, pin, confirmed=data.pin_confirmed)
     application.available_days = data.available_days
 
     application.rsbsa_number = data.rsbsa_number
