@@ -11,7 +11,7 @@ from app.api.routes.admin import _require_admin
 from app.core.sql import ilike_contains
 from app.models.produce import Produce
 from app.models.user import User
-from app.schemas.pagination import Page
+from app.schemas.pagination import MAX_PAGE, Page
 from app.schemas.produce import ProduceResponse
 from app.services import audit_log
 
@@ -47,7 +47,7 @@ def list_all_produce(
     merchant_id: int | None = None,
     hidden: bool | None = None,
     q: str | None = Query(None, max_length=100),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),

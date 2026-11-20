@@ -17,7 +17,7 @@ from app.core.sql import ilike_contains
 from app.models.merchant import Merchant
 from app.models.produce import Produce
 from app.models.search_log import SearchLog
-from app.schemas.pagination import Page
+from app.schemas.pagination import MAX_PAGE, Page
 from app.schemas.produce import ProduceResponse
 from app.services import rate_limit, store_pause
 from app.services.account_suspension import merchant_is_public
@@ -48,7 +48,7 @@ def search_produce(
     in_stock: bool = False,
     fresh: bool = False,
     sort: SortKey = "relevance",
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=60),
     db: Session = Depends(get_db),
 ):

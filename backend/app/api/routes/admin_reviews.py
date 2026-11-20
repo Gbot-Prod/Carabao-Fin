@@ -19,7 +19,7 @@ from app.api.routes.admin import _require_admin
 from app.core.sql import ilike_contains
 from app.models.review import Review
 from app.models.user import User
-from app.schemas.pagination import Page
+from app.schemas.pagination import MAX_PAGE, Page
 from app.services import audit_log
 from app.services.review_service import recompute_merchant_rating, reviewer_display_name
 
@@ -73,7 +73,7 @@ def list_reviews(
     max_rating: int | None = Query(None, ge=1, le=5),
     merchant_id: int | None = None,
     q: str | None = Query(None, max_length=100),
-    page: int = Query(1, ge=1, le=10_000),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),

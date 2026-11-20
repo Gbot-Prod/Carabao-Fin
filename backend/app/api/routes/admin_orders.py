@@ -22,7 +22,7 @@ from app.schemas.admin_order import (
     CancelOrderPayload,
     RecordRefundPayload,
 )
-from app.schemas.pagination import Page
+from app.schemas.pagination import MAX_PAGE, Page
 from app.services import audit_log
 from app.services.order_status import (
     ACTIVE_ORDER_STATUSES,
@@ -89,7 +89,7 @@ def list_all_orders(
     payment: PaymentStatus | None = Query(None, alias="payment_status"),
     date_from: date | None = None,
     date_to: date | None = None,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),

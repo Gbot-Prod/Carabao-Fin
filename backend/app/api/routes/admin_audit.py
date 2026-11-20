@@ -8,7 +8,7 @@ from app.api.routes.admin import _require_admin
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.user import User
 from app.schemas.audit_log import AuditLogEntry
-from app.schemas.pagination import Page
+from app.schemas.pagination import MAX_PAGE, Page
 from app.services.audit_log import ACTIONS
 
 router = APIRouter(tags=["admin"])
@@ -25,7 +25,7 @@ def list_audit_log(
     admin_id: int | None = None,
     target_type: str | None = None,
     target_id: int | None = None,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),

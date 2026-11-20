@@ -23,7 +23,7 @@ from app.schemas.merchant_application import (
     AdminMerchantApplicationResponse,
     ApplicationReviewPayload,
 )
-from app.schemas.pagination import MAX_OFFSET, Page
+from app.schemas.pagination import MAX_OFFSET, MAX_PAGE, Page
 from app.schemas.payout import (
     AdminPayoutBatchResponse,
     PayoutDestinationPreview,
@@ -177,7 +177,7 @@ def reset_admin_two_factor(
 
 @router.get("/admin/users", response_model=Page[UserResponse])
 def list_all_users(
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
@@ -196,7 +196,7 @@ def list_all_users(
 
 @router.get("/admin/merchants", response_model=Page[AdminMerchantResponse])
 def list_all_merchants(
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
