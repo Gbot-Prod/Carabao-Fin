@@ -357,6 +357,7 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
 
 1. Deploy with `CSP_ENFORCE` empty (Report-Only).
 2. Read `[csp-report]` lines in the web logs.
+   Each line has the directive, the blocked URL and the page, both without query or fragment. Each web process logs at most 60 reports a minute; then one `{"dropped": N}` line tells how many it did not log (CF-0090, `lib/csp-report.ts`). Bodies over 16 KB get 413.
 3. Fix real violations and ignore browser extensions.
 4. After some days with no real reports, set `CSP_ENFORCE=true` and redeploy.
 

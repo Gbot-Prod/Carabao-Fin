@@ -1,44 +1,35 @@
 // CF-0002: receives CSP violation reports while the policy is Report-Only.
 // Browsers send either the old "csp-report" body (report-uri) or a list of
 // Reporting API objects (report-to). Only a short summary is logged.
+// CF-0090: anyone can post here, so the body read is capped (also for chunked
+// posts with no content-length), logged URLs have no query or fragment, and
+// each server process logs at most LOG_BUDGET_PER_MINUTE reports a minute.
 
-const MAX_BODY_BYTES = 16 * 1024;
+import { MAX_BODY_BYTES, createLogBudget, readCappedText, summarizeReports } from '@/lib/csp-report';
 
-type Summary = { directive?: string; blocked?: string; page?: string };
-
-function summarize(body: unknown): Summary[] {
-  const items = Array.isArray(body) ? body : [body];
-  return items.slice(0, 10).map((item) => {
-    const r = (item as Record<string, unknown>) ?? {};
-    const legacy = r["csp-report"] as Record<string, unknown> | undefined;
-    const modern = r["body"] as Record<string, unknown> | undefined;
-    const src = legacy ?? modern ?? {};
-    const pick = (...keys: string[]) => {
-      for (const k of keys) if (typeof src[k] === "string") return (src[k] as string).slice(0, 300);
-      return undefined;
-    };
-    return {
-      directive: pick("effective-directive", "effectiveDirective", "violated-directive"),
-      blocked: pick("blocked-uri", "blockedURL"),
-      // Path only: the query string may carry personal data.
-      page: pick("document-uri", "documentURL")?.split("?")[0],
-    };
-  });
-}
+const budget = createLogBudget();
 
 export async function POST(request: Request) {
-  const length = Number(request.headers.get("content-length") ?? "0");
+  const length = Number(request.headers.get('content-length') ?? '0');
   if (length > MAX_BODY_BYTES) return new Response(null, { status: 413 });
 
-  const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) return new Response(null, { status: 413 });
+  const text = await readCappedText(request.body, MAX_BODY_BYTES);
+  if (text === null) return new Response(null, { status: 413 });
 
+  let summaries;
   try {
-    for (const s of summarize(JSON.parse(text))) {
-      console.warn("[csp-report]", JSON.stringify(s));
-    }
+    summaries = summarizeReports(JSON.parse(text));
   } catch {
     // A body that is not JSON is ignored.
+    return new Response(null, { status: 204 });
+  }
+
+  const { allowed, droppedBefore } = budget.take(summaries.length, Date.now());
+  if (droppedBefore > 0) {
+    console.warn('[csp-report]', JSON.stringify({ dropped: droppedBefore }));
+  }
+  for (const s of summaries.slice(0, allowed)) {
+    console.warn('[csp-report]', JSON.stringify(s));
   }
   return new Response(null, { status: 204 });
 }
