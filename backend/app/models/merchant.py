@@ -10,7 +10,7 @@ from sqlalchemy import (
     String,
     text,
 )
-from sqlalchemy.orm import relationship, validates
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -33,7 +33,8 @@ class Merchant(Base):
     )
 
     # Basic information
-    id = Column(Integer, primary_key=True, index=True)
+    # Typed (CF-0089) so `merchant.id` is an int to mypy; same DDL.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     merchant_name = Column(String, nullable=False, index=True)
     contact_number = Column(String, unique=True, index=True)
     # The number before the last change, and when it changed. Payout alerts
