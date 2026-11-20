@@ -1,7 +1,7 @@
 // Run with `npm test`. CF-0036.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { HISTORY_PAGE_SIZE, historyParams, pageAfterRemoval } from './order-history.ts';
+import { HISTORY_PAGE_SIZE, historyParams, pageAfterRemoval, tabFromParam } from './order-history.ts';
 
 test('only the filters that are set are sent', () => {
   assert.deepEqual(historyParams({ page: 1 }), { page: 1, page_size: HISTORY_PAGE_SIZE });
@@ -30,4 +30,13 @@ test('removing the last order on a later page steps back one page', () => {
   assert.equal(pageAfterRemoval(2, 11, 10), 1);
   assert.equal(pageAfterRemoval(1, 1, 10), 1);
   assert.equal(pageAfterRemoval(1, 0, 10), 1);
+});
+
+test('the ?tab= value picks a known tab, else All', () => {
+  assert.equal(tabFromParam('to_ship'), 'to_ship');
+  assert.equal(tabFromParam('delivered'), 'delivered');
+  assert.equal(tabFromParam(null), '');
+  assert.equal(tabFromParam(''), '');
+  assert.equal(tabFromParam('active'), '');
+  assert.equal(tabFromParam('__proto__'), '');
 });

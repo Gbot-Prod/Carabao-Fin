@@ -20,6 +20,15 @@ export type OrderHistoryItem = {
   requested_delivery_date?: string | null; // YYYY-MM-DD
   delivery_window?: string | null;
   notes?: string | null;
+  delivery_fee?: number;
+  discount?: number;
+  time_of_arrival?: string | null;
+  auto_confirm_at?: string | null;
+  delivered_at?: string | null;
+  /** The buyer has left a review for this order. */
+  reviewed?: boolean;
+  can_review?: boolean;
+  review_deadline?: string | null;
 };
 
 export type CurrentOrderItem = {

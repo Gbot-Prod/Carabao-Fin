@@ -11,6 +11,7 @@ from app.api.dependencies import get_current_user, get_db
 from app.api.routes import orders
 from app.models.merchant import Merchant
 from app.models.order import Order
+from app.models.review import Review
 from app.models.statuses import OrderStatus
 from app.models.user import User
 from tests.shared_fixtures import _buyer
@@ -107,6 +108,59 @@ def test_status_filter_groups(db: Session, merchant: Merchant) -> None:
     assert ids("cancelled") == {o.id for o in cancelled + mismatch}
     assert ids("active") == {o.id for o in active}
     assert client.get(PAGE, params={"status": "pending"}).status_code == 422
+
+
+def test_order_tab_filters(db: Session, merchant: Merchant) -> None:
+    """The web order tabs: To Pay, To Ship, To Receive."""
+    user, _ = _buyer(db)
+    to_pay = _orders(db, user, merchant, 1, OrderStatus.PENDING)
+    to_ship = _orders(db, user, merchant, 1, OrderStatus.PROCESSING, 1)
+    shipped = _orders(db, user, merchant, 1, OrderStatus.SHIPPED, 2)
+    out = _orders(db, user, merchant, 1, OrderStatus.OUT_FOR_DELIVERY, 3)
+    _orders(db, user, merchant, 1, OrderStatus.DELIVERED, 4)
+    client = _client(db, user)
+
+    def ids(status: str) -> set[int]:
+        return set(_ids(client.get(PAGE, params={"status": status}).json()))
+
+    assert ids("to_pay") == {o.id for o in to_pay}
+    assert ids("to_ship") == {o.id for o in to_ship}
+    assert ids("to_receive") == {o.id for o in shipped + out}
+
+
+def test_search_by_product_name(db: Session, merchant: Merchant) -> None:
+    user, _ = _buyer(db)
+    tomato, cabbage = _orders(db, user, merchant, 2)
+    tomato.items = [{"produce": "Red Tomato", "quantity": 2, "price": 50}]
+    cabbage.items = [{"produce": "Cabbage", "quantity": 1, "price": 80}]
+    db.commit()
+    client = _client(db, user)
+
+    assert _ids(client.get(PAGE, params={"q": "tomato"}).json()) == [tomato.id]
+    # A JSON key is not a product name.
+    assert client.get(PAGE, params={"q": "price"}).json()["total"] == 0
+    assert client.get(PAGE, params={"q": "%"}).json()["total"] == 0
+
+
+def test_rows_carry_review_state(db: Session, merchant: Merchant) -> None:
+    user, _ = _buyer(db)
+    open_one, done = _orders(db, user, merchant, 2)
+    now = datetime.now(UTC)
+    for order in (open_one, done):
+        order.delivered_at = now
+    db.add(
+        Review(order_id=done.id, user_id=user.id, merchant_id=merchant.id, rating=5)
+    )
+    db.commit()
+
+    rows = {
+        row["order_id"]: row for row in _client(db, user).get(PAGE).json()["items"]
+    }
+    assert rows[open_one.id]["can_review"] is True
+    assert rows[open_one.id]["reviewed"] is False
+    assert rows[open_one.id]["review_deadline"] is not None
+    assert rows[done.id]["can_review"] is False
+    assert rows[done.id]["reviewed"] is True
 
 
 def test_search_by_order_reference(db: Session, merchant: Merchant) -> None:

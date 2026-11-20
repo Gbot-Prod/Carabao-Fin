@@ -13,6 +13,8 @@ import { merchantUrl } from "@/lib/urls";
 import styles from "./page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
+import { usePinAutofill } from "@/components/MapPinPicker/usePinAutofill";
+import { mergeLocation } from "@/lib/pin-autofill";
 import ContactCodeField from "./ContactCodeField";
 import DocumentDropzone, { documentError } from "./DocumentDropzone";
 import {
@@ -115,6 +117,7 @@ export default function MerchantOnboardingPage() {
   const [phoneVerificationToken, setPhoneVerificationToken] = useState<string | null>(null);
   const [emailVerificationToken, setEmailVerificationToken] = useState<string | null>(null);
 
+  const autofill = usePinAutofill();
   const [form, setForm] = useState<MerchantOnboardingPayload>({
     merchant_name: "",
     legal_business_name: "",
@@ -463,14 +466,16 @@ export default function MerchantOnboardingPage() {
                   onChange={(pin, found) => {
                     setForm((prev) => ({
                       ...prev,
+                      ...(found?.location ? mergeLocation(prev, found.location) : {}),
                       lat: pin.lat,
                       lng: pin.lng,
-                      address: prev.address || found?.street || prev.address,
-                      postal_code: prev.postal_code || found?.postcode || prev.postal_code,
+                      address: autofill("address", prev.address, found?.street),
+                      postal_code: autofill("postal_code", prev.postal_code ?? "", found?.postcode),
                     }));
                     clearErrors("pin");
                     if (found?.street) clearErrors("address");
                     if (found?.postcode) clearErrors("postal_code");
+                    if (found?.location) clearErrors("region", "province", "city", "barangay");
                   }}
                 />
                 <FieldError id="merchantonboarding-pin" message={fieldErrors.pin} />

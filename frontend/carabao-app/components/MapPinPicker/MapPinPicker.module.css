@@ -48,3 +48,13 @@
   line-height: 1.45;
   color: var(--text-subtle);
 }
+
+.noteWarn {
+  color: #8a4b00;
+  font-weight: 600;
+}
+
+.noteError {
+  color: var(--danger);
+  font-weight: 600;
+}

@@ -151,6 +151,8 @@ def create_merchant_from_application(
         "postal_code": application.postal_code,
         "lat": application.lat,
         "lng": application.lng,
+        "road_lat": application.road_lat,
+        "road_lng": application.road_lng,
         "available_days": application.available_days,
         "rsbsa_number": application.rsbsa_number,
         "rsbsa_document_path": application.rsbsa_document_path,

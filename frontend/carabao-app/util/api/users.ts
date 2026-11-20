@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { OrderStatus } from './statuses';
 
 export type NotificationPrefs = {
   order_updates: boolean;
@@ -133,5 +134,29 @@ export const uploadProfilePicture = async (file: File): Promise<UserProfile> => 
   const formData = new FormData();
   formData.append('avatar', file);
   const response = await apiClient.post<UserProfile>('/users/me/avatar', formData);
+  return response.data;
+};
+
+/** One order chat in the buyer's chat list (GET /users/me/chats). */
+export type BuyerChatSummary = {
+  order_id: number;
+  order_ref: string;
+  order_status: OrderStatus;
+  merchant_id: number | null;
+  farm_name: string | null;
+  /** The farm's shop logo, or null when it has none. */
+  farm_logo_url: string | null;
+  closed: boolean;
+  /** null when the order has no messages yet: the buyer can start the chat. */
+  last_body: string | null;
+  last_sender_role: string | null;
+  last_mine: boolean;
+  last_at: string | null;
+  ordered_at: string | null;
+  unread: number;
+};
+
+export const fetchMyChats = async (): Promise<BuyerChatSummary[]> => {
+  const response = await apiClient.get<BuyerChatSummary[]>('/users/me/chats');
   return response.data;
 };

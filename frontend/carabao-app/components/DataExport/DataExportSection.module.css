@@ -1,30 +1,56 @@
+/* Shown as a subsection of the profile page's Account section; the head and
+   row match that page's subsection head and setting rows. */
 .section {
-  margin: 1.5rem 0;
-  padding: 1rem 1.25rem;
-  border: 1px solid var(--border-strong, #d5dcd6);
-  border-radius: 12px;
-  background: var(--bg-white, #ffffff);
+  margin: 0;
+}
+
+.head {
+  margin: 0;
 }
 
 .title {
-  margin: 0 0 0.5rem;
-  font-size: 1.05rem;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green-900);
+}
+
+.desc {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--text-subtle);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 0 0;
 }
 
 .text {
-  margin: 0 0 0.75rem;
-  color: var(--text-muted, #4a5e4d);
+  margin: 0;
+  font-size: 14px;
   line-height: 1.5;
+  color: var(--text-subtle);
 }
 
 .button {
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
-  border: 1px solid var(--border-strong, #d5dcd6);
-  background: var(--bg-white, #ffffff);
+  flex-shrink: 0;
+  font-family: inherit;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm, 8px);
+  border: 1.5px solid #9fc5aa;
+  background: transparent;
+  color: var(--green-900);
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
 }
+
+.button:hover:not(:disabled) { background: #f0faf4; }
+.button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 .button:disabled {
   opacity: 0.65;
@@ -34,5 +60,10 @@
 .error {
   margin: 0.5rem 0 0;
   color: #ba2f2f;
+  font-size: 14px;
   font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .row { flex-direction: column; align-items: stretch; gap: 12px; }
 }

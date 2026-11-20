@@ -26,6 +26,17 @@ const securityHeaders = [
 
 const rootDomain = process.env.ROOT_DOMAIN || "carabao.online";
 
+function hostOf(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+const r2PublicHost = hostOf(process.env.CLOUDFLARE_R2_PUBLIC_URL);
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   // `npm run dev:admin` runs a second dev server; it needs its own folder.
@@ -40,6 +51,17 @@ const nextConfig: NextConfig = {
   env: {
     ROOT_DOMAIN: rootDomain,
     APP_SURFACE: process.env.APP_SURFACE === "admin" || process.env.APP_SURFACE === "help" ? process.env.APP_SURFACE : "public",
+  },
+  // next/image loads only from hosts in this list. Uploaded images (produce,
+  // avatars) are on Cloudflare R2: the public r2.dev bucket URL, or a custom
+  // domain from CLOUDFLARE_R2_PUBLIC_URL (the same value as in the backend).
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "*.r2.dev", pathname: "/**" },
+      ...(r2PublicHost
+        ? [{ protocol: "https" as const, hostname: r2PublicHost, pathname: "/**" }]
+        : []),
+    ],
   },
   experimental: {
     // Two root layouts (app/(site), app/(help)): unknown URLs use

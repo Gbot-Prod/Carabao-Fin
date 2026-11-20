@@ -317,15 +317,21 @@ def make_merchant(db, user, farm, idx) -> Merchant:
         gov_id_document_path="gov-id/x.pdf",
         rsbsa_document_original_name="rsbsa.pdf",
         rsbsa_document_content_type="application/pdf",
+        verified_at=NOW,  # an approved merchant, as after admin approval
     )
     db.add(merchant)
     db.flush()
+    # Published, with the draft equal to the live page: buyers only see a
+    # merchant whose shop page has published_at (merchant_is_public()).
     db.add(
         ShopPage(
             merchant_id=merchant.id,
             title=farm["name"],
+            draft_title=farm["name"],
             slug=farm["slug"],
             description=farm["about"],
+            draft_description=farm["about"],
+            published_at=NOW,
         )
     )
     return merchant
@@ -397,6 +403,7 @@ def make_order(db, buyer, merchant, produce_list, status, ordered_at, *, address
     if status == OrderStatus.DELIVERED:
         order.shipped_at = ordered_at + timedelta(hours=RNG.randint(4, 20))
         order.delivered_at = order.shipped_at + timedelta(hours=RNG.randint(1, 4))
+        order.closed_at = order.delivered_at  # as order_status.mark_delivered does
         order.delivery_confirmed_by = "buyer"
     db.add(order)
     db.flush()

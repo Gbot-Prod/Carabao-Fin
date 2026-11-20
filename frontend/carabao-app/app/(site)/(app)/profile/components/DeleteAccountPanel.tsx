@@ -74,12 +74,15 @@ export default function DeleteAccountPanel({ phoneVerified, onAddPhone }: {
 
   if (!phoneVerified) {
     return (
-      <div className={styles.panelForm}>
-        <p className={styles.panelHint}>
-          To delete your account, we send a code to your mobile number. Add and verify a mobile number first.
-        </p>
-        <div className={styles.panelActions}>
-          <button className={styles.secondaryBtn} type="button" onClick={onAddPhone}>Go to Profile</button>
+      <div className={styles.rowList}>
+        <div className={styles.notifRow}>
+          <div className={styles.notifText}>
+            <span className={styles.notifLabel}>Verify your mobile number first</span>
+            <span className={styles.notifDesc}>
+              To delete your account, we send a code to your mobile number.
+            </span>
+          </div>
+          <button className={styles.outlineBtn} type="button" onClick={onAddPhone}>Go to Profile</button>
         </div>
       </div>
     );
@@ -87,16 +90,19 @@ export default function DeleteAccountPanel({ phoneVerified, onAddPhone }: {
 
   if (step === 'idle') {
     return (
-      <div className={styles.panelForm}>
-        <p className={styles.panelHint}>
-          This permanently deletes your account, addresses and saved data. You cannot undo it.
-        </p>
-        {error && <p className={styles.panelError} role="alert">{error}</p>}
-        <div className={styles.panelActions}>
+      <div className={styles.rowList}>
+        <div className={styles.notifRow}>
+          <div className={styles.notifText}>
+            <span className={styles.notifLabel}>Delete your account</span>
+            <span className={styles.notifDesc}>
+              This permanently deletes your account, addresses and saved data. You cannot undo it.
+            </span>
+          </div>
           <button className={styles.dangerBtn} type="button" onClick={() => void start()} disabled={busy}>
             {busy ? 'Loading…' : 'Delete account'}
           </button>
         </div>
+        {error && <p className={`${styles.panelError} ${styles.rowBanner}`} role="alert">{error}</p>}
       </div>
     );
   }

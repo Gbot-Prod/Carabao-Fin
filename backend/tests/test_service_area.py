@@ -27,8 +27,7 @@ from app.utils import geocoding
         "Region III",
         "Region III (Central Luzon)",
         "Region IV-A (CALABARZON)",
-        "MIMAROPA Region",
-        "Region IV-B",
+        "Region IV",
         "Region V (Bicol Region)",
         "region 3",
     ],
@@ -40,6 +39,12 @@ def test_luzon_regions(region):
 @pytest.mark.parametrize(
     "region",
     [
+        # MIMAROPA is not served.
+        "MIMAROPA Region",
+        "Region IV-B",
+        "Region IV-B (MIMAROPA)",
+        "region 4b",
+        "Southwestern Tagalog Region",
         "Region VI (Western Visayas)",
         "Region VII (Central Visayas)",
         "Negros Island Region (NIR)",
@@ -60,7 +65,9 @@ def test_regions_outside_luzon(region):
         ("12 Mabini St, Santo Rosario, Malolos, Bulacan, 3000, Philippines", True),
         ("Unit 5, Barangay 76, Pasay, Philippines", True),
         ("Blk 2 Lot 3, Poblacion, Quezon City", True),
-        ("Purok 4, Puerto Princesa, Palawan", True),
+        ("Purok 4, Puerto Princesa, Palawan", False),  # MIMAROPA
+        ("Ilaya, Calapan, Oriental Mindoro", False),
+        ("Poblacion, Boac, Marinduque", False),
         ("Brgy Tikay Malolos Bulacan", True),  # no commas: checked as a whole
         ("12 Rizal St, Lahug, Cebu City, Cebu", False),  # street named after a province
         ("88 Quezon Ave, Poblacion, Davao City", False),
@@ -76,7 +83,16 @@ def test_free_text_delivery_address(address, expected):
 def test_bbox_contains_luzon_but_not_visayas_or_mindanao():
     assert in_luzon_bbox(14.5995, 120.9842)  # Manila
     assert in_luzon_bbox(20.45, 121.97)  # Batanes
-    assert in_luzon_bbox(9.74, 118.74)  # Puerto Princesa
+    assert in_luzon_bbox(13.76, 121.06)  # Batangas City
+    assert in_luzon_bbox(13.57, 121.07)  # Verde Island, Batangas
+    assert in_luzon_bbox(13.95, 122.40)  # Bondoc Peninsula, Quezon
+    assert in_luzon_bbox(12.37, 123.62)  # Masbate City
+    # MIMAROPA is not served.
+    assert not in_luzon_bbox(9.74, 118.74)  # Puerto Princesa
+    assert not in_luzon_bbox(13.41, 121.18)  # Calapan, Oriental Mindoro
+    assert not in_luzon_bbox(12.00, 120.20)  # Coron
+    assert not in_luzon_bbox(13.45, 121.84)  # Boac, Marinduque
+    assert not in_luzon_bbox(12.58, 122.27)  # Romblon
     assert not in_luzon_bbox(7.07, 125.61)  # Davao City
     assert not in_luzon_bbox(10.32, 124.9)  # Leyte, east of the box
 
@@ -97,7 +113,7 @@ def test_geocoder_asks_mapbox_for_luzon_and_drops_results_outside_the_box(monkey
     monkeypatch.setenv("MAPBOX_ACCESS_TOKEN", "pk.test")
     monkeypatch.setattr(geocoding._requests, "get", fake_get)
     assert geocoding._geocode_sync("Poblacion, Davao City") is None
-    assert seen["bbox"] == "116.9,7.8,124.5,21.2"
+    assert seen["bbox"] == "119.5,11.7,124.5,21.2"
 
 
 # --- endpoints -----------------------------------------------------------------

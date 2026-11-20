@@ -100,6 +100,9 @@ class MerchantApplication(Base):
     # Map pin (U1).
     lat = Column(Float, nullable=True)
     lng = Column(Float, nullable=True)
+    # The nearest road point to the pin; routing uses it.
+    road_lat = Column(Float, nullable=True)
+    road_lng = Column(Float, nullable=True)
     available_days = Column(JSON, nullable=False, default=list)
 
     # Admin review

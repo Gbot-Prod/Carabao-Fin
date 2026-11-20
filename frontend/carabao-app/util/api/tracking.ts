@@ -23,6 +23,8 @@ export type ShipmentStop = {
   status: string;
   /** Planned arrival (ISO) from the route schedule. Merchant view only. */
   estimated_arrival_at?: string | null;
+  /** The rider reported that this stop's pin could not be reached. */
+  pin_unreachable?: boolean;
 };
 
 // 'estimated': progress and ETA come from the planned route schedule (no live GPS).
@@ -55,4 +57,9 @@ export const fetchTracking = async (orderId: number): Promise<TrackingData> => {
 export const fetchShipmentTracking = async (shipmentId: number): Promise<TrackingData> => {
   const response = await apiClient.get<TrackingData>(`/shipments/${shipmentId}`);
   return response.data;
+};
+
+/** The rider could not get to this stop's pin (pin quality, control 6). */
+export const reportUnreachablePin = async (orderId: number, note?: string): Promise<void> => {
+  await apiClient.post(`/merchants/me/orders/${orderId}/pin-unreachable`, { note: note?.trim() || null });
 };

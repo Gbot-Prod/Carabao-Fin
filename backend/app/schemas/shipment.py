@@ -31,6 +31,8 @@ class ShipmentStop(BaseModel):
     status: str
     # Planned arrival from the route schedule (merchant view only); not GPS.
     estimated_arrival_at: str | None = None
+    # The rider reported that this stop's pin could not be reached (control 6).
+    pin_unreachable: bool = False
 
 
 class ShipmentTrackingResponse(BaseModel):
@@ -55,6 +57,12 @@ class ShipmentTrackingResponse(BaseModel):
 # Pickup + 20 stops = 21 points, inside the Mapbox Matrix API's 25-point
 # limit, so every shipment is routed from a single matrix request.
 MAX_SHIPMENT_ORDERS = 20
+
+
+class PinUnreachableRequest(BaseModel):
+    note: str | None = Field(default=None, max_length=200)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class CreateShipmentRequest(BaseModel):

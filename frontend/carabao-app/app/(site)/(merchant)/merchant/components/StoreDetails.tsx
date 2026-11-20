@@ -2,6 +2,8 @@ import { useState } from "react";
 import styles from "../page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
+import { usePinAutofill } from "@/components/MapPinPicker/usePinAutofill";
+import { mergeLocation } from "@/lib/pin-autofill";
 import { sendOtp, updateMyMerchant, verifyOtp, type Merchant } from "@/util/api";
 import { formatCountdown, useResendCooldown } from "@/hooks/useResendCooldown";
 import errorHelper from "@/util/errorHelper";
@@ -52,6 +54,7 @@ type Props = {
 export default function StoreDetails({ merchant, onSaved }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<LocationDraft>(() => draftFromMerchant(null));
+  const autofill = usePinAutofill();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // CF-0030: a new contact number is saved only with a code sent to it.
@@ -273,10 +276,11 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
               onChange={(pin, found) =>
                 setDraft((d) => ({
                   ...d,
+                  ...(found?.location ? mergeLocation(d, found.location) : {}),
                   lat: pin.lat,
                   lng: pin.lng,
-                  address: d.address || found?.street || d.address,
-                  postal_code: d.postal_code || found?.postcode || d.postal_code,
+                  address: autofill("address", d.address, found?.street),
+                  postal_code: autofill("postal_code", d.postal_code, found?.postcode),
                 }))
               }
             />

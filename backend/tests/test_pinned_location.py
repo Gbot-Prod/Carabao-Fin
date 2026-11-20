@@ -24,7 +24,7 @@ def _no_geocode(_address):
 
 def test_validate_pin():
     assert validate_pin(None, None) is None
-    assert validate_pin(*MALOLOS) == MALOLOS
+    assert validate_pin(*MALOLOS) == (MALOLOS, None)  # (pin, road point)
     with pytest.raises(HTTPException) as half:
         validate_pin(14.8, None)
     assert half.value.status_code == 422

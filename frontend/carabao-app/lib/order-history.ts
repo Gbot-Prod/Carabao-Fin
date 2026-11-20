@@ -1,18 +1,28 @@
 // CF-0036: paged order history (GET /orders/me/history/page).
 // Pure helpers, so `npm test` covers them without a browser.
 
-export type HistoryFilter = 'active' | 'delivered' | 'cancelled';
+export type HistoryFilter = 'to_pay' | 'to_ship' | 'to_receive' | 'delivered' | 'cancelled';
 
 export const HISTORY_PAGE_SIZE = 10;
 // Same limit as the API's `q` (max_length=100).
 export const HISTORY_SEARCH_MAX = 100;
 
+// The tabs on the buyer's orders page, in order. '' is "All".
 export const HISTORY_FILTERS: { value: HistoryFilter | ''; label: string }[] = [
-  { value: '', label: 'All orders' },
-  { value: 'active', label: 'In progress' },
-  { value: 'delivered', label: 'Delivered' },
+  { value: '', label: 'All' },
+  { value: 'to_pay', label: 'To Pay' },
+  { value: 'to_ship', label: 'To Ship' },
+  { value: 'to_receive', label: 'To Receive' },
+  { value: 'delivered', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
+
+const TAB_VALUES = new Set<string>(HISTORY_FILTERS.map((f) => f.value).filter(Boolean));
+
+/** The tab named in the URL (?tab=to_ship), or '' (All) when it is missing or unknown. */
+export function tabFromParam(value: string | null): HistoryFilter | '' {
+  return value && TAB_VALUES.has(value) ? (value as HistoryFilter) : '';
+}
 
 export type HistoryQuery = { page: number; status?: HistoryFilter | ''; q?: string };
 

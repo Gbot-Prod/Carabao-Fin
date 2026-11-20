@@ -265,6 +265,13 @@ export default function OrderDetailPage() {
       .catch(() => setState("missing"));
   }, [orderId]);
 
+  // The order list links to #review and #chat. Those sections render only
+  // after the order loads, so the browser cannot scroll to them on its own.
+  useEffect(() => {
+    if (state !== "ready" || !window.location.hash) return;
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "start" });
+  }, [state]);
+
   if (state === "loading") return <PageLoader variant="inline" label="Loading order…" />;
   if (state === "missing" || !order) {
     return (
@@ -456,10 +463,14 @@ export default function OrderDetailPage() {
         </section>
       </div>
 
-      <ReviewSection key={order.review?.id ?? "new"} order={order} onSaved={handleReviewSaved} />
+      <div id="review">
+        <ReviewSection key={order.review?.id ?? "new"} order={order} onSaved={handleReviewSaved} />
+      </div>
 
       {/* Chat with the farm (CH1b) */}
-      <OrderChat orderId={order.order_id} />
+      <div id="chat">
+        <OrderChat orderId={order.order_id} />
+      </div>
     </div>
   );
 }

@@ -39,6 +39,9 @@ class UserAddress(Base):
     # Map pin for the address (U1); routing prefers it over geocoding.
     lat = Column(Float, nullable=True)
     lng = Column(Float, nullable=True)
+    # The nearest road point to the pin; routing uses it.
+    road_lat = Column(Float, nullable=True)
+    road_lng = Column(Float, nullable=True)
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -9,6 +9,7 @@ import Logo from "@/public/images/icons/carabaoLogo.png";
 import { LogoutButton } from "@/components/LogoutButton";
 import LanguageToggle from "@/components/LanguageToggle/LanguageToggle";
 import { useNotifications } from "@/components/Notifications/NotificationsProvider";
+import { useBuyerChats } from "@/components/Chats/BuyerChatsProvider";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthPrompt } from "@/components/AuthPrompt/AuthPromptContext";
@@ -59,6 +60,14 @@ function ReceiptIcon() {
       <line x1="8" y1="9" x2="16" y2="9" />
       <line x1="8" y1="13" x2="16" y2="13" />
       <line x1="8" y1="17" x2="12" y2="17" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
 }
@@ -122,6 +131,7 @@ export default function Sidebar() {
   const { showPrompt } = useAuthPrompt();
   const { t } = useLanguage();
   const { unread: unreadNotifications } = useNotifications();
+  const { unreadCount: unreadChats } = useBuyerChats();
 
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   // The sidebar also shows on merchant.<root>, so buyer links go to the apex.
@@ -261,6 +271,7 @@ export default function Sidebar() {
               {renderNavLink(appUrl("/cart"), t.nav.cart, <CartIcon />, false, "/cart")}
               {renderNavLink(appUrl("/track"), t.nav.track, <TrackIcon />, true, "/track")}
               {renderNavLink(appUrl("/orders"), t.nav.orders, <ReceiptIcon />, true, "/orders")}
+              {renderNavLink(appUrl("/chats"), t.nav.chats, <ChatIcon />, true, "/chats", false, unreadChats)}
               {renderNavLink(appUrl("/saved"), t.nav.saved, <HeartIcon />, true, "/saved")}
             </ul>
           </div>

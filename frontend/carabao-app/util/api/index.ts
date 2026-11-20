@@ -8,6 +8,7 @@ export * from './produce';
 export * from './reviews';
 export * from './notifications';
 export * from './tracking';
+export * from './locations';
 export * from './users';
 export * from './admin';
 export * from './sms';

@@ -15,6 +15,7 @@ from .demand_insight import router as demand_insight_router
 from .email import router as email_router
 from .email_otp import router as email_otp_router
 from .follows import router as follows_router
+from .locations import router as locations_router
 from .merchant_onboarding import router as merchant_onboarding_router
 from .merchant_sales import router as merchant_sales_router
 from .merchant_vouchers import router as merchant_vouchers_router
@@ -61,6 +62,7 @@ router.include_router(merchant_onboarding_router)
 router.include_router(merchants_router)
 router.include_router(users_router)
 router.include_router(user_addresses_router)
+router.include_router(locations_router)
 router.include_router(carts_router)
 router.include_router(orders_router)
 router.include_router(reviews_router)

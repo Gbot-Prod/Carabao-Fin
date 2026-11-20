@@ -35,15 +35,18 @@ export default function PasswordPanel() {
 
   if (!open) {
     return (
-      <div className={styles.panelForm}>
-        <p className={styles.panelHint}>
-          {has
-            ? 'Change the password you use to log in with your number or email.'
-            : 'Your account has no password. You log in with Google or Facebook. Add a password to also log in with your number or email.'}
-        </p>
-        {done && <p className={styles.noticeBanner} role="status">{done}</p>}
-        <div className={styles.panelActions}>
-          <button className={styles.secondaryBtn} type="button" onClick={() => { setDone(null); setOpen(true); }}>
+      <div className={styles.rowList}>
+        {done && <p className={`${styles.noticeBanner} ${styles.rowBanner}`} role="status">{done}</p>}
+        <div className={styles.notifRow}>
+          <div className={styles.notifText}>
+            <span className={styles.notifLabel}>{has ? 'Password' : 'No password yet'}</span>
+            <span className={styles.notifDesc}>
+              {has
+                ? 'Change the password you use to log in with your number or email.'
+                : 'You log in with Google or Facebook. Add a password to also log in with your number or email.'}
+            </span>
+          </div>
+          <button className={styles.outlineBtn} type="button" onClick={() => { setDone(null); setOpen(true); }}>
             {has ? 'Change password' : 'Add password'}
           </button>
         </div>
@@ -73,7 +76,7 @@ export default function PasswordPanel() {
   };
 
   return (
-    <form className={styles.panelForm} onSubmit={(e) => void submit(e)}>
+    <form className={`${styles.panelForm} ${styles.panelFormSpaced}`} onSubmit={(e) => void submit(e)}>
       {has && (
         <div className={styles.panelFormField}>
           <label htmlFor="pw-current" className={styles.formLabel}>Current password</label>

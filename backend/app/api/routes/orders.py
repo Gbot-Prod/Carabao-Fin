@@ -5,10 +5,11 @@ from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import ColumnElement, TextClause, or_, text
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db, require_verified_phone
-from app.core.sql import ilike_contains
+from app.core.sql import LIKE_ESCAPE, contains_pattern, ilike_contains
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.produce import Produce
@@ -45,7 +46,7 @@ from app.services.order_status import (
     mark_delivered,
     money_received_clause,
 )
-from app.services.pinned_location import validate_pin
+from app.services.pinned_location import enforce_not_flagged, validate_pin
 from app.services.produce_freshness import is_expired, ph_today
 from app.services.produce_pricing import unit_price_for
 from app.services.receipts import build_receipt, receipt_payment
@@ -138,6 +139,11 @@ def place_order_from_cart(
     elif payload.delivery_address and not address_in_luzon(payload.delivery_address):
         raise HTTPException(status_code=400, detail=DELIVERY_OUTSIDE_LUZON_DETAIL)
     delivery_pin = validate_pin(payload.delivery_lat, payload.delivery_lng)
+    road = delivery_pin.road if delivery_pin else None
+    # Control 6: a place riders reported more than once must be re-pinned.
+    enforce_not_flagged(
+        db, cast(int, current_user.id), delivery_pin.pin if delivery_pin else None
+    )
 
     # Release any elapsed checkout holds before checking availability.
     expire_stale_reservations(db, reservation_ttl_minutes())
@@ -325,8 +331,10 @@ def place_order_from_cart(
             voucher_code=voucher.code if discount and voucher is not None else None,
             items=items_by_merchant[merchant_id],
             delivery_address=(payload.delivery_address or "").strip() or None,
-            delivery_lat=delivery_pin[0] if delivery_pin else None,
-            delivery_lng=delivery_pin[1] if delivery_pin else None,
+            delivery_lat=delivery_pin.pin[0] if delivery_pin else None,
+            delivery_lng=delivery_pin.pin[1] if delivery_pin else None,
+            delivery_road_lat=road[0] if road else None,
+            delivery_road_lng=road[1] if road else None,
             requested_delivery_date=payload.delivery_date,
             delivery_window=(payload.delivery_time or "").strip() or None,
             notes=(payload.notes or "").strip() or None,
@@ -455,16 +463,45 @@ def get_my_order_history(
     return [to_order_history_item(order) for order in orders]
 
 
-# CF-0036: filter groups the history page offers.
-HistoryFilter = Literal["active", "delivered", "cancelled"]
+# CF-0036: filter groups the history page offers. The web order tabs use
+# to_pay / to_ship / to_receive / delivered / cancelled; mobile uses active.
+HistoryFilter = Literal[
+    "active", "to_pay", "to_ship", "to_receive", "delivered", "cancelled"
+]
 _HISTORY_FILTER_STATUSES: dict[str, frozenset[OrderStatus]] = {
     "active": ACTIVE_ORDER_STATUSES,
+    "to_pay": frozenset({OrderStatus.PENDING}),
+    "to_ship": frozenset({OrderStatus.PROCESSING}),
+    "to_receive": frozenset({OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY}),
     "delivered": frozenset({OrderStatus.DELIVERED}),
     # A payment mismatch is closed without delivery; the buyer sees it here.
     "cancelled": frozenset({OrderStatus.CANCELLED, OrderStatus.PAYMENT_MISMATCH}),
 }
 # "CB-2026-0042", "cb-2026-42", "#42" or "42": the order id.
 _ORDER_REF = re.compile(r"^(?:cb-\d{4}-)?#?0*(\d{1,9})$", re.IGNORECASE)
+
+# An order line's product name ("produce" on each item of orders.items).
+# Postgres and SQLite (the tests) read JSON arrays with different functions.
+_ITEM_NAME_MATCH = {
+    "postgresql": (
+        "CASE WHEN json_typeof(orders.items) = 'array' THEN EXISTS ("
+        "SELECT 1 FROM json_array_elements(orders.items) AS line "
+        "WHERE line->>'produce' ILIKE :item_q ESCAPE :item_esc) ELSE false END"
+    ),
+    "sqlite": (
+        "EXISTS (SELECT 1 FROM json_each(orders.items) AS line "
+        "WHERE json_extract(line.value, '$.produce') LIKE :item_q ESCAPE :item_esc)"
+    ),
+}
+
+
+def _item_name_matches(db: Session, term: str) -> TextClause | None:
+    """Orders with a line whose product name contains ``term``, or None when
+    the database is not one we know how to search."""
+    clause = _ITEM_NAME_MATCH.get(db.get_bind().dialect.name)
+    if clause is None:
+        return None
+    return text(clause).bindparams(item_q=contains_pattern(term), item_esc=LIKE_ESCAPE)
 
 
 @router.get("/orders/me/history/page", response_model=Page[OrderItemResponse])
@@ -478,8 +515,9 @@ def get_my_order_history_page(
 ) -> dict[str, Any]:
     """One page of the buyer's orders, newest first (CF-0036).
 
-    ``q`` matches an order reference or the farm name. Sorting, filtering
-    and paging happen in SQL, so a long history is not loaded at once.
+    ``q`` matches an order reference, the farm name or a product name.
+    Sorting, filtering and paging happen in SQL, so a long history is not
+    loaded at once.
     """
     # Legacy Column-typed model: the loaded attribute is an int.
     query = buyer_orders_query(db, cast(int, current_user.id))
@@ -491,8 +529,14 @@ def get_my_order_history_page(
         if ref:
             query = query.filter(Order.id == int(ref.group(1)))
         else:
-            query = query.outerjoin(Merchant, Order.merchant_id == Merchant.id).filter(
+            matches: list[ColumnElement[bool] | TextClause] = [
                 ilike_contains(Merchant.merchant_name, term)
+            ]
+            by_item = _item_name_matches(db, term)
+            if by_item is not None:
+                matches.append(by_item)
+            query = query.outerjoin(Merchant, Order.merchant_id == Merchant.id).filter(
+                or_(*matches)
             )
 
     total = query.order_by(None).count()
@@ -502,8 +546,14 @@ def get_my_order_history_page(
         .limit(page_size)
         .all()
     )
+    reviewed = {
+        order_id
+        for (order_id,) in db.query(Review.order_id).filter(
+            Review.order_id.in_([order.id for order in orders])
+        )
+    }
     return {
-        "items": [to_order_history_item(order) for order in orders],
+        "items": [to_order_history_item(o, o.id in reviewed) for o in orders],
         "total": total,
         "page": page,
         "page_size": page_size,

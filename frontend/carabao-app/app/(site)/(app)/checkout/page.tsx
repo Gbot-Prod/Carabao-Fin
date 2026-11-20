@@ -9,6 +9,8 @@ import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { clearPendingPayments, loadPendingPayments, savePendingPayments } from "@/util/pendingPayments";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
+import { usePinAutofill } from "@/components/MapPinPicker/usePinAutofill";
+import { mergeLocation } from "@/lib/pin-autofill";
 import type { Pin } from "@/util/reverseGeocode";
 import { isLuzonRegion } from "@/util/serviceArea";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -51,6 +53,7 @@ export default function CheckoutPage() {
   const [deliveryWindow, setDeliveryWindow] = useState(TIME_WINDOWS[0]);
   // Delivery pin (U1b): starts at the saved address's pin, if any.
   const [pin, setPin] = useState<Pin | null>(null);
+  const autofill = usePinAutofill();
   // Saved addresses; the default one pre-fills the form.
   const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
   const [savedAddressId, setSavedAddressId] = useState<number | null>(null);
@@ -296,8 +299,10 @@ export default function CheckoutPage() {
               value={pin}
               onChange={(next, found) => {
                 setPin(next);
-                if (!street.trim() && found?.street) setStreet(found.street);
-                if (!postal.trim() && found?.postcode) setPostal(found.postcode);
+                // The pin fills the address; text the buyer typed is kept.
+                setStreet((prev) => autofill("street", prev, found?.street));
+                setPostal((prev) => autofill("postal", prev, found?.postcode));
+                if (found?.location) setAddressForm((prev) => ({ ...prev, ...mergeLocation(prev, found.location) }));
               }}
             />
           </div>

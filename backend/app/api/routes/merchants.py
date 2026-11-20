@@ -72,7 +72,12 @@ from app.services.phone_verification import (
     normalize_ph_mobile,
     read_token,
 )
-from app.services.pinned_location import delivery_point, merchant_point, validate_pin
+from app.services.pinned_location import (
+    apply_pin,
+    delivery_point,
+    merchant_point,
+    validate_pin,
+)
 from app.services.produce_freshness import freshness_error, is_listed, ph_today
 from app.services.produce_pricing import parse_tiers, pricing_error, serialize_tiers
 from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
@@ -357,8 +362,14 @@ def update_my_merchant(
     token = updates.pop("phone_verification_token", None)
     if "region" in updates and not is_luzon_region(updates["region"]):
         raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
-    if "lat" in updates or "lng" in updates:
-        validate_pin(updates.get("lat", merchant.lat), updates.get("lng", merchant.lng))
+    pin_changed = "lat" in updates or "lng" in updates
+    if pin_changed:
+        apply_pin(
+            merchant,
+            validate_pin(
+                updates.pop("lat", merchant.lat), updates.pop("lng", merchant.lng)
+            ),
+        )
     if "contact_number" in updates:
         number = updates.pop("contact_number")
         _set_contact_number(merchant, current_user, number, token)

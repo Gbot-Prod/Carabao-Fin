@@ -175,6 +175,9 @@ Optional tuning (defaults):
 | `BETTER_AUTH_JWT_AUDIENCE` | `carabao-api` | must match `lib/auth.ts` |
 | `BETTER_AUTH_JWKS_URL` | `<BETTER_AUTH_URL>/api/auth/jwks` | old name of `PUBLIC_JWKS_URL` |
 | `SEMAPHORE_BASE_URL` | Semaphore API | override |
+| `ROAD_SNAP_PROVIDER` | `mapbox` with a token, else `off` | map pin road check: `mapbox`, `osrm` or `off` |
+| `ROAD_SNAP_MAX_METERS` | 150 | a pin with no drivable road this near is refused |
+| `OSRM_URL` | `https://router.project-osrm.org` | OSRM server for `ROAD_SNAP_PROVIDER=osrm` |
 
 Perf-only (`backend/scripts/perf`): `PERF_DATABASE_URL`, `PERF_CLIENT_CSV`, `PERF_RUN_DIR`, `PERF_BUYERS`, `PERF_MERCHANTS`, `PERF_MAPBOX`, `PERF_PAYMONGO`, `FASTAPI_JWT_SECRET`.
 

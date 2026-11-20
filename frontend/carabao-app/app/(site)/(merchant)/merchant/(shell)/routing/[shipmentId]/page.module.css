@@ -311,3 +311,52 @@
     font-size: 0.68rem;
   }
 }
+
+/* ── Unreachable pin report (pin quality, control 6) ─────────────────────── */
+
+.reportForm {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reportLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.reportInput {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.reportInput:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.reportActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reportError {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--danger);
+}
+
+.reportedNote {
+  margin: 10px 0 0;
+  padding-left: 40px;
+  font-size: 0.85rem;
+  color: #8a4b00;
+}

@@ -200,3 +200,44 @@ def test_merchant_chat_list_shows_last_message_and_unread(db, merchant, buyer, o
 
     # A buyer has no farm, so the list is not theirs to read.
     assert shopper.get("/merchants/me/chats").status_code == 404
+
+
+def test_buyer_chat_list(db, merchant, buyer, order):  # noqa: F811
+    farmer = db.get(User, merchant.user_id)
+    farm = _client(db, farmer)
+    shopper = _client(db, buyer[0])
+    unpaid = Order(
+        user_id=buyer[0].id,
+        merchant_id=merchant.id,
+        status="pending",
+        total_price=100,
+        items=[],
+        ordered_at=datetime(2026, 11, 13, tzinfo=UTC),
+    )
+    db.add(unpaid)
+    db.commit()
+
+    # A paid order with no messages shows, so the buyer can start the chat.
+    # An unpaid order does not show.
+    chats = shopper.get("/users/me/chats").json()
+    assert [c["order_id"] for c in chats] == [order.id]
+    assert chats[0]["last_body"] is None and chats[0]["unread"] == 0
+    assert chats[0]["farm_name"] == merchant.merchant_name
+    assert "farm_logo_url" in chats[0]
+
+    _post(shopper, order.id, "Is the talong fresh?")
+    _post(farm, order.id, "Harvested this morning!")
+    _post(farm, order.id, "Ships at 3pm.")
+    chats = shopper.get("/users/me/chats").json()
+    assert chats[0]["last_body"] == "Ships at 3pm."
+    assert chats[0]["last_mine"] is False and chats[0]["unread"] == 2
+
+    # Opening the thread marks it read.
+    shopper.get(f"/orders/{order.id}/messages")
+    assert shopper.get("/users/me/chats").json()[0]["unread"] == 0
+
+    # Another buyer does not see this chat.
+    other = make_user(db, "other-buyer@example.com", notifications_preferences={})
+    db.add(other)
+    db.commit()
+    assert _client(db, other).get("/users/me/chats").json() == []

@@ -1,15 +1,15 @@
 "use client";
 
 import Link from 'next/link';
-import { useCallback, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import RouteMap from '@/components/RouteMap/RouteMap';
 import SkeletonList, { LoadError } from '@/components/Skeleton/Skeleton';
 import { useVisiblePoll } from '@/hooks/useVisiblePoll';
 import { useLanguage } from '@/lib/i18n/LanguageProvider';
 import { fmt } from '@/lib/i18n/format';
-import { fetchShipmentTracking, type ShipmentStop } from '@/util/api';
-import { getApiErrorStatus } from '@/util/errorHelper';
+import { fetchShipmentTracking, reportUnreachablePin, type ShipmentStop } from '@/util/api';
+import getApiErrorMessage, { getApiErrorStatus } from '@/util/errorHelper';
 import { googleMapsDirectionsUrl, isNavigable, wazeNavigationUrl } from '@/util/navigation';
 import { isClosedStatus, isRouteFinished, statusLabel } from '@/util/tracking';
 import dash from '../../../page.module.css';
@@ -45,6 +45,67 @@ const parseShipmentId = (raw: string | string[] | undefined) => {
   const value = Number(Array.isArray(raw) ? raw[0] : raw);
   return Number.isInteger(value) && value > 0 ? value : null;
 };
+
+/** "Cannot get to pin" for one stop (pin quality, control 6). */
+function StopPinReport({ stop, onReported }: { stop: ShipmentStop; onReported: () => void }) {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const noteId = `pin-report-note-${stop.order_id}`;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className={`${dash.secondaryBtn} ${styles.navBtn}`}
+        onClick={() => setOpen(true)}
+        aria-label={fmt(t.routing.reportPinTo, { n: stop.sequence })}
+      >
+        {t.routing.reportPin}
+      </button>
+    );
+  }
+
+  const send = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await reportUnreachablePin(stop.order_id, note);
+      onReported();
+    } catch (err) {
+      // 409: already reported (for example from another device); show it as done.
+      if (getApiErrorStatus(err) === 409) onReported();
+      else setError(getApiErrorMessage(err, t.routing.reportError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={styles.reportForm}>
+      <label htmlFor={noteId} className={styles.reportLabel}>{t.routing.reportNoteLabel}</label>
+      <input
+        id={noteId}
+        className={styles.reportInput}
+        value={note}
+        maxLength={200}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder={t.routing.reportNotePlaceholder}
+      />
+      {error && <p className={styles.reportError} role="alert">{error}</p>}
+      <div className={styles.reportActions}>
+        <button type="button" className={`${dash.primaryBtn} ${styles.navBtn}`} onClick={send} disabled={busy}>
+          {t.routing.reportSend}
+        </button>
+        <button type="button" className={`${dash.secondaryBtn} ${styles.navBtn}`} onClick={() => setOpen(false)} disabled={busy}>
+          {t.routing.reportCancel}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function RoutingPage() {
   const { t } = useLanguage();
@@ -166,6 +227,12 @@ export default function RoutingPage() {
                     <span className={`${styles.chip} ${chipClass(stop.status)}`}>{statusLabel(stop.status)}</span>
                   </div>
 
+                  {stop.pin_unreachable && (
+                    <p className={styles.reportedNote}>
+                      <strong>{t.routing.reported}.</strong> {t.routing.reportedNote}
+                    </p>
+                  )}
+
                   {canNavigate && (
                     <div className={styles.navRow}>
                       <a
@@ -186,6 +253,12 @@ export default function RoutingPage() {
                       >
                         {t.routing.waze}
                       </a>
+                    </div>
+                  )}
+
+                  {!closed && !stop.pin_unreachable && (
+                    <div className={styles.navRow}>
+                      <StopPinReport stop={stop} onReported={retry} />
                     </div>
                   )}
                 </li>

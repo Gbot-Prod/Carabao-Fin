@@ -96,6 +96,11 @@ ACTION_LIMITS: dict[str, Limit] = {
     # CF-0077: each merchant application submit scans two documents of up to
     # 20 MB (PDF object walk or image re-encode) and writes them to R2.
     "onboarding_submit": Limit(10, 3600),
+    # Pin quality: each pin drop asks the road service for the nearest road
+    # (billed per request). A person moves the pin a few times per address.
+    "pin_check": Limit(120, 3600),
+    # A rider reports a pin that could not be reached (control 6).
+    "pin_report": Limit(60, 3600),
 }
 
 

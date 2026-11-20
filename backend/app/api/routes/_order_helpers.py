@@ -18,6 +18,7 @@ from app.services.order_status import (
     payment_status,
 )
 from app.services.produce_freshness import is_expired
+from app.services.review_service import can_review, review_deadline
 
 
 def _to_int(value: Any, default: int = 0) -> int:
@@ -272,8 +273,11 @@ def _schedule_fields(order: Order) -> dict[str, Any]:
     }
 
 
-def to_order_history_item(order: Order) -> dict[str, Any]:
+def to_order_history_item(order: Order, reviewed: bool = False) -> dict[str, Any]:
+    """One card in the buyer's order list. ``reviewed``: the buyer has left a
+    review for this order (the caller looks it up for the whole page)."""
     items = order.items or []
+    first_item = items[0] if items and isinstance(items[0], dict) else {}
     merchant = order.merchant
     return {
         "id": order.id,
@@ -290,6 +294,16 @@ def to_order_history_item(order: Order) -> dict[str, Any]:
         "status": order.status,
         "payment_status": payment_status(order),
         "items": items,
+        # Orders placed before delivery_fee existed kept it on the item.
+        "delivery_fee": order.delivery_fee
+        or _to_int(first_item.get("deliveryFee", 0)),
+        "discount": order.discount or 0,
+        "time_of_arrival": order.time_of_arrival,
+        "auto_confirm_at": auto_confirm_at(order),
+        "delivered_at": order.delivered_at,
+        "reviewed": reviewed,
+        "can_review": not reviewed and can_review(order),
+        "review_deadline": review_deadline(order),
         **_schedule_fields(order),
     }
 

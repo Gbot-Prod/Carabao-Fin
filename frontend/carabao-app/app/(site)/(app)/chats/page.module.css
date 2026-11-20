@@ -1,0 +1,341 @@
+/* Buyer chats page. Header follows the saved page; panes follow the merchant chats page. */
+
+.container {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.header {
+  background: linear-gradient(130deg, #f0fff1 0%, #dff5e6 52%, #ccefd8 100%);
+  border: 1px solid #c5e8d0;
+  border-radius: var(--radius-md);
+  padding: 1.4rem;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #2d7f47;
+  margin: 0 0 0.35rem;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  color: #11492a;
+}
+
+.empty {
+  background: var(--bg-white);
+  border: 1px solid #d9e7dd;
+  border-radius: var(--radius-md);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+}
+
+.emptyTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1d4f2f;
+  margin: 0;
+}
+
+.emptyText {
+  margin: 0;
+  color: #5a655f;
+}
+
+.action {
+  margin-top: 0.5rem;
+  padding: 0.55rem 1.1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid #1f7a45;
+  background: #1f7a45;
+  color: #fff;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Two panes that fill the screen below the page header. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  height: calc(100vh - 240px);
+  min-height: 420px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
+  background: var(--bg-white);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  border-right: 1px solid var(--green-border);
+}
+
+.list li + li {
+  border-top: 1px solid var(--green-border);
+}
+
+.row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: none;
+  border-left: 3px solid transparent;
+  background: none;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* The farm's logo on the left of each chat, as on the orders page. */
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #d7e7da 0%, #c0d9c6 100%);
+  border: 1px solid #d9e7dd;
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatarInitials {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #345f34;
+}
+
+.rowText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.row:hover {
+  background: var(--green-50);
+}
+
+.row:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
+
+.rowActive,
+.rowActive:hover {
+  background: #e2f1e6;
+  border-left-color: #2f9e5f;
+}
+
+.rowTop,
+.rowBottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rowName {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowTime {
+  font-size: 12px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.rowMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.closedTag {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--green-50);
+  border: 1px solid var(--green-border);
+  font-size: 11px;
+}
+
+.rowPreview {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowUnread .rowName,
+.rowUnread .rowPreview {
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #d97706;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.thread {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.threadHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--green-border);
+}
+
+.threadTitle {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.threadTitle strong {
+  font-size: 15px;
+  color: var(--text-strong);
+}
+
+.threadTitle span {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* The chat component has its own border; inside this pane it does not need one. */
+.threadBody {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+}
+
+.back {
+  display: none;
+  border: none;
+  background: none;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green-700, #166534);
+  cursor: pointer;
+}
+
+.pick {
+  margin: auto;
+  font-size: 14px;
+  color: var(--text-subtle);
+}
+
+/* Narrow: one pane at a time. The list, or the open chat with a back button. */
+@media (max-width: 768px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    height: calc(100dvh - 260px);
+  }
+
+  .list {
+    border-right: none;
+  }
+
+  .hasSelection .list,
+  .layout:not(.hasSelection) .thread {
+    display: none;
+  }
+
+  .back {
+    display: inline-flex;
+  }
+
+  .threadHead {
+    flex-wrap: wrap;
+    padding: 10px 14px;
+  }
+
+  .threadBody {
+    padding: 8px;
+  }
+}
+
+
+.description {
+  margin: 0.4rem 0 0;
+  font-size: 0.9rem;
+  color: #2f5d40;
+}
+
+.startHint {
+  font-style: italic;
+}
+
+.threadHead .orderLink {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green-700, #1f7a45);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.threadHead .orderLink:hover {
+  text-decoration: underline;
+}
+
+.farmLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.farmLink:hover {
+  text-decoration: underline;
+}

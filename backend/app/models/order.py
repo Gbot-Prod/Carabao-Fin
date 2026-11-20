@@ -45,6 +45,12 @@ class Order(Base):
     # Map pin for the delivery address (U1).
     delivery_lat = Column(Float, nullable=True)
     delivery_lng = Column(Float, nullable=True)
+    # The nearest road point to the pin; routing and the rider use it.
+    delivery_road_lat = Column(Float, nullable=True)
+    delivery_road_lng = Column(Float, nullable=True)
+    # A rider reported that the pin could not be reached (pin quality, control 6).
+    pin_unreachable_at = Column(DateTime(timezone=True), nullable=True)
+    pin_unreachable_note = Column(String(200), nullable=True)
     # What the buyer asked for at checkout; the route ETA is time_of_arrival.
     requested_delivery_date = Column(Date, nullable=True, index=True)
     delivery_window = Column(String, nullable=True)  # e.g. "08:00 – 10:00"

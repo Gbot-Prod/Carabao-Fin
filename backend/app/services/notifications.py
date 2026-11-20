@@ -32,6 +32,7 @@ PAYOUT_RELEASED = "payout_released"
 REFUND = "refund"
 PAYMENT_MISMATCH = "payment_mismatch"  # to admins (CF-0005)
 PAYOUT_DESTINATION_CHANGED = "payout_destination_changed"  # CF-0004
+PIN_UNREACHABLE = "pin_unreachable"  # to the buyer (pin quality, control 6)
 
 
 def wants(user, channel: str) -> bool:

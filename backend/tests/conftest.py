@@ -31,9 +31,14 @@ _DOTENV_LEAKS = (
     "R2_ACCESS_KEY_ID",
     "R2_SECRET_ACCESS_KEY",
     "MAPBOX_ACCESS_TOKEN",
+    "OSRM_URL",
+    "ROAD_SNAP_MAX_METERS",
 )
 for _name in _DOTENV_LEAKS:
     os.environ.pop(_name, None)
+# Pin road check off: tests that set MAPBOX_ACCESS_TOKEN must not snap pins.
+# test_pin_quality turns it on with monkeypatch.
+os.environ["ROAD_SNAP_PROVIDER"] = "off"
 
 import pytest  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402

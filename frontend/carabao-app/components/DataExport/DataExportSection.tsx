@@ -29,15 +29,19 @@ export default function DataExportSection() {
 
   return (
     <section className={styles.section} aria-labelledby="data-export-title">
-      <h2 className={styles.title} id="data-export-title">Your data</h2>
-      <p className={styles.text}>
-        Download a copy of what Carabao keeps about you: your account, saved addresses, orders and payments,
-        reviews, followed farms, saved produce, the messages you sent, and your farm profile if you sell. It is a
-        JSON file that other apps can read.
-      </p>
-      <button type="button" className={styles.button} onClick={() => void download()} disabled={busy}>
-        {busy ? "Preparing…" : "Download my data"}
-      </button>
+      <header className={styles.head}>
+        <h3 className={styles.title} id="data-export-title">Your data</h3>
+        <p className={styles.desc}>A copy of what Carabao keeps about you.</p>
+      </header>
+      <div className={styles.row}>
+        <p className={styles.text}>
+          Your account, saved addresses, orders and payments, reviews, followed farms, saved produce, the messages
+          you sent, and your farm profile if you sell. It is a JSON file that other apps can read.
+        </p>
+        <button type="button" className={styles.button} onClick={() => void download()} disabled={busy}>
+          {busy ? "Preparing…" : "Download my data"}
+        </button>
+      </div>
       {error && <p role="alert" className={styles.error}>{error}</p>}
     </section>
   );

@@ -1,8 +1,9 @@
 """Carabao's service area: the Luzon island group (B2).
 
 "Luzon" here is the Luzon island group as the PSA groups regions: NCR, CAR,
-Regions I, II, III, IV-A (CALABARZON), MIMAROPA (IV-B) and V (Bicol). Visayas
-and Mindanao regions are outside the service area.
+Regions I, II, III, IV-A (CALABARZON) and V (Bicol). MIMAROPA (IV-B: Mindoro,
+Marinduque, Romblon, Palawan), the Visayas and Mindanao are outside the service
+area.
 """
 
 from __future__ import annotations
@@ -11,18 +12,19 @@ import re
 
 OUTSIDE_LUZON_DETAIL = (
     "Carabao currently serves Luzon only (Metro Manila, CAR, Ilocos, Cagayan "
-    "Valley, Central Luzon, CALABARZON, MIMAROPA and Bicol)."
+    "Valley, Central Luzon, CALABARZON and Bicol). MIMAROPA is not served."
 )
 DELIVERY_OUTSIDE_LUZON_DETAIL = (
     "We can only deliver within Luzon. Include your province or Metro Manila city "
     "in the delivery address."
 )
 
-# Lng/lat box around the Luzon island group, Batanes to southern Palawan and
-# Catanduanes, for Mapbox geocoding. It keeps out Mindanao and the eastern
-# Visayas, but a box this wide also covers Panay, Negros and Cebu, so the real
-# check is on the address at entry (is_luzon_region / address_in_luzon).
-LUZON_BBOX = (116.9, 7.8, 124.5, 21.2)
+# Lng/lat box around the served area, Batanes to Masbate and Catanduanes, for
+# Mapbox geocoding. It keeps out Mindanao, Palawan's main island and most of
+# the Visayas, but it also covers north Panay and the MIMAROPA islands near
+# Luzon (MIMAROPA_BOXES below), so the real check is on the address at entry
+# (is_luzon_region / address_in_luzon).
+LUZON_BBOX = (119.5, 11.7, 124.5, 21.2)
 
 _REGION_NAMES = (
     "ncr",
@@ -34,11 +36,13 @@ _REGION_NAMES = (
     "cagayan valley",
     "central luzon",
     "calabarzon",
-    "mimaropa",
-    "southwestern tagalog",
     "bicol",
 )
-# Regions I-V (IV covers IV-A and IV-B), written as Roman or Arabic numerals.
+# MIMAROPA (Region IV-B) is not served, however it is written.
+_EXCLUDED_REGION = re.compile(
+    r"mimaropa|southwestern tagalog|\bregion\s*-?\s*(iv|4)\s*-?\s*b\b"
+)
+# Regions I-V (IV is IV-A once IV-B is excluded), Roman or Arabic numerals.
 _REGION_NUMBERS = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5}
 
 LUZON_PROVINCES = frozenset(
@@ -54,9 +58,6 @@ LUZON_PROVINCES = frozenset(
         "zambales",
         # Region IV-A
         "batangas", "cavite", "laguna", "quezon", "rizal",
-        # MIMAROPA
-        "marinduque", "occidental mindoro", "oriental mindoro", "mindoro",
-        "palawan", "romblon",
         # Region V
         "albay", "camarines norte", "camarines sur", "catanduanes", "masbate",
         "sorsogon",
@@ -73,7 +74,16 @@ METRO_MANILA = frozenset(
 )  # fmt: skip
 
 # Places outside Luzon whose names contain a Luzon place name.
-_OUTSIDE_LUZON = ("basilan",)
+_OUTSIDE_LUZON = (
+    "basilan",
+    # MIMAROPA (not served); "mindoro" also covers Occidental/Oriental Mindoro.
+    "mindoro",
+    "marinduque",
+    "romblon",
+    "palawan",
+    "puerto princesa",
+    "calapan",
+)
 
 
 def _norm(text: str) -> str:
@@ -89,6 +99,8 @@ def is_luzon_region(region: str | None) -> bool:
     if not region or not region.strip():
         return False
     name = _norm(region)
+    if _EXCLUDED_REGION.search(name):
+        return False
     if any(_has_word(name, n) for n in _REGION_NAMES):
         return True
     match = re.search(r"\bregion\s*-?\s*([ivx]+|\d+)\b", name)
@@ -116,6 +128,25 @@ def address_in_luzon(address: str | None) -> bool:
     return any(_has_word(search, place) for place in LUZON_PROVINCES | METRO_MANILA)
 
 
-def in_luzon_bbox(lat: float, lng: float) -> bool:
-    min_lng, min_lat, max_lng, max_lat = LUZON_BBOX
+# MIMAROPA islands inside LUZON_BBOX: (min_lng, min_lat, max_lng, max_lat).
+# Each box keeps clear of the Batangas, Quezon and Bicol coasts (Verde Island,
+# Bondoc Peninsula, Burias). Palawan's main island is west of LUZON_BBOX.
+MIMAROPA_BOXES = (
+    (120.30, 12.10, 121.60, 13.53),  # Mindoro
+    (119.95, 13.60, 120.35, 13.95),  # Lubang Islands
+    (119.70, 11.70, 120.45, 12.45),  # Calamian Islands (Coron, Busuanga, Culion)
+    (121.80, 13.10, 122.20, 13.60),  # Marinduque
+    (121.80, 11.70, 122.75, 12.75),  # Romblon (Tablas, Romblon, Sibuyan)
+)
+
+
+def _in_box(box: tuple[float, float, float, float], lat: float, lng: float) -> bool:
+    min_lng, min_lat, max_lng, max_lat = box
     return min_lat <= lat <= max_lat and min_lng <= lng <= max_lng
+
+
+def in_luzon_bbox(lat: float, lng: float) -> bool:
+    """Inside the service area's box and not on a MIMAROPA island."""
+    if not _in_box(LUZON_BBOX, lat, lng):
+        return False
+    return not any(_in_box(box, lat, lng) for box in MIMAROPA_BOXES)

@@ -25,6 +25,15 @@ class OrderItemResponse(BaseModel):
     requested_delivery_date: date | None = None
     delivery_window: str | None = None
     notes: str | None = None
+    # The buyer's tabbed order list shows these on each card.
+    delivery_fee: int = 0
+    discount: int = 0
+    time_of_arrival: datetime | None = None
+    auto_confirm_at: datetime | None = None
+    delivered_at: datetime | None = None
+    reviewed: bool = False
+    can_review: bool = False
+    review_deadline: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

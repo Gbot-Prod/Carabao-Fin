@@ -19,12 +19,13 @@ from app.routing.service import compute_route
 from app.routing.state import Stop
 from app.schemas.shipment import (
     CreateShipmentRequest,
+    PinUnreachableRequest,
     ShipmentStop,
     ShipmentTrackingResponse,
     TrackingPosition,
     Waypoint,
 )
-from app.services import mapbox_routing, rate_limit
+from app.services import mapbox_routing, notifications, rate_limit
 from app.services.merchant_service import get_active_merchant, get_editable_merchant
 from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
 from app.services.pinned_location import delivery_point, merchant_point
@@ -68,6 +69,12 @@ def _shipment_response(
 
     waypoints = [Waypoint(**point) for point in route_waypoints]
     stop_points = [point for point in route_waypoints if point.get("type") != "pickup"]
+    flagged = {
+        order_id
+        for (order_id,) in db.query(Order.id).filter(
+            Order.shipment_id == shipment.id, Order.pin_unreachable_at.is_not(None)
+        )
+    }
     stops = [
         ShipmentStop(
             sequence=int(point.get("sequence", index + 1)),
@@ -79,6 +86,7 @@ def _shipment_response(
             label=point.get("label", "Stop"),
             status=point.get("status", "in_transit"),
             estimated_arrival_at=point.get("estimated_arrival_at"),
+            pin_unreachable=int(point["order_id"]) in flagged,
         )
         for index, point in enumerate(stop_points)
     ]
@@ -453,3 +461,49 @@ def list_my_shipments(
         }
         for s in rows
     ]
+
+
+@router.post("/merchants/me/orders/{order_id}/pin-unreachable", status_code=204)
+def report_unreachable_pin(
+    order_id: int,
+    payload: PinUnreachableRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The rider could not get to this stop's pin (pin quality, control 6).
+
+    One report per order. Reports near the same place count toward the
+    buyer's re-pin limit (pinned_location.PIN_FLAG_LIMIT).
+    """
+    rate_limit.enforce_action(db, "pin_report", str(current_user.id))
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.merchant_id == merchant.id)
+        .first()
+    )
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.shipment_id is None:
+        raise HTTPException(
+            status_code=400, detail="Only an order on a shipment can be reported"
+        )
+    if order.status == OrderStatus.CANCELLED:
+        raise HTTPException(status_code=400, detail="This order is cancelled")
+    if order.pin_unreachable_at is not None:
+        raise HTTPException(status_code=409, detail="This stop is already reported")
+
+    order.pin_unreachable_at = datetime.now(UTC)
+    order.pin_unreachable_note = (payload.note or "").strip() or None
+    notifications.notify(
+        db,
+        order.user_id,
+        notifications.PIN_UNREACHABLE,
+        f"The rider could not get to your pin ({notifications.order_ref(order)})",
+        "Check the map pin of this address. Put it at your gate or on the road "
+        "where the rider can stop.",
+        notifications.order_link(order),
+    )
+    db.commit()

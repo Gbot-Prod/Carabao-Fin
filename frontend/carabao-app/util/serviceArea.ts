@@ -1,11 +1,13 @@
-// Carabao serves the Luzon island group only (B2): NCR, CAR, Regions I, II, III,
-// IV-A (CALABARZON), MIMAROPA (IV-B) and V (Bicol). Mirrors
-// backend/app/services/service_area.py, which is the check that counts.
+// Carabao serves part of the Luzon island group only (B2): NCR, CAR, Regions I,
+// II, III, IV-A (CALABARZON) and V (Bicol). MIMAROPA (IV-B) is not served.
+// Mirrors backend/app/services/service_area.py, which is the check that counts.
 
 const REGION_NAMES = [
   'ncr', 'national capital', 'metro manila', 'car', 'cordillera', 'ilocos',
-  'cagayan valley', 'central luzon', 'calabarzon', 'mimaropa', 'southwestern tagalog', 'bicol',
+  'cagayan valley', 'central luzon', 'calabarzon', 'bicol',
 ];
+// MIMAROPA (Region IV-B), however it is written.
+const EXCLUDED_REGION = /mimaropa|southwestern tagalog|\bregion\s*-?\s*(iv|4)\s*-?\s*b\b/;
 const REGION_NUMBERS: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5 };
 
 // Needles are plain lowercase words (no regex characters), so no escaping is needed.
@@ -15,11 +17,12 @@ const hasWord = (haystack: string, needle: string) =>
 // Site standard: NCR has no provinces, so its province is shown and saved as this.
 export const NCR_PROVINCE = 'Metro Manila';
 
-export const SERVICE_AREA_NOTE = 'Carabao currently delivers within Luzon only.';
+export const SERVICE_AREA_NOTE = 'Carabao currently delivers within Luzon only, except MIMAROPA.';
 
 export function isLuzonRegion(region: string | null | undefined): boolean {
   if (!region || !region.trim()) return false;
   const name = region.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (EXCLUDED_REGION.test(name)) return false;
   if (REGION_NAMES.some((n) => hasWord(name, n))) return true;
   const match = name.match(/\bregion\s*-?\s*([ivx]+|\d+)\b/);
   if (!match) return false;
