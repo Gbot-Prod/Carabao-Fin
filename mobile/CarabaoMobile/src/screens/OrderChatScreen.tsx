@@ -12,6 +12,7 @@ import { useAuth } from '../lib/AuthContext';
 import { api, type ApiChatMessage } from '../lib/api';
 import { chatTitle, parseOrderId } from '../lib/orderDetail';
 import { usePolling } from '../lib/usePolling';
+import { shouldPollChat } from '../lib/livePolling';
 import { CHAT_BODY_MAX } from '../lib/inputLimits';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -64,7 +65,8 @@ function OrderChatContent() {
   }, [token, id, isSupport]);
 
   // CF-0117: only while this chat is in view and the app is in the foreground.
-  usePolling(poll, POLL_MS, isSupport || id !== null);
+  // CF-0134: and not after the server says the thread is closed.
+  usePolling(poll, POLL_MS, shouldPollChat(isSupport || id !== null, closed));
 
   const send = async () => {
     const body = draft.trim();

@@ -13,6 +13,9 @@ export const ORDER_STATUSES = [
 ] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
+/** Finished orders: nothing changes after these (web statuses.ts CLOSED_ORDER_STATUSES). */
+export const CLOSED_ORDER_STATUSES: readonly OrderStatus[] = ['delivered', 'cancelled', 'payment_mismatch'];
+
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   pending: 'Awaiting payment',
   processing: 'Preparing',

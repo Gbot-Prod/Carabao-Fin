@@ -1,5 +1,5 @@
 // src/screens/TrackScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
   StyleSheet, SafeAreaView,
@@ -11,6 +11,8 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, Divider } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
+import { usePolling } from '../lib/usePolling';
+import { shouldRefreshTracking, TRACKING_POLL_MS } from '../lib/livePolling';
 import {
   ORDER_TIMELINE_STEPS, orderStatusColor, orderStatusLabel, timelineIndex,
 } from '../lib/orderStatus';
@@ -139,6 +141,25 @@ function TrackScreenContent() {
       .catch(() => { /* leave the "waiting for shipment" state */ });
     return () => { active = false; };
   }, [token, selected]);
+
+  // CF-0134: keep the ETA current while the buyer watches (30 s, in view and in
+  // the foreground only, like the web track page); stop once the order is finished.
+  const selectedId = selected?.order_id ?? null;
+  const selectedRef = useRef(selectedId);
+  useEffect(() => {
+    selectedRef.current = selectedId;
+  }, [selectedId]);
+  const refreshTracking = useCallback(async () => {
+    if (selectedId === null) return;
+    try {
+      const data = await api.tracking.forOrder(token, selectedId);
+      // a late answer for an order the buyer has left must not replace the new one
+      if (selectedRef.current === selectedId) setLoaded({ orderId: selectedId, data });
+    } catch {
+      /* keep the last answer; the next tick tries again */
+    }
+  }, [token, selectedId]);
+  usePolling(refreshTracking, TRACKING_POLL_MS, shouldRefreshTracking(selected, tracking));
 
   const hasEstimate =
     tracking?.tracking_state === 'estimated' && tracking.eta_minutes !== null;
