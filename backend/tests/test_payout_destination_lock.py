@@ -55,7 +55,9 @@ def test_payout_codes_count_against_the_per_user_sms_limit(db, merchant, _payout
         rate_limit.enforce_identifier(db, "otp_send_user", str(merchant.user_id))
     sent_before = len(_payout_sms)
 
-    blocked = _merchant_client(db, merchant).post("/merchants/me/payout-info/code", json=GCASH)
+    blocked = _merchant_client(db, merchant).post(
+        "/merchants/me/payout-info/code", json=GCASH
+    )
     assert blocked.status_code == 429
     assert blocked.json()["detail"].startswith("Too many codes requested")
     assert int(blocked.headers["Retry-After"]) > 60
@@ -107,8 +109,8 @@ def test_requested_payout_keeps_its_destination(db, merchant, buyer, transfers):
 
 
 def test_failed_payout_moves_to_the_confirmed_destination(
-    db, merchant, buyer, transfers
-):  # noqa: F811
+    db, merchant, buyer, transfers  # noqa: F811
+):
     client = _merchant_client(db, merchant)
     save_payout_info(client, GCASH)
     _delivered_sale(db, merchant, buyer)

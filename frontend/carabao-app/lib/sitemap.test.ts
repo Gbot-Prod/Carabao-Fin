@@ -37,6 +37,18 @@ test('buyer sitemap with no farms still lists the two buyer pages', () => {
   assert.deepEqual(buyerSitemap(BASE, []).map((e) => e.url), [`${BASE}/`, `${BASE}/farms`]);
 });
 
+test('buyer sitemap lists listings after farms; bad and duplicate ids dropped (CF-0091)', () => {
+  const entries = buyerSitemap(BASE, [{ id: 2 }], [9, 4, 9, 0, -1, 2.5]);
+  assert.deepEqual(entries.map((e) => e.url), [
+    `${BASE}/`,
+    `${BASE}/farms`,
+    `${BASE}/farms/2`,
+    `${BASE}/listings/4`,
+    `${BASE}/listings/9`,
+  ]);
+  assert.ok(entries.slice(3).every((e) => !('lastModified' in e) && e.priority === 0.7));
+});
+
 test('help sitemap lists every help page through the given URL builder', () => {
   const onHelpHost = helpSitemap((p) => new URL(p, 'https://help.carabao.online').toString());
   assert.deepEqual(

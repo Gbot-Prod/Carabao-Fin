@@ -6,8 +6,8 @@ takes them as a parameter. A pytest plugin makes them available everywhere
 without the import. A module that defines its own ``db`` still overrides it.
 """
 
-from datetime import UTC, datetime
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest

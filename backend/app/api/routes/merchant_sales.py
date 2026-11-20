@@ -29,6 +29,8 @@ router = APIRouter(tags=["merchants"])
 logger = logging.getLogger(__name__)
 
 ALLOWED_DAYS = (30, 90)
+# CF-0094 (B102): a schema bound too; the handlers still allow only ALLOWED_DAYS.
+MAX_DAYS = max(ALLOWED_DAYS)
 # The dashboard tabs (7 / 30 / 90 days) can all be exported (CF-0055).
 EXPORT_DAYS = (7, 30, 90)
 EXPORT_COLUMNS = [
@@ -197,7 +199,7 @@ def merchant_sales(
 
 @router.get("/merchants/me/sales", response_model=MerchantSales)
 def get_my_sales(
-    days: int = Query(30),
+    days: int = Query(30, ge=1, le=MAX_DAYS),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -269,7 +271,7 @@ def sales_export_rows(
 
 @router.get("/merchants/me/sales/export")
 def export_my_sales(
-    days: int = Query(30),
+    days: int = Query(30, ge=1, le=MAX_DAYS),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:

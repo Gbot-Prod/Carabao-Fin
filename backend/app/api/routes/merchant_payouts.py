@@ -3,7 +3,9 @@ from routes/merchants.py; merged with main's CF-0046 transfer limit and CF-0054
 edit lock)."""
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -66,7 +68,7 @@ router = APIRouter(tags=["merchants"])
 def get_my_payout_info(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> MerchantPayoutInfo | None:
     merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
@@ -76,7 +78,9 @@ def get_my_payout_info(
 @router.get(
     "/merchants/me/payout-institutions", response_model=list[ReceivingInstitution]
 )
-def list_payout_institutions(current_user: User = Depends(get_current_user)):
+def list_payout_institutions(
+    current_user: User = Depends(get_current_user),
+) -> list[dict[str, Any]]:
     """Banks a payout can be sent to (PayMongo's InstaPay list)."""
     try:
         return paymongo.list_receiving_institutions("instapay")
@@ -89,7 +93,7 @@ def list_payout_institutions(current_user: User = Depends(get_current_user)):
         ) from exc
 
 
-def _payout_values(payload: PayoutInfoUpdate) -> dict:
+def _payout_values(payload: PayoutInfoUpdate) -> dict[str, Any]:
     """The validated payout method to save, with the bank's name looked up."""
     values = payload.model_dump(include=set(PayoutInfoUpdate.model_fields))
     values["bank_name"] = None
@@ -122,9 +126,13 @@ _PAYOUT_FIELDS = (
 )
 
 
-def _payout_snapshot(info: MerchantPayoutInfo | None) -> dict | None:
+def _payout_snapshot(info: MerchantPayoutInfo | None) -> dict[str, Any] | None:
     if info is None:
         return None
+    return _payout_fields(info)
+
+
+def _payout_fields(info: MerchantPayoutInfo) -> dict[str, Any]:
     return {field: getattr(info, field) for field in _PAYOUT_FIELDS}
 
 
@@ -134,7 +142,7 @@ def send_payout_info_code(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> PayoutCodeSent:
     """CF-0004: text a code that confirms exactly this payout method."""
     merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
@@ -150,7 +158,7 @@ def update_my_payout_info(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> MerchantPayoutInfo:
     """Save a payout method confirmed with its SMS code (CF-0004).
 
     Writes an audit row, moves failed payouts to the new method (requested
@@ -181,7 +189,7 @@ def update_my_payout_info(
             merchant_id=merchant.id,
             user_id=current_user.id,
             before=before,
-            after={**_payout_snapshot(info), "failed_batches_moved": moved},
+            after={**_payout_fields(info), "failed_batches_moved": moved},
             confirmed_via=payout_otp.account_number(current_user)[-4:],
             ip_address=rate_limit.client_ip(request),
         )
@@ -208,7 +216,7 @@ def update_my_payout_info(
 def get_my_payouts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> list[PayoutBatch]:
     merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
@@ -224,11 +232,11 @@ def get_my_payouts(
 def get_my_transactions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> list[TransactionSummary]:
     merchant = get_active_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
-    rows = (
+    rows: Sequence[tuple[Transaction, Any]] = (
         db.query(Transaction, Order.status)
         .outerjoin(Order, Order.id == Transaction.order_id)
         .filter(Transaction.merchant_id == merchant.id)
@@ -248,7 +256,7 @@ def get_my_transactions(
 def get_my_available_payout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> AvailablePayout:
     """What a cash out would request right now, and what would land after fees."""
     merchant = get_active_merchant(db, current_user.id)
     if not merchant:
@@ -268,7 +276,7 @@ def get_my_available_payout(
 def request_my_payout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> PayoutBatch:
     # The row lock makes a concurrent request wait, then see this one as pending.
     merchant = get_active_merchant(db, current_user.id, for_update=True)
     if not merchant:

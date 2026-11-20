@@ -1,5 +1,6 @@
 import { cache } from "react";
 import type { Merchant, ShopPage } from "@/util/api/merchants";
+import type { ListingDetail } from "@/util/api/produceSearch";
 import { rootDomain } from "@/lib/urls";
 
 // Server-side helpers for metadata, robots.txt and sitemap.xml.
@@ -58,6 +59,38 @@ export const getPublicFarm = cache(async (merchantId: number) => {
   ]);
   return { merchant, shopPage };
 });
+
+/**
+ * CF-0088 (B91): one listing for the server-rendered /listings/{id} page.
+ * GET /produce/{id} has a per-IP limit, and every server render comes from
+ * our one web server IP, so the call sends the shared secret (CF-0084) to skip
+ * it. Server only: AUTH_SYNC_SHARED_SECRET has no NEXT_PUBLIC_ prefix and no
+ * client file imports this module (lib/seo-server-only.test.ts checks).
+ */
+export const getPublicListing = cache((produceId: number) =>
+  getInternal<ListingDetail>(`/produce/${produceId}`),
+);
+
+/**
+ * CF-0091 (B96): ids of the listings buyers can order today, for sitemap.xml.
+ * Same per-IP limit and shared secret as getPublicListing.
+ */
+export const getSitemapListingIds = () => getInternal<number[]>("/produce/sitemap-ids");
+
+// A public read that skips the per-IP limit (CF-0084). Server only.
+async function getInternal<T>(path: string): Promise<T | null> {
+  const secret = process.env.AUTH_SYNC_SHARED_SECRET;
+  try {
+    const res = await fetch(`${apiBase}${path}`, {
+      headers: secret ? { "X-Internal-Auth-Sync-Secret": secret } : undefined,
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
 
 // CF-0062: the sitemap needs ids and dates only, not every listing.
 export const getPublicFarms = () => getPublic<Merchant[]>("/merchants?include_produce=false");

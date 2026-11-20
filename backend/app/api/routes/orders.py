@@ -27,7 +27,7 @@ from app.schemas.order import (
     VoucherPreviewRequest,
     VoucherPreviewResponse,
 )
-from app.schemas.pagination import Page
+from app.schemas.pagination import MAX_PAGE, Page
 from app.schemas.receipt import ReceiptResponse
 from app.services import notifications, rate_limit, store_pause, vouchers
 from app.services.merchant_service import get_active_merchant
@@ -508,7 +508,7 @@ def _item_name_matches(db: Session, term: str) -> TextClause | None:
 def get_my_order_history_page(
     status: HistoryFilter | None = None,
     q: str | None = Query(None, max_length=100),
-    page: int = Query(1, ge=1, le=10_000),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

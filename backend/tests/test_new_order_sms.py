@@ -50,7 +50,10 @@ def _order(status="pending", phone="09171234567"):
         id=42,
         status=status,
         ordered_at=datetime(2026, 11, 12, 9, 30),
-        items=[{"produce": "Tomato", "quantity": 2}, {"produce": "Okra", "quantity": 1}],
+        items=[
+            {"produce": "Tomato", "quantity": 2},
+            {"produce": "Okra", "quantity": 1},
+        ],
         total_price=1540,
         requested_delivery_date=date(2026, 11, 14),
         delivery_window="08:00 – 10:00",
@@ -98,7 +101,9 @@ def _signature(body: bytes, field: str = "te") -> str:
         WEBHOOK_SECRET.encode(), f"{ts}.".encode() + body, hashlib.sha256
     ).hexdigest()
     # PayMongo fills `te` for test-mode events and `li` for live ones.
-    return f"t={ts},te={digest if field == 'te' else ''},li={digest if field == 'li' else ''}"
+    te = digest if field == "te" else ""
+    li = digest if field == "li" else ""
+    return f"t={ts},te={te},li={li}"
 
 
 @pytest.fixture
@@ -125,7 +130,10 @@ def _post(client, body, field="te"):
     return client.post(
         "/webhooks/paymongo",
         content=body,
-        headers={"Paymongo-Signature": _signature(body, field), "Content-Type": "application/json"},
+        headers={
+            "Paymongo-Signature": _signature(body, field),
+            "Content-Type": "application/json",
+        },
     )
 
 

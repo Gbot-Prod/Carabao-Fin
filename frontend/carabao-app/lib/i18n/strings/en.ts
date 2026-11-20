@@ -582,6 +582,15 @@ const en = {
     reportedNote: 'You reported this pin. We told the buyer to move it.',
     reportError: 'We could not send the report. Try again.',
   },
+  // CF-0086: merchant "are you sure?" texts (window.confirm).
+  merchantConfirm: {
+    deleteProduce: 'Delete this produce item?',
+    deleteReply: 'Delete your reply? Buyers will no longer see it.',
+    discardDraft: 'Discard your draft changes? The draft goes back to the live page.',
+    unpublishShop:
+      'Unpublish your shop? Buyers cannot find your farm or order from it until you publish again. Open orders continue.',
+    deleteVoucher: 'Delete voucher {code}?',
+  },
   trackOrder: {
     title: 'Track order',
     yourStop: 'Your stop',

@@ -40,6 +40,9 @@ for _name in _DOTENV_LEAKS:
 # test_pin_quality turns it on with monkeypatch.
 os.environ["ROAD_SNAP_PROVIDER"] = "off"
 
+import sqlite3  # noqa: E402
+from datetime import date, datetime  # noqa: E402
+
 import pytest  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
@@ -48,6 +51,14 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 import app.models  # noqa: E402
 from app.core import field_crypto  # noqa: E402
 from app.models.otp import OtpCode, RateLimitHit  # noqa: E402
+
+# CF-0092: plain SQL (better_auth_store) sends datetime/date values straight to
+# sqlite3, whose built-in adapters are deprecated since Python 3.12. Register
+# the same text forms by hand (the sqlite3 docs recipe), so stored values do not
+# change. Postgres (psycopg) in production does not use these adapters.
+# pyproject makes the deprecation warning an error, so a new case fails here.
+sqlite3.register_adapter(datetime, lambda value: value.isoformat(" "))
+sqlite3.register_adapter(date, lambda value: value.isoformat())
 
 # CF-0033: shared db / merchant / buyer fixtures for every test module.
 pytest_plugins = ["tests.shared_fixtures"]

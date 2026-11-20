@@ -11,7 +11,7 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -59,7 +59,8 @@ class User(Base):
 
     __tablename__ = "backend_users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    # Typed (CF-0089) so `user.id` is an int to mypy; same DDL.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     # BetterAuth "user".id. Set when the row is created on the first request.
     # Deleting the BetterAuth user deletes this row too (and its cart and
     # application); a shop or payment records block that delete.
@@ -149,7 +150,9 @@ class User(Base):
         return _identity_column(
             case(
                 (
-                    func.lower(AuthIdentity.email).like(f"%@{PLACEHOLDER_EMAIL_DOMAIN}"),
+                    func.lower(AuthIdentity.email).like(
+                        f"%@{PLACEHOLDER_EMAIL_DOMAIN}"
+                    ),
                     None,
                 ),
                 else_=AuthIdentity.email,

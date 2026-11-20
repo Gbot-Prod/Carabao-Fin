@@ -9,6 +9,7 @@ import SaveProduceButton from "@/components/SaveProduceButton/SaveProduceButton"
 import { useSavedProduce } from "@/components/SaveProduceButton/useSavedProduce";
 import styles from "./ProduceResults.module.css";
 import { activePause, shortDay } from "@/lib/store-pause";
+import { PRICE_FILTER_MAX, priceFilter } from "@/lib/price-filter";
 
 const PAGE_SIZE = 24;
 const SORTS: ProduceSort[] = ["relevance", "price_asc", "price_desc", "freshest", "newest"];
@@ -41,8 +42,8 @@ export default function ProduceResults({ query }: { query: string }) {
         in_stock: inStock,
         fresh,
         sort,
-        min_price: minPrice ? Number(minPrice) : undefined,
-        max_price: maxPrice ? Number(maxPrice) : undefined,
+        min_price: priceFilter(minPrice),
+        max_price: priceFilter(maxPrice),
         page,
         page_size: PAGE_SIZE,
       })
@@ -76,6 +77,7 @@ export default function ProduceResults({ query }: { query: string }) {
         <input
           type="number"
           min={0}
+          max={PRICE_FILTER_MAX}
           inputMode="numeric"
           placeholder={s.minPrice}
           aria-label={s.minPrice}
@@ -85,6 +87,7 @@ export default function ProduceResults({ query }: { query: string }) {
         <input
           type="number"
           min={0}
+          max={PRICE_FILTER_MAX}
           inputMode="numeric"
           placeholder={s.maxPrice}
           aria-label={s.maxPrice}

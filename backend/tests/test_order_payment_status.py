@@ -121,8 +121,12 @@ def test_merchant_sees_only_orders_a_payment_landed_on(db, merchant, buyer):  # 
 
 
 def test_merchant_performance_ignores_unpaid_checkouts(db, merchant, buyer):  # noqa: F811
-    _order(db, merchant, buyer, OrderStatus.PENDING, TransactionStatus.PENDING, total=900)
-    _order(db, merchant, buyer, OrderStatus.PROCESSING, TransactionStatus.PAID, total=500)
+    _order(
+        db, merchant, buyer, OrderStatus.PENDING, TransactionStatus.PENDING, total=900
+    )
+    _order(
+        db, merchant, buyer, OrderStatus.PROCESSING, TransactionStatus.PAID, total=500
+    )
 
     body = _merchant_client(db, merchant).get("/merchants/me/performance").json()
 
@@ -146,7 +150,9 @@ def test_buyer_current_orders_are_active_and_show_payment(db, merchant, buyer): 
 
 def test_buyer_history_and_detail_agree_on_payment(db, merchant, buyer):  # noqa: F811
     user, _history = buyer
-    order = _order(db, merchant, buyer, OrderStatus.CANCELLED, TransactionStatus.REFUND_PENDING)
+    order = _order(
+        db, merchant, buyer, OrderStatus.CANCELLED, TransactionStatus.REFUND_PENDING
+    )
     client = _client(db, user)
 
     history = client.get("/orders/me/history").json()

@@ -75,7 +75,7 @@ Help deploy:
 
 Rules that apply to all deploys:
 
-- **`robots.txt` and `sitemap.xml` per host** (CF-0041): each host lists only its own pages. Apex: `/`, `/farms`, each public farm (and `/help/*` when not in subdomain mode). `help.` (help deploy, or `help.` on the public deploy): the four help pages, and its `robots.txt` names its own sitemap. `merchant.` and admin: empty sitemap, `robots.txt` blocks all.
+- **`robots.txt` and `sitemap.xml` per host** (CF-0041): each host lists only its own pages. Apex: `/`, `/farms`, each public farm, each listing buyers can order (`/listings/{id}`, CF-0091) (and `/help/*` when not in subdomain mode). `help.` (help deploy, or `help.` on the public deploy): the four help pages, and its `robots.txt` names its own sitemap. `merchant.` and admin: empty sitemap, `robots.txt` blocks all.
 - Asset files are not routed: a top-level name with a dot (`/icon.png`, `robots.txt`), anything under `/images/`, and `/_next/*`. A dot deeper in a path (`/farms/1.x`) does not count, so a dynamic page cannot skip the host rules (on the admin deploy it would render a buyer page).
 - **The host rules apply only in subdomain mode.** Subdomain mode means that `NEXT_PUBLIC_APP_URL` is on `ROOT_DOMAIN`. If it is not (for example `localhost` or a `*.up.railway.app` domain), one host serves all paths, and the links are `/merchant/...` and `/help/...`. This prevents redirect loops when the config and the host do not agree.
 - All redirects are 307. Change them to 308 only after the hosts are stable, because browsers keep 308.

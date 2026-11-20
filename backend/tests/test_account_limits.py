@@ -94,3 +94,24 @@ def test_follow_and_unfollow_are_rate_limited_per_user(
     assert "Retry-After" in resp.headers
     calm = _follow_client(db, other)
     assert calm.put(f"/merchants/{merchant.id}/follow").status_code == 204
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("POST", "/users/me/delete-code", {"password": None, "skip_sms": True}),
+        ("DELETE", "/users/me", {"code": "123456", "force": True}),
+    ],
+)
+def test_account_delete_bodies_refuse_unknown_fields(
+    db: Session, method: str, path: str, body: dict[str, Any]
+) -> None:
+    """CF-0085: the two account-deletion bodies (from main) refuse unknown
+    fields, as the other input models do (CF-0051, CF-0063). The user is kept."""
+    user, _ = _buyer(db)
+
+    resp = _client(db, user, follows_users_router()).request(method, path, json=body)
+
+    assert resp.status_code == 422, resp.text
+    db.expire_all()
+    assert db.get(User, user.id) is not None

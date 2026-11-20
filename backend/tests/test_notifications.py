@@ -137,7 +137,9 @@ def test_manage_unread_delete_and_page(db, merchant, buyer):  # noqa: F811
     first, second, third = (n["id"] for n in mine["items"])
     theirs = db.query(Notification).filter_by(user_id=other.id).one()
 
-    page = client.get("/users/me/notifications", params={"limit": 1, "offset": 1}).json()
+    page = client.get(
+        "/users/me/notifications", params={"limit": 1, "offset": 1}
+    ).json()
     assert [n["id"] for n in page["items"]] == [second] and page["total"] == 3
 
     assert client.post(f"/users/me/notifications/{first}/read").status_code == 204
@@ -195,7 +197,9 @@ def test_refund_respects_preferences_but_always_notifies_in_app(
         merchant_amount=490,
         status="refund_pending",
     )
-    admin = make_user(db, "admin@example.com", is_admin=True, notifications_preferences={})
+    admin = make_user(
+        db, "admin@example.com", is_admin=True, notifications_preferences={}
+    )
     db.add_all([txn, admin])
     db.commit()
 

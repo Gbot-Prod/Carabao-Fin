@@ -22,6 +22,7 @@ from app.schemas.admin_transaction import (
     AdminTransactionRow,
     AdminTransactionTotals,
 )
+from app.schemas.pagination import MAX_ID, MAX_PAGE
 from app.services.produce_freshness import PH_TZ, ph_day_start
 
 router = APIRouter(tags=["admin"])
@@ -55,7 +56,7 @@ class TransactionFilters:
     def __init__(
         self,
         status: TransactionStatus | None = None,
-        merchant_id: int | None = None,
+        merchant_id: int | None = Query(None, ge=1, le=MAX_ID),
         date_from: date | None = None,
         date_to: date | None = None,
         q: str | None = Query(None, max_length=200),
@@ -135,7 +136,7 @@ def _ordered(q: SAQuery) -> SAQuery:
 @router.get("/admin/transactions", response_model=AdminTransactionPage)
 def list_transactions(
     filters: TransactionFilters = Depends(),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),

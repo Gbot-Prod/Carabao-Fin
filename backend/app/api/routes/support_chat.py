@@ -13,7 +13,7 @@ from app.api.routes.admin import _require_admin
 from app.api.routes.chat import ChatMessageOut, _out
 from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.user import User
-from app.schemas.pagination import MAX_OFFSET
+from app.schemas.pagination import MAX_ID, MAX_OFFSET
 from app.services import chat, notifications, rate_limit
 
 router = APIRouter(tags=["support"])
@@ -96,7 +96,7 @@ def _admins(db: Session) -> list[User]:
 
 @router.get("/support/messages", response_model=SupportThread)
 def my_support_thread(
-    after_id: int = Query(0, ge=0),
+    after_id: int = Query(0, ge=0, le=MAX_ID),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -250,7 +250,7 @@ def _support_conv(db: Session, conversation_id: int) -> Conversation:
 @router.get("/admin/support/{conversation_id}/messages", response_model=SupportThread)
 def admin_read_support(
     conversation_id: int,
-    after_id: int = Query(0, ge=0),
+    after_id: int = Query(0, ge=0, le=MAX_ID),
     db: Session = Depends(get_db),
     admin: User = Depends(_require_admin),
 ):

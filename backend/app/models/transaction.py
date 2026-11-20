@@ -7,7 +7,7 @@ from sqlalchemy import (
     String,
     Text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
@@ -39,7 +39,10 @@ class Transaction(Base):
 
     amount = Column(Integer, nullable=False)  # pesos
     platform_fee = Column(Integer, nullable=False)  # 2% of amount, can be changed
-    merchant_amount = Column(Integer, nullable=False)  # amount - platform_fee
+    # Typed (CF-0089): payout totals add these as ints.
+    merchant_amount: Mapped[int] = mapped_column(
+        Integer, nullable=False
+    )  # amount - platform_fee
 
     status = Column(
         status_type(TransactionStatus, "ck_transactions_status"),

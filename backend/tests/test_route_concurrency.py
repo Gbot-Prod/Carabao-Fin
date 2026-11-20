@@ -1,10 +1,10 @@
 """Guards against the event-loop deadlock and per-row query loops coming back."""
 
 import inspect
-from datetime import UTC, datetime
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI

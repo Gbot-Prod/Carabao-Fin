@@ -13,6 +13,7 @@ from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.shopPage import ShopPage
 from app.models.user import User
+from app.schemas.pagination import MAX_ID
 from app.services import chat, notifications, rate_limit
 from app.services.merchant_service import get_active_merchant
 
@@ -56,7 +57,9 @@ def _out(m: ChatMessage, user: User) -> ChatMessageOut:
 @router.get("/orders/{order_id}/messages", response_model=ChatThread)
 def read_thread(
     order_id: int,
-    after_id: int = Query(0, ge=0, description="Only messages newer than this id"),
+    after_id: int = Query(
+        0, ge=0, le=MAX_ID, description="Only messages newer than this id"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

@@ -1,12 +1,12 @@
 """Public market reference prices (P1). Read-only; loaded from a CSV."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
 from app.models.reference_price import ReferencePrice
 from app.schemas.reference_price import ReferencePriceResponse
-from app.services import reference_prices
+from app.services import rate_limit, reference_prices
 
 router = APIRouter(tags=["reference-prices"])
 
@@ -34,10 +34,14 @@ def list_reference_prices(db: Session = Depends(get_db)):
 
 @router.get("/reference-prices/match", response_model=ReferencePriceResponse | None)
 def match_reference_price(
+    request: Request,
     name: str = Query(min_length=1, max_length=200),
     unit: str | None = Query(None, max_length=20),
     db: Session = Depends(get_db),
 ):
     """The reference price for a produce name, or null when none matches."""
+    rate_limit.enforce_action(
+        db, "reference_price_match", rate_limit.client_ip(request)
+    )
     found = reference_prices.match(db.query(ReferencePrice).all(), name, unit)
     return _view(found) if found else None

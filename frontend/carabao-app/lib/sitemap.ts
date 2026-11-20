@@ -2,8 +2,10 @@
 //
 // Each host lists only its own pages (a sitemap may not name URLs on another
 // host): the buyer site lists the home page, the farm list and each public
-// farm; the help site lists its four static pages. Farm lastModified comes
-// from the farm's `updated_at` (GET /merchants).
+// farm and each listing buyers can order (CF-0091, GET /produce/sitemap-ids);
+// the help site lists its four static pages. Farm lastModified comes from the
+// farm's `updated_at` (GET /merchants); listings have no date column, so their
+// entries have no lastModified.
 
 export type SitemapFarm = { id: number; updated_at?: string | null };
 
@@ -23,8 +25,15 @@ function validDate(value: string | null | undefined): Date | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-/** Buyer site: home, farm list, then one entry per farm (deduplicated, by id). */
-export function buyerSitemap(base: string | URL, farms: readonly SitemapFarm[]): SitemapEntry[] {
+/**
+ * Buyer site: home, farm list, one entry per farm, then one per listing
+ * (each deduplicated, by id).
+ */
+export function buyerSitemap(
+  base: string | URL,
+  farms: readonly SitemapFarm[],
+  listingIds: readonly number[] = [],
+): SitemapEntry[] {
   const url = (path: string) => new URL(path, base).toString();
   const byId = new Map<number, SitemapFarm>();
   for (const farm of farms) {
@@ -49,7 +58,17 @@ export function buyerSitemap(base: string | URL, farms: readonly SitemapFarm[]):
     { url: url('/'), changeFrequency: 'daily', priority: 1 },
     { url: url('/farms'), ...(newest ? { lastModified: newest } : {}), changeFrequency: 'daily', priority: 0.9 },
     ...farmEntries,
+    ...validIds(listingIds).map((id): SitemapEntry => ({
+      url: url(`/listings/${id}`),
+      changeFrequency: 'daily',
+      priority: 0.7,
+    })),
   ];
+}
+
+function validIds(ids: readonly number[]): number[] {
+  const ok = ids.filter((id) => Number.isInteger(id) && id > 0);
+  return [...new Set(ok)].sort((a, b) => a - b);
 }
 
 /**

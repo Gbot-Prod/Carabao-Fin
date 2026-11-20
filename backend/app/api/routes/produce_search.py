@@ -17,8 +17,8 @@ from app.core.sql import ilike_contains
 from app.models.merchant import Merchant
 from app.models.produce import Produce
 from app.models.search_log import SearchLog
-from app.schemas.pagination import Page
-from app.schemas.produce import ProduceResponse
+from app.schemas.pagination import MAX_PAGE, Page
+from app.schemas.produce import MAX_PRICE, ProduceResponse
 from app.services import rate_limit, store_pause
 from app.services.account_suspension import merchant_is_public
 from app.services.produce_freshness import is_listed, ph_today
@@ -43,12 +43,13 @@ def search_produce(
     q: str | None = Query(None, max_length=100),
     category: str | None = Query(None, max_length=50),
     province: str | None = Query(None, max_length=100),
-    min_price: int | None = Query(None, ge=0),
-    max_price: int | None = Query(None, ge=0),
+    # CF-0094 (B102): no listing costs more than MAX_PRICE.
+    min_price: int | None = Query(None, ge=0, le=MAX_PRICE),
+    max_price: int | None = Query(None, ge=0, le=MAX_PRICE),
     in_stock: bool = False,
     fresh: bool = False,
     sort: SortKey = "relevance",
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=60),
     db: Session = Depends(get_db),
 ):
@@ -179,6 +180,38 @@ def _farm(merchant: Merchant, today: date) -> ListingFarm:
         rating_count=int(cast(Any, merchant.rating_count) or 0),
         paused_until=store_pause.paused_until(merchant, today),
     )
+
+
+# CF-0091 (B96): sitemap.xml lists at most this many listing pages (the
+# sitemap protocol allows 50,000 URLs per file; farms and help pages share it).
+SITEMAP_LISTINGS_MAX = 5000
+
+
+@router.get("/produce/sitemap-ids", response_model=list[int])
+def sitemap_listing_ids(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> list[int]:
+    """Ids of listings buyers can order today, lowest first, for sitemap.xml.
+
+    Same filter as search and GET /produce/{id} (public farm, not hidden, not
+    expired), so every id has a page that answers 200. Ids only: no names,
+    prices or farm data. Declared before /produce/{produce_id}.
+    """
+    # CF-0084: the web server's sitemap render sends the shared secret.
+    if not is_internal_request(request):
+        rate_limit.enforce_action(
+            db, "produce_search", rate_limit.client_ip(request)
+        )
+    rows: list[Any] = (
+        db.query(Produce.id)
+        .join(Merchant, Merchant.id == Produce.merchant_id)
+        .filter(merchant_is_public(), is_listed(ph_today()))  # type: ignore[no-untyped-call]
+        .order_by(Produce.id.asc())
+        .limit(SITEMAP_LISTINGS_MAX)
+        .all()
+    )
+    return [int(row[0]) for row in rows]
 
 
 # Declared after /produce/search: Starlette would read "search" as an id.

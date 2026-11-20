@@ -16,6 +16,7 @@ import os
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -63,7 +64,7 @@ class Destination:
     def provider(self) -> str:
         return "pesonet" if self.bic in PESONET_ONLY_BICS else "instapay"
 
-    def as_paymongo(self) -> dict:
+    def as_paymongo(self) -> dict[str, str]:
         return {"number": self.number, "name": self.name, "bic": self.bic}
 
 
@@ -92,7 +93,7 @@ def is_valid_mobile(number: str | None) -> bool:
     return bool(number and _MOBILE_RE.match(number))
 
 
-def payout_info_problem(info) -> str | None:
+def payout_info_problem(info: MerchantPayoutInfo | None) -> str | None:
     """Why this payout method can't be sent to yet, or None when it can."""
     if info is None:
         return "Set up your payout method first."
@@ -111,25 +112,26 @@ def payout_info_problem(info) -> str | None:
     return "Unsupported payout method."
 
 
-def resolve_destination(info) -> Destination:
+def resolve_destination(info: MerchantPayoutInfo | None) -> Destination:
     problem = payout_info_problem(info)
-    if problem:
+    # CF-0089: a None problem means every field below is set and valid.
+    if problem or info is None:
         raise PayoutError(400, f"Merchant payout method is incomplete: {problem}")
     if info.payout_type == "bank":
         return Destination(
             type="bank",
-            bic=info.bank_code,
-            institution=info.bank_name or info.bank_code,
-            name=info.account_name.strip(),
-            number=info.account_number.strip(),
+            bic=info.bank_code or "",
+            institution=info.bank_name or info.bank_code or "",
+            name=(info.account_name or "").strip(),
+            number=(info.account_number or "").strip(),
         )
     bic, institution = EWALLET_INSTITUTIONS[info.payout_type]
     return Destination(
         type=info.payout_type,
         bic=bic,
         institution=institution,
-        name=info.account_name.strip(),
-        number=info.ewallet_number,
+        name=(info.account_name or "").strip(),
+        number=info.ewallet_number or "",
     )
 
 
@@ -370,7 +372,7 @@ def apply_transfer_status(
         _mark_failed(batch, reason or "Transfer failed at the receiving bank")
 
 
-def _error_message(transfer: dict) -> str | None:
+def _error_message(transfer: dict[str, Any]) -> str | None:
     # The v2 transfer object says provider_error_message; webhook docs show
     # provider_error.
     return transfer.get("provider_error_message") or transfer.get("provider_error")
@@ -400,7 +402,9 @@ def refresh_payout(db: Session, batch_id: int) -> PayoutBatch:
     return batch
 
 
-def handle_transfer_event(db: Session, event_type: str, resource: dict) -> None:
+def handle_transfer_event(
+    db: Session, event_type: str, resource: dict[str, Any]
+) -> None:
     """Apply a ``transfer.outward.*`` webhook to its payout batch."""
     attrs = resource.get("attributes") or resource
     transfer_id = attrs.get("transfer_id") or resource.get("id")

@@ -140,7 +140,12 @@ class SettleDB:
 
 def _txn(status="pending"):
     return SimpleNamespace(
-        id=3, order_id=7, user_id=5, amount=1500, status=status, paymongo_payment_id=None
+        id=3,
+        order_id=7,
+        user_id=5,
+        amount=1500,
+        status=status,
+        paymongo_payment_id=None,
     )
 
 
