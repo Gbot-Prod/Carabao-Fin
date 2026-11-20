@@ -27,6 +27,10 @@ export interface CartItem {
   stockQuantity?: number;
   /** Why checkout would refuse this line now (CF-0052); null when it can be bought. */
   unavailableReason?: string | null;
+  /** The server issue code (CF-0042); every one, known or not, blocks checkout (CF-0129). */
+  issue?: string | null;
+  /** The price when the buyer last saved the line, when it has changed since. */
+  previousPrice?: number | null;
 }
 
 interface CartContextType {

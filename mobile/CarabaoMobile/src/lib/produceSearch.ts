@@ -15,6 +15,10 @@ export const SORTS: { value: ProduceSort; label: string }[] = [
 export const CATEGORIES = ['Vegetables', 'Fruits'] as const;
 export const SEARCH_PAGE_SIZE = 24; // web PAGE_SIZE; backend allows up to 60
 export const SEARCH_Q_MAX = 100; // backend max_length
+// CF-0136 (web B103): web lib/price-filter.ts PRICE_FILTER_MAX = backend
+// app/schemas/produce.py MAX_PRICE (CF-0094, web loop branch). The API refuses
+// (422) a price above it, so a larger typed price is sent as the maximum.
+export const PRICE_FILTER_MAX = 1_000_000;
 
 export type SearchFilters = {
   q: string;
@@ -33,7 +37,7 @@ export const NO_FILTERS: SearchFilters = {
 function price(value: string): number | null | 'bad' {
   const v = value.trim();
   if (!v) return null;
-  return /^\d{1,7}$/.test(v) ? Number(v) : 'bad';
+  return /^\d{1,7}$/.test(v) ? Math.min(Number(v), PRICE_FILTER_MAX) : 'bad';
 }
 
 /** The query string for a page, or the problem with the filters. Empty values are left out (as on the web). */

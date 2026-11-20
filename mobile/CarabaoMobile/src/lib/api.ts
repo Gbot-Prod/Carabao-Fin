@@ -7,9 +7,11 @@ import { API_BASE } from './config';
 import { historyQueryString, type HistoryQuery } from './orderHistory';
 import type { ServerCartLine } from './cartSync';
 import type { AddressPayload } from './addresses';
-import type { MerchantReviews, MyMerchantReviews } from './reviews';
+import type { MerchantReviews, MyMerchantReviews, MyReview } from './reviews';
 import type { DemandInsight, MerchantPerformance } from './dashboard';
 import type { ChatSummary } from './chatInbox';
+import type { VoucherPreview } from './vouchers';
+import type { NotificationPrefs } from './notificationPrefs';
 import { UNREAD_COUNT_QUERY } from './polling';
 
 export { API_BASE, WEB_BASE } from './config';
@@ -109,15 +111,20 @@ async function send<T>(
 export type ApiMerchant = {
   id: number;
   merchant_name: string;
-  address: string | null;
-  barangay: string | null;
+  // CF-0128 (M34): backend PublicMerchantResponse (CF-0048) leaves out the street
+  // address and barangay on the public farm routes, and the number can be null.
+  address?: string | null;
+  barangay?: string | null;
   city: string | null;
   province: string | null;
-  contact_number: string;
+  contact_number: string | null;
   operating_hours: string | null;
   delivery_price: number | null;
   delivery_time: number | null;
   rating: number | null;
+  // CF-0066 holiday mode (shown by M57).
+  paused_until?: string | null;
+  pause_message?: string | null;
   produces: ApiProduce[];
   shop_page: {
     id: number;
@@ -209,6 +216,10 @@ export type ApiOrderReview = {
   created_at: string;
   updated_at: string;
   editable_until: string | null;
+  // CF-0128 (M62): backend ReviewResponse. `hidden`: an admin hid it (CF-0078).
+  merchant_reply?: string | null;
+  merchant_replied_at?: string | null;
+  hidden?: boolean;
 };
 
 export type ApiOrderDetail = {
@@ -225,7 +236,10 @@ export type ApiOrderDetail = {
   status: string;
   payment_status: string;
   items: ApiCartItem[];
-  total_amount: number;
+  total_amount: number; // already net of the discount
+  // CF-0128 (M61): farm voucher on this order (backend CF-0064).
+  discount?: number;
+  voucher_code?: string | null;
   delivery_address: string | null;
   requested_delivery_date: string | null;
   delivery_window: string | null;
@@ -235,6 +249,38 @@ export type ApiOrderDetail = {
   review: ApiOrderReview | null;
   can_review: boolean;
   review_deadline: string | null;
+};
+
+// CF-0135 (M54): the buyer's receipt for a paid order (backend schemas/receipt.py, web OrderReceipt).
+export type ApiReceiptLine = {
+  name: string;
+  unit: string | null;
+  quantity: number;
+  unit_price: number; // whole pesos
+  line_total: number;
+};
+
+export type ApiReceipt = {
+  receipt_number: string;
+  order_id: number;
+  order_status: string;
+  ordered_at: string | null;
+  paid_at: string | null;
+  payment_status: string; // paid | refund_pending | refunded
+  payment_reference: string | null;
+  buyer_name: string | null;
+  farm_name: string | null;
+  farm_town: string | null;
+  farm_contact_number: string | null;
+  delivery_address: string | null;
+  requested_delivery_date: string | null;
+  delivery_window: string | null;
+  lines: ApiReceiptLine[];
+  subtotal: number;
+  delivery_fee: number;
+  discount?: number;
+  voucher_code?: string | null;
+  total: number;
 };
 
 export type ApiCartItem = {
@@ -261,6 +307,8 @@ export type ApiUserProfile = {
   cart: { id: number; total_items: number; total_price: number } | null;
   // Saved delivery addresses, default first.
   addresses: ApiUserAddress[];
+  // Raw stored switches; read them with readNotificationPrefs (CF-0132).
+  notifications_preferences?: Record<string, unknown> | null;
 };
 
 export type ApiUserAddress = {
@@ -306,7 +354,11 @@ export type PlaceOrderPayload = {
   delivery_lng?: number;
   delivery_time?: string | null;
   notes?: string | null;
+  // CF-0131: one farm voucher code (≤ 40); the server works out the discount.
+  voucher_code?: string | null;
 };
+
+export type { VoucherPreview };
 
 export type PlacedOrder = {
   order_id: number;
@@ -469,6 +521,12 @@ export const api = {
     // CF-0119: query from src/lib/reviews.ts myReviewsQuery.
     myReviews: (token: string | null, query: string) =>
       request<MyMerchantReviews>(`/merchants/me/reviews?${query}`, token),
+    // CF-0133: the farm's one public reply; PUT writes or edits it, DELETE removes it
+    // (204, also when there is none). A review an admin hid gives 404.
+    setReviewReply: (token: string | null, reviewId: number, reply: string) =>
+      request<MyReview>(`/merchants/me/reviews/${reviewId}/reply`, token, { method: 'PUT', body: JSON.stringify({ reply }) }),
+    deleteReviewReply: (token: string | null, reviewId: number) =>
+      request<null>(`/merchants/me/reviews/${reviewId}/reply`, token, { method: 'DELETE' }),
     stockAlerts: (token: string | null) =>
       request<ApiStockAlerts>('/merchants/me/stock-alerts', token),
     updateOrderStatus: (token: string | null, orderId: number, status: MerchantOrderStatus) =>
@@ -497,6 +555,9 @@ export const api = {
       request<ApiPage<ApiHistoryOrder>>(`/orders/me/history/page?${historyQueryString(query)}`, token),
     detail: (token: string | null, orderId: number) =>
       request<ApiOrderDetail>(`/orders/me/${orderId}`, token),
+    // CF-0135: 404 when not the caller's order, 409 when it has no payment yet.
+    receipt: (token: string | null, orderId: number) =>
+      request<ApiReceipt>(`/orders/me/${orderId}/receipt`, token),
     // Both return the order as /orders/me/current does; the screen re-reads the detail after.
     cancel: (token: string | null, orderId: number) =>
       request<ApiCurrentOrder>(`/orders/me/${orderId}/cancel`, token, { method: 'POST' }),
@@ -507,6 +568,12 @@ export const api = {
       request<ApiOrderReview>(`/orders/me/${orderId}/review`, token, { method: 'PATCH', body: JSON.stringify(body) }),
     confirmReceived: (token: string | null, orderId: number) =>
       request<ApiCurrentOrder>(`/orders/me/${orderId}/confirm-received`, token, { method: 'POST' }),
+    // CF-0131: what a farm voucher code takes off the server cart now (no hold).
+    previewVoucher: (token: string | null, voucherCode: string) =>
+      request<VoucherPreview>('/orders/me/voucher-preview', token, {
+        method: 'POST',
+        body: JSON.stringify({ voucher_code: voucherCode }),
+      }),
     place: (token: string | null, payload: PlaceOrderPayload) =>
       request<PlaceOrderResponse>('/orders/me/place', token, {
         method: 'POST',
@@ -628,6 +695,12 @@ export const api = {
   users: {
     me: (token: string | null) =>
       request<ApiUserProfile>('/users/me', token),
+    // CF-0132: body from togglePrefs (src/lib/notificationPrefs.ts), the three known keys only.
+    updateNotificationPrefs: (token: string | null, prefs: NotificationPrefs) =>
+      request<ApiUserProfile>('/users/me', token, {
+        method: 'PATCH',
+        body: JSON.stringify({ notifications_preferences: prefs }),
+      }),
     // CF-0122: account deletion (texted code, then DELETE with the code).
     deleteCode: (token: string | null, body: { password: string | null }) =>
       request<{ sent_to: string }>('/users/me/delete-code', token, { method: 'POST', body: JSON.stringify(body) }),

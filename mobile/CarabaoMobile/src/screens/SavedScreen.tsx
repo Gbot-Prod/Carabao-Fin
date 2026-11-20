@@ -12,6 +12,7 @@ import { useAuth } from '../lib/AuthContext';
 import { useSaved } from '../lib/SavedContext';
 import { api, type ApiSavedProduce } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
+import { safeImageUri } from '../lib/imageUri';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { SaveHeart } from '../components/SaveHeart';
@@ -28,6 +29,8 @@ function fetchSaved(token: string): Promise<Load> {
 function SavedRow({ item }: { item: ApiSavedProduce }) {
   const router = useRouter();
   const place = [item.merchant_city, item.merchant_province].filter(Boolean).join(', ');
+  // CF-0130: only a plain https image link is loaded.
+  const image = safeImageUri(item.image_url, __DEV__);
   return (
     <TouchableOpacity
       style={styles.row}
@@ -38,8 +41,8 @@ function SavedRow({ item }: { item: ApiSavedProduce }) {
       accessibilityRole="button"
       accessibilityLabel={`${item.name ?? 'Produce'} from ${item.merchant_name}. Open the farm.`}
     >
-      {item.image_url ? (
-        <Image source={{ uri: item.image_url }} style={styles.image} contentFit="cover" />
+      {image ? (
+        <Image source={{ uri: image }} style={styles.image} contentFit="cover" />
       ) : (
         <View style={[styles.image, styles.imagePlaceholder]}>
           <Ionicons name="leaf-outline" size={24} color={Colors.textLight} />

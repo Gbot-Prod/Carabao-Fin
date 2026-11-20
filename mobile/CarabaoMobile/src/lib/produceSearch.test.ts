@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { activeFilterCount, NO_FILTERS, SEARCH_PAGE_SIZE, searchQuery, SORTS } from './produceSearch.ts';
+import { activeFilterCount, NO_FILTERS, PRICE_FILTER_MAX, SEARCH_PAGE_SIZE, searchQuery, SORTS } from './produceSearch.ts';
 
 const q = (over: Partial<typeof NO_FILTERS>, page = 1) => {
   const r = searchQuery({ ...NO_FILTERS, ...over }, page);
@@ -29,6 +29,13 @@ test('bad prices are refused before a request', () => {
   assert.equal(q({ maxPrice: '-3' }), 'ERR Prices are whole pesos.');
   assert.equal(q({ minPrice: '300', maxPrice: '100' }), 'ERR Min ₱ is above max ₱.');
   assert.match(q({ minPrice: '100', maxPrice: '100' }), /min_price=100&max_price=100/);
+});
+
+test('CF-0136: a price above the backend MAX_PRICE is sent as the maximum (no 422)', () => {
+  assert.equal(PRICE_FILTER_MAX, 1_000_000);
+  assert.match(q({ maxPrice: '9999999' }), new RegExp(`max_price=${PRICE_FILTER_MAX}&`));
+  assert.match(q({ minPrice: '1000000', maxPrice: '1000001' }), /min_price=1000000&max_price=1000000&/);
+  assert.match(q({ minPrice: '0' }), /min_price=0&/);
 });
 
 test('filter count ignores the query text', () => {

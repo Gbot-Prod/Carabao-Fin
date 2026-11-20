@@ -18,6 +18,7 @@ test('a server line becomes a cart line with the server fee and reason', () => {
   assert.deepEqual(fromServerLine(server), {
     id: '7', produceId: 7, merchantId: 3, farm: 'Dela Cruz', produce: 'Kale', unit: 'kg', price: 120,
     quantity: 2, deliveryFee: 50, minOrderQty: 1, stockQuantity: 9, unavailableReason: null,
+    issue: null, previousPrice: null,
   });
   const old = fromServerLine({ id: '8', produce_id: 8, produce: 'Rice', unit: 'kg', price: 50, quantity: 1 });
   assert.equal(old.farm, 'Farm');

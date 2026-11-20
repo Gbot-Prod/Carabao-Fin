@@ -14,6 +14,12 @@ import { DeleteAccountSheet } from '../components/DeleteAccountSheet';
 import { PhoneVerifySheet } from '../components/PhoneVerifySheet';
 import { AddEmailSheet } from '../components/AddEmailSheet';
 import { formatPhMobile } from '../lib/phone';
+import * as WebBrowser from 'expo-web-browser';
+import { WEB_BASE } from '../lib/config';
+import { webPageUrl, type WebPage } from '../lib/webPages';
+import {
+  NOTIFICATION_PREF_ITEMS, readNotificationPrefs, togglePrefs, type NotificationPrefKey,
+} from '../lib/notificationPrefs';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -55,8 +61,6 @@ function SectionHeader({ title }: { title: string }) {
 function ProfileScreenContent() {
   const { user, token, signOut, refreshUser } = useAuth();
   const router = useRouter();
-  const [notifEnabled, setNotifEnabled] = useState(true);
-  const [promoEnabled, setPromoEnabled] = useState(false);
   const [profile, setProfile] = useState<ApiUserProfile | null>(null);
   const [phoneSheetOpen, setPhoneSheetOpen] = useState(false);
   const [emailSheetOpen, setEmailSheetOpen] = useState(false);
@@ -66,6 +70,31 @@ function ProfileScreenContent() {
     if (!token) return;
     void api.users.me(token).then(setProfile).catch(() => { });
   }, [token]);
+
+  // CF-0132: the switches show and save the server value (web NotificationsPanel).
+  const [savingPref, setSavingPref] = useState<NotificationPrefKey | null>(null);
+  const prefs = readNotificationPrefs(profile?.notifications_preferences);
+  const togglePref = async (key: NotificationPrefKey) => {
+    if (!profile || savingPref) return;
+    const before = profile;
+    const next = togglePrefs(prefs, key);
+    setProfile({ ...profile, notifications_preferences: next });
+    setSavingPref(key);
+    try {
+      setProfile(await api.users.updateNotificationPrefs(token, next));
+    } catch {
+      setProfile(before);
+      Alert.alert('Not saved', 'Your notification setting was not saved. Please try again.');
+    } finally {
+      setSavingPref(null);
+    }
+  };
+
+  const openWebPage = (page: WebPage) => {
+    void WebBrowser.openBrowserAsync(webPageUrl(WEB_BASE, page)).catch(() => {
+      Alert.alert('Could not open the page', 'Please try again later.');
+    });
+  };
 
   // Re-read on focus, so an address saved on the Addresses screen shows here (CF-0110).
   useFocusEffect(loadProfile);
@@ -115,15 +144,9 @@ function ProfileScreenContent() {
                 {displayName.charAt(0).toUpperCase()}
               </Text>
             </View>
-            <TouchableOpacity style={styles.editAvatarBtn}>
-              <Ionicons name="camera" size={14} color={Colors.primaryDark} />
-            </TouchableOpacity>
           </View>
           <Text style={styles.displayName}>{displayName}</Text>
           <Text style={styles.userEmail}>{email || formatPhMobile(phone) || 'Not signed in'}</Text>
-          <TouchableOpacity style={styles.editProfileBtn}>
-            <Text style={styles.editProfileText}>Edit Profile</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Merchant Banner */}
@@ -176,7 +199,6 @@ function ProfileScreenContent() {
               onPress={() => setPhoneSheetOpen(true)}
             />
             <SettingItem icon="location-outline" label="Address" value={address || 'Not set'} onPress={() => router.push('/addresses')} />
-            <SettingItem icon="card-outline" label="Payment Methods" value="No cards saved" onPress={() => { }} />
             <SettingItem icon="receipt-outline" label="Order History" onPress={() => router.push('/(tabs)/history')} />
             <SettingItem icon="heart-outline" label="Saved produce" onPress={() => router.push('/saved')} />
             <SettingItem
@@ -192,45 +214,31 @@ function ProfileScreenContent() {
           {/* Notifications */}
           <SectionHeader title="Notifications" />
           <View style={styles.settingsGroup}>
-            <SettingItem
-              icon="notifications-outline"
-              label="Order Updates"
-              rightElement={
-                <Switch
-                  value={notifEnabled}
-                  onValueChange={setNotifEnabled}
-                  trackColor={{ false: Colors.border, true: Colors.primaryLight }}
-                  thumbColor={notifEnabled ? Colors.primary : Colors.white}
-                />
-              }
-            />
-            <SettingItem
-              icon="megaphone-outline"
-              label="Promotions"
-              rightElement={
-                <Switch
-                  value={promoEnabled}
-                  onValueChange={setPromoEnabled}
-                  trackColor={{ false: Colors.border, true: Colors.primaryLight }}
-                  thumbColor={promoEnabled ? Colors.primary : Colors.white}
-                />
-              }
-            />
-          </View>
-
-          {/* Preferences */}
-          <SectionHeader title="Preferences" />
-          <View style={styles.settingsGroup}>
-            <SettingItem icon="language-outline" label="Language" value="English" onPress={() => { }} />
-            <SettingItem icon="sunny-outline" label="Theme" value="Light" onPress={() => { }} />
+            {NOTIFICATION_PREF_ITEMS.map(({ key, label }) => (
+              <SettingItem
+                key={key}
+                icon={key === 'promotions' ? 'megaphone-outline' : key === 'email_alerts' ? 'mail-outline' : 'notifications-outline'}
+                label={label}
+                rightElement={
+                  <Switch
+                    value={prefs[key]}
+                    onValueChange={() => void togglePref(key)}
+                    disabled={!profile || savingPref !== null}
+                    accessibilityLabel={label}
+                    trackColor={{ false: Colors.border, true: Colors.primaryLight }}
+                    thumbColor={prefs[key] ? Colors.primary : Colors.white}
+                  />
+                }
+              />
+            ))}
           </View>
 
           {/* Support */}
           <SectionHeader title="Support" />
           <View style={styles.settingsGroup}>
-            <SettingItem icon="help-circle-outline" label="Help Center" onPress={() => { }} />
-            <SettingItem icon="document-text-outline" label="Terms & Privacy" onPress={() => { }} />
-            <SettingItem icon="star-outline" label="Rate the App" onPress={() => { }} />
+            <SettingItem icon="help-circle-outline" label="Help Center" onPress={() => openWebPage('help')} />
+            <SettingItem icon="document-text-outline" label="Terms of Service" onPress={() => openWebPage('terms')} />
+            <SettingItem icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => openWebPage('privacy')} />
           </View>
 
           {/* Sign out */}
@@ -311,20 +319,8 @@ const styles = StyleSheet.create({
     borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)',
   },
   avatarText: { fontSize: FontSize.xxxl, fontWeight: '800', color: Colors.white },
-  editAvatarBtn: {
-    position: 'absolute', bottom: 0, right: 0,
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: Colors.white, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: Colors.primaryDark,
-  },
   displayName: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.white },
   userEmail: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.7)' },
-  editProfileBtn: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: Spacing.lg, paddingVertical: 8,
-    borderRadius: Radius.full, marginTop: 4,
-  },
-  editProfileText: { color: Colors.white, fontSize: FontSize.sm, fontWeight: '600' },
 
   merchantBanner: {
     backgroundColor: Colors.primary,

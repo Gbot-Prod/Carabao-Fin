@@ -2,7 +2,7 @@
 // Run with `npm test`. CF-0105.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chatTitle, isOrderRef, orderActions, orderRef, parseOrderId } from './orderDetail.ts';
+import { chatTitle, isOrderRef, orderActions, orderRef, parseOrderId, voucherLine } from './orderDetail.ts';
 
 test('cancel only while preparing, confirm only in transit (as the backend)', () => {
   const none = { canCancel: false, canCancelUnpaid: false, canConfirm: false, canTrack: false };
@@ -46,4 +46,14 @@ test('order id parameter: plain positive whole numbers only', () => {
     assert.equal(parseOrderId(bad), null, String(bad));
   }
   assert.equal(parseOrderId(['42']), null);
+});
+
+test('CF-0128 voucher line comes from the server values only (M61)', () => {
+  assert.deepEqual(voucherLine(50, 'HARVEST10'), { label: 'Voucher (HARVEST10)', amount: 50 });
+  assert.deepEqual(voucherLine(25, null), { label: 'Voucher', amount: 25 });
+  assert.deepEqual(voucherLine(25, '  '), { label: 'Voucher', amount: 25 });
+  for (const d of [0, -5, undefined, null, Number.NaN]) assert.equal(voucherLine(d, 'X'), null, String(d));
+  // The rows add up to the server total for a voucher order.
+  const items = 300, fee = 80, discount = 50, total = 330;
+  assert.equal(items + fee - (voucherLine(discount, 'X')?.amount ?? 0), total);
 });
