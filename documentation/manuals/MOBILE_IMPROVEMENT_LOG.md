@@ -1,10 +1,10 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: final-only    iteration: 41    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
+branch: improve/mobile-loop    push: final-only    iteration: 42    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0135) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0136) to avoid collisions.
 
 ## Session rules (2026-11-20, the user is away)
 - Run until **15:00 (Asia/Manila) on 2026-11-20**. The PC force-shuts down at 15:00. One iteration every 15 min.
@@ -33,7 +33,7 @@ takes IDs from **CF-0101 upward** (last used: CF-0135) to avoid collisions.
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 20/#41 · STRENGTHEN 9/#39 · SECURITY 6/#35 · AUDIT 6/#40
+PARITY 20/#41 · STRENGTHEN 10/#42 · SECURITY 6/#35 · AUDIT 6/#40
 
 ## Needs human
 - **Web loop merged (2026-11-20)**: done at #32. The "web loop only" row is replaced by real rows and M35 is split into M51–M60. Web log items B34 / B54 / B63 / B70 / B77 / B90 are covered here (M04 / M06 / M13 / M51–M60); mark them "moved to mobile log" in `IMPROVEMENT_LOG.md` when the web loop is not running (it edits that file at the same time).
@@ -115,6 +115,9 @@ Parity score: 14 / 32 done (8 partial, 10 missing; 3 rows n/a), rechecked at #40
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #42 — STRENGTHEN — search — CF-0136 — S
+What: cross-loop item web B103 (from web #73, CF-0094 on `improve/loop`): the backend now refuses search `min_price` / `max_price` above `MAX_PRICE` = 1 000 000 with 422. The mobile filter took up to 7 digits (9 999 999), so after the branches merge a large typed price would fail the search. `produceSearch.ts` gets `PRICE_FILTER_MAX` = 1 000 000 (= web `lib/price-filter.ts`) and a larger whole-peso value is sent as the maximum; non-whole or negative prices keep the existing "Prices are whole pesos." message (unchanged mobile behaviour, the web ignores them instead). Done by the session after the loops were stopped (web #74 / mobile #42 agents hit the usage limit with no changes). Tests: `produceSearch.test.ts` +1 (clamp, min = max at the cap, 0 kept). No in-step test reads the backend value yet, because `MAX_PRICE` is not on this branch; add one after the merge. Checks: npm test 166/166, lint 0/0, tsc pass. Not run on a device.
+
 ### #41 — PARITY — orders — CF-0135 — M
 What: M54 (web B63, CF-0049). New `ReceiptScreen` (route `order-receipt`, in `ProtectedScreen`): `GET /orders/me/:id/receipt` → receipt no., paid / ordered time (Asia/Manila), short payment ref., Sold by (farm, town, contact), Billed to (buyer, address, delivery date / window), item lines, Subtotal / Delivery / Voucher (when used) / Total paid, refund note, PayMongo footer: all amounts from the server. 404 → "Order not found.", 409 → "This order has no payment yet, so there is no receipt.", else "The receipt could not be loaded." with retry (web texts word for word). Share button → system share sheet with a text copy (see Decisions). `OrderDetailScreen` shows "View receipt" when `payment_status` is paid / refund_pending / refunded (web rule). New pure `src/lib/receipt.ts` (copy of web `lib/receipt.ts` + `receiptFailure`, `receiptSummaryRows`, `receiptShareText`); `ApiReceipt` type, `api.orders.receipt`. Why: buyers could get a receipt only on the web. Tests: `receipt.test.ts` 7 (web cases copied; failure map; summary rows and voucher; share text has no address; in step: states = backend `MONEY_RECEIVED_STATUSES` = web, texts = web page, route and 409 text in backend). Manual check (not run on a device): open a paid order → View receipt → totals equal the order detail total; Share → text in the share sheet; an unpaid order has no button. Checks: npm test 165/165, lint clean, tsc pass. Parity: 15 / 32 done. Follow-ups: none new; next non-PARITY turn SECURITY (#39 note), next PARITY M57 (holiday mode).
 ### #40 — AUDIT — all — (no CF ID) — M
