@@ -1,10 +1,10 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: final-only    iteration: 33    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
+branch: improve/mobile-loop    push: final-only    iteration: 34    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0128) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0129) to avoid collisions.
 
 ## Session rules (2026-11-20, the user is away)
 - Run until **15:00 (Asia/Manila) on 2026-11-20**. The PC force-shuts down at 15:00. One iteration every 15 min.
@@ -16,12 +16,14 @@ takes IDs from **CF-0101 upward** (last used: CF-0128) to avoid collisions.
 - #32 (AUDIT): M35 ("after the web merge") split into M51–M60 and retired, because the merge made every part of it buildable. Five parity rows moved from done to partial (farm detail, cart, checkout, order history, order detail): the merged backend now sends data those screens do not show (replies, holiday mode, cart `issue`, vouchers, discount, hide from history). Reason: the matrix must show the real gap. Undo: revert this log change.
 - #33 (STRENGTHEN): M63 closed with a test only, no code change: the server refuses a holiday farm with 400 and the buyer text from `store_pause.pause_detail`, and the mobile checkout already shows a 400 server text as is and reads the cart again. Reason: the existing path is correct; a test now holds it. Undo: delete the test.
 - #33: the order detail screen also shows `merchant_reply` under the buyer's own review (one line, "Reply from the farm: …"), although M55 asked only for the farm screen. Reason: the field is now typed and it costs one line. Undo: remove the line in `OrderDetailScreen`.
+- #34 (PARITY): a cart `issue` code that this build does not know still blocks checkout (with "Kale can’t be ordered now"), as on the web (SYSTEM_REFERENCE §3 row). Reason: place-order refuses it anyway; blocking early is the safe side. Undo: `checkoutBlockers` back to `unavailableReason` only.
+- #34: the cart "−" button stops at the listing's minimum order and "+" at the stock the server reported, the same as the web cart. Reason: a quantity outside them only makes a blocked line. "Remove" still removes a line. Undo: drop the `disabled` props in `CartScreen`.
 
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 16/#31 · STRENGTHEN 7/#33 · SECURITY 5/#30 · AUDIT 5/#32
+PARITY 17/#34 · STRENGTHEN 7/#33 · SECURITY 5/#30 · AUDIT 5/#32
 
 ## Needs human
 - **Web loop merged (2026-11-20)**: done at #32. The "web loop only" row is replaced by real rows and M35 is split into M51–M60. Web log items B34 / B54 / B63 / B70 / B77 / B90 are covered here (M04 / M06 / M13 / M51–M60); mark them "moved to mobile log" in `IMPROVEMENT_LOG.md` when the web loop is not running (it edits that file at the same time).
@@ -40,7 +42,7 @@ PARITY 16/#31 · STRENGTHEN 7/#33 · SECURITY 5/#30 · AUDIT 5/#32
 | `farms/[merchantID]` farm detail | `merchant` → `MerchantScreen` + `FarmReviews` | partial | `/merchants/:id`, `/merchants/:id/produce`, `/merchants/:id/reviews` ✓ (since #14) | banner, logo, about, reviews with paging; #32: `merchant_reply` under each review and the holiday notice (`paused_until`, `pause_message`) not shown (M55, M57); `ApiMerchant` types match `PublicMerchantResponse` since #33 |
 | `order` produce search | `search` → `SearchScreen` (+ top hits in `OrderScreen`) | done | `/produce/search` with q, category, min/max price, in_stock, fresh, sort, page ✓ (since #21) | same sorts and labels as web, 24 per page with infinite scroll |
 | `saved` saved produce | `saved` → `SavedScreen` + `SaveHeart` | done | `/users/me/saved-produce`, `/users/me/saved-produce/ids`, `PUT/DELETE /produce/:id/save` ✓ (since #5) | hearts on farm produce rows and search hits; entry in Profile |
-| `cart` | `(tabs)/cart` → `CartScreen` | partial | `GET/PUT /carts/me` ✓ (since #11) | server cart, `unavailable_reason` blocks checkout; #32: line `issue` (incl. `exceeds_stock`) and `previous_price` (CF-0042) not shown and do not block checkout (M51) |
+| `cart` | `(tabs)/cart` → `CartScreen` | done | `GET/PUT /carts/me` ✓ (since #11) | server cart; `unavailable_reason` and every `issue` code (incl. `exceeds_stock`) block checkout; issue text and "Price changed from ₱n." (`previous_price`) shown; +/− capped at stock / minimum (#34, CF-0129) |
 | `checkout` | `checkout` → `CheckoutScreen` | partial | `/orders/me/place` (with `delivery_date`), `/payments/checkout/:id`, `/payments/checkout/:id/cancel` (#28), `/users/me/addresses` ✓; `/orders/me/voucher-preview` not called | #32: no voucher code field (M52); holiday-farm refusal shows the server text (checked #33); no map pin picker (native extra) |
 | `confirmation`, `orders/success` | `confirmation` → `ConfirmationScreen` | done | `/payments/transactions/order/:id` | checks status with server |
 | `orders` history | `(tabs)/history` → `HistoryScreen` | partial | `/orders/me/history/page` ✓ (since #3); `DELETE /orders/me/history/:id` not called | status filter, search, infinite scroll; #32: no "hide from history" (M59); unpaged route unused by mobile (M30) |
@@ -71,12 +73,11 @@ PARITY 16/#31 · STRENGTHEN 7/#33 · SECURITY 5/#30 · AUDIT 5/#32
 | merchant `settings` | — | missing | `/merchants/me`, `PUT/DELETE /merchants/me/pause` ✓ | holiday pause switch first (M57) |
 | merchant `vouchers` | — | missing | `/merchants/me/vouchers` CRUD ✓ (CF-0061) | M58 |
 
-Parity score: 11 / 32 done (11 partial, 10 missing; 3 rows n/a) since #32, counted row by row. The drop from 16 / 26 comes from the merge, not from a regression: 4 new rows, 5 rows done → partial.
+Parity score: 12 / 32 done (10 partial, 10 missing; 3 rows n/a) since #34 (cart done), counted row by row. The drop from 16 / 26 comes from the merge, not from a regression: 4 new rows, 5 rows done → partial.
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
-| M51 | PARITY | M | 4 | 2 | cart | after-web-merge | **From M35.** `CartScreen`: show line `issue` (codes from backend `cart_line_issue`, incl. `exceeds_stock`) and "was ₱n" from `previous_price` next to `unavailable_reason`, and block checkout while a line has an issue, same as web — test: pure helper test per issue code; in-step test reads the backend codes. |
 | M52 | PARITY | M | 4 | 2 | checkout | after-web-merge | **From M35 (web B70).** Voucher code field (≤ 40 chars) → `POST /orders/me/voucher-preview` per farm, show the server discount, send `voucher_code` on `/orders/me/place` — test: place-order body has `voucher_code`; preview errors shown. |
 | M55 | PARITY | M | 3 | 2 | reviews | after-web-merge | **From M35.** `merchant_reply` under each review in `FarmReviews`; reply / edit / delete in `MerchantReviewsScreen` (`PUT/DELETE /merchants/me/reviews/:id/reply`; hidden reviews give 404) — test: reply shows on the farm screen. |
 | M57 | PARITY | M | 3 | 2 | merchant | after-web-merge | **From M35 (web B77).** Holiday mode: notice on `MerchantScreen` and farm cards (`paused_until`, `pause_message`); merchant pause switch (`PUT/DELETE /merchants/me/pause`) as the first slice of merchant settings — test: paused farm shows the notice; switch round-trips. |
@@ -87,7 +88,7 @@ Parity score: 11 / 32 done (11 partial, 10 missing; 3 rows n/a) since #32, count
 | M60 | PARITY | S | 2 | 2 | account | after-web-merge | **From M35.** Download my data (`GET /users/me/export`) from Profile; save or share the JSON (check first if `expo-sharing` works in Expo Go) — test: export opens a share sheet with the file. |
 | M56 | PARITY | S | 2 | 2 | discovery | after-web-merge | **From M35.** Recently viewed farms: port web `lib/recently-viewed.ts` (+ its test) to `src/lib/`, store with AsyncStorage keyed by user ID, wipe on sign-out (#10 rule) — test: copied test passes; sign-out clears it. |
 | M58 | PARITY | M | 2 | 3 | merchant | after-web-merge | **From M35.** Merchant vouchers list / create / edit / delete (`/merchants/me/vouchers`) — test: a created voucher works in M52. |
-| M65 | STRENGTHEN | S | 2 | 1 | in-step | — | **New (#32).** `inStep.test.ts` does not read the new backend limits (voucher code max 40, reply max length, `cart_line_issue` codes). Add each with the item that uses it (M51, M52, M55) — test: in-step test fails when the backend value changes. |
+| M65 | STRENGTHEN | S | 2 | 1 | in-step | — | **New (#32).** `inStep.test.ts` does not read the new backend limits (voucher code max 40, reply max length, `cart_line_issue` codes). Cart codes done at #34 (`cartIssues.test.ts`). Add the rest with the item that uses it (M52, M55) — test: in-step test fails when the backend value changes. |
 | M46 | STRENGTHEN | S | 3 | 1 | track | — | **New (#24).** `TrackScreen` loads the tracking ETA once and never refreshes it while the buyer watches. Use `usePolling` (30 s, only in view and in the foreground); batch with M47 — test: manual: ETA changes without leaving the screen. |
 | M47 | STRENGTHEN | S | 2 | 1 | chat | — | **New (#24).** `OrderChatScreen` keeps polling every 10 s after the server says the thread is `closed` (7 days after delivery). Pass `enabled = !closed` to `usePolling`; batch with M46 — test: closed chat → no more requests. |
 | M49 | STRENGTHEN | M | 2 | 2 | refactor | — | **New (#24).** Largest screens: `AuthScreen` 457 lines, `MerchantScreen` 449, `CheckoutScreen` 431. Move their pure logic and sub-views out (e.g. `CheckoutScreen` address / date / payment sections into components, `MerchantScreen` hero + products into components); batch with M37 (`api.ts` 637 lines) — test: tsc, lint, npm test, android export pass, no behavior change. |
@@ -106,6 +107,8 @@ Parity score: 11 / 32 done (11 partial, 10 missing; 3 rows n/a) since #32, count
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #34 — PARITY — cart — CF-0129 — M
+What: M51. New pure `src/lib/cartIssues.ts` (port of web `lib/cart-issues.ts`, the web English texts word for word): issue code → message with {qty}, "Price changed from ₱n." from `previous_price`, and the "+" stock cap. `cartSync` reads `issue` and `previous_price` from the server line; `checkoutBlockers` now blocks on any `issue` too (so `exceeds_stock`, which has no `unavailable_reason`, closes checkout and the checkout alert says "Kale: Only 2 left…"). `CartScreen` shows the issue text and the price change, and "−" / "+" stop at the minimum order / stock (with accessibility labels). SYSTEM_REFERENCE §3 cart-issue row names the mobile file. Why: after the merge the server flagged lines that the phone let through to a place-order 400. Tests: `cartIssues.test.ts` +6 (message per code, unknown code still blocks, price-change text, stock cap, in-step: codes = backend `CartIssue` + `schemas/cart.py`, texts = web `en.ts`); `cartSync.test.ts` updated for the two new fields. Manual check: put 5 of a listing with 2 left in the cart (or lower the stock on the web) → pull to refresh → line says "Only 2 left…", banner shows, Checkout is closed; "+" is grey at 2; change the price on the web → line says "Price changed from ₱old.". Checks: npm test 134/134, lint 0/0, tsc pass. Not run on a device. Follow-ups: next PARITY M52 (voucher code at checkout).
 ### #33 — STRENGTHEN — orders / types — CF-0128 — M
 What: batch of 4 S items left by the web merge (M61, M62, M34, M63). M61 (bug): `OrderDetailScreen` now shows "Voucher (CODE) −₱n" from the server `discount` / `voucher_code` between the delivery fee and the total, so a web voucher order adds up (pure `voucherLine` in `orderDetail.ts`, no phone math; no row when the discount is 0 or missing). M62: `ApiOrderReview` gets `merchant_reply`, `merchant_replied_at`, `hidden`; a hidden review shows the web notice text word for word (`HIDDEN_REVIEW_NOTICE`), and a farm reply shows under the buyer's review. M34: `ApiMerchant` `address` / `barangay` optional, `contact_number` nullable (the farm screen already hides a null number), and `paused_until` / `pause_message` typed for M57. M63: checked, no change needed (see Decisions). Why: after the merge the server sent values the phone ignored. Tests: `orderDetail.test.ts` +1 (voucher line, rows add up), `inStep.test.ts` +2 (notice = web text; backend holiday refusal is 400 with the buyer text, and `placeOrderFailure` shows it as is). Manual check: place a web order with a farm voucher → open it on the phone → items + fee − voucher = total; an admin hides the buyer's review → order detail shows the notice. Checks: npm test 128/128, lint 0/0, tsc pass. Not run on a device. Follow-ups: next PARITY M51 or M52.
 

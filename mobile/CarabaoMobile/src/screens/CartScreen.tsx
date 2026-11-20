@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { useCart } from '../lib/CartContext';
 import { cartTotals, groupCartByFarm } from '../lib/cartGroups';
 import { checkoutBlockers } from '../lib/cartSync';
+import { atStockCap, cartIssueMessage, priceChangeText } from '../lib/cartIssues';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { StatRow, Divider, Button, EmptyState } from '../components/UI';
 
@@ -133,22 +134,32 @@ function CartScreenContent() {
               <Text style={styles.itemPrice}>₱{item.price.toLocaleString()} / {item.unit}</Text>
               {item.unavailableReason ? (
                 <Text style={styles.itemIssue}>This item {item.unavailableReason}</Text>
+              ) : item.issue ? (
+                // CF-0129: e.g. exceeds_stock, which has no unavailable_reason.
+                <Text style={styles.itemIssue}>{cartIssueMessage(item) ?? 'This item can’t be ordered now.'}</Text>
               ) : null}
+              {priceChangeText(item) ? <Text style={styles.priceChanged}>{priceChangeText(item)}</Text> : null}
             </View>
 
             <View style={styles.itemActions}>
               {/* Quantity control */}
               <View style={styles.qtyControl}>
                 <TouchableOpacity
-                  style={styles.qtyBtn}
+                  style={[styles.qtyBtn, item.quantity <= (item.minOrderQty ?? 1) && styles.qtyBtnOff]}
                   onPress={() => updateQuantity(item.id, item.quantity - 1)}
+                  disabled={item.quantity <= (item.minOrderQty ?? 1)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Fewer ${item.produce}`}
                 >
                   <Text style={styles.qtyBtnText}>−</Text>
                 </TouchableOpacity>
                 <Text style={styles.qtyValue}>{item.quantity}</Text>
                 <TouchableOpacity
-                  style={styles.qtyBtn}
+                  style={[styles.qtyBtn, atStockCap(item) && styles.qtyBtnOff]}
                   onPress={() => updateQuantity(item.id, item.quantity + 1)}
+                  disabled={atStockCap(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`More ${item.produce}`}
                 >
                   <Text style={styles.qtyBtnText}>+</Text>
                 </TouchableOpacity>
@@ -209,6 +220,8 @@ const styles = StyleSheet.create({
   },
   blockedText: { flex: 1, fontSize: FontSize.sm, color: Colors.text, lineHeight: 20 },
   itemIssue: { fontSize: FontSize.xs, color: Colors.error, fontWeight: '600', marginTop: 2 },
+  priceChanged: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 2 },
+  qtyBtnOff: { opacity: 0.4 },
   root: { flex: 1, backgroundColor: Colors.offWhite },
 
   header: {
