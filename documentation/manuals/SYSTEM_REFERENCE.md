@@ -107,7 +107,7 @@ The web app never sends SMS or email itself. It asks the API.
 | Phone code length 6, TTL 600 s, 5 attempts | `lib/auth.ts` phoneNumber() | `backend/app/services/otp.py` |
 | Phone format `+639XXXXXXXXX` | `lib/phone.ts` `normalizePhMobile` | `phone_verification.normalize_ph_mobile` (returns without `+`) |
 | Status values | `backend/app/models/statuses.py` | `frontend/.../util/api/statuses.ts` |
-| Review reply max length 1000 (CF-0043) | `REPLY_MAX_LENGTH` in `backend/app/schemas/review.py` | `REPLY_MAX_LENGTH` in `frontend/.../lib/review-reply.ts` |
+| Review reply max length 1000 (CF-0043) | `REPLY_MAX_LENGTH` in `backend/app/schemas/review.py` | `REPLY_MAX_LENGTH` in `frontend/.../lib/review-reply.ts`; mobile `src/lib/reviews.ts` (CF-0133, `inStep.test.ts`) |
 | Cart line `issue` values (CF-0042) | `CartIssue` in `backend/app/api/routes/_order_helpers.py` and `schemas/cart.py` | `frontend/.../lib/cart-issues.ts`, `mobile/CarabaoMobile/src/lib/cartIssues.ts` (CF-0129; unknown values show no message but still block checkout) |
 | Public farm fields (CF-0048): no `address`, `barangay`, `lat`/`lng`, `legal_business_name`, `user_id` on `GET /merchants` and `/merchants/{id}`; the owner reads them from `GET /merchants/me` | `PublicMerchantResponse` in `backend/app/schemas/merchant.py` | owner-only fields in `Merchant` (`frontend/.../util/api/merchants.ts`), merchant site `MerchantContext` (`fetchMyMerchant`), `lib/structured-data.ts` (also leaves them out) |
 | Payment states with a receipt (CF-0049): `paid`, `refund_pending`, `refunded` | `MONEY_RECEIVED_STATUSES` in `backend/app/services/order_status.py` (used by `GET /orders/me/{id}/receipt`) | `hasReceipt()` in `frontend/.../lib/receipt.ts` (shows "View receipt") |

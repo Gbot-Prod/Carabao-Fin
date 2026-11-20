@@ -328,7 +328,7 @@ function MerchantScreenContent() {
               })
             )}
           </View>
-          {merchantId !== null && <FarmReviews merchantId={merchantId} />}
+          {merchantId !== null && <FarmReviews merchantId={merchantId} farmName={merchant?.merchant_name ?? null} />}
           <View style={{ height: 100 }} />
         </ScrollView>
       )}

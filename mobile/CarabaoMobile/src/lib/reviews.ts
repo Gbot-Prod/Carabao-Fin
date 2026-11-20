@@ -9,6 +9,9 @@ export type PublicReview = {
   reviewer_name: string;
   created_at: string;
   updated_at: string;
+  // CF-0133 (M55): the farm's one public reply (backend PublicReviewResponse, CF-0043).
+  merchant_reply?: string | null;
+  merchant_replied_at?: string | null;
 };
 
 export type MerchantReviews = {
@@ -96,4 +99,35 @@ export function breakdownRows(breakdown: Record<string, number>, ratingCount: nu
 /** Turn a star filter on or off. */
 export function toggleRating(ratings: readonly number[], stars: number): number[] {
   return ratings.includes(stars) ? ratings.filter((n) => n !== stars) : [...ratings, stars].sort();
+}
+
+// ---- the farm's reply (PUT / DELETE /merchants/me/reviews/{id}/reply), CF-0133 ----
+// Copied from web lib/review-reply.ts. Keep REPLY_MAX_LENGTH in step with backend
+// app/schemas/review.py (inStep.test.ts checks it).
+
+export const REPLY_MAX_LENGTH = 1000;
+
+/** Why this reply can't be sent, or null when it can. Same rules as the API. */
+export function replyProblem(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return 'Write a reply first.';
+  if (trimmed.length > REPLY_MAX_LENGTH) return `Keep your reply under ${REPLY_MAX_LENGTH} characters.`;
+  return null;
+}
+
+/** Web en.ts `shop.farmReply`: "Reply from {farm}"; "the farm" when the name is not known yet. */
+export function farmReplyLabel(farm: string | null | undefined): string {
+  const name = (farm ?? '').trim();
+  return `Reply from ${name || 'the farm'}`;
+}
+
+/** A reply with text after trimming; null for a missing or blank one. */
+export function shownReply(r: Pick<PublicReview, 'merchant_reply'>): string | null {
+  const text = typeof r.merchant_reply === 'string' ? r.merchant_reply.trim() : '';
+  return text || null;
+}
+
+/** Put the server's copy of one review in place of the old one (same position). */
+export function replaceReview<T extends { id: number }>(list: readonly T[], updated: T): T[] {
+  return list.map((r) => (r.id === updated.id ? updated : r));
 }

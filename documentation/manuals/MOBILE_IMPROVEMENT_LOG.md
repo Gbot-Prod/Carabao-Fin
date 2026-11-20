@@ -1,10 +1,10 @@
 # Mobile Improvement Log
-branch: improve/mobile-loop    push: final-only    iteration: 37    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
+branch: improve/mobile-loop    push: final-only    iteration: 38    target: 15:00 on 2026-11-20 (15 min cadence; see Session rules)
 
 Worktree: this loop runs in its own git worktree (not the main checkout, not the web loop's
 `improve/loop` worktree). `node_modules` is installed per worktree (`npm ci`).
 CF IDs: the web loop runs at the same time and takes the next CF number, so this loop
-takes IDs from **CF-0101 upward** (last used: CF-0132) to avoid collisions.
+takes IDs from **CF-0101 upward** (last used: CF-0133) to avoid collisions.
 
 ## Session rules (2026-11-20, the user is away)
 - Run until **15:00 (Asia/Manila) on 2026-11-20**. The PC force-shuts down at 15:00. One iteration every 15 min.
@@ -23,11 +23,12 @@ takes IDs from **CF-0101 upward** (last used: CF-0132) to avoid collisions.
 - #37 (STRENGTHEN): M31. Profile rows that did nothing are removed, not wired to new screens: "Payment Methods / No cards saved" (the app saves no cards; each order pays on the PayMongo page), "Language" (English only), "Theme" (no dark mode yet), "Rate the App" (no store listing yet), and the hero "Edit Profile" and camera buttons (avatar is M23). Help Center, Terms of Service and Privacy Policy open the web pages `/help`, `/help/terms`, `/help/privacy` in the in-app browser. Reason: a row that looks live and does nothing misleads the buyer. Undo: restore the rows from git (`ProfileScreen.tsx` before CF-0132).
 - #37: the "Order Updates" / "Promotions" switches were phone-only state (lost on restart, never sent). They now read and save `notifications_preferences` through `PATCH /users/me`, with the same three switches, labels and defaults as the web panel (adds "Email alerts"). Reason: the backend uses `order_updates` to gate SMS and `email_alerts` to gate email, so a fake switch gave a false promise. Undo: drop the map over `NOTIFICATION_PREF_ITEMS`.
 
+- #38 (PARITY): M55. The merchant reply form shows the server text on a refusal (404 for a review an admin hid, 429 for the reply rate limit), the same as the web `getApiErrorMessage`; the delete confirm is a native Alert ("Keep" / "Delete") in place of the web `window.confirm`. The farm screen label falls back to "Reply from the farm" while the farm name is not loaded. Reason: same rules as web, no new server behavior. Undo: revert CF-0133.
 ## In progress
 (none)
 
 ## Kind balance (count / last iteration #)
-PARITY 18/#36 · STRENGTHEN 8/#37 · SECURITY 6/#35 · AUDIT 5/#32
+PARITY 19/#38 · STRENGTHEN 8/#37 · SECURITY 6/#35 · AUDIT 5/#32
 
 ## Needs human
 - **Web loop merged (2026-11-20)**: done at #32. The "web loop only" row is replaced by real rows and M35 is split into M51–M60. Web log items B34 / B54 / B63 / B70 / B77 / B90 are covered here (M04 / M06 / M13 / M51–M60); mark them "moved to mobile log" in `IMPROVEMENT_LOG.md` when the web loop is not running (it edits that file at the same time).
@@ -43,7 +44,7 @@ PARITY 18/#36 · STRENGTHEN 8/#37 · SECURITY 6/#35 · AUDIT 5/#32
 | web page / feature | mobile screen | status | backend routes | notes |
 |--------------------|---------------|--------|----------------|-------|
 | `farms` farm list (+ follow) | `(tabs)/index` → `OrderScreen` | done | `/merchants`, `/users/me/follows`, `/merchants/:id/follow` | real data only since #13 (`mockData.ts` deleted) |
-| `farms/[merchantID]` farm detail | `merchant` → `MerchantScreen` + `FarmReviews` | partial | `/merchants/:id`, `/merchants/:id/produce`, `/merchants/:id/reviews` ✓ (since #14) | banner, logo, about, reviews with paging; #32: `merchant_reply` under each review and the holiday notice (`paused_until`, `pause_message`) not shown (M55, M57); `ApiMerchant` types match `PublicMerchantResponse` since #33 |
+| `farms/[merchantID]` farm detail | `merchant` → `MerchantScreen` + `FarmReviews` | partial | `/merchants/:id`, `/merchants/:id/produce`, `/merchants/:id/reviews` ✓ (since #14) | banner, logo, about, reviews with paging; farm reply under each review since #38 (CF-0133); holiday notice (`paused_until`, `pause_message`) not shown (M57); `ApiMerchant` types match `PublicMerchantResponse` since #33 |
 | `order` produce search | `search` → `SearchScreen` (+ top hits in `OrderScreen`) | done | `/produce/search` with q, category, min/max price, in_stock, fresh, sort, page ✓ (since #21) | same sorts and labels as web, 24 per page with infinite scroll |
 | `saved` saved produce | `saved` → `SavedScreen` + `SaveHeart` | done | `/users/me/saved-produce`, `/users/me/saved-produce/ids`, `PUT/DELETE /produce/:id/save` ✓ (since #5) | hearts on farm produce rows and search hits; entry in Profile |
 | `cart` | `(tabs)/cart` → `CartScreen` | done | `GET/PUT /carts/me` ✓ (since #11) | server cart; `unavailable_reason` and every `issue` code (incl. `exceeds_stock`) block checkout; issue text and "Price changed from ₱n." (`previous_price`) shown; +/− capped at stock / minimum (#34, CF-0129) |
@@ -70,19 +71,18 @@ PARITY 18/#36 · STRENGTHEN 8/#37 · SECURITY 6/#35 · AUDIT 5/#32
 | merchant `orders` | `merchant-orders` → `MerchantOrdersScreen` | done | `/merchants/me/orders`, `/merchants/me/orders/:id/status` | |
 | merchant `shipments`, `routing/[shipmentId]` | — | missing | `/merchants/me/shipments`, `/shipments/:id` exist | |
 | merchant `chats` | `merchant-chats` → `MerchantChatsScreen` → `order-chat` | done | `/merchants/me/chats` ✓ (since #31) | unread first, preview, order ref + status, closed mark, unread badge; refreshed every 30 s in view |
-| merchant `reviews` + replies | `merchant-reviews` → `MerchantReviewsScreen` | partial | `/merchants/me/reviews` ✓ (since #22); `PUT/DELETE /merchants/me/reviews/:id/reply` not called | reply / edit / delete reply (M55) |
+| merchant `reviews` + replies | `merchant-reviews` → `MerchantReviewsScreen` | done | `/merchants/me/reviews` ✓ (since #22), `PUT/DELETE /merchants/me/reviews/:id/reply` ✓ (since #38) | reply / edit / delete reply, one form open at a time (CF-0133) |
 | merchant `sales` | — | missing | `/merchants/me/sales`, `/merchants/me/transactions` exist | |
 | merchant `earnings` / cash-out | — | missing | `/merchants/me/payouts*`, `/merchants/me/payout-info*`, `/merchants/me/payout-institutions` exist | payout destination lock rules apply |
 | merchant `shop` page | — | missing | `/merchants/me/shoppage` (+ banner, logo, publish, discard) exist | |
 | merchant `settings` | — | missing | `/merchants/me`, `PUT/DELETE /merchants/me/pause` ✓ | holiday pause switch first (M57) |
 | merchant `vouchers` | — | missing | `/merchants/me/vouchers` CRUD ✓ (CF-0061) | M58 |
 
-Parity score: 13 / 32 done (9 partial, 10 missing; 3 rows n/a) since #36 (checkout done), counted row by row. The drop from 16 / 26 comes from the merge, not from a regression: 4 new rows, 5 rows done → partial.
+Parity score: 14 / 32 done (8 partial, 10 missing; 3 rows n/a) since #38 (merchant reviews done), counted row by row. The drop from 16 / 26 comes from the merge, not from a regression: 4 new rows, 5 rows done → partial.
 
 ## Backlog (highest impact÷effort first)
 | id | kind | size | impact | effort | area | epic | item — acceptance test |
 |----|------|------|--------|--------|------|------|------------------------|
-| M55 | PARITY | M | 3 | 2 | reviews | after-web-merge | **From M35.** `merchant_reply` under each review in `FarmReviews`; reply / edit / delete in `MerchantReviewsScreen` (`PUT/DELETE /merchants/me/reviews/:id/reply`; hidden reviews give 404) — test: reply shows on the farm screen. |
 | M57 | PARITY | M | 3 | 2 | merchant | after-web-merge | **From M35 (web B77).** Holiday mode: notice on `MerchantScreen` and farm cards (`paused_until`, `pause_message`); merchant pause switch (`PUT/DELETE /merchants/me/pause`) as the first slice of merchant settings — test: paused farm shows the notice; switch round-trips. |
 | M59 | PARITY | S | 2 | 1 | orders | after-web-merge | **From M35.** "Hide from history" on finished orders in `HistoryScreen` (`DELETE /orders/me/history/:id`, same wording as web) — test: hidden order leaves the list and does not come back on refresh. Batch with M61 / M62 for an M. |
 | M54 | PARITY | M | 3 | 2 | orders | after-web-merge | **From M35 (web B63).** Receipt view (`GET /orders/me/:id/receipt`) from order detail — test: receipt totals equal the order totals. |
@@ -90,7 +90,7 @@ Parity score: 13 / 32 done (9 partial, 10 missing; 3 rows n/a) since #36 (checko
 | M60 | PARITY | S | 2 | 2 | account | after-web-merge | **From M35.** Download my data (`GET /users/me/export`) from Profile; save or share the JSON (check first if `expo-sharing` works in Expo Go) — test: export opens a share sheet with the file. |
 | M56 | PARITY | S | 2 | 2 | discovery | after-web-merge | **From M35.** Recently viewed farms: port web `lib/recently-viewed.ts` (+ its test) to `src/lib/`, store with AsyncStorage keyed by user ID, wipe on sign-out (#10 rule) — test: copied test passes; sign-out clears it. |
 | M58 | PARITY | M | 2 | 3 | merchant | after-web-merge | **From M35.** Merchant vouchers list / create / edit / delete (`/merchants/me/vouchers`) — test: a created voucher works in M52. |
-| M65 | STRENGTHEN | S | 2 | 1 | in-step | — | **New (#32).** `inStep.test.ts` does not read the new backend limits (voucher code max 40, reply max length, `cart_line_issue` codes). Cart codes done at #34 (`cartIssues.test.ts`), voucher code pattern + max 40 at #36. Add the rest (reply max length) with the item that uses it (M52, M55) — test: in-step test fails when the backend value changes. |
+| M65 | STRENGTHEN | S | 2 | 1 | in-step | — | **New (#32).** `inStep.test.ts` does not read the new backend limits (voucher code max 40, reply max length, `cart_line_issue` codes). Cart codes done at #34 (`cartIssues.test.ts`), voucher code pattern + max 40 at #36. Reply max length done at #38 (CF-0133). Nothing left but new limits as they come — test: in-step test fails when the backend value changes. |
 | M46 | STRENGTHEN | S | 3 | 1 | track | — | **New (#24).** `TrackScreen` loads the tracking ETA once and never refreshes it while the buyer watches. Use `usePolling` (30 s, only in view and in the foreground); batch with M47 — test: manual: ETA changes without leaving the screen. |
 | M47 | STRENGTHEN | S | 2 | 1 | chat | — | **New (#24).** `OrderChatScreen` keeps polling every 10 s after the server says the thread is `closed` (7 days after delivery). Pass `enabled = !closed` to `usePolling`; batch with M46 — test: closed chat → no more requests. |
 | M49 | STRENGTHEN | M | 2 | 2 | refactor | — | **New (#24).** Largest screens: `AuthScreen` 457 lines, `MerchantScreen` 449, `CheckoutScreen` 431. Move their pure logic and sub-views out (e.g. `CheckoutScreen` address / date / payment sections into components, `MerchantScreen` hero + products into components); batch with M37 (`api.ts` 637 lines) — test: tsc, lint, npm test, android export pass, no behavior change. |
@@ -108,6 +108,8 @@ Parity score: 13 / 32 done (9 partial, 10 missing; 3 rows n/a) since #36 (checko
 | M37 | STRENGTHEN | S | 2 | 2 | types | — | **New (#8).** `api.ts` is 587 lines with every domain in one file; split by domain (`src/lib/api/orders.ts`, `merchants.ts`, …) behind the same `api` object, no behavior change — test: tsc, lint, npm test, android export pass. |
 
 ## History (newest first; keep last 30, summarize older ones in one line each)
+### #38 — PARITY — reviews — CF-0133 — M
+What: M55. (1) Farm screen: `FarmReviews` shows the farm's public reply under each review ("Reply from Mang Ben Farm", web en.ts `shop.farmReply`); `MerchantScreen` passes the farm name. (2) `MerchantReviewsScreen`: "Reply" on a review without one opens an inline form (≤ 1000, counter, Save reply / Cancel, one form open at a time, keyboard-safe list); a review with a reply shows "Your reply · date" with Edit reply / Delete reply (native confirm). Save → `PUT /merchants/me/reviews/:id/reply`, the server copy replaces the row; delete → `DELETE …/reply`, the row loses the reply. Refusals show the server text (see Decisions). New in `src/lib/reviews.ts`: `REPLY_MAX_LENGTH` + `replyProblem` (copied from web `lib/review-reply.ts`), `farmReplyLabel`, `shownReply`, `replaceReview`; `PublicReview.merchant_reply` / `merchant_replied_at`; `api.merchants.setReviewReply` / `deleteReviewReply`. SYSTEM_REFERENCE §3 reply-length row names the mobile file. Why: farms could answer reviews only on the web, and buyers on the phone did not see the answers. Tests: `reviews.test.ts` +3 (reply rules and texts = web, label and blank reply, replace keeps order), `inStep.test.ts` +1 (max 1000 = backend schema = web, web texts); 155 tests. Manual check (not run on a device): merchant → Reviews → Reply → type → Save reply → "Your reply" shows; buyer opens that farm → "Reply from <farm>" under the review; Edit reply changes it; Delete reply → Delete → reply gone on both screens; empty reply → "Write a reply first." without a request. Checks: npm test 155/155, lint clean, tsc pass. Follow-ups: none new; next PARITY M57 (holiday mode) or M54 (receipt).
 ### #37 — STRENGTHEN — account — CF-0132 — M
 What: M31. `ProfileScreen`: (1) the notification switches were local `useState` only; now they show and save the server value (`api.users.updateNotificationPrefs` → `PATCH /users/me { notifications_preferences }`), three switches like web `NotificationsPanel` (Order updates, Promotions, Email alerts), optimistic flip, revert + "Not saved" alert on failure, disabled while a save runs. New pure `src/lib/notificationPrefs.ts` (port of the web panel logic: defaults, `readNotificationPrefs`, `togglePrefs` that sends only the 3 known keys because the backend refuses others and PATCH replaces the stored object). (2) Help Center / Terms of Service / Privacy Policy open the web help pages through `src/lib/webPages.ts` (fixed key → path table, own-key check). (3) Dead rows and buttons removed (see Decisions). Why: buyers could turn off SMS on the phone and still get SMS. Tests: `notificationPrefs.test.ts` (defaults, bad stored values, toggle body, keys in step with backend `NotificationPreferences` and the web panel defaults/labels), `webPages.test.ts` (URL join, unknown key refused, each path has a web `page.tsx`, Profile source has no `onPress={() => {}}` and no "No cards saved"); 151 tests. Manual check (not run on a device): Profile → flip "Order updates" off → leave and come back → still off; web profile shows it off too; Help Center opens the web help page. Checks: npm test 151/151, lint clean, tsc pass. Follow-ups: none new (avatar stays M23).
 ### #36 — PARITY — checkout — CF-0131 — M

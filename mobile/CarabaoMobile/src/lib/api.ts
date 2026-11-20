@@ -7,7 +7,7 @@ import { API_BASE } from './config';
 import { historyQueryString, type HistoryQuery } from './orderHistory';
 import type { ServerCartLine } from './cartSync';
 import type { AddressPayload } from './addresses';
-import type { MerchantReviews, MyMerchantReviews } from './reviews';
+import type { MerchantReviews, MyMerchantReviews, MyReview } from './reviews';
 import type { DemandInsight, MerchantPerformance } from './dashboard';
 import type { ChatSummary } from './chatInbox';
 import type { VoucherPreview } from './vouchers';
@@ -489,6 +489,12 @@ export const api = {
     // CF-0119: query from src/lib/reviews.ts myReviewsQuery.
     myReviews: (token: string | null, query: string) =>
       request<MyMerchantReviews>(`/merchants/me/reviews?${query}`, token),
+    // CF-0133: the farm's one public reply; PUT writes or edits it, DELETE removes it
+    // (204, also when there is none). A review an admin hid gives 404.
+    setReviewReply: (token: string | null, reviewId: number, reply: string) =>
+      request<MyReview>(`/merchants/me/reviews/${reviewId}/reply`, token, { method: 'PUT', body: JSON.stringify({ reply }) }),
+    deleteReviewReply: (token: string | null, reviewId: number) =>
+      request<null>(`/merchants/me/reviews/${reviewId}/reply`, token, { method: 'DELETE' }),
     stockAlerts: (token: string | null) =>
       request<ApiStockAlerts>('/merchants/me/stock-alerts', token),
     updateOrderStatus: (token: string | null, orderId: number, status: MerchantOrderStatus) =>
