@@ -1,5 +1,6 @@
 import { cache } from "react";
 import type { Merchant, ShopPage } from "@/util/api/merchants";
+import type { ListingDetail } from "@/util/api/produceSearch";
 import { rootDomain } from "@/lib/urls";
 
 // Server-side helpers for metadata, robots.txt and sitemap.xml.
@@ -57,6 +58,27 @@ export const getPublicFarm = cache(async (merchantId: number) => {
     getPublic<ShopPage>(`/merchants/${merchantId}/shoppage`),
   ]);
   return { merchant, shopPage };
+});
+
+/**
+ * CF-0088 (B91): one listing for the server-rendered /listings/{id} page.
+ * GET /produce/{id} has a per-IP limit, and every server render comes from
+ * our one web server IP, so the call sends the shared secret (CF-0084) to skip
+ * it. Server only: AUTH_SYNC_SHARED_SECRET has no NEXT_PUBLIC_ prefix and no
+ * client file imports this module (lib/seo-server-only.test.ts checks).
+ */
+export const getPublicListing = cache(async (produceId: number) => {
+  const secret = process.env.AUTH_SYNC_SHARED_SECRET;
+  try {
+    const res = await fetch(`${apiBase}/produce/${produceId}`, {
+      headers: secret ? { "X-Internal-Auth-Sync-Secret": secret } : undefined,
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as ListingDetail;
+  } catch {
+    return null;
+  }
 });
 
 // CF-0062: the sitemap needs ids and dates only, not every listing.

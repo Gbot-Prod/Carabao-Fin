@@ -148,3 +148,73 @@ test('breadcrumbs go Home > Farms > farm, with absolute URLs (CF-0041)', () => {
     ],
   );
 });
+
+// CF-0088 (B91): listing page structured data and preview text.
+import { listingDescription, listingJsonLd, listingTitle, type JsonLdListing } from './structured-data.ts';
+
+const LISTING_URL = 'https://carabao.example/listings/1';
+const listingData: JsonLdListing = {
+  listing: tomato,
+  farm: { id: 7, merchant_name: 'Dela Cruz Farm', city: 'Lipa', province: 'Batangas', rating: 4.66, rating_count: 12 },
+  other_farms: [
+    { id: 9, name: 'Tomato', price: 75, unit: 'kg', stock_quantity: 0, merchant_name: 'Santos Farm' },
+    { id: 10, name: 'Tomato', price: 0, unit: 'kg', stock_quantity: 4, merchant_name: 'Free Farm' },
+  ],
+};
+
+test('listingJsonLd: Product with Offer sold by the farm, similar offers link to their listing pages', () => {
+  const nodes = graph(listingJsonLd(listingData, LISTING_URL));
+  const product = nodes.find((n) => (n['@type'] as unknown) === 'Product')!;
+  assert.equal(product.name, 'Tomato');
+  assert.equal(product.url, LISTING_URL);
+  assert.equal(product.offers.price, '80.00');
+  assert.equal(product.offers.priceCurrency, 'PHP');
+  assert.equal(product.offers.availability, 'https://schema.org/InStock');
+  assert.deepEqual(product.offers.seller, { '@id': 'https://carabao.example/farms/7#farm' });
+  // The zero-price listing is left out; the out-of-stock one is kept and marked.
+  assert.equal(product.isSimilarTo.length, 1);
+  assert.equal(product.isSimilarTo[0].url, 'https://carabao.example/listings/9');
+  assert.equal(product.isSimilarTo[0].offers.availability, 'https://schema.org/OutOfStock');
+  assert.equal(product.isSimilarTo[0].offers.seller.name, 'Santos Farm');
+
+  const farmNode = nodes.find((n) => (n['@type'] as unknown) === 'LocalBusiness')!;
+  assert.equal(farmNode.url, 'https://carabao.example/farms/7');
+  assert.equal(farmNode.aggregateRating.ratingValue, 4.7);
+  assert.equal(farmNode.address.streetAddress, undefined);
+
+  const crumbs = nodes.find((n) => (n['@type'] as unknown) === 'BreadcrumbList')!;
+  assert.deepEqual(
+    (crumbs.itemListElement as unknown as { item: string }[]).map((c) => c.item),
+    ['https://carabao.example/', 'https://carabao.example/farms/7', LISTING_URL],
+  );
+});
+
+test('listingJsonLd: no rating without reviews, no isSimilarTo without other farms', () => {
+  const data: JsonLdListing = {
+    ...listingData,
+    farm: { ...listingData.farm, rating: null, rating_count: 0 },
+    other_farms: [],
+  };
+  const nodes = graph(listingJsonLd(data, LISTING_URL));
+  assert.equal(nodes.find((n) => (n['@type'] as unknown) === 'LocalBusiness')!.aggregateRating, undefined);
+  assert.equal('isSimilarTo' in nodes.find((n) => (n['@type'] as unknown) === 'Product')!, false);
+});
+
+test('listingJsonLd: a merchant-written </script> stays escaped after serializeJsonLd', () => {
+  const data: JsonLdListing = { ...listingData, listing: { ...tomato, name: '</script><b>x' } };
+  const out = serializeJsonLd(listingJsonLd(data, LISTING_URL));
+  assert.equal(out.includes('</script>'), false);
+  assert.equal(out.includes('<'), false);
+});
+
+test('listingTitle and listingDescription', () => {
+  assert.equal(listingTitle(listingData), 'Tomato from Dela Cruz Farm');
+  assert.equal(listingDescription(listingData), 'Vine-ripened');
+  const plain: JsonLdListing = { ...listingData, listing: { ...tomato, description: null, unit_quantity: 5 } };
+  assert.equal(
+    listingDescription(plain),
+    'Tomato at ₱80.00 per 5 kg from Dela Cruz Farm in Lipa, Batangas. Order on Carabao.',
+  );
+  const long: JsonLdListing = { ...listingData, listing: { ...tomato, description: 'a'.repeat(300) } };
+  assert.equal(listingDescription(long).length, 198);
+});

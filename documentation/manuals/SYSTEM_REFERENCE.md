@@ -38,6 +38,8 @@ Browser / Mobile
 API -> GET <BETTER_AUTH_URL>/api/auth/jwks   (public keys, cached 1 h, refetch on unknown kid)
 Web app -> API  POST /internal/sms/account-otp, /email/send-password-reset, /email/send-verification
                 header X-Internal-Auth-Sync-Secret = AUTH_SYNC_SHARED_SECRET
+Web server -> API  GET /produce/{id} (server render of /listings/{id}, lib/seo.ts)
+                same header, so it skips the per-IP limit (CF-0084, CF-0088)
 Web app, API -> same Postgres
 API -> PayMongo, Semaphore, Resend, R2, Mapbox
 ```

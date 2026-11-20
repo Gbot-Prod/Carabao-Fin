@@ -154,6 +154,139 @@ export function farmJsonLd(
   return { '@context': 'https://schema.org', '@graph': [business, ...products, breadcrumbs] };
 }
 
+// CF-0088 (B91): one public listing page (/listings/{id}).
+export type JsonLdListingFarm = {
+  id: number;
+  merchant_name: string;
+  city: string | null;
+  province: string | null;
+  rating: number | null;
+  rating_count: number;
+};
+
+export type JsonLdOtherListing = {
+  id: number;
+  name: string | null;
+  price: number;
+  unit: 'kg' | 'lbs';
+  stock_quantity: number;
+  merchant_name: string;
+};
+
+export type JsonLdListing = {
+  listing: JsonLdProduce;
+  farm: JsonLdListingFarm;
+  other_farms: JsonLdOtherListing[];
+};
+
+function offer(price: number, unit: JsonLdProduce['unit'], unitQuantity: number, stock: number, url: string) {
+  return {
+    '@type': 'Offer',
+    url,
+    price: price.toFixed(2),
+    priceCurrency: 'PHP',
+    availability: stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    priceSpecification: {
+      '@type': 'UnitPriceSpecification',
+      price: price.toFixed(2),
+      priceCurrency: 'PHP',
+      referenceQuantity: { '@type': 'QuantitativeValue', value: unitQuantity, unitCode: UNIT_CODE[unit] ?? UNIT_CODE.kg },
+    },
+  };
+}
+
+/** "Tomato from Dela Cruz Farm · Carabao" style parts for <title> and previews. */
+export function listingTitle(data: JsonLdListing): string {
+  const name = clean(data.listing.name) ?? 'Produce';
+  return `${name} from ${data.farm.merchant_name}`;
+}
+
+/** A short preview text, max ~200 characters. */
+export function listingDescription(data: JsonLdListing): string {
+  const own = clean(data.listing.description);
+  if (own) return own.length > 200 ? `${own.slice(0, 197)}…` : own;
+  const { listing, farm } = data;
+  const where = [farm.city, farm.province].filter(Boolean).join(', ');
+  const name = clean(listing.name) ?? 'Fresh produce';
+  const price = `₱${listing.price.toFixed(2)} per ${listing.unit_quantity === 1 ? '' : `${listing.unit_quantity} `}${listing.unit}`;
+  return `${name} at ${price} from ${farm.merchant_name}${where ? ` in ${where}` : ''}. Order on Carabao.`;
+}
+
+/**
+ * Product (with Offer and the farm as seller), the farm as LocalBusiness,
+ * other farms' offers of the same produce as `isSimilarTo` (each with its own
+ * listing URL, so crawlers find those pages too), and a breadcrumb.
+ */
+export function listingJsonLd(data: JsonLdListing, pageUrl: string): Record<string, unknown> {
+  const { listing, farm } = data;
+  const farmUrl = new URL(`/farms/${farm.id}`, pageUrl).toString();
+  const farmId = `${farmUrl}#farm`;
+  const name = clean(listing.name) ?? 'Produce';
+
+  const business = compact({
+    '@type': 'LocalBusiness',
+    '@id': farmId,
+    name: farm.merchant_name,
+    url: farmUrl,
+    address: compact({
+      '@type': 'PostalAddress',
+      addressLocality: clean(farm.city),
+      addressRegion: clean(farm.province),
+      addressCountry: 'PH',
+    }),
+    aggregateRating:
+      farm.rating != null && farm.rating_count > 0
+        ? {
+            '@type': 'AggregateRating',
+            ratingValue: Math.round(farm.rating * 10) / 10,
+            reviewCount: farm.rating_count,
+            bestRating: 5,
+            worstRating: 1,
+          }
+        : undefined,
+  });
+
+  const similar = data.other_farms
+    .filter((o) => o.price > 0)
+    .slice(0, MAX_PRODUCTS)
+    .map((o) => {
+      const url = new URL(`/listings/${o.id}`, pageUrl).toString();
+      return compact({
+        '@type': 'Product',
+        '@id': `${url}#product`,
+        name: clean(o.name) ?? name,
+        url,
+        offers: { ...offer(o.price, o.unit, 1, o.stock_quantity, url), seller: { '@type': 'Organization', name: o.merchant_name } },
+      });
+    });
+
+  const product = compact({
+    '@type': 'Product',
+    '@id': `${pageUrl}#product`,
+    name,
+    url: pageUrl,
+    description: clean(listing.description),
+    category: clean(listing.category),
+    image: absoluteUrl(listing.image_url),
+    offers: listing.price > 0
+      ? { ...offer(listing.price, listing.unit, listing.unit_quantity, listing.stock_quantity, pageUrl), seller: { '@id': farmId } }
+      : undefined,
+    isSimilarTo: similar.length ? similar : undefined,
+  });
+
+  const breadcrumbs = {
+    '@type': 'BreadcrumbList',
+    '@id': `${pageUrl}#breadcrumbs`,
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: new URL('/', pageUrl).toString() },
+      { '@type': 'ListItem', position: 2, name: farm.merchant_name, item: farmUrl },
+      { '@type': 'ListItem', position: 3, name, item: pageUrl },
+    ],
+  };
+
+  return { '@context': 'https://schema.org', '@graph': [product, business, breadcrumbs] };
+}
+
 /**
  * JSON for a <script type="application/ld+json"> body. Farm names and
  * descriptions are merchant-written, so `<`, `>` and `&` are escaped: a value
