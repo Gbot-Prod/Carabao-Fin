@@ -353,6 +353,10 @@ class MerchantApplicationResponse(BaseModel):
     address: str
     postal_code: str
     available_days: list[str]
+    # The farm pin from step 1, so finishing the application later keeps it.
+    lat: float | None = None
+    lng: float | None = None
+    pin_confirmed: bool = False
 
     rsbsa_number: str | None = None
     rsbsa_document_original_name: str | None = None
