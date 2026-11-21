@@ -9,7 +9,9 @@ import {
   fetchMyProduce,
   fetchMyShopPage,
   type Merchant,
+  type MerchantApplication,
   type MerchantPerformance,
+  type MerchantVerificationStatus,
   type MyShopPage,
   type Produce,
 } from "@/util/api";
@@ -31,11 +33,19 @@ export type MerchantStatus = "loading" | "signed-out" | "not-merchant" | "error"
 type MerchantContextValue = {
   status: MerchantStatus;
   /**
-   * For status "not-merchant": the application status ("submitted",
-   * "clarification", "rejected", "suspended", "approved"), null when there is
-   * no application or when it could not load, undefined while it loads.
+   * For status "not-merchant" (no merchant row: onboarding not started, or an
+   * account closed): the application status, null when there is none or it
+   * could not load, undefined while it loads.
    */
   applicationStatus: string | null | undefined;
+  /**
+   * Whether the farm may sell. Any merchant row opens the Merchant Centre
+   * ("ready"); only "verified" can publish, appear to buyers, take orders and
+   * request payouts. Null until the merchant loads.
+   */
+  verificationStatus: MerchantVerificationStatus | null;
+  /** The owner's application while the farm is not verified (checklist, admin note). */
+  application: MerchantApplication | null;
   userName: string;
   userEmail: string;
   performance: MerchantPerformance | null;
@@ -145,6 +155,19 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
     };
   }, [isMerchant]);
 
+  const verificationStatus = performance?.verification_status ?? null;
+  const [application, setApplication] = useState<MerchantApplication | null>(null);
+  useEffect(() => {
+    if (!verificationStatus || verificationStatus === "verified") return;
+    let live = true;
+    fetchMyMerchantApplication()
+      .then((a) => live && setApplication(a))
+      .catch(() => live && setApplication(null));
+    return () => {
+      live = false;
+    };
+  }, [verificationStatus]);
+
   const reloadPerformance = useCallback(() => setAttempt((n) => n + 1), []);
 
   let status: MerchantStatus;
@@ -164,6 +187,8 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       applicationStatus,
+      verificationStatus,
+      application,
       userName: user?.name ?? "",
       userEmail: user?.email ?? "",
       performance,
@@ -181,7 +206,7 @@ export function MerchantProvider({ children }: { children: ReactNode }) {
       chatsState,
       shipmentSelection,
     }),
-    [status, applicationStatus, user, performance, reloadPerformance, merchant, shopPage, produces, produceLoading, activeOrderCount, productCount, ordersState, chatsState, shipmentSelection],
+    [status, applicationStatus, verificationStatus, application, user, performance, reloadPerformance, merchant, shopPage, produces, produceLoading, activeOrderCount, productCount, ordersState, chatsState, shipmentSelection],
   );
 
   return <MerchantContext.Provider value={value}>{children}</MerchantContext.Provider>;

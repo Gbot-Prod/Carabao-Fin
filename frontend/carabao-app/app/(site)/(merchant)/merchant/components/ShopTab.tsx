@@ -5,6 +5,8 @@ import t from "./ShopTab.module.css";
 import farm from "@/app/(site)/(app)/farms/page.module.css";
 import getApiErrorMessage from "@/util/errorHelper";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { useMerchant } from "../MerchantContext";
+import { APPROVED_PUBLISH, PUBLISH_LOCKED } from "../lib/verification";
 import { shopSlug } from "@/lib/shop-slug";
 import {
   createMyShopPage,
@@ -109,7 +111,10 @@ function PublishBar({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (p
   const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const canPublish = shopPage.draft_title.trim().length > 0 && shopPage.has_unpublished_changes;
+  // Publishing needs Carabao's approval (the API refuses it too). Approval
+  // never publishes by itself: the merchant reviews prices and stock first.
+  const verified = useMerchant().verificationStatus === "verified";
+  const canPublish = verified && shopPage.draft_title.trim().length > 0 && shopPage.has_unpublished_changes;
   const live = shopPage.is_published;
 
   const run = async (kind: Action, send: () => Promise<MyShopPage>) => {
@@ -127,11 +132,17 @@ function PublishBar({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (p
   };
 
   let state: { tone: string; badge: string; text: string };
-  if (!live) {
+  if (!live && !verified) {
     state = {
       tone: t.toneDraft,
       badge: "Not live",
-      text: "Buyers cannot see your farm yet. Set up your page, look at the preview, then publish.",
+      text: "Buyers cannot see your farm yet. Set up your page now; you can publish once Carabao approves your documents.",
+    };
+  } else if (!live) {
+    state = {
+      tone: t.toneDraft,
+      badge: "Not live",
+      text: APPROVED_PUBLISH,
     };
   } else if (shopPage.has_unpublished_changes) {
     state = {
@@ -169,11 +180,17 @@ function PublishBar({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (p
           type="button"
           className={styles.primaryBtn}
           disabled={busy !== null || !canPublish}
-          title={!shopPage.draft_title.trim() ? "Add a title first" : undefined}
+          title={!verified ? PUBLISH_LOCKED : !shopPage.draft_title.trim() ? "Add a title first" : undefined}
+          aria-describedby={!verified ? "publish-locked" : undefined}
           onClick={() => void run("publish", publishMyShopPage)}
         >
           {busy === "publish" ? "Publishing…" : live ? "Publish changes" : "Publish shop"}
         </button>
+        {!verified && (
+          <p id="publish-locked" className={t.publishMsg}>
+            {PUBLISH_LOCKED}
+          </p>
+        )}
       </div>
     </div>
   );

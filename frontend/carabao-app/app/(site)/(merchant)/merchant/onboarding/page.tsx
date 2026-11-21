@@ -79,8 +79,10 @@ type TextKey = {
 // Form fields plus the parts of the form that are not payload fields.
 type FieldKey = keyof FormState | "pin" | "rsbsa_file" | "gov_id_file" | "bir_cert_file";
 
+// The shop name is part of step 1: the Merchant Centre and the draft shop
+// page are created on the first save, Submit later included.
 const OPS_FIELDS = new Set<string>([
-  "address", "region", "province", "city", "barangay", "postal_code", "pin", "lat", "lng", "pin_confirmed",
+  "merchant_name", "address", "region", "province", "city", "barangay", "postal_code", "pin", "lat", "lng", "pin_confirmed",
   "available_days", "contact_email", "contact_number", "email_verification_token", "phone_verification_token",
 ]);
 const stepOfField = (field: string): StepId => (OPS_FIELDS.has(field) ? "ops" : "legal");
@@ -238,6 +240,10 @@ function formFromApplication(app: MerchantApplication): Partial<FormState> {
     address: text(app.address),
     postal_code: text(app.postal_code),
     available_days: app.available_days?.length ? app.available_days : INITIAL_FORM.available_days,
+    // The pin saved with step 1 (kept, so finishing later does not ask again).
+    ...(app.lat != null && app.lng != null
+      ? { lat: app.lat, lng: app.lng, pin_confirmed: app.pin_confirmed === true }
+      : {}),
     contact_email: app.contact_email,
     contact_number: formatLocalPhone(app.contact_number.replace(/^\+63/, "")),
     seller_type: app.seller_type,
@@ -460,6 +466,11 @@ export default function MerchantOnboardingPage() {
         const application = await fetchMyMerchantApplication();
         if (application && PREFILL_STATUSES.has(application.status)) {
           setForm((prev) => ({ ...prev, ...formFromApplication(application) }));
+          // From the dashboard checklist or a reminder: open the business step.
+          if (new URLSearchParams(window.location.search).get("step") === "business") {
+            const legal = STEPS.findIndex((s) => s.id === "legal");
+            if (legal !== -1) setStepIndex(legal);
+          }
         }
       } catch {
         // No prefill on error.
@@ -545,6 +556,9 @@ export default function MerchantOnboardingPage() {
   const validateStep = (id: StepId): FieldErrors<FieldKey> => {
     const errors: FieldErrors<FieldKey> = {};
     if (id === "ops") {
+      const merchantName = form.merchant_name.trim();
+      if (!merchantName) errors.merchant_name = "Merchant name is required.";
+      else if (merchantName.length < 3) errors.merchant_name = "Merchant name must be at least 3 characters.";
       if (!form.address.trim()) errors.address = "Enter your street / house no.";
       if (!form.region.trim()) errors.region = "Select your region.";
       else if (!form.province.trim() && !isNcrRegion(form.region)) errors.province = "Select your province.";
@@ -568,9 +582,6 @@ export default function MerchantOnboardingPage() {
     const required = (key: TextKey, message: string) => {
       if (!form[key].trim()) errors[key] = message;
     };
-    const merchantName = form.merchant_name.trim();
-    if (!merchantName) errors.merchant_name = "Merchant name is required.";
-    else if (merchantName.length < 3) errors.merchant_name = "Merchant name must be at least 3 characters.";
     if (isIndividual(sellerType)) {
       required("last_name", "Last name is required.");
       required("first_name", "First name is required.");
@@ -656,7 +667,8 @@ export default function MerchantOnboardingPage() {
         available_days: [...form.available_days].sort((a, b) => dayOrder(a) - dayOrder(b)),
         phone_verification_token: isAccountPhone ? "" : phoneVerificationToken ?? "",
         email_verification_token: isAccountEmail ? "" : emailVerificationToken ?? "",
-        // Submit later sends step 1 and the seller type only.
+        merchant_name: form.merchant_name.trim(),
+        // Submit later sends step 1 (with the shop name) and the seller type only.
         ...(later ? {} : businessPayload(form)),
       };
       const merchantApplication = await submitMyMerchantOnboarding(
@@ -702,8 +714,8 @@ export default function MerchantOnboardingPage() {
           <h1 className={styles.title}>{saved ? "Application saved" : "Application submitted"}</h1>
           <p className={styles.subtitle}>
             {saved
-              ? "We saved your contact and operations details. Finish your business information when you have your documents: you can't start selling until you do."
-              : "Your application is now set for review. We will notify you via email once your application has been approved or rejected."}
+              ? "Your Merchant Centre is ready: set up your shop and add produce now. Finish your business information when you have your documents; your shop goes live once Carabao approves them."
+              : "Your application is now set for review. Meanwhile, set up your shop and add produce in the Merchant Centre; you can publish once it is approved."}
           </p>
           <div className={styles.successBox}>
             <div>
@@ -779,6 +791,18 @@ export default function MerchantOnboardingPage() {
         <div className={styles.body}>
           {step.id === "ops" && (
             <div className={styles.grid}>
+              <TextField
+                id="merchantonboarding-merchant-name"
+                label="Merchant name"
+                value={form.merchant_name}
+                max={NAME_MAX}
+                onChange={setText("merchant_name")}
+                error={fieldErrors.merchant_name}
+                placeholder="Carabao Fresh Farm"
+                help="The store name buyers see. Your Merchant Centre opens as soon as you save this step."
+                full
+              />
+
               <LocationSelects
                 value={{
                   region: form.region,
@@ -933,19 +957,7 @@ export default function MerchantOnboardingPage() {
 
               {!later && sellerType && (
                 <>
-                  <h3 className={styles.sectionTitle}>Store and legal name</h3>
-                  <TextField
-                    id="merchantonboarding-merchant-name"
-                    label="Merchant name"
-                    value={form.merchant_name}
-                    max={NAME_MAX}
-                    onChange={setText("merchant_name")}
-                    error={fieldErrors.merchant_name}
-                    placeholder="Carabao Fresh Farm"
-                    help="The store name buyers see."
-                    full
-                  />
-
+                  <h3 className={styles.sectionTitle}>Legal name</h3>
                   {isIndividual(sellerType) && personFields("")}
 
                   {(sellerType === "corporation" || sellerType === "cooperative") && (

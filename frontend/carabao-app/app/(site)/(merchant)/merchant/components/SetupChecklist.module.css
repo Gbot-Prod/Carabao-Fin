@@ -1,0 +1,169 @@
+/* Dashboard home: the steps to a live shop (SetupChecklist.tsx). */
+
+.card {
+  background: var(--bg-white);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--card-shadow);
+  padding: 20px 22px;
+  margin-bottom: 24px;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  color: var(--text-strong);
+}
+
+.sub {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.progress {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--green-50);
+  border: 1px solid var(--border-strong);
+  color: var(--green-900);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list li + li {
+  border-top: 1px solid #edf1ee;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  text-decoration: none;
+}
+
+.rowLink:hover {
+  background: var(--green-50);
+}
+
+.rowLink:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.mark {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--text-faint);
+}
+
+.markDone {
+  background: var(--green-600);
+  border-color: var(--green-600);
+  color: #fff;
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.label {
+  font-weight: 600;
+  color: var(--text-strong);
+  font-size: 0.92rem;
+}
+
+.detail {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.note {
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: #fff7e8;
+  color: #7a4b00;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.chevron {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The banner across Merchant Centre pages while the shop is not verified. */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  margin: 0 0 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #f1d9a6;
+  background: #fff7e8;
+  color: #5c3b00;
+}
+
+.bannerText {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.bannerTitle {
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.bannerAction {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--green-900);
+  text-decoration: underline;
+}
+
+.bannerAction:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 4px;
+}

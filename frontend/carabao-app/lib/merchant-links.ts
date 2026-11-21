@@ -9,6 +9,8 @@ const PAGE_BY_KIND: Record<string, string> = {
   review_received: "/reviews",
   payout_released: "/earnings",
   payout_destination_changed: "/earnings",
+  // Submit later: "finish your business information" (backend setup_reminders.py).
+  setup_reminder: "/onboarding?step=business",
 };
 
 /**
