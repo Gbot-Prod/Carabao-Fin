@@ -139,12 +139,6 @@
   border-top: 1px solid var(--green-border);
 }
 
-.editorError {
-  margin: 0;
-  padding: 0 16px 14px;
-  font-size: 13px;
-}
-
 @media (max-width: 600px) {
   .publishActions {
     width: 100%;
@@ -152,4 +146,13 @@
   .publishActions > button {
     flex: 1 1 auto;
   }
+}
+
+/* Holds the publish button's hover note; disabled buttons ignore the pointer. */
+.publishWrap {
+  display: inline-flex;
+}
+
+.publishWrap > button:disabled {
+  pointer-events: none;
 }

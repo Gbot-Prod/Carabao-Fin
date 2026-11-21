@@ -1,26 +1,37 @@
 "use client";
 
+import { useState } from "react";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import { appUrl } from "@/lib/urls";
 import { useMerchant } from "../../MerchantContext";
 import MerchantPage from "../../MerchantPage";
-import ShopTab from "../../components/ShopTab";
+import ShopTab, { PublishStatusBanner, type View } from "../../components/ShopTab";
 import StoreDetails from "../../components/StoreDetails";
 import DangerZone from "../../components/DangerZone";
 import HolidayModePanel from "../../components/HolidayModePanel";
 import styles from "../../page.module.css";
 import s from "./shop.module.css";
+import c from "../../components/ShopSettings.module.css";
 
-// One page for what buyers see (shop page) and how the farm works (store
-// details: address, pickup pin, delivery days and price, contact number).
+// The publish status, then one long card: the public storefront, store details
+// (address, pickup pin, delivery days and price, contact number), shop close
+// mode, and deleting the merchant profile.
 export default function MerchantShopPage() {
   const { shopPage, setShopPage, merchant, setMerchant, performance, produceLoading } = useMerchant();
+  const [view, setView] = useState<View>("edit");
   // Until the shop data loads, a missing page or empty details are not known to be missing.
   const loading = produceLoading && !shopPage && !merchant;
+
+  const previewDraft = () => {
+    setView("preview");
+    document.getElementById("storefront")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <MerchantPage
       eyebrow="Store"
       title="Shop & settings"
+      wideDescription
       description="Your public shop page, and the farm details that buyers and deliveries use. Shop page edits stay in a draft until you publish them."
       actions={
         // The farm page shows only after the first publish.
@@ -34,22 +45,17 @@ export default function MerchantShopPage() {
       {loading ? (
         <PageLoader variant="inline" label="Loading shop and store details…" />
       ) : (
-        <div className={s.columns}>
-          <section className={s.column} aria-labelledby="shop-public">
-            <h2 id="shop-public" className={s.heading}>Public shop page</h2>
-            <ShopTab shopPage={shopPage} merchant={merchant} onShopPageChange={setShopPage} />
-          </section>
-          <section className={s.column} aria-labelledby="shop-settings">
-            <h2 id="shop-settings" className={s.heading}>Store settings</h2>
+        <div className={s.stack}>
+          {shopPage && <PublishStatusBanner shopPage={shopPage} onChange={setShopPage} onPreview={previewDraft} />}
+          <div className={c.sheet}>
+            <ShopTab shopPage={shopPage} merchant={merchant} onShopPageChange={setShopPage} view={view} onViewChange={setView} />
+            <StoreDetails merchant={merchant} onSaved={setMerchant} />
             {/* CF-0066: was on the old settings page. */}
             <HolidayModePanel merchant={merchant} onSaved={setMerchant} />
-            <StoreDetails merchant={merchant} onSaved={setMerchant} />
-          </section>
+            <DangerZone />
+          </div>
         </div>
       )}
-      <div className={s.danger}>
-        <DangerZone />
-      </div>
     </MerchantPage>
   );
 }

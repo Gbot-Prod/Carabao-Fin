@@ -288,7 +288,7 @@ export default function MerchantDashboardPage() {
     { key: "out", icon: PackageX, tone: "red", label: "Out of stock", count: outOfStock, href: merchantUrl("/inventory"), action: "Buyers cannot order these" },
     { key: "expiry", icon: AlertTriangle, tone: "red", label: "Best-before soon or past", count: expiring, href: merchantUrl("/inventory"), action: "Sell or remove these first" },
     { key: "payout", icon: Banknote, tone: "red", label: "Payout failed", count: payoutFailed, href: merchantUrl("/earnings"), action: "Check your payout details" },
-    { key: "paused", icon: CirclePause, tone: "amber", label: "Holiday mode", count: pausedThrough ? 1 : 0, href: merchantUrl("/shop"), action: pausedThrough ? `Orders are paused through ${shortDay(pausedThrough)}` : "Your store takes orders" },
+    { key: "paused", icon: CirclePause, tone: "amber", label: "Shop close mode", count: pausedThrough ? 1 : 0, href: merchantUrl("/shop"), action: pausedThrough ? `Orders are paused through ${shortDay(pausedThrough)}` : "Your store takes orders" },
     { key: "setup", icon: shopLive ? MapPin : Store, tone: "violet", label: "Shop setup", count: setupMissing, href: merchantUrl("/shop"), action: shopLive ? "Set your farm pickup pin" : shopPage ? "Publish your shop page" : "Create your public shop page" },
   ];
   const openTotal = sum(attention.map((a) => a.count));

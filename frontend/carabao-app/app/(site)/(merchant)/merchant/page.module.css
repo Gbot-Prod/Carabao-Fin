@@ -227,6 +227,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .produceList {
@@ -370,210 +372,7 @@
   opacity: 0.8;
 }
 
-/* ── Shop page tab ───────────────────────────────────────────────────────── */
-.shopLayout {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 780px;
-}
-
-.shopCreateForm {
-  background: var(--bg-white);
-  border: 1px dashed rgba(49, 146, 93, 0.3);
-  border-radius: var(--radius-md);
-  padding: 20px 24px;
-}
-
-.shopEditor {
-  background: var(--bg-white);
-  border: 1px solid rgba(23, 61, 37, 0.10);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.shopBannerWrap {
-  position: relative;
-  display: block;
-  width: 100%;
-  height: 180px;
-  cursor: pointer;
-  overflow: hidden;
-  background: rgba(49, 146, 93, 0.06);
-  border-bottom: 1px solid rgba(23, 61, 37, 0.08);
-}
-
-.shopBannerWrap:hover .shopBannerOverlay {
-  opacity: 1;
-}
-
-.shopBannerImg {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.shopBannerEmpty {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.shopBannerOverlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(23, 61, 37, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.15s;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.shopMetaRow {
-  display: flex;
-  gap: 18px;
-  align-items: flex-start;
-  padding: 18px;
-}
-
-.shopLogoWrap {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  border: 1px solid rgba(23, 61, 37, 0.12);
-  flex-shrink: 0;
-  cursor: pointer;
-  display: block;
-}
-
-.shopLogoWrap:hover .shopLogoOverlay {
-  opacity: 1;
-}
-
-.shopLogoImg {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.shopLogoPlaceholder {
-  width: 100%;
-  height: 100%;
-  background: rgba(49, 146, 93, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 800;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.shopLogoOverlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(23, 61, 37, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.15s;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.shopInfoView {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.shopInfoTitle {
-  font-size: 15px;
-  font-weight: 850;
-  color: var(--green-900);
-}
-
-.shopInfoDesc {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-/* ── Store details panel ─────────────────────────────────────────────────── */
-.shopDetailsSection {
-  background: var(--bg-white);
-  border: 1px solid rgba(23, 61, 37, 0.10);
-  border-radius: var(--radius-md);
-  padding: 20px 24px;
-}
-
-.shopDetailsSectionTitle {
-  margin: 0 0 14px;
-  font-size: 14px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--green-900);
-}
-
-.shopDetailsView {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.shopDetailRow {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(23, 61, 37, 0.06);
-}
-
-.shopDetailRow:last-of-type {
-  border-bottom: none;
-}
-
-.shopDetailLabel {
-  width: 80px;
-  flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-faint);
-}
-
-.shopDetailValue {
-  font-size: 14px;
-  color: #1f2a1f;
-}
-
-.shopDetailValue em {
-  color: var(--text-faint);
-  font-style: normal;
-}
-
+/* ── Store details edit form ─────────────────────────────────────────────── */
 .shopDetailsForm {
   display: flex;
   flex-direction: column;
@@ -617,11 +416,6 @@
   color: var(--green-900);
   font-family: inherit;
   outline: none;
-}
-
-.shopInfoForm {
-  flex: 1;
-  min-width: 0;
 }
 
 /* ── Orders tab ──────────────────────────────────────────────────────────── */
@@ -849,7 +643,7 @@
 .earningsRow {
   display: flex;
   gap: 16px;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .payoutMessage {
@@ -1131,25 +925,6 @@
   cursor: not-allowed;
 }
 
-.uploadBtn {
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px dashed rgba(49, 146, 93, 0.45);
-  background: rgba(49, 146, 93, 0.06);
-  color: var(--green-600);
-  font-weight: 800;
-  font-size: 13px;
-  cursor: pointer;
-  font-family: inherit;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.uploadBtn:hover {
-  background: rgba(49, 146, 93, 0.12);
-}
-
 .dangerBtn {
   padding: 10px 14px;
   border-radius: var(--radius-sm);
@@ -1316,20 +1091,6 @@
 }
 
 /* ── Danger zone ─────────────────────────────────────────────────────────── */
-.dangerZone {
-  padding: 16px 28px 20px;
-  border-top: 1px solid rgba(185, 28, 28, 0.12);
-  background: rgba(185, 28, 28, 0.02);
-}
-
-.dangerTitle {
-  margin: 0 0 10px;
-  font-size: 11px;
-  font-weight: 900;
-  color: var(--danger);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
 
 .dangerWarning {
   margin: 0 0 12px;
@@ -1725,4 +1486,41 @@
   align-items: center;
   gap: 8px 12px;
   margin-top: 6px;
+}
+
+/* ── Full-height pages ───────────────────────────────────────────────────────
+   The root of a section page (direct child of MerchantPage). It takes the rest
+   of the screen, and its last card stretches to the bottom, so an empty list
+   still shows a full card instead of a short strip. */
+.fillPage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+}
+
+.fillPage > :last-child {
+  flex: 1;
+}
+
+/* A card holding a list: title and filters on top, then the list. */
+.listPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.listPanel .ordersHeader,
+.listPanel .produceSectionHeader {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--green-border);
+}
+
+/* Cards inside a list card need a visible edge against the white. */
+.listPanel .orderCard,
+.listPanel .reviewCard,
+.listPanel .produceRow,
+.listPanel .produceForm {
+  border-color: var(--green-border);
 }

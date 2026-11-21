@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import styles from "../page.module.css";
+import vs from "./VouchersTab.module.css";
 import { formatDate } from "../lib/format";
 import getApiErrorMessage from "@/util/errorHelper";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -87,10 +88,11 @@ export default function VouchersTab() {
   };
 
   const field = (id: keyof VoucherDraft, label: string, props: Record<string, unknown> = {}) => (
-    <label htmlFor={`voucher-${id}`} style={{ display: "grid", gap: "0.25rem" }}>
+    <label htmlFor={`voucher-${id}`} className={styles.formLabel}>
       <span>{label}</span>
       <input
         id={`voucher-${id}`}
+        className={styles.formInput}
         value={draft[id]}
         onChange={(e) => set(id)(e.target.value)}
         {...props}
@@ -99,21 +101,18 @@ export default function VouchersTab() {
   );
 
   return (
-    <>
+    <div className={styles.fillPage}>
       <section className={styles.panel} aria-labelledby="voucher-new-title">
         <h2 className={styles.panelTitle} id="voucher-new-title">New voucher</h2>
-        <p className={styles.kpiSub}>
+        <p className={vs.intro}>
           Buyers enter the code at checkout. The discount comes off your produce subtotal (not the
           delivery fee), and your payout is the lower total.
         </p>
-        <form
-          onSubmit={create}
-          style={{ display: "grid", gap: "0.75rem", gridTemplateColumns: "repeat(auto-fill, minmax(11rem, 1fr))" }}
-        >
+        <form onSubmit={create} className={vs.form}>
           {field("code", "Code", { maxLength: 32, autoCapitalize: "characters", required: true })}
-          <label htmlFor="voucher-kind" style={{ display: "grid", gap: "0.25rem" }}>
+          <label htmlFor="voucher-kind" className={styles.formLabel}>
             <span>Type</span>
-            <select id="voucher-kind" value={draft.kind} onChange={(e) => set("kind")(e.target.value)}>
+            <select id="voucher-kind" className={styles.formInput} value={draft.kind} onChange={(e) => set("kind")(e.target.value)}>
               <option value="percent">Percent off</option>
               <option value="fixed">Pesos off</option>
             </select>
@@ -125,7 +124,7 @@ export default function VouchersTab() {
           {field("perUserLimit", "Uses per buyer", { inputMode: "numeric" })}
           {field("startsOn", "First day (optional)", { type: "date" })}
           {field("endsOn", "Last day (optional)", { type: "date" })}
-          <div style={{ alignSelf: "end" }}>
+          <div className={vs.actions}>
             <button type="submit" className={styles.primaryBtn} disabled={busy}>
               {busy ? "Saving…" : "Create voucher"}
             </button>
@@ -195,6 +194,6 @@ export default function VouchersTab() {
         )}
         {rowError && <p className={styles.danger} role="alert">{rowError}</p>}
       </section>
-    </>
+    </div>
   );
 }

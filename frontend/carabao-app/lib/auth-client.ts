@@ -19,7 +19,7 @@ const authClient = createAuthClient({
 });
 
 // ── Backend access token ─────────────────────────────────────────────
-// A short-lived (15 min) JWT from BetterAuth that FastAPI verifies with the
+// A short-lived (15 min; 5 min on the admin site) JWT from BetterAuth that FastAPI verifies with the
 // public keys at /api/auth/jwks. Kept in memory only, never in a cookie or
 // storage, and fetched again shortly before it expires.
 

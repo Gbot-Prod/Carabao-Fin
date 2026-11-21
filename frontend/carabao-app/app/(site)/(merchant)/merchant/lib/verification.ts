@@ -9,7 +9,7 @@ import { MERCHANT_PAGES as P } from "@/lib/merchant-links";
 /** The onboarding business step, pre-filled from the saved application. */
 export const BUSINESS_STEP_PATH = `${P.onboarding}?step=business`;
 
-export const PUBLISH_LOCKED = "Available once your documents are approved.";
+
 export const APPROVED_PUBLISH = "You're approved — review your products and publish.";
 
 /** The step the banner names while the shop is not live. */

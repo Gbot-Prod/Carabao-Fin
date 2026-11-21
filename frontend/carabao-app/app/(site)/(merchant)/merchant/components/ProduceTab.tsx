@@ -98,95 +98,97 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
   };
 
   return (
-    <div className={styles.produceLayout}>
-      <div className={styles.produceSectionHeader}>
-        <h2 className={styles.sectionTitle}>Your Produce</h2>
-        {actionError && <p role="alert" className={styles.errorText}>{actionError}</p>}
-        {!showAddForm && (
-          <button className={styles.primaryBtn} onClick={() => { setShowAddForm(true); setEditingId(null); }}>
-            + Add Produce
-          </button>
-        )}
-      </div>
+    <div className={styles.fillPage}>
+      <section className={`${styles.panel} ${styles.listPanel}`} aria-labelledby="produce-title">
+        <div className={styles.produceSectionHeader}>
+          <h2 className={`${styles.sectionTitle} ${styles.flush}`} id="produce-title">Your Produce</h2>
+          {actionError && <p role="alert" className={styles.errorText}>{actionError}</p>}
+          {!showAddForm && (
+            <button className={styles.primaryBtn} onClick={() => { setShowAddForm(true); setEditingId(null); }}>
+              + Add Produce
+            </button>
+          )}
+        </div>
 
-      {showAddForm && (
-        <form onSubmit={(e) => void handleAdd(e)} className={styles.produceForm}>
-          <p className={styles.formTitle}>{t.listing.newProduce}</p>
-          <ProduceFormFields form={addForm} onChange={setAddForm} />
-          <div className={styles.formActions}>
-            <button type="submit" className={styles.primaryBtn} disabled={saving}>{saving ? t.listing.saving : t.listing.save}</button>
-            <button type="button" className={styles.secondaryBtn} onClick={() => { setShowAddForm(false); setAddForm(emptyProduceForm); }}>{t.listing.cancel}</button>
-          </div>
-        </form>
-      )}
-
-      {loading && <PageLoader variant="compact" label="Loading produce…" />}
-      {!loading && produces.length === 0 && !showAddForm && (
-        <p className={styles.emptyText}>No produce listed yet. Add your first item above.</p>
-      )}
-
-      <div className={styles.produceList}>
-        {produces.map((produce) =>
-          editingId === produce.id ? (
-            <form key={produce.id} onSubmit={(e) => void handleUpdate(e)} className={styles.produceForm}>
-              <p className={styles.formTitle}>Edit: {produce.name}</p>
-              <ProduceFormFields form={editForm} onChange={setEditForm} />
-              <div className={styles.formActions}>
-                <button type="submit" className={styles.primaryBtn} disabled={saving}>{saving ? t.listing.saving : t.listing.saveChanges}</button>
-                <button type="button" className={styles.secondaryBtn} onClick={() => setEditingId(null)}>{t.listing.cancel}</button>
-              </div>
-            </form>
-          ) : (
-            <div key={produce.id} className={styles.produceRow}>
-              <label className={styles.produceThumbWrap} title="Click to upload image">
-                {uploadingIds.has(produce.id) ? (
-                  <div className={styles.produceThumbPlaceholder}>…</div>
-                ) : produce.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={produce.image_url} alt={produce.name ? `Photo of ${produce.name}` : "Produce photo"} className={styles.produceThumb} />
-                ) : (
-                  <div className={styles.produceThumbPlaceholder}>+</div>
-                )}
-                <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={uploadingIds.has(produce.id)} onChange={(e) => void handleImageUpload(produce.id, e)} />
-              </label>
-              <div className={styles.produceRowInfo}>
-                <strong className={styles.produceName}>{produce.name}</strong>
-                {produce.category && <span className={styles.produceCategory}>{produce.category}</span>}
-                <span className={styles.producePrice}>₱{produce.price} / {produce.unit_quantity !== 1 ? produce.unit_quantity : ""}{produce.unit}</span>
-                <span className={styles.produceStock}>Stock: {produce.stock_quantity}</span>
-                {(produce.min_order_qty > 1 || produce.price_tiers.length > 0) && (
-                  <span className={styles.produceFreshness}>
-                    {produce.min_order_qty > 1 && `Min. order ${produce.min_order_qty}`}
-                    {produce.min_order_qty > 1 && produce.price_tiers.length > 0 && " · "}
-                    {produce.price_tiers.map((t) => `${t.min_qty}+ → ₱${t.unit_price}`).join(" · ")}
-                  </span>
-                )}
-                {produce.harvest_date && produce.best_before ? (
-                  <span className={styles.produceFreshness}>
-                    Harvested {formatRequestedDate(produce.harvest_date)} · Best before {formatRequestedDate(produce.best_before)}
-                    {produce.best_before < todayInManila() && (
-                      <span className={styles.produceExpired}>Expired · hidden from buyers</span>
-                    )}
-                  </span>
-                ) : (
-                  <span className={styles.produceFreshness}>Harvest date not set. Edit to add it.</span>
-                )}
-                {produce.hidden_at && (
-                  <p className={styles.produceHidden} role="status">
-                    <strong>Hidden by Carabao admin</strong> · buyers can&apos;t see or order this listing.
-                    {produce.hidden_reason && <> Reason: {produce.hidden_reason}</>} Contact support once it&apos;s fixed.
-                  </p>
-                )}
-                {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
-              </div>
-              <div className={styles.produceRowActions}>
-                <button className={styles.secondaryBtn} onClick={() => startEdit(produce)}>Edit</button>
-                <button className={styles.dangerBtn} onClick={() => void handleDelete(produce.id)}>Delete</button>
-              </div>
+        {showAddForm && (
+          <form onSubmit={(e) => void handleAdd(e)} className={styles.produceForm}>
+            <p className={styles.formTitle}>{t.listing.newProduce}</p>
+            <ProduceFormFields form={addForm} onChange={setAddForm} />
+            <div className={styles.formActions}>
+              <button type="submit" className={styles.primaryBtn} disabled={saving}>{saving ? t.listing.saving : t.listing.save}</button>
+              <button type="button" className={styles.secondaryBtn} onClick={() => { setShowAddForm(false); setAddForm(emptyProduceForm); }}>{t.listing.cancel}</button>
             </div>
-          )
+          </form>
         )}
-      </div>
+
+        {loading && <PageLoader variant="compact" label="Loading produce…" />}
+        {!loading && produces.length === 0 && !showAddForm && (
+          <p className={styles.emptyText}>No produce listed yet. Add your first item above.</p>
+        )}
+
+        <div className={styles.produceList}>
+          {produces.map((produce) =>
+            editingId === produce.id ? (
+              <form key={produce.id} onSubmit={(e) => void handleUpdate(e)} className={styles.produceForm}>
+                <p className={styles.formTitle}>Edit: {produce.name}</p>
+                <ProduceFormFields form={editForm} onChange={setEditForm} />
+                <div className={styles.formActions}>
+                  <button type="submit" className={styles.primaryBtn} disabled={saving}>{saving ? t.listing.saving : t.listing.saveChanges}</button>
+                  <button type="button" className={styles.secondaryBtn} onClick={() => setEditingId(null)}>{t.listing.cancel}</button>
+                </div>
+              </form>
+            ) : (
+              <div key={produce.id} className={styles.produceRow}>
+                <label className={styles.produceThumbWrap} title="Click to upload image">
+                  {uploadingIds.has(produce.id) ? (
+                    <div className={styles.produceThumbPlaceholder}>…</div>
+                  ) : produce.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={produce.image_url} alt={produce.name ? `Photo of ${produce.name}` : "Produce photo"} className={styles.produceThumb} />
+                  ) : (
+                    <div className={styles.produceThumbPlaceholder}>+</div>
+                  )}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={uploadingIds.has(produce.id)} onChange={(e) => void handleImageUpload(produce.id, e)} />
+                </label>
+                <div className={styles.produceRowInfo}>
+                  <strong className={styles.produceName}>{produce.name}</strong>
+                  {produce.category && <span className={styles.produceCategory}>{produce.category}</span>}
+                  <span className={styles.producePrice}>₱{produce.price} / {produce.unit_quantity !== 1 ? produce.unit_quantity : ""}{produce.unit}</span>
+                  <span className={styles.produceStock}>Stock: {produce.stock_quantity}</span>
+                  {(produce.min_order_qty > 1 || produce.price_tiers.length > 0) && (
+                    <span className={styles.produceFreshness}>
+                      {produce.min_order_qty > 1 && `Min. order ${produce.min_order_qty}`}
+                      {produce.min_order_qty > 1 && produce.price_tiers.length > 0 && " · "}
+                      {produce.price_tiers.map((t) => `${t.min_qty}+ → ₱${t.unit_price}`).join(" · ")}
+                    </span>
+                  )}
+                  {produce.harvest_date && produce.best_before ? (
+                    <span className={styles.produceFreshness}>
+                      Harvested {formatRequestedDate(produce.harvest_date)} · Best before {formatRequestedDate(produce.best_before)}
+                      {produce.best_before < todayInManila() && (
+                        <span className={styles.produceExpired}>Expired · hidden from buyers</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className={styles.produceFreshness}>Harvest date not set. Edit to add it.</span>
+                  )}
+                  {produce.hidden_at && (
+                    <p className={styles.produceHidden} role="status">
+                      <strong>Hidden by Carabao admin</strong> · buyers can&apos;t see or order this listing.
+                      {produce.hidden_reason && <> Reason: {produce.hidden_reason}</>} Contact support once it&apos;s fixed.
+                    </p>
+                  )}
+                  {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
+                </div>
+                <div className={styles.produceRowActions}>
+                  <button className={styles.secondaryBtn} onClick={() => startEdit(produce)}>Edit</button>
+                  <button className={styles.dangerBtn} onClick={() => void handleDelete(produce.id)}>Delete</button>
+                </div>
+              </div>
+            )
+          )}
+        </div>
+      </section>
     </div>
   );
 }

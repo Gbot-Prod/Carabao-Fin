@@ -1,5 +1,6 @@
 import { useState } from "react";
 import styles from "../page.module.css";
+import c from "./ShopSettings.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
 import { focusFirstInvalid } from "@/components/FieldError/FieldError";
@@ -172,23 +173,22 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
     }
   };
 
-  const detailRows: [string, string | null | undefined][] = [
-    ["Region", merchant?.region],
-    ["Province", merchant?.province],
-    ["City", merchant?.city],
-    ["Barangay", merchant?.barangay],
-    ["Address", merchant?.address],
-    ["Map pin", merchant?.lat != null && merchant?.lng != null ? `${merchant.lat.toFixed(5)}, ${merchant.lng.toFixed(5)}` : "Not pinned"],
-    ["Contact", merchant?.contact_number],
-    ["Open", daysText(merchant) || null],
-    ["Delivery fee", merchant?.delivery_price != null ? `₱${merchant.delivery_price.toLocaleString()} per order` : null],
-  ];
+  // Barangay, City, Province, Region on one line; street and postal code under it.
+  const area = [merchant?.barangay, merchant?.city, merchant?.province, merchant?.region]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(", ");
+  const street = [merchant?.address?.trim(), merchant?.postal_code?.trim()].filter(Boolean).join(" · ");
+  const pinned = merchant?.lat != null && merchant?.lng != null;
+  const missing = <span className={c.missing}>Not set</span>;
 
   return (
-    <div className={styles.shopDetailsSection}>
-      <h3 className={styles.shopDetailsSectionTitle}>Store Details</h3>
+    <section className={c.section} aria-labelledby="store-details-title">
+      <div className={c.sectionHead}>
+        <h2 id="store-details-title" className={c.sectionTitle}>Store details</h2>
+      </div>
       {editing ? (
-        <div className={styles.shopDetailsForm}>
+        <div className={`${c.fields} ${styles.shopDetailsForm}`}>
           <div className={styles.shopDetailsLocRow}>
             <LocationSelects
               value={{ region: draft.region, province: draft.province, city: draft.city, barangay: draft.barangay }}
@@ -324,21 +324,59 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
           </div>
         </div>
       ) : (
-        <div className={styles.shopDetailsView}>
-          {detailRows.map(([label, value]) => (
-            <div key={label} className={styles.shopDetailRow}>
-              <span className={styles.shopDetailLabel}>{label}</span>
-              <span className={styles.shopDetailValue}>{value ?? <em>Not set</em>}</span>
-            </div>
-          ))}
-          <button
-            className={`${styles.uploadBtn} ${styles.spaceAboveLg}`}
-            onClick={startEditing}
-          >
-            Edit store details
-          </button>
+        <div className={c.details}>
+          <div className={c.group}>
+            <h3 className={c.groupTitle}>Location</h3>
+            {area ? <p className={c.line}>{area}</p> : <p className={c.line}>{missing}</p>}
+            {street && <p className={c.lineSub}>{street}</p>}
+            <p className={c.lineSub}>
+              {pinned ? (
+                <>
+                  Pin: {merchant!.lat!.toFixed(5)}, {merchant!.lng!.toFixed(5)}
+                  {!merchant?.pin_confirmed && " (not confirmed)"}{" "}
+                  ·{" "}
+                  <a
+                    className={c.mapLink}
+                    href={`https://www.google.com/maps/search/?api=1&query=${merchant!.lat},${merchant!.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View on map ↗
+                  </a>
+                </>
+              ) : (
+                <>Pin: <span className={c.missing}>Not pinned</span></>
+              )}
+            </p>
+          </div>
+
+          <hr className={c.divider} />
+
+          <div className={c.group}>
+            <h3 className={c.groupTitle}>Contact &amp; schedule</h3>
+            <dl className={c.facts}>
+              <dt>Contact</dt>
+              <dd>{merchant?.contact_number || missing}</dd>
+              <dt>Open</dt>
+              <dd>{daysText(merchant) || missing}</dd>
+              <dt>Delivery fee</dt>
+              <dd>
+                {merchant?.delivery_price != null ? (
+                  `₱${merchant.delivery_price.toLocaleString()} per order`
+                ) : (
+                  <span className={c.missing}>Not set</span>
+                )}
+              </dd>
+            </dl>
+          </div>
+
+          <div className={c.actions}>
+            <button type="button" className={styles.secondaryBtn} onClick={startEditing}>
+              Edit store details
+            </button>
+          </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

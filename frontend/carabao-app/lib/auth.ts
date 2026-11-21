@@ -699,7 +699,10 @@ function createAuth() {
         jwt: {
           issuer: jwtIssuer,
           audience: JWT_AUDIENCE,
-          expirationTime: "15m",
+          // Admin tokens live 5 minutes: after sign-out, a copied admin token
+          // works for at most that long. The client refetches from "exp"
+          // (lib/auth-client.ts), so a shorter life needs no other change.
+          expirationTime: isAdminSurface ? "5m" : "15m",
           // The backend reads name, email, phone, role, ban and 2FA live from the
           // "user" table (backend/app/models/auth_identity.py). The token adds only
           // whether this session passed the code step (CF-0017), and the deploy

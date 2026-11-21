@@ -132,7 +132,7 @@ Results of the separate secret:
 ### 1.4 API tokens (`backend/app/core/security.py`)
 
 1. The API reads the token's `kid`.
-2. It looks for the `kid` in the public key set (`PUBLIC_JWKS_URL`), then in the admin key set (`ADMIN_JWKS_URL`).
+2. It looks for the `kid` in the public key set (`PUBLIC_JWKS_URL`), then in the admin key set (`ADMIN_JWKS_URL`). In the admin set it takes only a key whose RFC 7638 thumbprint is in `ADMIN_JWKS_THUMBPRINTS`. The admin deploy serves every row of `jwks_admin`, and the public deploy can write to that table (same database), so a planted key, also one that reuses a real `kid`, is refused and logged.
 3. The set that has the key gives the **surface**. Nothing in the request can set it.
 4. If the token has a `surface` claim that does not agree with that set, the API returns 401.
 5. `_require_admin` (all `/admin/*` routes) and admin order chat need surface `admin` **and** an admin user with 2FA and `mfa=true`.
@@ -227,6 +227,7 @@ Same repo root (`frontend/carabao-app`), same build and start commands. Set:
 | `AUTH_JWT_ISSUER` | empty or `https://carabao.online` | must equal the web value |
 | `PUBLIC_JWKS_URL` | empty | default `<issuer>/api/auth/jwks`. |
 | `ADMIN_JWKS_URL` | `http://web-admin.railway.internal:<PORT>/api/auth/jwks` | empty = no admin tokens accepted |
+| `ADMIN_JWKS_THUMBPRINTS` | output of `scripts/admin_jwk_thumbprints.py` | the admin keys the API trusts, comma separated. Empty = no admin tokens accepted (logged as an error). Add the new thumbprint **before** a new admin key is used. |
 | `AUTH_SYNC_SHARED_SECRET` | same as web | unchanged |
 
 There is no `MERCHANT_URL`: the API makes no links to the merchant site.
@@ -314,7 +315,7 @@ Add these lines to the hosts file (Windows: `C:\Windows\System32\drivers\etc\hos
 
 1. Copy `frontend/carabao-app/.env.example` to `.env.local`. Keep `ROOT_DOMAIN=carabao.test`, `NEXT_PUBLIC_APP_URL=http://carabao.test:3000` and `BETTER_AUTH_URL=http://carabao.test:3000`.
 2. Make `frontend/carabao-app/.env.admin.local` (git-ignored) from the admin block at the end of `.env.example`. Use a **different** `BETTER_AUTH_SECRET`.
-3. Copy `backend/.env.example` to `backend/.env`. Keep the `.test` origins and `ADMIN_JWKS_URL=http://localhost:3001/api/auth/jwks`.
+3. Copy `backend/.env.example` to `backend/.env`. Keep the `.test` origins and `ADMIN_JWKS_URL=http://localhost:3001/api/auth/jwks`. After the first admin sign-in, run `uv run python scripts/admin_jwk_thumbprints.py` and put its output in `ADMIN_JWKS_THUMBPRINTS`, then restart the API.
 
 ### 5.3 Run
 
@@ -504,6 +505,7 @@ Expected: only the dev fallbacks (`localhost`) and the `carabao.online` default 
    - API: `api.carabao.online`
 5. Put Cloudflare Access in front of `admin.carabao.online` only.
 6. API: set `ALLOWED_ORIGINS`, `APP_URL`, `ADMIN_URL`, and `ADMIN_JWKS_URL` (private network URL), then restart.
+6a. Sign in once on the admin site (this makes the first admin key). Then run `uv run python scripts/admin_jwk_thumbprints.py` in `backend` against the production database, check that every listed key is one web-admin made, and set `ADMIN_JWKS_THUMBPRINTS` on the API. Restart the API. Until then, the admin site signs in but its API calls get 401.
 7. Set web vars (2.1), then rebuild web (the `NEXT_PUBLIC_*` values are fixed at build).
 8. OAuth redirect URIs stay on the apex (`https://carabao.online/api/auth/callback/...`).
 9. Do the checklist in section 6 on the real hosts.

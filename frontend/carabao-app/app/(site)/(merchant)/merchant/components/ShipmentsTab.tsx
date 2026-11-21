@@ -127,7 +127,7 @@ export default function ShipmentsTab({ ordersState, selection, onOpenOrders }: P
   };
 
   return (
-    <div className={styles.ordersLayout}>
+    <div className={styles.fillPage}>
       {/* ── Ready to ship ── */}
       <section className={styles.panel}>
         <div className={s.sectionHead}>

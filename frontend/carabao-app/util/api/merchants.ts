@@ -338,8 +338,19 @@ export const fetchMyDemand = async (): Promise<DemandInsight> => {
   return response.data;
 };
 
-export const deleteMyMerchant = async (): Promise<void> => {
-  await apiClient.delete('/merchants/me');
+/**
+ * Text the code that confirms closing the merchant profile; returns the last 4
+ * digits it went to. The backend checks the password first when the account
+ * has one (the same steps as deleting the account).
+ */
+export const sendMerchantDeleteCode = async (password?: string): Promise<string> => {
+  const response = await apiClient.post<{ sent_to: string }>('/merchants/me/delete-code', { password: password ?? null });
+  return response.data.sent_to;
+};
+
+/** Close the merchant profile, confirmed with the code from sendMerchantDeleteCode. */
+export const deleteMyMerchant = async (code: string): Promise<void> => {
+  await apiClient.delete('/merchants/me', { data: { code } });
 };
 
 export const fetchMerchantShopPage = async (merchantId: number): Promise<ShopPage> => {

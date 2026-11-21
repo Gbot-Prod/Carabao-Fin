@@ -7,7 +7,7 @@ import { MERCHANT_PAGES as P } from "@/lib/merchant-links";
 import { merchantUrl } from "@/lib/urls";
 import { fetchMyPayoutInfo } from "@/util/api";
 import { useReadyMerchant } from "../MerchantContext";
-import { APPROVED_PUBLISH, BUSINESS_STEP_PATH, PUBLISH_LOCKED } from "../lib/verification";
+import { APPROVED_PUBLISH, BUSINESS_STEP_PATH } from "../lib/verification";
 import styles from "./SetupChecklist.module.css";
 
 type Item = {
@@ -89,7 +89,7 @@ export default function SetupChecklist() {
       key: "publish",
       label: "Publish your shop",
       done: false,
-      detail: verified ? APPROVED_PUBLISH : PUBLISH_LOCKED,
+      detail: verified ? APPROVED_PUBLISH : "Available once your documents are approved.",
       path: verified ? P.shop : undefined,
     },
   ];

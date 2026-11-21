@@ -1,0 +1,27 @@
+/* Vouchers page (VouchersTab). */
+
+.intro {
+  margin: -4px 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 70ch;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px 16px;
+  align-items: end;
+}
+
+/* Labels of different lengths still line up their inputs. */
+.form > label {
+  justify-content: flex-end;
+}
+
+.actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+}

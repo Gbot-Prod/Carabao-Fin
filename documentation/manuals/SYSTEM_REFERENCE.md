@@ -432,7 +432,7 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
 
 ### 7.2 Tokens
 
-- **Issuing:** the client gets a JWT from `GET /api/auth/token`. The JWT plugin signs it with EdDSA. It lasts 15 min. Issuer = `AUTH_JWT_ISSUER` or `BETTER_AUTH_URL` origin, audience `carabao-api`. The payload adds `mfa` (whether the session passed TOTP) and `surface`. The public deploy signs with keys in `jwks`, the admin deploy with keys in `jwks_admin`.
+- **Issuing:** the client gets a JWT from `GET /api/auth/token`. The JWT plugin signs it with EdDSA. It lasts 15 min (5 min from the admin deploy, so a copied admin token dies soon after sign-out). Issuer = `AUTH_JWT_ISSUER` or `BETTER_AUTH_URL` origin, audience `carabao-api`. The payload adds `mfa` (whether the session passed TOTP) and `surface`. The public deploy signs with keys in `jwks`, the admin deploy with keys in `jwks_admin`. The API trusts an admin key only if its thumbprint is in `ADMIN_JWKS_THUMBPRINTS` (SUBDOMAINS.md 1.4).
 - **Surface:** the API takes it only from the key set that verified the token. A disagreeing `surface` claim is 401. `/admin/*` needs surface `admin` (see `SUBDOMAINS.md` 1.4).
 - **Checking:** the API checks `exp`, `iat`, `sub`, `iss` and `aud`, with 30 s leeway.
   - JWKS unreachable → 503.

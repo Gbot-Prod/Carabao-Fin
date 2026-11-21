@@ -6,6 +6,7 @@ export default function MerchantPage({
   title,
   count,
   description,
+  wideDescription = false,
   actions,
   children,
 }: {
@@ -13,6 +14,8 @@ export default function MerchantPage({
   title: string;
   count?: React.ReactNode;
   description?: React.ReactNode;
+  /** Let the blurb run the full width instead of wrapping at a reading width. */
+  wideDescription?: boolean;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -25,7 +28,7 @@ export default function MerchantPage({
             {title}
             {count !== undefined && count !== null && <span className={styles.count}>{count}</span>}
           </h1>
-          {description && <p className={styles.description}>{description}</p>}
+          {description && <p className={`${styles.description}${wideDescription ? ` ${styles.descriptionWide}` : ""}`}>{description}</p>}
         </div>
         {actions && <div className={styles.actions}>{actions}</div>}
       </div>

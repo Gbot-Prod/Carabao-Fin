@@ -41,6 +41,7 @@ from tests.tokens import (
     PUBLIC_KID,
     REAL_SIGNING_KEY,
     bearer,
+    make_admin_token,
     make_token,
     trust_test_key,
 )
@@ -130,18 +131,29 @@ class _FakeJwks:
     def __init__(self, error=None, keys=None):
         self.error, self.keys = error, keys or {}
 
-    def find(self, kid, *, refresh):
+    def find(self, kid, *, refresh, pins=None):
         if self.error:
             raise self.error
-        return self.keys.get(kid)
+        key = self.keys.get(kid)
+        if (
+            key is not None
+            and pins is not None
+            and security.jwk_thumbprint(key) not in pins
+        ):
+            return None
+        return key
 
 
 PUBLIC_URL = "http://web.test/api/auth/jwks"
 ADMIN_URL = "http://web-admin.internal:3001/api/auth/jwks"
 
 
+ADMIN_PIN = security.jwk_thumbprint(ADMIN_KEY.public_key())
+
+
 def _jwks(monkeypatch, sets):
     monkeypatch.setattr(security, "_signing_key", REAL_SIGNING_KEY)
+    monkeypatch.setenv("ADMIN_JWKS_THUMBPRINTS", ADMIN_PIN)
     monkeypatch.setattr(security, "_jwk_client", lambda url: sets[url])
 
 
@@ -208,6 +220,85 @@ def test_admin_jwks_outage_does_not_break_public_tokens(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         security.verify_access_token(make_token(key=ADMIN_KEY))
     assert exc.value.status_code == 503
+
+
+def test_jwk_thumbprint_matches_rfc_8037_example():
+    # RFC 8037 appendix A.3: the Ed25519 example key and its thumbprint.
+    jwk = {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+    }
+    key = jwt.PyJWK(jwk).key
+    assert security.jwk_thumbprint(key) == "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k"
+
+
+def _admin_sets(monkeypatch, admin_set):
+    monkeypatch.setenv("BETTER_AUTH_URL", ISSUER)
+    monkeypatch.setenv("ADMIN_JWKS_URL", ADMIN_URL)
+    _jwks(
+        monkeypatch,
+        {
+            PUBLIC_URL: _FakeJwks(keys={PUBLIC_KID: KEY.public_key()}),
+            ADMIN_URL: admin_set,
+        },
+    )
+
+
+def test_planted_admin_key_is_refused(monkeypatch):
+    """A key written into jwks_admin by someone else is served, but not pinned."""
+    planted = Ed25519PrivateKey.generate()
+    _admin_sets(
+        monkeypatch,
+        _FakeJwks(
+            keys={ADMIN_KID: ADMIN_KEY.public_key(), "planted": planted.public_key()}
+        ),
+    )
+    assert security.verify_access_token(make_admin_token()).surface == "admin"
+    with pytest.raises(HTTPException) as exc:
+        security.verify_access_token(make_token(key=planted, kid="planted"))
+    assert exc.value.status_code == 401
+
+
+def test_without_pins_no_admin_token_is_accepted(monkeypatch):
+    _admin_sets(monkeypatch, _FakeJwks(keys={ADMIN_KID: ADMIN_KEY.public_key()}))
+    monkeypatch.setenv("ADMIN_JWKS_THUMBPRINTS", "")
+    with pytest.raises(HTTPException) as exc:
+        security.verify_access_token(make_admin_token())
+    assert exc.value.status_code == 401
+    assert security.verify_access_token(make_token()).surface == "public"
+
+
+def test_pins_accept_commas_and_spaces(monkeypatch):
+    monkeypatch.setenv("ADMIN_JWKS_THUMBPRINTS", f" a , {ADMIN_PIN}\nb ")
+    assert security.admin_key_pins() == frozenset({"a", ADMIN_PIN, "b"})
+
+
+class _Jwk:
+    def __init__(self, kid, key):
+        self.key_id, self.key = kid, key
+
+
+def _key_set(*jwks):
+    class _Client:
+        def get_jwk_set(self, refresh=False):
+            return type("_Set", (), {"keys": list(jwks)})()
+
+    key_set = security._KeySet(ADMIN_URL)
+    key_set.client = _Client()
+    return key_set
+
+
+def test_planted_row_reusing_a_real_kid_is_skipped():
+    """Two rows with the real kid: the planted one comes first and is skipped."""
+    planted = Ed25519PrivateKey.generate().public_key()
+    real = ADMIN_KEY.public_key()
+    key_set = _key_set(_Jwk(ADMIN_KID, planted), _Jwk(ADMIN_KID, real))
+    assert key_set.find(ADMIN_KID, refresh=False, pins=frozenset({ADMIN_PIN})) is real
+    only_planted = _key_set(_Jwk(ADMIN_KID, planted))
+    assert (
+        only_planted.find(ADMIN_KID, refresh=False, pins=frozenset({ADMIN_PIN})) is None
+    )
 
 
 def test_unknown_kid_refetch_is_rate_limited():

@@ -4,10 +4,12 @@ from typing import Any, cast
 
 from fastapi import (
     APIRouter,
+    Body,
     Depends,
     File,
     HTTPException,
     Query,
+    Request,
     UploadFile,
 )
 from pydantic import BaseModel, ConfigDict, Field
@@ -41,7 +43,13 @@ from app.schemas.payout import (
     MerchantOrderResponse,
 )
 from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
+from app.schemas.user import (
+    AccountDeleteCodeRequest,
+    AccountDeleteCodeSent,
+    AccountDeleteConfirm,
+)
 from app.services import (
+    account_deletion_otp,
     mapbox_routing,
     notifications,
     r2_service,
@@ -867,17 +875,8 @@ def update_my_merchant_order_status(
     return _to_merchant_order_response(order, user)
 
 
-@router.delete("/merchants/me", status_code=204)
-def delete_my_merchant(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    # The row lock makes checkout wait, so no order can slip in between the
-    # blocker check and the delete.
-    merchant = get_active_merchant(db, current_user.id, for_update=True)
-    if not merchant:
-        raise HTTPException(status_code=404, detail="Merchant profile not found")
-
+def _refuse_merchant_delete_if_blocked(db: Session, merchant: Merchant) -> None:
+    """409 naming what is still open (orders, refunds, payouts)."""
     blockers = find_deletion_blockers(db, merchant.id)
     if blockers:
         raise HTTPException(
@@ -890,6 +889,57 @@ def delete_my_merchant(
                 "blockers": blockers,
             },
         )
+
+
+@router.post("/merchants/me/delete-code", response_model=AccountDeleteCodeSent)
+def send_merchant_delete_code(
+    request: Request,
+    payload: AccountDeleteCodeRequest | None = Body(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Text the code that confirms closing the merchant profile, after the
+    account's password (when it has one), as for deleting the account
+    (/users/me/delete-code). Refuses (409) first when the profile can't be
+    closed, so no SMS is spent on it."""
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    _refuse_merchant_delete_if_blocked(db, merchant)
+    account_deletion_otp.check_password(
+        db, request, current_user, payload.password if payload else None
+    )
+    sent_to = account_deletion_otp.send_code(
+        db, request, current_user, purpose="merchant"
+    )
+    return AccountDeleteCodeSent(sent_to=sent_to)
+
+
+@router.delete("/merchants/me", status_code=204)
+def delete_my_merchant(
+    request: Request,
+    payload: AccountDeleteConfirm = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Close the merchant profile, confirmed with the code from
+    /merchants/me/delete-code. A session alone cannot close it."""
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    # Refuse before using up the code, so it still works once things settle.
+    _refuse_merchant_delete_if_blocked(db, merchant)
+    # check_code commits, so it runs before the row lock below is taken.
+    account_deletion_otp.check_code(
+        db, request, current_user, payload.code, purpose="merchant"
+    )
+
+    # The row lock makes checkout wait, so no order can slip in between the
+    # blocker check and the delete.
+    merchant = get_active_merchant(db, current_user.id, for_update=True)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    _refuse_merchant_delete_if_blocked(db, merchant)
 
     soft_delete_merchant(db, merchant)
     db.commit()

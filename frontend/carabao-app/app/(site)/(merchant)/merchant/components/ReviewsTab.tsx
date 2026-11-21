@@ -132,7 +132,7 @@ export default function ReviewsTab({ onViewOrder }: Props) {
   const isCurrent = loadedFor === filter;
 
   return (
-    <div className={styles.ordersLayout}>
+    <div className={styles.fillPage}>
       {summary && (
         <div className={`${styles.panel} ${styles.reviewSummary}`}>
           <div className={styles.reviewAverage}>
@@ -175,146 +175,148 @@ export default function ReviewsTab({ onViewOrder }: Props) {
         </div>
       )}
 
-      <div className={styles.ordersHeader}>
-        <h2 className={`${styles.sectionTitle} ${styles.flush}`}>Customer Reviews</h2>
-        <div className={styles.orderFilterRow}>
-          {FILTER_CHIPS.map(([value, label]) => (
-            <button
-              key={value}
-              className={`${styles.filterChip} ${filter === value ? styles.filterChipActive : ""}`}
-              onClick={() => setFilter(value)}
-            >
-              {label}
-            </button>
-          ))}
-          {/^[1-5]$/.test(filter) && (
-            <button
-              className={`${styles.filterChip} ${styles.filterChipActive}`}
-              onClick={() => setFilter("all")}
-              aria-label="Clear star filter"
-            >
-              {filter}★ only ×
-            </button>
-          )}
+      <section className={`${styles.panel} ${styles.listPanel}`} aria-labelledby="reviews-title">
+        <div className={styles.ordersHeader}>
+          <h2 className={`${styles.sectionTitle} ${styles.flush}`} id="reviews-title">Customer Reviews</h2>
+          <div className={styles.orderFilterRow}>
+            {FILTER_CHIPS.map(([value, label]) => (
+              <button
+                key={value}
+                className={`${styles.filterChip} ${filter === value ? styles.filterChipActive : ""}`}
+                onClick={() => setFilter(value)}
+              >
+                {label}
+              </button>
+            ))}
+            {/^[1-5]$/.test(filter) && (
+              <button
+                className={`${styles.filterChip} ${styles.filterChipActive}`}
+                onClick={() => setFilter("all")}
+                aria-label="Clear star filter"
+              >
+                {filter}★ only ×
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
-      {error && (
-        <div className={styles.reviewError}>
-          <p className={`${styles.emptyText} ${styles.errorText}`}>{error}</p>
-          <button className={styles.secondaryBtn} onClick={() => void load(filter, 0)}>Retry</button>
-        </div>
-      )}
-      {loading && !isCurrent && <PageLoader variant="compact" label="Loading reviews…" />}
-      {!loading && !error && summary?.rating_count === 0 && (
-        <p className={styles.emptyText}>No reviews yet. Buyers can rate an order once it&apos;s delivered.</p>
-      )}
-      {!loading && !error && !!summary?.rating_count && reviews.length === 0 && (
-        <p className={styles.emptyText}>No reviews match this filter.</p>
-      )}
+        {error && (
+          <div className={styles.reviewError}>
+            <p className={`${styles.emptyText} ${styles.errorText}`}>{error}</p>
+            <button className={styles.secondaryBtn} onClick={() => void load(filter, 0)}>Retry</button>
+          </div>
+        )}
+        {loading && !isCurrent && <PageLoader variant="compact" label="Loading reviews…" />}
+        {!loading && !error && summary?.rating_count === 0 && (
+          <p className={styles.emptyText}>No reviews yet. Buyers can rate an order once it&apos;s delivered.</p>
+        )}
+        {!loading && !error && !!summary?.rating_count && reviews.length === 0 && (
+          <p className={styles.emptyText}>No reviews match this filter.</p>
+        )}
 
-      {isCurrent && reviews.length > 0 && (
-        <div className={styles.ordersList}>
-          {reviews.map((review) => (
-            <article key={review.id} className={styles.reviewCard}>
-              <div className={styles.reviewCardHeader}>
-                <span className={styles.reviewStars} aria-label={`${review.rating} out of 5 stars`}>
-                  {renderStars(review.rating)}
-                </span>
-                <span className={styles.orderBuyerName}>{review.reviewer_name}</span>
-                <span className={styles.orderDate}>
-                  {formatDate(review.created_at)}
-                  {wasEdited(review) && " · edited"}
-                </span>
-              </div>
-              {review.comment ? (
-                <p className={styles.reviewComment}>{review.comment}</p>
-              ) : (
-                <p className={styles.reviewNoComment}>No comment left.</p>
-              )}
-              {replyingTo === review.id ? (
-                <form
-                  className={styles.reviewReplyForm}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void saveReply(review);
-                  }}
-                >
-                  <label className={styles.reviewReplyLabel} htmlFor={`reply-${review.id}`}>
-                    Your public reply
-                  </label>
-                  <textarea
-                    id={`reply-${review.id}`}
-                    className={styles.reviewReplyInput}
-                    value={draft}
-                    maxLength={REPLY_MAX_LENGTH}
-                    rows={3}
-                    onChange={(e) => setDraft(e.target.value)}
-                    aria-describedby={replyError ? `reply-error-${review.id}` : undefined}
-                  />
-                  {replyError && (
-                    <p id={`reply-error-${review.id}`} className={styles.errorText} role="alert">
-                      {replyError}
+        {isCurrent && reviews.length > 0 && (
+          <div className={styles.ordersList}>
+            {reviews.map((review) => (
+              <article key={review.id} className={styles.reviewCard}>
+                <div className={styles.reviewCardHeader}>
+                  <span className={styles.reviewStars} aria-label={`${review.rating} out of 5 stars`}>
+                    {renderStars(review.rating)}
+                  </span>
+                  <span className={styles.orderBuyerName}>{review.reviewer_name}</span>
+                  <span className={styles.orderDate}>
+                    {formatDate(review.created_at)}
+                    {wasEdited(review) && " · edited"}
+                  </span>
+                </div>
+                {review.comment ? (
+                  <p className={styles.reviewComment}>{review.comment}</p>
+                ) : (
+                  <p className={styles.reviewNoComment}>No comment left.</p>
+                )}
+                {replyingTo === review.id ? (
+                  <form
+                    className={styles.reviewReplyForm}
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void saveReply(review);
+                    }}
+                  >
+                    <label className={styles.reviewReplyLabel} htmlFor={`reply-${review.id}`}>
+                      Your public reply
+                    </label>
+                    <textarea
+                      id={`reply-${review.id}`}
+                      className={styles.reviewReplyInput}
+                      value={draft}
+                      maxLength={REPLY_MAX_LENGTH}
+                      rows={3}
+                      onChange={(e) => setDraft(e.target.value)}
+                      aria-describedby={replyError ? `reply-error-${review.id}` : undefined}
+                    />
+                    {replyError && (
+                      <p id={`reply-error-${review.id}`} className={styles.errorText} role="alert">
+                        {replyError}
+                      </p>
+                    )}
+                    <div className={styles.reviewReplyActions}>
+                      <button type="submit" className={styles.primaryBtn} disabled={replyBusy}>
+                        {replyBusy ? "Saving…" : "Save reply"}
+                      </button>
+                      <button type="button" className={styles.secondaryBtn} onClick={closeReply} disabled={replyBusy}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                ) : review.merchant_reply ? (
+                  <div className={styles.reviewReply}>
+                    <p className={styles.reviewReplyLabel}>
+                      Your reply{review.merchant_replied_at ? ` · ${formatDate(review.merchant_replied_at)}` : ""}
                     </p>
-                  )}
-                  <div className={styles.reviewReplyActions}>
-                    <button type="submit" className={styles.primaryBtn} disabled={replyBusy}>
-                      {replyBusy ? "Saving…" : "Save reply"}
-                    </button>
-                    <button type="button" className={styles.secondaryBtn} onClick={closeReply} disabled={replyBusy}>
-                      Cancel
-                    </button>
+                    <p className={styles.reviewComment}>{review.merchant_reply}</p>
+                    <div className={styles.reviewReplyActions}>
+                      <button type="button" className={styles.linkBtn} onClick={() => openReply(review)}>
+                        Edit reply
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.linkBtn}
+                        onClick={() => void removeReply(review)}
+                        disabled={replyBusy}
+                      >
+                        Delete reply
+                      </button>
+                    </div>
                   </div>
-                </form>
-              ) : review.merchant_reply ? (
-                <div className={styles.reviewReply}>
-                  <p className={styles.reviewReplyLabel}>
-                    Your reply{review.merchant_replied_at ? ` · ${formatDate(review.merchant_replied_at)}` : ""}
-                  </p>
-                  <p className={styles.reviewComment}>{review.merchant_reply}</p>
-                  <div className={styles.reviewReplyActions}>
+                ) : null}
+                <div className={styles.reviewReplyActions}>
+                  {replyingTo !== review.id && !review.merchant_reply && (
                     <button type="button" className={styles.linkBtn} onClick={() => openReply(review)}>
-                      Edit reply
+                      Reply
                     </button>
+                  )}
+                  {review.order_id != null && (
                     <button
                       type="button"
-                      className={styles.linkBtn}
-                      onClick={() => void removeReply(review)}
-                      disabled={replyBusy}
+                      className={styles.reviewOrderLink}
+                      onClick={() => onViewOrder(review.order_id as number)}
                     >
-                      Delete reply
+                      View order #{review.order_id} →
                     </button>
-                  </div>
+                  )}
                 </div>
-              ) : null}
-              <div className={styles.reviewReplyActions}>
-                {replyingTo !== review.id && !review.merchant_reply && (
-                  <button type="button" className={styles.linkBtn} onClick={() => openReply(review)}>
-                    Reply
-                  </button>
-                )}
-                {review.order_id != null && (
-                  <button
-                    type="button"
-                    className={styles.reviewOrderLink}
-                    onClick={() => onViewOrder(review.order_id as number)}
-                  >
-                    View order #{review.order_id} →
-                  </button>
-                )}
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
+              </article>
+            ))}
+          </div>
+        )}
 
-      {summary && isCurrent && reviews.length < summary.total && (
-        <div className={styles.overviewActions}>
-          <button className={styles.secondaryBtn} disabled={loading} onClick={() => void load(filter, reviews.length)}>
-            {loading ? "Loading…" : `Load more (${summary.total - reviews.length} left)`}
-          </button>
-        </div>
-      )}
+        {summary && isCurrent && reviews.length < summary.total && (
+          <div className={styles.overviewActions}>
+            <button className={styles.secondaryBtn} disabled={loading} onClick={() => void load(filter, reviews.length)}>
+              {loading ? "Loading…" : `Load more (${summary.total - reviews.length} left)`}
+            </button>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

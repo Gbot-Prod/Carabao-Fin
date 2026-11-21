@@ -49,23 +49,7 @@ export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOp
   const visibleOrders = orders.filter((o) => activeFilter === "all" || o.status === activeFilter);
 
   return (
-    <div className={styles.ordersLayout}>
-      <div className={styles.ordersHeader}>
-        <h2 className={`${styles.sectionTitle} ${styles.flush}`}>Customer Orders</h2>
-        <div className={styles.orderFilterRow}>
-          {ORDER_FILTERS.map((f) => (
-            <button
-              key={f}
-              className={`${styles.filterChip} ${activeFilter === f ? styles.filterChipActive : ""}`}
-              onClick={() => setFilter(f)}
-            >
-              {f === "all" ? "All" : ORDER_STATUS_LABELS[f]}
-              {loaded && <span className={s.chipCount}>{counts[f] ?? 0}</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-
+    <div className={styles.fillPage}>
       {readyToShip.length > 0 && (
         <div className={s.readyBanner}>
           <span>
@@ -75,24 +59,44 @@ export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOp
         </div>
       )}
 
-      {loading && !loaded && <PageLoader variant="compact" label="Loading orders…" />}
-      {!loading && error && <p className={`${styles.emptyText} ${styles.errorText}`}>{error}</p>}
-      {loaded && orders.length === 0 && <p className={styles.emptyText}>No orders yet.</p>}
-      {loaded && orders.length > 0 && visibleOrders.length === 0 && (
-        <p className={styles.emptyText}>No {activeFilter} orders.</p>
-      )}
+      <section className={`${styles.panel} ${styles.listPanel}`} aria-labelledby="orders-title">
+        <div className={styles.ordersHeader}>
+          <h2 className={`${styles.sectionTitle} ${styles.flush}`} id="orders-title">Customer Orders</h2>
+          <div className={styles.orderFilterRow}>
+            {ORDER_FILTERS.map((f) => (
+              <button
+                key={f}
+                className={`${styles.filterChip} ${activeFilter === f ? styles.filterChipActive : ""}`}
+                onClick={() => setFilter(f)}
+              >
+                {f === "all" ? "All" : ORDER_STATUS_LABELS[f]}
+                {loaded && <span className={s.chipCount}>{counts[f] ?? 0}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
 
-      <div className={s.orderList}>
-        {visibleOrders.map((order) => (
-          <OrderCard
-            key={order.id}
-            order={order}
-            today={today}
-            focused={focusOrderId === order.id}
-            onCancel={(reason, note) => handleCancel(order.id, reason, note)}
-          />
-        ))}
-      </div>
+        {loading && !loaded && <PageLoader variant="compact" label="Loading orders…" />}
+        {!loading && error && <p className={`${styles.emptyText} ${styles.errorText}`}>{error}</p>}
+        {loaded && orders.length === 0 && <p className={styles.emptyText}>No orders yet.</p>}
+        {loaded && orders.length > 0 && visibleOrders.length === 0 && (
+          <p className={styles.emptyText}>No {activeFilter} orders.</p>
+        )}
+
+        {visibleOrders.length > 0 && (
+          <div className={s.orderList}>
+            {visibleOrders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                today={today}
+                focused={focusOrderId === order.id}
+                onCancel={(reason, note) => handleCancel(order.id, reason, note)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

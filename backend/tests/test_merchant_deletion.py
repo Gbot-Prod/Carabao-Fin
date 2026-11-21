@@ -23,6 +23,7 @@ from app.models.shipment import Shipment  # noqa: F401 - registers the table
 from app.models.shopPage import ShopPage
 from app.models.transaction import Transaction
 from app.services.merchant_service import create_merchant_from_application
+from tests.account_delete import delete_merchant
 from tests.better_auth import make_user
 
 
@@ -210,7 +211,7 @@ def test_delete_blocked_while_obligations_remain(db, seller, buyer, setup, expec
 
     before = snapshot()
 
-    resp = _client(db, user).delete("/merchants/me")
+    resp = delete_merchant(_client(db, user))
 
     assert resp.status_code == 409
     assert resp.json()["detail"]["blockers"] == expected
@@ -248,7 +249,7 @@ def test_delete_soft_deletes_and_keeps_financial_records(db, seller, buyer):
     )
     db.commit()
 
-    resp = _client(db, user).delete("/merchants/me")
+    resp = delete_merchant(_client(db, user))
 
     assert resp.status_code == 204
     db.expire_all()
@@ -267,7 +268,7 @@ def test_delete_soft_deletes_and_keeps_financial_records(db, seller, buyer):
 def test_deleted_merchant_is_hidden_everywhere(db, seller, buyer):
     user, merchant = seller
     client = _client(db, user)
-    assert client.delete("/merchants/me").status_code == 204
+    assert delete_merchant(client).status_code == 204
 
     assert client.get("/merchants").json() == []
     assert client.get(f"/merchants/{merchant.id}").status_code == 404
@@ -282,7 +283,7 @@ def test_deleted_merchant_is_hidden_everywhere(db, seller, buyer):
         "best_before": "2026-01-10",
     }
     assert client.post("/produce/", json=new_produce).status_code == 404
-    assert client.delete("/merchants/me").status_code == 404
+    assert delete_merchant(client).status_code == 404
 
 
 def test_active_merchant_still_listed(db, seller):
@@ -295,7 +296,7 @@ def test_active_merchant_still_listed(db, seller):
 
 def test_checkout_rejected_for_deleted_merchant(db, seller, buyer):
     user, merchant = seller
-    assert _client(db, user).delete("/merchants/me").status_code == 204
+    assert delete_merchant(_client(db, user)).status_code == 204
     buyer_user, _ = buyer
     produce = db.query(Produce).one()
     db.add(
@@ -314,7 +315,7 @@ def test_checkout_rejected_for_deleted_merchant(db, seller, buyer):
 
 def test_reapproved_application_reactivates_deleted_merchant(db, seller):
     user, merchant = seller
-    assert _client(db, user).delete("/merchants/me").status_code == 204
+    assert delete_merchant(_client(db, user)).status_code == 204
     application = MerchantApplication(
         user_id=user.id,
         status="approved",
@@ -349,3 +350,97 @@ def test_active_merchant_cannot_be_created_twice(db, seller):
 
     with pytest.raises(ValueError, match="already has a merchant profile"):
         create_merchant_from_application(db, application)
+
+
+# Same safeguards as deleting the account (test_buyer_deletion.py): the
+# password first (when the account has one), then a code texted to the
+# verified number. A session alone cannot close the profile.
+
+
+def test_merchant_delete_needs_the_texted_code(db, seller):
+    user, merchant = seller
+    client = _client(db, user)
+
+    assert client.request("DELETE", "/merchants/me").status_code == 422
+    assert client.post("/merchants/me/delete-code").status_code == 200
+    from tests.payout_codes import SENT
+
+    assert "DELETE your merchant profile" in SENT[-1]["message"]
+    resp = client.request("DELETE", "/merchants/me", json={"code": "000000"})
+
+    assert resp.status_code == 400
+    db.refresh(merchant)
+    assert merchant.deleted_at is None
+
+
+def test_merchant_delete_needs_the_password_first(db, seller):
+    from tests import payout_codes
+    from tests.better_auth import add_password
+
+    user, merchant = seller
+    add_password(db, user, "Correct-horse-1!")
+    client = _client(db, user)
+
+    for body in (None, {"password": "Wrong-horse-1!"}):
+        resp = client.post("/merchants/me/delete-code", json=body)
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Your password is not correct."
+    assert payout_codes.SENT == []
+
+    assert delete_merchant(client, password="Correct-horse-1!").status_code == 204
+    db.expire_all()
+    assert db.get(Merchant, merchant.id).deleted_at is not None
+
+
+def test_merchant_delete_code_needs_a_verified_number(db):
+    user = make_user(db, "google-farmer@example.com", phone_number=None)
+    db.add(
+        Merchant(
+            verification_status="verified",
+            user_id=user.id,
+            merchant_name="No Phone Farm",
+            region="Region III",
+            province="Bulacan",
+            address="Purok 1",
+            postal_code="3000",
+            available_days=["mon"],
+            operating_hours={},
+            seller_type="individual_farmer",
+        )
+    )
+    db.commit()
+
+    resp = _client(db, user).post("/merchants/me/delete-code")
+
+    assert resp.status_code == 400
+    assert "merchant profile" in resp.json()["detail"]
+
+
+def test_merchant_delete_code_is_not_sent_when_blocked(db, seller, buyer):
+    from tests import payout_codes
+
+    user, merchant = seller
+    _transaction(db, _order(db, merchant, buyer, "shipped"), "paid")
+    db.commit()
+
+    resp = _client(db, user).post("/merchants/me/delete-code")
+
+    assert resp.status_code == 409
+    assert payout_codes.SENT == []
+
+
+def test_account_delete_code_cannot_close_the_merchant_profile(db, seller):
+    from app.api.routes import users
+    from tests.payout_codes import SENT, last_code
+
+    user, merchant = seller
+    client = _client(db, user)
+    client.app.include_router(users.router)
+    assert client.post("/users/me/delete-code").status_code == 200
+    assert "DELETE your account" in SENT[-1]["message"]
+
+    resp = client.request("DELETE", "/merchants/me", json={"code": last_code()})
+
+    assert resp.status_code == 400
+    db.refresh(merchant)
+    assert merchant.deleted_at is None

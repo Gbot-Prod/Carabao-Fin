@@ -2,11 +2,13 @@ import { useState, type ChangeEvent } from "react";
 import { SHOP_DESCRIPTION_MAX, SHOP_TITLE_MAX } from "@/lib/input-limits";
 import styles from "../page.module.css";
 import t from "./ShopTab.module.css";
+import c from "./ShopSettings.module.css";
+import FieldError, { invalidClass, invalidProps } from "@/components/FieldError/FieldError";
 import farm from "@/app/(site)/(app)/farms/page.module.css";
 import getApiErrorMessage from "@/util/errorHelper";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { useMerchant } from "../MerchantContext";
-import { APPROVED_PUBLISH, PUBLISH_LOCKED } from "../lib/verification";
+import { APPROVED_PUBLISH } from "../lib/verification";
 import { shopSlug } from "@/lib/shop-slug";
 import {
   createMyShopPage,
@@ -20,13 +22,7 @@ import {
   type MyShopPage,
 } from "@/util/api";
 
-type Props = {
-  shopPage: MyShopPage | null;
-  merchant: Merchant | null;
-  onShopPageChange: (page: MyShopPage) => void;
-};
-
-type View = "edit" | "preview" | "live";
+export type View = "edit" | "preview" | "live";
 
 /** The values one version of the page shows to buyers. */
 type PageContent = {
@@ -50,51 +46,58 @@ const liveOf = (p: MyShopPage): PageContent => ({
   banner_image_url: p.banner_image_url,
 });
 
-// The public shop page (logo, banner, title). All edits go to a draft. Buyers
-// see the draft only after the merchant publishes it. Before the first
-// publish, buyers do not see the farm at all. Store details (address, pickup
-// pin, delivery days) are next to it on the same page (StoreDetails).
-export default function ShopTab({ shopPage, merchant, onShopPageChange }: Props) {
-  const [view, setView] = useState<View>("edit");
+type Props = {
+  shopPage: MyShopPage | null;
+  merchant: Merchant | null;
+  onShopPageChange: (page: MyShopPage) => void;
+  view: View;
+  onViewChange: (view: View) => void;
+};
 
-  if (!shopPage) {
-    return (
-      <div className={styles.shopLayout}>
-        <ShopPageCreateForm onCreated={onShopPageChange} />
-      </div>
-    );
-  }
-
-  const views: { key: View; label: string }[] = [
-    { key: "edit", label: "Edit draft" },
-    { key: "preview", label: "Preview draft" },
-    ...(shopPage.is_published ? [{ key: "live" as const, label: "Live page" }] : []),
-  ];
-  const current = view === "live" && !shopPage.is_published ? "edit" : view;
+// The public storefront card (logo, banner, title). All edits go to a draft.
+// Buyers see the draft only after the merchant publishes it (PublishStatusBanner,
+// at the top of the page). Before the first publish, buyers do not see the farm.
+export default function ShopTab({ shopPage, merchant, onShopPageChange, view, onViewChange }: Props) {
+  const views: { key: View; label: string }[] = shopPage
+    ? [
+        { key: "edit", label: "Edit draft" },
+        { key: "preview", label: "Preview draft" },
+        ...(shopPage.is_published ? [{ key: "live" as const, label: "Live page" }] : []),
+      ]
+    : [];
+  const current = view === "live" && !shopPage?.is_published ? "edit" : view;
 
   return (
-    <div className={styles.shopLayout}>
-      <PublishBar shopPage={shopPage} onChange={onShopPageChange} />
-
-      <div className={t.views} role="tablist" aria-label="Shop page view">
-        {views.map((v) => (
-          <button
-            key={v.key}
-            type="button"
-            role="tab"
-            aria-selected={current === v.key}
-            className={`${t.viewBtn} ${current === v.key ? t.viewBtnOn : ""}`}
-            onClick={() => setView(v.key)}
-          >
-            {v.label}
-          </button>
-        ))}
+    <section id="storefront" className={c.section} aria-labelledby="storefront-title">
+      <div className={c.sectionHead}>
+        <h2 id="storefront-title" className={c.sectionTitle}>Public storefront</h2>
+        {views.length > 0 && (
+          <div className={t.views} role="tablist" aria-label="Shop page view">
+            {views.map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                role="tab"
+                aria-selected={current === v.key}
+                className={`${t.viewBtn} ${current === v.key ? t.viewBtnOn : ""}`}
+                onClick={() => onViewChange(v.key)}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-
-      {current === "edit" && <ShopPageEditor shopPage={shopPage} onChange={onShopPageChange} />}
-      {current === "preview" && <ShopPreview content={draftOf(shopPage)} merchant={merchant} label="Draft. Buyers do not see this version yet." />}
-      {current === "live" && <ShopPreview content={liveOf(shopPage)} merchant={merchant} label="Live. Buyers see this version now." />}
-    </div>
+      {!shopPage ? (
+        <ShopPageCreateForm onCreated={onShopPageChange} />
+      ) : current === "edit" ? (
+        <ShopPageEditor shopPage={shopPage} onChange={onShopPageChange} />
+      ) : current === "preview" ? (
+        <ShopPreview content={draftOf(shopPage)} merchant={merchant} label="Draft. Buyers do not see this version yet." />
+      ) : (
+        <ShopPreview content={liveOf(shopPage)} merchant={merchant} label="Live. Buyers see this version now." />
+      )}
+    </section>
   );
 }
 
@@ -106,7 +109,16 @@ const FAIL_MESSAGE: Record<Action, string> = {
   discard: "Could not discard the draft. Try again.",
 };
 
-function PublishBar({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (page: MyShopPage) => void }) {
+/** Top of the page: is the shop live, and the publish / preview actions. */
+export function PublishStatusBanner({
+  shopPage,
+  onChange,
+  onPreview,
+}: {
+  shopPage: MyShopPage;
+  onChange: (page: MyShopPage) => void;
+  onPreview: () => void;
+}) {
   const { t: text } = useLanguage();
   const [busy, setBusy] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -162,10 +174,13 @@ function PublishBar({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (p
     <div className={`${t.publishBar} ${state.tone}`} role="status">
       <div className={t.publishText}>
         <span className={t.badge}>{state.badge}</span>
-        <p className={t.publishMsg}>{state.text}</p>
+        <p id="publish-status" className={t.publishMsg}>{state.text}</p>
         {error && <p className={`${styles.errorText} ${t.publishMsg}`}>{error}</p>}
       </div>
       <div className={t.publishActions}>
+        <button type="button" className={styles.secondaryBtn} onClick={onPreview}>
+          Preview draft
+        </button>
         {live && (
           <button type="button" className={styles.secondaryBtn} disabled={busy !== null} onClick={() => void run("unpublish", unpublishMyShopPage)}>
             {busy === "unpublish" ? "Unpublishing…" : "Unpublish"}
@@ -176,21 +191,21 @@ function PublishBar({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (p
             {busy === "discard" ? "Discarding…" : "Discard changes"}
           </button>
         )}
-        <button
-          type="button"
-          className={styles.primaryBtn}
-          disabled={busy !== null || !canPublish}
-          title={!verified ? PUBLISH_LOCKED : !shopPage.draft_title.trim() ? "Add a title first" : undefined}
-          aria-describedby={!verified ? "publish-locked" : undefined}
-          onClick={() => void run("publish", publishMyShopPage)}
+        {/* The hover note sits on a wrapper: a disabled button shows no tooltip in some browsers. */}
+        <span
+          className={t.publishWrap}
+          title={!verified ? "Available once your documents are approved." : !shopPage.draft_title.trim() ? "Add a title first" : undefined}
         >
-          {busy === "publish" ? "Publishing…" : live ? "Publish changes" : "Publish shop"}
-        </button>
-        {!verified && (
-          <p id="publish-locked" className={t.publishMsg}>
-            {PUBLISH_LOCKED}
-          </p>
-        )}
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            disabled={busy !== null || !canPublish}
+            aria-describedby={!verified ? "publish-status" : undefined}
+            onClick={() => void run("publish", publishMyShopPage)}
+          >
+            {busy === "publish" ? "Publishing…" : live ? "Publish changes" : "Publish shop"}
+          </button>
+        </span>
       </div>
     </div>
   );
@@ -254,27 +269,31 @@ function ShopPageCreateForm({ onCreated }: { onCreated: (page: MyShopPage) => vo
   };
 
   return (
-    <div className={styles.shopCreateForm}>
-      <p className={`${styles.emptyText} ${styles.spaceBelow}`}>
+    <div className={c.fields}>
+      <p className={c.muted}>
         Set up your shop page. Buyers do not see your farm until you publish it, so you can add a logo, banner and description first.
       </p>
       <label className={styles.formLabel}>Title *<input className={styles.formInput} value={draft.title} maxLength={SHOP_TITLE_MAX} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} placeholder="e.g. Dela Cruz Farm" /></label>
-      <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} value={draft.description} maxLength={SHOP_DESCRIPTION_MAX} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Short description shown on your shop page" /></label>
-      {error && <p className={`${styles.errorText} ${styles.spaceAbove}`}>{error}</p>}
-      <div className={`${styles.formActions} ${styles.spaceAboveLg}`}>
+      <label className={styles.formLabel}>Description<textarea className={styles.formInput} rows={2} value={draft.description} maxLength={SHOP_DESCRIPTION_MAX} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Short description shown on your shop page" /></label>
+      {error && <p className={styles.errorText} role="alert">{error}</p>}
+      <div className={c.actions}>
         <button className={styles.primaryBtn} disabled={creating || !draft.title.trim()} onClick={() => void handleCreate()}>{creating ? "Creating…" : "Start shop page draft"}</button>
       </div>
     </div>
   );
 }
 
+const IMAGE_TYPES = "image/png,image/jpeg,image/webp";
+
 function ShopPageEditor({ shopPage, onChange }: { shopPage: MyShopPage; onChange: (page: MyShopPage) => void }) {
   const [bannerUploading, setBannerUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ title: "", description: "" });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const upload = async (
     e: ChangeEvent<HTMLInputElement>,
@@ -284,76 +303,97 @@ function ShopPageEditor({ shopPage, onChange }: { shopPage: MyShopPage; onChange
     const file = e.target.files?.[0];
     if (!file) return;
     setBusy(true);
-    setError(null);
+    setUploadError(null);
     try { onChange(await send(file)); }
-    catch (err) { setError(getApiErrorMessage(err, "Image upload failed. Try again.")); }
+    catch (err) { setUploadError(getApiErrorMessage(err, "Image upload failed. Try again.")); }
     finally { setBusy(false); e.target.value = ""; }
+  };
+
+  const startEditing = () => {
+    setDraft({ title: shopPage.draft_title, description: shopPage.draft_description ?? "" });
+    setTitleError(null);
+    setSaveError(null);
+    setEditing(true);
   };
 
   const handleSave = async () => {
     if (!draft.title.trim()) {
-      setError("Title is required.");
+      setTitleError("Enter a title for your shop.");
+      document.getElementById("shop-title")?.focus();
       return;
     }
     setSaving(true);
-    setError(null);
+    setTitleError(null);
+    setSaveError(null);
     try {
       onChange(await updateMyShopPage({ title: draft.title.trim(), description: draft.description.trim() || null }));
       setEditing(false);
     } catch (err) {
-      setError(getApiErrorMessage(err, "Could not save the draft. Try again."));
+      setSaveError(getApiErrorMessage(err, "Could not save the draft. Try again."));
     } finally {
       setSaving(false);
     }
   };
 
-  return (
-    <div className={styles.shopEditor}>
-      {error && <p role="alert" className={styles.errorText}>{error}</p>}
-      <label className={styles.shopBannerWrap} title="Click to change banner">
-        {bannerUploading ? (
-          <div className={styles.shopBannerEmpty}>Uploading…</div>
-        ) : shopPage.draft_banner_image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={shopPage.draft_banner_image_url} alt="Shop banner (draft)" className={styles.shopBannerImg} />
-        ) : (
-          <div className={styles.shopBannerEmpty}>Click to upload a banner image</div>
-        )}
-        <div className={styles.shopBannerOverlay}>Change Banner</div>
-        <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={bannerUploading} onChange={(e) => void upload(e, uploadBannerImage, setBannerUploading)} />
-      </label>
+  const banner = shopPage.draft_banner_image_url;
+  const logo = shopPage.draft_logo_url;
 
-      <div className={styles.shopMetaRow}>
-        <label className={styles.shopLogoWrap} title="Click to change logo">
-          {logoUploading ? <div className={styles.shopLogoPlaceholder}>…</div>
-            : shopPage.draft_logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={shopPage.draft_logo_url} alt="Shop logo (draft)" className={styles.shopLogoImg} />
-            ) : (
-              <div className={styles.shopLogoPlaceholder}>Logo</div>
-            )}
-          <div className={styles.shopLogoOverlay}>Change</div>
-          <input type="file" accept="image/png,image/jpeg,image/webp" hidden disabled={logoUploading} onChange={(e) => void upload(e, uploadShopLogo, setLogoUploading)} />
+  return (
+    <>
+      <label className={c.banner}>
+        {bannerUploading ? (
+          <div className={c.bannerEmpty}>Uploading…</div>
+        ) : banner ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={banner} alt="Shop banner (draft)" className={c.bannerImg} />
+        ) : (
+          <div className={c.bannerEmpty}>
+            Add a banner image
+            <small>Shown across the top of your shop page</small>
+          </div>
+        )}
+        {!bannerUploading && <span className={c.chip} aria-hidden="true">{banner ? "Replace banner" : "Upload banner"}</span>}
+        <input type="file" accept={IMAGE_TYPES} className={c.fileInput} aria-label={banner ? "Replace banner image" : "Upload banner image"} disabled={bannerUploading} onChange={(e) => void upload(e, uploadBannerImage, setBannerUploading)} />
+      </label>
+      <p className={c.hint}>Wide image, about 4:1 (for example 1600 × 400 px). JPG, PNG or WebP.</p>
+      {uploadError && <p className={styles.errorText} role="alert">{uploadError}</p>}
+
+      <div className={c.identity}>
+        <label className={c.logo}>
+          {logoUploading ? (
+            <div className={c.logoEmpty}>…</div>
+          ) : logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logo} alt="Shop logo (draft)" />
+          ) : (
+            <div className={c.logoEmpty}>Logo</div>
+          )}
+          {!logoUploading && <span className={c.chip} aria-hidden="true">{logo ? "Change" : "Upload"}</span>}
+          <input type="file" accept={IMAGE_TYPES} className={c.fileInput} aria-label={logo ? "Change logo" : "Upload logo"} disabled={logoUploading} onChange={(e) => void upload(e, uploadShopLogo, setLogoUploading)} />
         </label>
 
         {editing ? (
-          <div className={styles.shopInfoForm}>
-            <label className={styles.formLabel}>Title<input className={styles.formInput} maxLength={SHOP_TITLE_MAX} value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} /></label>
-            <label className={`${styles.formLabel} ${styles.spaceAbove}`}>Description<textarea className={styles.formInput} rows={2} maxLength={SHOP_DESCRIPTION_MAX} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} /></label>
-            <div className={`${styles.formActions} ${styles.spaceAbove}`}>
+          <div className={c.identityForm}>
+            <label className={`${styles.formLabel}${invalidClass(titleError)}`}>
+              Title
+              <input id="shop-title" className={styles.formInput} maxLength={SHOP_TITLE_MAX} value={draft.title} onChange={(e) => { setDraft((d) => ({ ...d, title: e.target.value })); setTitleError(null); }} {...invalidProps("shop-title", titleError)} />
+              <FieldError id="shop-title" message={titleError} />
+            </label>
+            <label className={styles.formLabel}>Description<textarea className={styles.formInput} rows={3} maxLength={SHOP_DESCRIPTION_MAX} value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="What you grow, how you farm, where you are" /></label>
+            {saveError && <p className={styles.errorText} role="alert">{saveError}</p>}
+            <div className={c.actions}>
               <button className={styles.primaryBtn} disabled={saving} onClick={() => void handleSave()}>{saving ? "Saving…" : "Save draft"}</button>
-              <button className={styles.secondaryBtn} onClick={() => { setEditing(false); setError(null); }}>Cancel</button>
+              <button className={styles.secondaryBtn} disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
             </div>
           </div>
         ) : (
-          <div className={styles.shopInfoView}>
-            <strong className={styles.shopInfoTitle}>{shopPage.draft_title}</strong>
-            {shopPage.draft_description && <p className={styles.shopInfoDesc}>{shopPage.draft_description}</p>}
-            <button className={`${styles.uploadBtn} ${styles.spaceAbove}`} onClick={() => { setDraft({ title: shopPage.draft_title, description: shopPage.draft_description ?? "" }); setEditing(true); }}>Edit title & description</button>
+          <div className={c.identityText}>
+            <h3 className={c.identityTitle}>{shopPage.draft_title}</h3>
+            <p className={c.identityDesc}>{shopPage.draft_description || <em>No description yet. Tell buyers about your farm.</em>}</p>
+            <button type="button" className={styles.secondaryBtn} onClick={startEditing}>Edit info</button>
           </div>
         )}
       </div>
-      {error && <p className={`${styles.errorText} ${t.editorError}`}>{error}</p>}
-    </div>
+    </>
   );
 }

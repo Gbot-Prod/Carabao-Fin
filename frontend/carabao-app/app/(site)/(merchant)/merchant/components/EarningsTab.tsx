@@ -57,7 +57,7 @@ export default function EarningsTab() {
   if (!loaded) return <PageLoader variant="inline" label="Loading earnings…" />;
 
   return (
-    <div className={styles.earningsLayout}>
+    <div className={styles.fillPage}>
       <section className={styles.earningsGrid}>
         <div className={`${styles.kpiCard} ${styles.kpiCardAccent}`}>
           <span className={styles.kpiLabel}>Total Earned</span>

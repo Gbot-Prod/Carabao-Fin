@@ -24,12 +24,23 @@ Settings:
 - ``ADMIN_JWKS_URL``: the admin deploy's ``/api/auth/jwks``, on a route that
   does not go through Cloudflare Access (Railway private network). Unset: no
   admin tokens are accepted.
+- ``ADMIN_JWKS_THUMBPRINTS``: the RFC 7638 thumbprints of the admin keys the API
+  trusts, comma separated (``scripts/admin_jwk_thumbprints.py`` prints them).
+  The admin deploy serves every row of ``jwks_admin`` without checking it, and
+  the public deploy shares that database: a key someone writes into the table
+  is served too. Only a pinned key verifies an admin token, also when a planted
+  row reuses a real "kid". Empty: no admin tokens are accepted.
 - ``BETTER_AUTH_JWT_AUDIENCE``: defaults to ``carabao-api``; must match lib/auth.ts.
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
+import logging
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -38,7 +49,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 import jwt
+from cryptography.hazmat.primitives.asymmetric.ed448 import Ed448PublicKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from fastapi import HTTPException, status
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_AUDIENCE = "carabao-api"
 ALGORITHMS = ["EdDSA"]
@@ -103,6 +119,39 @@ def admin_jwks_url() -> str | None:
     return os.getenv("ADMIN_JWKS_URL", "").strip() or None
 
 
+def admin_key_pins() -> frozenset[str]:
+    raw = os.getenv("ADMIN_JWKS_THUMBPRINTS", "")
+    return frozenset(pin for pin in re.split(r"[\s,]+", raw) if pin)
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def jwk_thumbprint(key: Any) -> str | None:
+    """RFC 7638 SHA-256 thumbprint of an EdDSA public key; None for other keys."""
+    if isinstance(key, Ed25519PublicKey):
+        crv = "Ed25519"
+    elif isinstance(key, Ed448PublicKey):
+        crv = "Ed448"
+    else:
+        return None
+    x = _b64url(key.public_bytes(Encoding.Raw, PublicFormat.Raw))
+    # Required members only, sorted, no whitespace (RFC 7638 section 3).
+    canonical = json.dumps(
+        {"crv": crv, "kty": "OKP", "x": x}, separators=(",", ":"), sort_keys=True
+    )
+    return _b64url(hashlib.sha256(canonical.encode()).digest())
+
+
+@lru_cache(maxsize=1)
+def _warn_admin_keys_not_pinned() -> None:
+    logger.error(
+        "ADMIN_JWKS_URL is set but ADMIN_JWKS_THUMBPRINTS is empty: no admin "
+        "token is accepted. Run scripts/admin_jwk_thumbprints.py and set it."
+    )
+
+
 class _KeySet:
     """One JWKS URL. Cached; refetched for an unknown kid, rate limited."""
 
@@ -113,7 +162,11 @@ class _KeySet:
         self._lock = threading.Lock()
         self._last_refresh = 0.0
 
-    def find(self, kid: str, *, refresh: bool) -> Any | None:
+    def find(
+        self, kid: str, *, refresh: bool, pins: frozenset[str] | None = None
+    ) -> Any | None:
+        """The key for ``kid``. With ``pins``, only a key whose thumbprint is
+        pinned; a planted duplicate of a real kid is skipped, not returned."""
         if refresh:
             with self._lock:
                 now = time.monotonic()
@@ -128,8 +181,21 @@ class _KeySet:
             # No usable keys at this URL (yet): not this set.
             return None
         for jwk in jwk_set.keys:
-            if jwk.key_id == kid:
+            if jwk.key_id != kid:
+                continue
+            if pins is None:
                 return jwk.key
+            thumbprint = jwk_thumbprint(jwk.key)
+            if thumbprint in pins:
+                return jwk.key
+            # A served key that is not pinned: a new key not yet pinned, or a
+            # row written into the key table by someone else.
+            logger.warning(
+                "Admin key set serves an unpinned key (kid=%s, thumbprint=%s); "
+                "refused.",
+                kid,
+                thumbprint,
+            )
         return None
 
 
@@ -150,11 +216,18 @@ class VerifiedToken:
     surface: str
 
 
-def _key_sources() -> list[tuple[str, str]]:
-    sources = [(PUBLIC_SURFACE, public_jwks_url())]
+def _key_sources() -> list[tuple[str, str, frozenset[str] | None]]:
+    """(surface, JWKS URL, pinned thumbprints or None for "any key")."""
+    sources: list[tuple[str, str, frozenset[str] | None]] = [
+        (PUBLIC_SURFACE, public_jwks_url(), None)
+    ]
     admin_url = admin_jwks_url()
     if admin_url:
-        sources.append((ADMIN_SURFACE, admin_url))
+        pins = admin_key_pins()
+        if pins:
+            sources.append((ADMIN_SURFACE, admin_url, pins))
+        else:
+            _warn_admin_keys_not_pinned()
     return sources
 
 
@@ -170,9 +243,9 @@ def _signing_key(token: str) -> SigningKey:
     unreachable = False
     # Cached sets first; a refetch only when no set knows the kid.
     for refresh in (False, True):
-        for surface, url in _key_sources():
+        for surface, url, pins in _key_sources():
             try:
-                key = _jwk_client(url).find(kid, refresh=refresh)
+                key = _jwk_client(url).find(kid, refresh=refresh, pins=pins)
             except jwt.PyJWKClientConnectionError:
                 unreachable = True
                 continue

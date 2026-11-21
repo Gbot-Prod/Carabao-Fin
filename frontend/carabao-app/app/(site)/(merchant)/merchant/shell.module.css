@@ -284,6 +284,9 @@
 .main {
   flex: 1;
   min-width: 0;
+  /* A column, so a page can stretch its last card to the bottom of the screen. */
+  display: flex;
+  flex-direction: column;
 }
 
 .mobileToggle,

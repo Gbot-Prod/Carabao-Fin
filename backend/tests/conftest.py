@@ -114,6 +114,7 @@ def _jwks_urls(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.delenv("PUBLIC_JWKS_URL", raising=False)
     monkeypatch.delenv("ADMIN_JWKS_URL", raising=False)
+    monkeypatch.delenv("ADMIN_JWKS_THUMBPRINTS", raising=False)
 
 
 @pytest.fixture(autouse=True)
