@@ -34,6 +34,7 @@ from app.services import (
     admin_enrolment,
     audit_log,
     better_auth_store,
+    document_checks,
     money,
     paymongo,
     r2_service,
@@ -763,28 +764,42 @@ def review_merchant_application(
     if application is None:
         raise HTTPException(status_code=404, detail="Application not found")
 
+    linked = (
+        db.get(Merchant, application.merchant_id) if application.merchant_id else None
+    )
     before = {
         "status": application.status,
         "admin_note": application.admin_note,
         "merchant_id": application.merchant_id,
+        "verification_status": linked.verification_status if linked else None,
     }
     try:
-        apply_admin_decision(db, application, payload.status)
+        merchant = apply_admin_decision(
+            db,
+            application,
+            payload.status,
+            admin_id=admin.id,
+            confirmed_items=payload.confirmed_items,
+        )
     except (ValueError, IntegrityError) as exc:
         db.rollback()
         raise HTTPException(
             status_code=400, detail="Failed to create merchant profile"
         ) from exc
     application.admin_note = payload.admin_note or None
-    now = datetime.now(UTC)
     application.reviewed_by_user_id = admin.id
-    application.reviewed_at = now
-    if payload.status == "approved" and application.merchant_id is not None:
-        merchant = db.get(Merchant, application.merchant_id)
-        if merchant is not None:
-            merchant.verified_by_user_id = admin.id
-            merchant.verified_at = now
+    application.reviewed_at = datetime.now(UTC)
 
+    after: dict = {
+        "status": application.status,
+        "admin_note": application.admin_note,
+        "merchant_id": application.merchant_id,
+        "verification_status": merchant.verification_status if merchant else None,
+    }
+    if payload.status == "approved":
+        # What the admin confirmed on the automated checklist (they decide).
+        after["checklist"] = application.check_checklist
+        after["checklist_confirmations"] = application.check_confirmations
     audit_log.record_admin_action(
         db,
         admin=admin,
@@ -792,20 +807,40 @@ def review_merchant_application(
         target_type="merchant_application",
         target_id=application.id,
         before=before,
-        after={
-            "status": application.status,
-            "admin_note": application.admin_note,
-            "merchant_id": application.merchant_id,
-        },
+        after=after,
     )
     db.commit()
     db.refresh(application)
     return application
 
 
-def _document_url_response(
-    db: Session, app_id: int, document: str, label: str
-) -> dict:
+@router.post(
+    "/admin/merchant-applications/{app_id}/checks/rerun",
+    response_model=AdminMerchantApplicationResponse,
+)
+def rerun_document_checks(
+    app_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(_require_admin),
+):
+    """Run the automated checks again (they failed, or a document changed)."""
+    application = (
+        db.query(MerchantApplication).filter(MerchantApplication.id == app_id).first()
+    )
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if application.status == "pending_documents":
+        raise HTTPException(
+            status_code=409, detail="This application has no documents yet."
+        )
+    document_checks.run_and_save(
+        db, application, document_checks.load_documents(application)
+    )
+    db.refresh(application)
+    return application
+
+
+def _document_url_response(db: Session, app_id: int, document: str, label: str) -> dict:
     """A short-lived signed URL for one of an application's private documents."""
     application = (
         db.query(MerchantApplication).filter(MerchantApplication.id == app_id).first()

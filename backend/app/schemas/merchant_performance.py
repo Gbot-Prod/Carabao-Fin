@@ -8,6 +8,9 @@ from pydantic import BaseModel, ConfigDict
 class MerchantPerformanceResponse(BaseModel):
     merchant_id: int
     merchant_name: str
+    # setup | under_review | needs_changes | verified | suspended. The Merchant
+    # Centre opens for any merchant; only "verified" sells.
+    verification_status: str = "setup"
     rating: float | None = None
     rating_count: int = 0
 

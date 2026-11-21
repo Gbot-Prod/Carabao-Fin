@@ -97,6 +97,9 @@ class MerchantResponse(BaseModel):
     # CF-0066: holiday mode; the farm takes no orders through this day.
     paused_until: date | None = None
     pause_message: str | None = None
+    # Whether the merchant may sell (merchant_verification.py). Buyers only
+    # ever see verified merchants.
+    verification_status: str | None = None
 
     shop_page: MerchantShopResponse | None = None
     produces: list[ProduceResponse] = Field(default_factory=list)

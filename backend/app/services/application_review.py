@@ -16,18 +16,30 @@ Applicant moves (POST /merchant-onboarding/me):
         their account
 
 Any other move is refused with 409.
+
+The merchant row exists from the applicant's first save
+(merchant_verification.ensure_merchant_for_application); every move here
+updates its ``verification_status`` through sync_verification_status.
+Approving copies the reviewed fields onto it and needs every warn and fail
+item of the automated checklist confirmed (document_checks.py).
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
+from app.services import document_checks
 from app.services.merchant_service import create_merchant_from_application
+from app.services.merchant_verification import (
+    apply_reviewed_fields,
+    sync_verification_status,
+)
 
 SUBMITTED = "submitted"
 APPROVED = "approved"
@@ -81,27 +93,47 @@ def check_can_resubmit(
     raise HTTPException(status_code=409, detail=detail)
 
 
+def _merchant_for(db: Session, application: Any) -> Merchant | None:
+    query = db.query(Merchant).with_for_update()
+    if application.merchant_id is not None:
+        return query.filter(Merchant.id == application.merchant_id).first()
+    return query.filter(Merchant.user_id == application.user_id).first()
+
+
 def apply_admin_decision(
-    db: Session, application: MerchantApplication, target: str
-) -> None:
+    db: Session,
+    application: Any,
+    target: str,
+    *,
+    admin_id: int | None = None,
+    confirmed_items: list[str] | None = None,
+) -> Merchant | None:
     """Move the application to ``target`` and do what that move requires.
 
-    Approval can raise ValueError or IntegrityError from creating the merchant;
-    the caller rolls back.
+    Approval refuses (409) until every warn and fail checklist item is in
+    ``confirmed_items``; the confirmations are stored on the application.
+    Reject and clarification never need the checklist.
+
+    Approval can raise ValueError or IntegrityError from creating a merchant
+    (an application from before merchants were made at onboarding); the caller
+    rolls back.
     """
     check_admin_transition(application.status, target)
+    if target == APPROVED:
+        document_checks.confirm_items(application, confirmed_items or [], admin_id)
     application.status = target
 
-    if target == APPROVED and application.merchant_id is None:
-        merchant = create_merchant_from_application(db, application)
+    merchant = _merchant_for(db, application)
+    if target == APPROVED:
+        if merchant is None or merchant.deleted_at is not None:
+            # Fallback for an application that has no live merchant yet.
+            merchant = create_merchant_from_application(db, application)
+        else:
+            apply_reviewed_fields(merchant, application)
         application.merchant_id = merchant.id
+        merchant.verified_by_user_id = admin_id
+        merchant.verified_at = datetime.now(UTC)
 
-    if target == SUSPENDED:
-        merchant = (
-            db.query(Merchant)
-            .filter(Merchant.user_id == application.user_id)
-            .with_for_update()
-            .first()
-        )
-        if merchant is not None and merchant.suspended_at is None:
-            merchant.suspended_at = datetime.now(UTC)
+    if merchant is not None:
+        sync_verification_status(merchant, application)
+    return merchant
