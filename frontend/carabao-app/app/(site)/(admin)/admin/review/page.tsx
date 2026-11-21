@@ -3,17 +3,19 @@
 import { useEffect, useState } from "react";
 import {
   fetchAdminMerchantApplications,
+  fetchBirCertDocumentUrl,
   fetchGovIdDocumentUrl,
   fetchRsbsaDocumentUrl,
   reviewMerchantApplication,
   type MerchantApplication,
 } from "@/util/api/admin";
+import { SELLER_TYPE_LABELS } from "@/util/api/merchants";
 import styles from "./page.module.css";
 import { ADMIN_LIST_LIMIT, ADMIN_LIST_MAX, mayHaveMore, mergeById } from "@/lib/admin-window";
 
-// CF-0067: always load every application waiting for a decision; the reviewed
-// ones come a window at a time.
-const OPEN_STATUSES = ["submitted", "clarification"];
+// CF-0067: always load every application waiting for a decision, and the
+// incomplete ones (Submit later); the reviewed ones come a window at a time.
+const OPEN_STATUSES = ["submitted", "clarification", "pending_documents"];
 import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 
@@ -23,9 +25,22 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Rejected",
   clarification: "Needs Clarification",
   suspended: "Suspended",
+  pending_documents: "Incomplete",
 };
 
-type DocumentKind = "rsbsa" | "govId";
+const VAT_LABELS: Record<string, string> = { vat_registered: "VAT-registered", non_vat: "Non-VAT" };
+
+const personName = (...parts: (string | null)[]) => parts.filter(Boolean).join(" ") || null;
+const dateTime = (value: string | null) => (value ? new Date(value).toLocaleString("en-PH") : null);
+
+/** The small agricultural producer declaration (BIR RR No. 12-2023), as the admin reads it. */
+function declarationText(app: MerchantApplication): string | null {
+  if (app.small_agri_producer === null) return null;
+  const year = app.small_agri_declared_year ? ` (declared ${app.small_agri_declared_year})` : "";
+  return `${app.small_agri_producer ? "Yes" : "No"}${year}`;
+}
+
+type DocumentKind = "rsbsa" | "govId" | "birCert";
 
 const DOCUMENTS: Record<
   DocumentKind,
@@ -33,7 +48,15 @@ const DOCUMENTS: Record<
 > = {
   rsbsa: { label: "RSBSA document", button: "View RSBSA Document", fetchUrl: fetchRsbsaDocumentUrl },
   govId: { label: "government ID", button: "View Government ID", fetchUrl: fetchGovIdDocumentUrl },
+  birCert: { label: "BIR Form 2303", button: "View BIR Form 2303", fetchUrl: fetchBirCertDocumentUrl },
 };
+
+const documentName = (app: MerchantApplication, kind: DocumentKind) =>
+  kind === "rsbsa"
+    ? app.rsbsa_document_original_name
+    : kind === "govId"
+      ? app.gov_id_document_original_name
+      : app.bir_cert_document_original_name;
 
 type ReviewAction = "approved" | "rejected" | "clarification" | "suspended";
 
@@ -126,9 +149,11 @@ function ApplicationCard({
     <div className={styles.card}>
       <button className={styles.cardHeader} onClick={() => setOpen((v) => !v)}>
         <div className={styles.cardMeta}>
-          <span className={styles.cardName}>{app.merchant_name}</span>
+          <span className={styles.cardName}>
+            {app.merchant_name ?? `Business information to follow (${app.contact_email})`}
+          </span>
           <span className={styles.cardSub}>
-            {app.legal_business_name} · {app.city}, {app.province}
+            {[app.legal_business_name, `${app.city}, ${app.province}`].filter(Boolean).join(" · ")}
           </span>
         </div>
         <div className={styles.cardRight}>
@@ -142,10 +167,25 @@ function ApplicationCard({
       {open && (
         <div className={styles.cardBody}>
           <div className={styles.grid}>
-            <Field label="Business Type" value={app.business_type} />
+            <Field label="Seller Type" value={app.seller_type ? SELLER_TYPE_LABELS[app.seller_type] ?? app.seller_type : null} />
+            {(app.seller_type === "individual_farmer" || app.seller_type === "sole_proprietor") && (
+              <Field label="Legal Name" value={personName(app.first_name, app.middle_name, app.last_name, app.suffix)} />
+            )}
+            {(app.seller_type === "corporation" || app.seller_type === "cooperative") && (
+              <Field label="Registered Name" value={app.company_name} />
+            )}
+            {app.seller_type !== "individual_farmer" && <Field label="Trade Name" value={app.trade_name} />}
+            {app.seller_type === "corporation" && (
+              <Field
+                label="Authorized Representative"
+                value={personName(app.rep_first_name, app.rep_middle_name, app.rep_last_name, app.rep_suffix)}
+              />
+            )}
             <Field label="Contact Email" value={app.contact_email} />
             <Field label="Contact Number" value={app.contact_number} />
             <Field label="TIN" value={app.tin} />
+            <Field label="VAT Status" value={app.vat_status ? VAT_LABELS[app.vat_status] : null} />
+            <Field label="Small Agri Producer (RR 12-2023)" value={declarationText(app)} />
             <Field label="Registration Type" value={app.registration_type} />
             <Field label="Registration No." value={app.registration_number} />
             <Field label="Address" value={app.address} />
@@ -155,22 +195,18 @@ function ApplicationCard({
             <Field label="Available Days" value={app.available_days.join(", ")} />
             <Field label="RSBSA No." value={app.rsbsa_number} />
             <Field label="Government ID" value={app.gov_id_type} />
+            <Field label="Submitted" value={dateTime(app.submitted_at)} />
             <Field
-              label="Submitted"
-              value={
-                app.submitted_at
-                  ? new Date(app.submitted_at).toLocaleString("en-PH")
-                  : null
-              }
+              label="Terms Accepted"
+              value={app.terms_accepted_at ? `${dateTime(app.terms_accepted_at)} (version ${app.terms_version ?? "—"})` : null}
             />
           </div>
 
           <div className={styles.documentPanel}>
-            {(["rsbsa", "govId"] as const).map((kind) => {
-              const fileName =
-                kind === "rsbsa"
-                  ? app.rsbsa_document_original_name
-                  : app.gov_id_document_original_name;
+            {(["rsbsa", "govId", "birCert"] as const).map((kind) => {
+              const fileName = documentName(app, kind);
+              // Only the documents this application has (none while incomplete).
+              if (!fileName) return null;
               return (
                 <div key={kind} className={styles.documentRow}>
                   <button
@@ -203,7 +239,9 @@ function ApplicationCard({
             <p className={styles.adminNoteText}>
               {app.status === "suspended"
                 ? "This merchant is suspended."
-                : "Waiting for the applicant to send the form again."}
+                : app.status === "pending_documents"
+                  ? "Incomplete: the applicant chose Submit later and has not sent their business information yet. It can be reviewed once they do."
+                  : "Waiting for the applicant to send the form again."}
             </p>
           ) : (
           <div className={styles.actionPanel}>
@@ -346,6 +384,7 @@ export default function AdminReviewPage() {
   const reviewed = applications.filter(
     (a) => a.status === "approved" || a.status === "rejected" || a.status === "suspended",
   );
+  const incomplete = applications.filter((a) => a.status === "pending_documents");
 
   return (
     <div className={styles.page}>
@@ -364,6 +403,15 @@ export default function AdminReviewPage() {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Pending</h2>
           {pending.map((a) => (
+            <ApplicationCard key={a.id} app={a} onUpdate={handleUpdate} />
+          ))}
+        </section>
+      )}
+
+      {incomplete.length > 0 && (
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Incomplete (Submit later)</h2>
+          {incomplete.map((a) => (
             <ApplicationCard key={a.id} app={a} onUpdate={handleUpdate} />
           ))}
         </section>

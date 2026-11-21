@@ -4,6 +4,7 @@ import { Fragment, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ADMIN_PAGE_SIZE, fetchAdminMerchantsPage, type AdminMerchant } from "@/util/api/admin";
+import { SELLER_TYPE_LABELS } from "@/util/api/merchants";
 import Pagination from "@/components/Pagination/Pagination";
 import SuspendControl from "../../SuspendControl";
 import styles from "./page.module.css";
@@ -168,8 +169,8 @@ function MerchantDetails({ merchant: m }: { merchant: AdminMerchant }) {
             <dd>{m.legal_business_name ?? dash}</dd>
           </div>
           <div>
-            <dt>Business type</dt>
-            <dd>{m.business_type ?? dash}</dd>
+            <dt>Seller type</dt>
+            <dd>{m.seller_type ? SELLER_TYPE_LABELS[m.seller_type] : dash}</dd>
           </div>
           <div>
             <dt>Registration</dt>

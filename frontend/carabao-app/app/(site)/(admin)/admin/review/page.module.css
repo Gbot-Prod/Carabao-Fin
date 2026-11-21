@@ -95,6 +95,12 @@
   color: #9a3412;
 }
 
+/* Saved with "Submit later": no business information yet. */
+.badge_pending_documents {
+  background: #e5e7eb;
+  color: #374151;
+}
+
 .chevron {
   font-size: 10px;
   color: var(--text-subtle);
