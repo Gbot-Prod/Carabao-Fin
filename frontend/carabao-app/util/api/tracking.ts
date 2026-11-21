@@ -1,3 +1,4 @@
+import type { Feature, LineString } from 'geojson';
 import { apiClient } from './client';
 
 export type TrackingPosition = { lat: number; lng: number };
@@ -59,6 +60,20 @@ export const fetchTracking = async (orderId: number): Promise<TrackingData> => {
 export const fetchShipmentTracking = async (shipmentId: number): Promise<TrackingData> => {
   const response = await apiClient.get<TrackingData>(`/shipments/${shipmentId}`);
   return response.data;
+};
+
+type RouteResponse = { route: Feature<LineString> | null };
+
+/** Road line for the buyer's track map: through the waypoints /tracking/{id} shows. */
+export const fetchOrderRoute = async (orderId: number): Promise<Feature<LineString> | null> => {
+  const response = await apiClient.get<RouteResponse>(`/tracking/${orderId}/route`);
+  return response.data.route;
+};
+
+/** Road line for the merchant's routing map. */
+export const fetchShipmentRoute = async (shipmentId: number): Promise<Feature<LineString> | null> => {
+  const response = await apiClient.get<RouteResponse>(`/shipments/${shipmentId}/route`);
+  return response.data.route;
 };
 
 /** The rider could not get to this stop's pin (pin quality, control 6). */

@@ -26,6 +26,8 @@ const apiOrigin = origin(
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
 );
 
+const TURNSTILE = "https://challenges.cloudflare.com";
+
 const MAPBOX = ["https://api.mapbox.com", "https://*.tiles.mapbox.com", "https://events.mapbox.com"];
 
 // nonce null: a statically rendered page (help). Its HTML is made at build, so
@@ -42,6 +44,9 @@ function buildPolicy(nonce: string | null): string {
       "'self'",
       ...(nonce ? [`'nonce-${nonce}'`, "'strict-dynamic'"] : ["'unsafe-inline'"]),
       ...(isDev ? ["'unsafe-eval'"] : []),
+      // Turnstile (lib/turnstile.ts). Under 'strict-dynamic' it loads as a script our
+      // own code inserts; the host is for browsers without 'strict-dynamic'.
+      TURNSTILE,
     ],
     // CSS modules, Mapbox GL and React style={} props use inline styles.
     "style-src": ["'self'", "'unsafe-inline'"],
@@ -52,7 +57,8 @@ function buildPolicy(nonce: string | null): string {
     // Mapbox GL runs its workers from blob: URLs.
     "worker-src": ["'self'", "blob:"],
     "child-src": ["'self'", "blob:"],
-    "frame-src": ["'none'"],
+    // Cloudflare Turnstile (lib/turnstile.ts) runs its check in an iframe.
+    "frame-src": [TURNSTILE],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],

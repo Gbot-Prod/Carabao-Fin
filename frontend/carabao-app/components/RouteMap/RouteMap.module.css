@@ -9,6 +9,11 @@
   inset: 0;
 }
 
+/* Shown until there is a route: no Mapbox map is loaded for it. */
+.mapPlaceholder {
+  background: var(--surface-muted);
+}
+
 /* Numbered stop pin; also used as a Mapbox marker element. */
 .stopMarker {
   display: flex;

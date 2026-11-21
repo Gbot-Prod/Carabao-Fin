@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_current_user, get_db
-from app.api.routes.tracking import with_current_order_statuses
+from app.api.routes.tracking import route_for, with_current_order_statuses
 from app.models.order import Order
 from app.models.shipment import Shipment
 from app.models.statuses import OrderStatus
@@ -20,6 +20,7 @@ from app.routing.state import Stop
 from app.schemas.shipment import (
     CreateShipmentRequest,
     PinUnreachableRequest,
+    RouteGeometryResponse,
     ShipmentStop,
     ShipmentTrackingResponse,
     SkippedStop,
@@ -460,6 +461,18 @@ def get_shipment_tracking(
             float(selected_destination.get("lat", 0.0)),
             float(selected_destination.get("lng", 0.0)),
         ),
+    )
+
+
+@router.get("/shipments/{shipment_id}/route", response_model=RouteGeometryResponse)
+def get_shipment_route(
+    shipment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rate_limit.enforce_action(db, "route_view", str(current_user.id))
+    return route_for(
+        get_shipment_tracking(shipment_id, db=db, current_user=current_user)
     )
 
 

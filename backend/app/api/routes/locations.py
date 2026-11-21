@@ -1,21 +1,26 @@
-"""Pin check before save (pin quality, control 5).
+"""Map pin picker endpoints.
 
-The map picker calls this each time the pin moves, so the person sees at once
-where the rider will stop, or that there is no road near the pin. The save
-routes run the same check again (validate_pin); this answer is only a preview.
+Pin check before save (pin quality, control 5): the map picker calls this each
+time the pin moves, so the person sees at once where the rider will stop, or
+that there is no road near the pin. The save routes run the same check again
+(validate_pin); this answer is only a preview.
+
+Place search: forward and reverse geocoding for the picker, so the Mapbox
+geocoding token stays on the server (services/place_search).
 """
 
 from __future__ import annotations
 
-from typing import cast
+from collections.abc import Callable
+from typing import Any, cast
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.models.user import User
-from app.services import rate_limit
+from app.services import place_search, rate_limit
 from app.services.pinned_location import (
     PIN_FLAG_LIMIT,
     distance_m,
@@ -67,3 +72,68 @@ def check_pin(
         unreachable_reports=reports,
         blocked=reports >= PIN_FLAG_LIMIT,
     )
+
+
+# --- Place search for the pin picker (server-side Mapbox geocoding) ----------
+
+
+class GeocodeRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=place_search.MAX_QUERY_LENGTH)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReverseGeocodeRequest(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlaceContext(BaseModel):
+    id: str
+    text: str
+
+
+class PlaceFeature(BaseModel):
+    id: str | None = None
+    place_type: list[str] = []
+    text: str | None = None
+    place_name: str | None = None
+    center: list[float]
+    context: list[PlaceContext] = []
+
+
+class PlaceResponse(BaseModel):
+    # Null: Mapbox found nothing.
+    feature: PlaceFeature | None = None
+
+
+def _place(lookup: Callable[[], dict[str, Any] | None]) -> PlaceResponse:
+    try:
+        found = lookup()
+    except place_search.PlaceSearchUnavailable:
+        raise HTTPException(
+            status_code=503, detail="Place search is unavailable right now."
+        ) from None
+    return PlaceResponse(feature=PlaceFeature(**found) if found else None)
+
+
+@router.post("/locations/geocode", response_model=PlaceResponse)
+def geocode(
+    payload: GeocodeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rate_limit.enforce_action(db, "place_search", str(current_user.id))
+    return _place(lambda: place_search.forward(payload.query))
+
+
+@router.post("/locations/reverse-geocode", response_model=PlaceResponse)
+def reverse_geocode(
+    payload: ReverseGeocodeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rate_limit.enforce_action(db, "place_search", str(current_user.id))
+    return _place(lambda: place_search.reverse(payload.lat, payload.lng))

@@ -36,7 +36,7 @@ class Limit:
     window_seconds: int
 
 
-# scope -> (per IP, per identifier). Identifiers are emails, phone numbers or user ids.
+# scope -> (per IP add, per identifier). Identifiers are emails, phone numbers or user ids.
 LIMITS: dict[str, tuple[Limit, Limit]] = {
     "otp_send": (Limit(20, 900), Limit(5, 900)),
     "otp_verify": (Limit(30, 900), Limit(10, 900)),
@@ -105,6 +105,13 @@ ACTION_LIMITS: dict[str, Limit] = {
     "pin_check": Limit(120, 3600),
     # A rider reports a pin that could not be reached (control 6).
     "pin_report": Limit(60, 3600),
+    # Map pin picker: forward (typed address) and reverse (pin's area) Mapbox
+    # geocoding together, billed per request. Each pin move asks once, each
+    # address edit up to three times; repeats are answered from a cache.
+    "place_search": Limit(240, 3600),
+    # The road line on the tracking / routing map (Mapbox Directions). Asked
+    # once per page view and set of stops; repeats come from a cache.
+    "route_view": Limit(120, 3600),
 }
 
 

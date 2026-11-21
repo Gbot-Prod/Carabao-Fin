@@ -205,6 +205,7 @@ function Track() {
           highlightOrderId={selectedOrder.orderId}
           highlightLabel={t.trackOrder.yourStop}
           showOtherStops={false}
+          routeFor="order"
         >
           {tracking && etaMinutes !== null && (
             <div className={styles.mapEtaChip}>

@@ -1,8 +1,11 @@
 // Mapbox geocoding for the map pin (U1b). Forward: the typed address places the
 // first pin. Reverse: the pin's area, to check it against the typed address.
 // Neither one writes the address fields; the typed address is what riders read.
+// Both go through the API (signed in, rate limited, cached), so no Mapbox
+// geocoding token is in the browser.
 
 import type { PlaceHints } from '@/lib/pin-area';
+import { geocodePlace, reverseGeocodePlace, type PlaceFeature } from '@/util/api/locations';
 
 export type Pin = { lat: number; lng: number };
 
@@ -17,17 +20,8 @@ export type PinAddress = {
 export type AddressHit = { pin: Pin; zoom: number; hints: PlaceHints };
 
 const NO_HINTS: PlaceHints = { province: [], city: [], barangay: [] };
-const BASE = 'https://api.mapbox.com/geocoding/v5/mapbox.places';
 
-type MapboxContext = { id: string; text: string };
-type MapboxFeature = {
-  id?: string;
-  place_type?: string[];
-  text?: string;
-  place_name?: string;
-  center?: [number, number];
-  context?: MapboxContext[];
-};
+type MapboxFeature = PlaceFeature;
 
 /** Province, city and barangay names in a Mapbox feature and its context. */
 export function placeHints(feature: MapboxFeature | undefined): PlaceHints {
@@ -53,26 +47,14 @@ function zoomFor(feature: MapboxFeature): number {
   return 13;
 }
 
-async function search(path: string, params: string): Promise<MapboxFeature | undefined> {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_API_KEY;
-  if (!token) return undefined;
-  const res = await fetch(`${BASE}/${path}.json?country=PH&limit=1&${params}&access_token=${encodeURIComponent(token)}`);
-  if (!res.ok) throw new Error(`Geocoding failed (${res.status})`);
-  const body = (await res.json()) as { features?: MapboxFeature[] };
-  return body.features?.[0];
-}
-
 export async function reverseGeocode(pin: Pin): Promise<PinAddress> {
-  const feature = await search(`${pin.lng},${pin.lat}`, 'types=address,poi,neighborhood,locality,place');
+  const feature = await reverseGeocodePlace(pin);
   return { placeName: feature?.place_name ?? null, hints: placeHints(feature) };
 }
 
 /** The best spot for a typed address, or null when Mapbox finds nothing. */
 export async function forwardGeocode(query: string): Promise<AddressHit | null> {
-  const feature = await search(
-    encodeURIComponent(query),
-    'types=address,poi,neighborhood,locality,place&autocomplete=false',
-  );
+  const feature = await geocodePlace(query);
   const center = feature?.center;
   if (!feature || !center) return null;
   return { pin: { lng: center[0], lat: center[1] }, zoom: zoomFor(feature), hints: placeHints(feature) };

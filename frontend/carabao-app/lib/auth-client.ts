@@ -1,6 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import { jwtClient, phoneNumberClient, twoFactorClient } from "better-auth/client/plugins";
 import { normalizePhMobile } from "@/lib/phone";
+import { captchaHeaders } from "@/lib/turnstile";
 
 const authClient = createAuthClient({
   plugins: [
@@ -195,7 +196,11 @@ const codeSendError = (error: unknown) => {
 };
 
 export const sendPhoneCode = async (phoneNumber: string) => {
-  const { error } = await authClient.phoneNumber.sendOtp({ phoneNumber: requirePhone(phoneNumber) });
+  const phone = requirePhone(phoneNumber);
+  const { error } = await authClient.phoneNumber.sendOtp({
+    phoneNumber: phone,
+    fetchOptions: { headers: await captchaHeaders() },
+  });
   if (error) throw codeSendError(error);
 };
 
@@ -345,7 +350,11 @@ export const signOut = async () => {
 // Both answer the same whether or not an account exists.
 
 export const requestPhonePasswordReset = async (phoneNumber: string) => {
-  const { error } = await authClient.phoneNumber.requestPasswordReset({ phoneNumber: requirePhone(phoneNumber) });
+  const phone = requirePhone(phoneNumber);
+  const { error } = await authClient.phoneNumber.requestPasswordReset({
+    phoneNumber: phone,
+    fetchOptions: { headers: await captchaHeaders() },
+  });
   if (error) throw codeSendError(error);
 };
 
@@ -367,7 +376,11 @@ export const resetPasswordWithPhone = async ({
 };
 
 export const requestPasswordReset = async (email: string) => {
-  const { error } = await authClient.requestPasswordReset({ email, redirectTo: "/reset-password" });
+  const { error } = await authClient.requestPasswordReset({
+    email,
+    redirectTo: "/reset-password",
+    fetchOptions: { headers: await captchaHeaders() },
+  });
   if (error) throw new Error(getErrorMessage(error, "Could not send the reset email"));
 };
 

@@ -18,3 +18,27 @@ export const checkPin = async (pin: { lat: number; lng: number }): Promise<PinCh
   const response = await apiClient.post<PinCheckResult>('/locations/pin-check', pin);
   return response.data;
 };
+
+/** A Mapbox place, trimmed by the API to what the pin picker reads. */
+export type PlaceFeature = {
+  id?: string | null;
+  place_type?: string[];
+  text?: string | null;
+  place_name?: string | null;
+  center?: [number, number];
+  context?: { id: string; text: string }[];
+};
+
+type PlaceResponse = { feature: PlaceFeature | null };
+
+/** Forward geocoding for the map pin, through the API (Mapbox token stays server-side). */
+export const geocodePlace = async (query: string): Promise<PlaceFeature | undefined> => {
+  const response = await apiClient.post<PlaceResponse>('/locations/geocode', { query: query.slice(0, 256) });
+  return response.data.feature ?? undefined;
+};
+
+/** The place at a pin, through the API. */
+export const reverseGeocodePlace = async (pin: { lat: number; lng: number }): Promise<PlaceFeature | undefined> => {
+  const response = await apiClient.post<PlaceResponse>('/locations/reverse-geocode', pin);
+  return response.data.feature ?? undefined;
+};

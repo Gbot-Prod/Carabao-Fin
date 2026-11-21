@@ -278,6 +278,7 @@ export default function RoutingPage() {
             tracking={tracking}
             highlightOrderId={nextStop?.order_id ?? null}
             highlightLabel={t.routing.nextStop}
+            routeFor="shipment"
           />
         </section>
       </div>

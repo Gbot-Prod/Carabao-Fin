@@ -10,6 +10,7 @@ import {
   statusLabel,
   type LatLng,
   type RouteGeoJSON,
+  type RouteSource,
 } from '@/util/tracking';
 import styles from './RouteMap.module.css';
 
@@ -97,6 +98,8 @@ export type RouteMapProps = {
   highlightLabel: string;
   /** Buyers only ever see their own stop, so their legend leaves this out. */
   showOtherStops?: boolean;
+  /** Where the road line comes from: the buyer's order or the merchant's shipment. */
+  routeFor: RouteSource['kind'];
   /** Overlays drawn on top of the map, such as an ETA chip. */
   children?: ReactNode;
 };
@@ -106,6 +109,7 @@ export default function RouteMap({
   highlightOrderId,
   highlightLabel,
   showOtherStops = true,
+  routeFor,
   children,
 }: RouteMapProps) {
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -115,6 +119,7 @@ export default function RouteMap({
   const [routeResult, setRouteResult] = useState<{ key: string; route: RouteGeoJSON | null } | null>(null);
 
   const waypoints = useMemo(() => tracking?.waypoints ?? [], [tracking]);
+  const hasStops = waypoints.length > 0;
 
   // Value-keyed so a poll that returns the same route does not redraw anything.
   const markersKey = JSON.stringify(waypoints.map((wp) => toMarkerSpec(wp, highlightOrderId)));
@@ -157,18 +162,18 @@ export default function RouteMap({
     };
   }, []);
 
-  // Road route from Mapbox Directions, fetched once per set of stops.
+  // Road route (Mapbox Directions, asked by the API), fetched once per set of stops.
+  const sourceId = routeFor === 'order' ? tracking?.order_id : tracking?.shipment_id;
   useEffect(() => {
-    if (routePoints.length < 2 || mapUnavailable) return;
+    if (routePoints.length < 2 || mapUnavailable || !sourceId) return;
     let cancelled = false;
-    const token = process.env.NEXT_PUBLIC_MAPBOX_API_KEY ?? '';
-    void fetchRouteGeoJSON(routePoints, token).then((fetched) => {
+    void fetchRouteGeoJSON({ kind: routeFor, id: sourceId }).then((fetched) => {
       if (!cancelled) setRouteResult({ key: routeKey, route: fetched });
     });
     return () => {
       cancelled = true;
     };
-  }, [routeKey, routePoints, mapUnavailable]);
+  }, [routeKey, routePoints, mapUnavailable, routeFor, sourceId]);
 
   // Draw (or clear) the route line once the style can take layers.
   useEffect(() => {
@@ -245,7 +250,12 @@ export default function RouteMap({
 
   return (
     <div className={styles.root}>
-      <div className={styles.mapCanvas} ref={containerRef} />
+      {/* Each Mapbox map is a billed map load: build one only when there are stops to show. */}
+      {hasStops ? (
+        <div className={styles.mapCanvas} ref={containerRef} />
+      ) : (
+        <div className={`${styles.mapCanvas} ${styles.mapPlaceholder}`} aria-hidden="true" />
+      )}
       {mapUnavailable && <FallbackRouteMap markers={markers} />}
       {children}
       <ul className={styles.legend} aria-label="Map legend">

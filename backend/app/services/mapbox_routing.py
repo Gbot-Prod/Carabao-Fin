@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import cast
+from typing import Any, cast
 
 import requests as _requests
+
+from app.utils.lru import TTLCache
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,62 @@ def leg_durations(coords: list[tuple[float, float]]) -> list[float] | None:
     except Exception as exc:
         logger.warning("mapbox directions failed: %s", type(exc).__name__)
         return None
+
+
+# Mapbox Directions takes at most 25 coordinates.
+_MAX_ROUTE_POINTS = 25
+# A shipment's stops do not move, and the tracking page polls, so one answer
+# per set of stops is enough. Failures are not cached.
+_route_cache: TTLCache[dict[str, Any] | None] = TTLCache(
+    maxsize=500, ttl_seconds=6 * 3600
+)
+
+
+def route_geometry(coords: list[tuple[float, float]]) -> dict[str, Any] | None:
+    """The driving route through ``coords`` as a GeoJSON Feature, or None.
+
+    Drawn on the tracking and routing maps. The browser used to ask Mapbox
+    itself with the public token; now it asks the API (rate limited, cached).
+    """
+    if len(coords) < 2 or len(coords) > _MAX_ROUTE_POINTS:
+        return None
+    key = tuple((round(lat, 6), round(lng, 6)) for lat, lng in coords)
+    hit = _route_cache.get(key)
+    if hit is not TTLCache.missing():
+        return hit  # type: ignore[return-value]
+    token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
+    if not token:
+        return None
+    try:
+        resp = _requests.get(
+            _DIRECTIONS_URL + _coord_path(coords),
+            params={
+                "access_token": token,
+                "geometries": "geojson",
+                "overview": "full",
+            },
+            timeout=10,
+        )
+        if not resp.ok:
+            logger.warning("mapbox route: HTTP %s", resp.status_code)
+            return None
+        routes = resp.json().get("routes") or []
+        geometry = routes[0].get("geometry") if routes else None
+    except Exception as exc:
+        logger.warning("mapbox route failed: %s", type(exc).__name__)
+        return None
+    feature = (
+        {"type": "Feature", "properties": {}, "geometry": geometry}
+        if isinstance(geometry, dict) and geometry.get("type") == "LineString"
+        else None
+    )
+    # "No route" is an answer too: cache it so a poll does not ask again.
+    _route_cache.put(key, feature)
+    return feature
+
+
+def clear_route_cache() -> None:
+    _route_cache.clear()
 
 
 def duration_matrix(

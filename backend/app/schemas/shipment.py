@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -44,6 +44,13 @@ class SkippedStop(BaseModel):
     # no_location: no pin and the address could not be found on the map.
     # no_road: no road route reaches it from the pickup or the other stops.
     reason: Literal["no_location", "no_road"]
+
+
+class RouteGeometryResponse(BaseModel):
+    """The road line for a tracking or routing map: a GeoJSON LineString
+    Feature through the response's waypoints, or null when there is none."""
+
+    route: dict[str, Any] | None = None
 
 
 class ShipmentTrackingResponse(BaseModel):

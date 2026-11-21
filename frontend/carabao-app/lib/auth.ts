@@ -19,6 +19,7 @@ import { appSurface, merchantUrl, rootDomain, subdomainMode } from "@/lib/urls";
 import { PH_MOBILE_PATTERN, PHONE_PLACEHOLDER_EMAIL_DOMAIN, isPlaceholderEmail } from "@/lib/phone";
 import { OTP_SEND_PATHS, resendWaitSeconds } from "@/lib/otp-cooldown";
 import { authRateLimit } from "@/lib/auth-rate-limit";
+import { CAPTCHA_FAILED_MESSAGE, CAPTCHA_HEADER, needsCaptcha, verifyTurnstile } from "@/lib/captcha";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, PASSWORD_RULE_MESSAGE, isStrongPassword } from "@/lib/password-policy";
 import {
   ENROLMENT_TOKEN_HEADER,
@@ -440,6 +441,33 @@ const phoneVerifyGuard = (): BetterAuthPlugin => ({
   },
 });
 
+// Cloudflare Turnstile on the public endpoints that send a text code or a
+// reset email (lib/captcha.ts). On only when TURNSTILE_SECRET_KEY is set. The
+// mobile app has no widget yet, so its requests skip the check and rely on the
+// rate limits; the mobile check is a header, so this stops casual scripts on
+// the web endpoints, not a determined one.
+const turnstileSecret = (process.env.TURNSTILE_SECRET_KEY || "").trim();
+
+const captchaResponse = (status: number, code: string, message: string) => ({
+  response: Response.json({ code, message }, { status }),
+});
+
+const otpCaptcha = (): BetterAuthPlugin => ({
+  id: "carabao-otp-captcha",
+  onRequest: async (request) => {
+    if (!turnstileSecret || !needsCaptcha(new URL(request.url).pathname, AUTH_BASE_PATH)) return;
+    if (isMobileRequest(request.headers)) return;
+    const token = request.headers.get(CAPTCHA_HEADER);
+    if (!token) return captchaResponse(400, "CAPTCHA_MISSING", CAPTCHA_FAILED_MESSAGE);
+    const result = await verifyTurnstile({ token, secret: turnstileSecret });
+    if (result === "failed") return captchaResponse(403, "CAPTCHA_FAILED", CAPTCHA_FAILED_MESSAGE);
+    if (result === "unavailable") {
+      console.error("[captcha] Cloudflare Turnstile could not be reached");
+      return captchaResponse(503, "CAPTCHA_UNAVAILABLE", "We couldn't send the code. Try again shortly.");
+    }
+  },
+});
+
 // Site-wide OTP resend wait (lib/otp-cooldown.ts): one code a minute per
 // number. Checked before BetterAuth writes the new code, so a refused resend
 // leaves the code already sent working. A password-reset request for a number
@@ -623,12 +651,16 @@ const sendEmailThroughBackend = async (path: string, payload: Record<string, str
 };
 
 function createAuth() {
+  if (!turnstileSecret && process.env.NODE_ENV === "production") {
+    console.warn("[captcha] TURNSTILE_SECRET_KEY is not set: code requests have no CAPTCHA.");
+  }
   return betterAuth({
     // E8: TOTP two-step verification ("Carabao" is the name shown in authenticator apps).
     // Always loaded, because admins always need it (CF-0003); who may turn it on,
     // and the other admin rules, are in adminTwoFactor above.
     plugins: [
       blockAdminEndpoints(),
+      otpCaptcha(),
       admin(),
       // No password for setup: the one-time link replaces it (CF-0018).
       twoFactor({ issuer: "Carabao", allowPasswordless: true }),

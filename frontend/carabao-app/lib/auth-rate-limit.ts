@@ -9,7 +9,8 @@ type Rule = { window: number; max: number };
 export const AUTH_RATE_RULES: Record<string, Rule> = {
   "/sign-in/email": { window: 900, max: 10 },
   "/sign-in/phone-number": { window: 900, max: 10 },
-  // Lenient on purpose (no CAPTCHA yet): 20 codes per IP per hour.
+  // Lenient on purpose: 20 codes per IP per hour. The web also needs a
+  // Turnstile token (lib/captcha.ts); the mobile app doesn't yet.
   "/phone-number/send-otp": { window: 3600, max: 20 },
   "/phone-number/request-password-reset": { window: 3600, max: 20 },
   "/phone-number/verify": { window: 900, max: 30 },

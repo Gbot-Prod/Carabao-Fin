@@ -2,41 +2,25 @@ import along from '@turf/along';
 import length from '@turf/length';
 import type { Feature, LineString } from 'geojson';
 import { CLOSED_ORDER_STATUSES, ORDER_STATUS_LABELS, type OrderStatus } from '@/util/api/statuses';
-import type { TrackingData } from '@/util/api/tracking';
+import { fetchOrderRoute, fetchShipmentRoute, type TrackingData } from '@/util/api/tracking';
 
 export type RouteGeoJSON = Feature<LineString>;
 
 export type LatLng = { lat: number; lng: number };
 
+/** Who is looking: the buyer's order, or the merchant's whole shipment. */
+export type RouteSource = { kind: 'order'; id: number } | { kind: 'shipment'; id: number };
+
 /**
- * Fetches a road-following route from the Mapbox Directions API.
- * Accepts 2+ waypoints; Mapbox will route through all of them in order.
- * Returns null if the request fails or no route is found.
+ * The road route through the map's waypoints, from the API (which asks Mapbox
+ * Directions with the server token and caches the answer). Null on any failure:
+ * the map then shows the stops without a line.
  */
-export async function fetchRouteGeoJSON(
-  waypoints: LatLng[],
-  accessToken: string,
-): Promise<RouteGeoJSON | null> {
-  if (waypoints.length < 2) return null;
-
-  const coords = waypoints.map(w => `${w.lng},${w.lat}`).join(';');
-  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&overview=full&access_token=${accessToken}`;
-
+export async function fetchRouteGeoJSON(source: RouteSource): Promise<RouteGeoJSON | null> {
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.error('[tracking] Directions API error:', res.status, await res.text());
-      return null;
-    }
-    const data = (await res.json()) as { routes?: { geometry: LineString }[] };
-    const route = data.routes?.[0];
-    if (!route) {
-      console.error('[tracking] Directions API returned no routes for coords:', coords);
-      return null;
-    }
-    return { type: 'Feature', properties: {}, geometry: route.geometry };
+    return source.kind === 'order' ? await fetchOrderRoute(source.id) : await fetchShipmentRoute(source.id);
   } catch (err) {
-    console.error('[tracking] Directions API fetch threw:', err);
+    console.error('[tracking] route request failed:', err);
     return null;
   }
 }

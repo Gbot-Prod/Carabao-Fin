@@ -10,7 +10,9 @@ from app.models.order import Order
 from app.models.shipment import Shipment
 from app.models.user import User
 from app.routing.eta import _eta_from_waypoints
+from app.services import mapbox_routing, rate_limit
 from app.schemas.shipment import (
+    RouteGeometryResponse,
     ShipmentStop,
     ShipmentTrackingResponse,
     TrackingPosition,
@@ -193,3 +195,23 @@ def get_order_tracking(
     return _waiting_for_shipment(
         order_id=order_id, merchant_name=merchant_name, status=order.status
     )
+
+
+def route_for(tracking: ShipmentTrackingResponse) -> RouteGeometryResponse:
+    """The road line through the waypoints this viewer is shown.
+
+    Built from the tracking answer itself, so the caller cannot choose the
+    points (a buyer gets only their own stops) and repeats hit the cache.
+    """
+    coords = [(wp.lat, wp.lng) for wp in tracking.waypoints]
+    return RouteGeometryResponse(route=mapbox_routing.route_geometry(coords))
+
+
+@router.get("/tracking/{order_id}/route", response_model=RouteGeometryResponse)
+def get_order_tracking_route(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rate_limit.enforce_action(db, "route_view", str(current_user.id))
+    return route_for(get_order_tracking(order_id, db=db, current_user=current_user))
