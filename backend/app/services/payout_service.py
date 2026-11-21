@@ -24,12 +24,14 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.models.merchant import Merchant
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.services import money, notifications, paymongo
+from app.services.merchant_verification import merchant_can_request_payout
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +260,10 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
         raise PayoutError(
             409, "This payout is already being sent. Refresh its status instead."
         )
+
+    # Defence in depth: requests already refuse an unverified merchant.
+    if not merchant_can_request_payout(db.get(Merchant, batch.merchant_id)):
+        raise PayoutError(403, "This merchant is not verified to receive payouts")
 
     # CF-0004: the destination saved when the payout was requested, never the
     # merchant's current payout method.

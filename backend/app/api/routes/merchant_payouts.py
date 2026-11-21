@@ -46,6 +46,10 @@ from app.services.merchant_service import (
     get_active_merchant,
     get_editable_merchant,
 )
+from app.services.merchant_verification import (
+    PAYOUT_NOT_VERIFIED_DETAIL,
+    merchant_can_request_payout,
+)
 from app.services.payout_service import (
     PROVIDER_LABELS,
     PROVIDER_MAX_PESOS,
@@ -281,6 +285,10 @@ def request_my_payout(
     merchant = get_active_merchant(db, current_user.id, for_update=True)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
+    # Payout details may be set up before verification; payouts may not. A
+    # suspended merchant is still paid what it earned (CF-0054).
+    if not merchant_can_request_payout(merchant):
+        raise HTTPException(status_code=403, detail=PAYOUT_NOT_VERIFIED_DETAIL)
 
     info = get_payout_info(db, merchant.id)
     problem = payout_info_problem(info)

@@ -45,6 +45,10 @@ from app.services.merchant_service import (
     get_active_merchant,
     get_editable_merchant,
 )
+from app.services.merchant_verification import (
+    PUBLISH_NOT_VERIFIED_DETAIL,
+    require_can_sell,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -219,8 +223,12 @@ def publish_my_shoppage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Copy the draft to the live page. The first publish makes the shop public."""
-    _, shop_page = _my_shop_page(db, current_user, editable=True)
+    """Copy the draft to the live page. The first publish makes the shop public.
+
+    Only a verified merchant may publish (403 otherwise). Approval never
+    publishes by itself: prices and stock may be stale by then."""
+    merchant, shop_page = _my_shop_page(db, current_user, editable=True)
+    require_can_sell(merchant, PUBLISH_NOT_VERIFIED_DETAIL)
     if not (shop_page.draft_title or "").strip():
         raise HTTPException(status_code=422, detail="Add a title before you publish")
     for field in DRAFT_FIELDS:

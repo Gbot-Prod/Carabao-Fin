@@ -20,6 +20,10 @@ from app.models.voucher import Voucher, VoucherRedemption
 from app.schemas.voucher import VoucherCreate, VoucherResponse, VoucherUpdate
 from app.services import vouchers
 from app.services.merchant_service import get_active_merchant
+from app.services.merchant_verification import (
+    VOUCHER_NOT_VERIFIED_DETAIL,
+    require_can_sell,
+)
 
 router = APIRouter(tags=["merchant vouchers"])
 
@@ -105,6 +109,9 @@ def create_my_voucher(
                 "Delete an old one first."
             ),
         )
+    if values.get("active", True):
+        # A live voucher is visible to buyers: only for verified merchants.
+        require_can_sell(merchant, VOUCHER_NOT_VERIFIED_DETAIL)
     code = vouchers.normalize_code(values.pop("code"))
     voucher = Voucher(merchant_id=merchant.id, code=code, **values)
     db.add(voucher)
@@ -134,6 +141,8 @@ def update_my_voucher(
         if required in changes and changes[required] is None:
             raise HTTPException(status_code=422, detail=f"{required} cannot be empty.")
     merged = {name: getattr(voucher, name) for name in _FIELDS} | changes
+    if changes.get("active") is True:
+        require_can_sell(merchant, VOUCHER_NOT_VERIFIED_DETAIL)
     vouchers.check_rules(merged)
     for name, value in changes.items():
         setattr(voucher, name, value)

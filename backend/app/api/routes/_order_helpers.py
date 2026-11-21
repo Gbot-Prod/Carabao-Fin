@@ -12,6 +12,7 @@ from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.produce import Produce
 from app.services import store_pause
+from app.services.merchant_verification import merchant_can_sell
 from app.services.order_status import (
     SHIPPED_STATUSES,
     auto_confirm_at,
@@ -29,12 +30,14 @@ def _to_int(value: Any, default: int = 0) -> int:
 
 
 def merchant_takes_orders(merchant: Merchant | None) -> bool:
-    """Not closed, not suspended by an admin, the owner is not banned, and
-    the farm is not in holiday mode (CF-0066)."""
+    """Verified to sell (merchant_can_sell: not closed, not suspended), the
+    owner is not banned, and the farm is not in holiday mode (CF-0066).
+
+    Only new orders are checked: an order already placed still completes if
+    the merchant is suspended later."""
     return (
         merchant is not None
-        and merchant.deleted_at is None
-        and merchant.suspended_at is None
+        and merchant_can_sell(merchant)
         and (merchant.user is None or not merchant.user.is_suspended)
         and not store_pause.is_paused(merchant)
     )
