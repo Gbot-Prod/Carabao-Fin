@@ -107,6 +107,11 @@ MERCHANT_NAME_MAX = 50
 class ApplicationReviewPayload(BaseModel):
     status: ReviewStatus
     admin_note: str | None = Field(default=None, max_length=MAX_ADMIN_NOTE)
+    # The checklist items the admin ticked as reviewed (document_checks.py).
+    # Approval needs every warn and fail item; other decisions ignore it.
+    confirmed_items: list[Annotated[str, Field(max_length=40)]] = Field(
+        default_factory=list, max_length=20
+    )
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -348,6 +353,10 @@ class MerchantApplicationResponse(BaseModel):
     address: str
     postal_code: str
     available_days: list[str]
+    # The farm pin from step 1, so finishing the application later keeps it.
+    lat: float | None = None
+    lng: float | None = None
+    pin_confirmed: bool = False
 
     rsbsa_number: str | None = None
     rsbsa_document_original_name: str | None = None
@@ -366,8 +375,28 @@ class MerchantApplicationResponse(BaseModel):
         return mask(value)
 
 
+class ChecklistItem(BaseModel):
+    """One automated review check (services/document_checks.py)."""
+
+    id: str
+    label: str
+    result: Literal["pass", "warn", "fail", "not_checked"]
+    reason: str
+    # Which uploaded document it is about (rsbsa, gov_id, bir_cert), if any.
+    document: str | None = None
+    # Other applications with the same number or file (duplicates check).
+    related_application_ids: list[int] = []
+
+
 class AdminMerchantApplicationResponse(MerchantApplicationResponse):
-    """Admins review the full TIN and RSBSA number (CF-0007)."""
+    """Admins review the full TIN and RSBSA number (CF-0007), and see the
+    automated checklist. The OCR text and numbers are never sent."""
+
+    check_status: str | None = None
+    checked_at: datetime | None = None
+    name_match_score: float | None = None
+    check_checklist: list[ChecklistItem] | None = None
+    check_confirmations: dict[str, dict] | None = None
 
     @field_serializer("tin", "rsbsa_number")
     def _serialize_identifier(self, value: str | None) -> str | None:

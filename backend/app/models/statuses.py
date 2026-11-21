@@ -57,6 +57,34 @@ class PayoutStatus(StrEnum):
     FAILED = "failed"
 
 
+class MerchantVerificationStatus(StrEnum):
+    """Whether a merchant may sell (``merchants.verification_status``).
+
+    A merchant row exists from the first onboarding step, so the seller can use
+    the Merchant Centre at once. Only ``verified`` may sell: publish the shop,
+    list produce publicly, take orders and request payouts
+    (services/merchant_verification.py). Follows the application status; set
+    only by ``sync_verification_status``.
+    """
+
+    SETUP = "setup"  # Submit later: business information not sent yet
+    UNDER_REVIEW = "under_review"  # submitted, an admin has yet to decide
+    NEEDS_CHANGES = "needs_changes"  # clarification requested or rejected
+    VERIFIED = "verified"  # approved by an admin
+    SUSPENDED = "suspended"  # suspended by an admin
+
+
+# merchant_applications.status -> merchants.verification_status.
+APPLICATION_TO_VERIFICATION: dict[str, MerchantVerificationStatus] = {
+    "pending_documents": MerchantVerificationStatus.SETUP,
+    "submitted": MerchantVerificationStatus.UNDER_REVIEW,
+    "clarification": MerchantVerificationStatus.NEEDS_CHANGES,
+    "rejected": MerchantVerificationStatus.NEEDS_CHANGES,
+    "approved": MerchantVerificationStatus.VERIFIED,
+    "suspended": MerchantVerificationStatus.SUSPENDED,
+}
+
+
 def status_type(enum_cls: type[StrEnum], name: str) -> SAEnum:
     """A VARCHAR column restricted to ``enum_cls``'s values by a named CHECK."""
     return SAEnum(

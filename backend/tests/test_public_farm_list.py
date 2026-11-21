@@ -32,6 +32,7 @@ def _farm(db: Session, n: int) -> Merchant:
     db.add(owner)
     db.flush()
     farm = Merchant(
+        verification_status="verified",
         user_id=owner.id,
         merchant_name=f"Farm {n}",
         contact_number=f"63917123456{n}",

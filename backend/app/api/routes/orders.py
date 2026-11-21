@@ -438,8 +438,9 @@ def preview_voucher(
                 produce.hidden_at is not None
                 or is_expired(produce, today)
                 or merchant_id == own_merchant_id
-                # CF-0072 (B83): checkout refuses a paused farm's lines.
-                or store_pause.is_paused(produce.merchant, today)
+                # CF-0072 (B83): checkout refuses a paused farm's lines; and
+                # any farm that is not verified to sell.
+                or not merchant_takes_orders(produce.merchant)
             ):
                 continue
             quantity = lines[cast(int, produce.id)]

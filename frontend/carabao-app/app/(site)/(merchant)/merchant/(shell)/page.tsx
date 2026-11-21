@@ -39,6 +39,7 @@ import {
   type StockAlerts,
 } from "@/util/api";
 import { useReadyMerchant } from "../MerchantContext";
+import SetupChecklist from "../components/SetupChecklist";
 import styles from "./dashboard.module.css";
 
 // Merchant home: the same layout as the admin dashboard (stat cards, a
@@ -298,6 +299,7 @@ export default function MerchantDashboardPage() {
   return (
     <div className={styles.page}>
       {header}
+      <SetupChecklist />
 
       <div className={styles.statGrid}>
         <StatCard

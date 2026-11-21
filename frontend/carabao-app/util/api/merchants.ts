@@ -2,7 +2,7 @@ import { MerchantApplication } from './admin';
 import { apiClient } from './client';
 import type { Produce } from './produce';
 import type { InquirySummary } from './users';
-import type { OrderStatus, PaymentStatus, PayoutStatus, TransactionStatus } from './statuses';
+import type { MerchantVerificationStatus, OrderStatus, PaymentStatus, PayoutStatus, TransactionStatus } from './statuses';
 
 export type Merchant = {
   id: number;
@@ -40,6 +40,8 @@ export type Merchant = {
   /** CF-0066 holiday mode: no orders through this day (yyyy-mm-dd, Manila). */
   paused_until?: string | null;
   pause_message?: string | null;
+  /** Owner view: whether the farm may sell yet. */
+  verification_status?: MerchantVerificationStatus | null;
   /** The public list and detail include the shop page (CF-0056). */
   shop_page?: Pick<ShopPage, 'logo_url' | 'banner_image_url' | 'slug'> | null;
   produces: Produce[];
@@ -148,6 +150,7 @@ export type MyShopPage = ShopPage & {
 export type MerchantPerformance = {
   merchant_id: number;
   merchant_name: string;
+  verification_status: MerchantVerificationStatus;
   rating?: number | null;
   rating_count: number;
   total_products: number;

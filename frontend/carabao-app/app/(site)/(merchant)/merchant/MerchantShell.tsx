@@ -29,6 +29,7 @@ import { appUrl, helpUrl, merchantUrl } from "@/lib/urls";
 import { merchantLoginUrl } from "./lib/signIn";
 import { useMerchant } from "./MerchantContext";
 import MerchantWelcome from "./MerchantWelcome";
+import VerificationBanner from "./components/VerificationBanner";
 import styles from "./shell.module.css";
 
 type Icon = ComponentType<{ size?: number; strokeWidth?: number }>;
@@ -302,7 +303,10 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
             </a>
           </div>
         </header>
-        <main className={styles.main}>{body}</main>
+        <main className={styles.main}>
+          <VerificationBanner />
+          {body}
+        </main>
       </div>
     </div>
   );

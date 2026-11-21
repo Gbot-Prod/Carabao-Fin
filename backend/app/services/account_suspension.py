@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.models.merchant import Merchant
 from app.models.shopPage import ShopPage
+from app.models.statuses import MerchantVerificationStatus
 from app.models.user import User
 from app.services import audit_log, better_auth_store
 
@@ -26,12 +27,15 @@ def suspended_detail(user: User) -> str:
 
 
 def merchant_is_public():
-    """SQL filter: merchants buyers may see (not deleted, the shop not
-    suspended by an admin, owner not suspended, shop page published)."""
+    """SQL filter: merchants buyers may see (verified by an admin, not
+    deleted, the shop not suspended, owner not suspended, shop page
+    published). Every public shop and produce query uses it, so an unverified
+    merchant's shop and produce never appear (merchant_verification.py)."""
     # An alias, so a query that selects from shop_pages still correlates.
     # Made per call: aliasing at import time configures the mappers too early.
     page = aliased(ShopPage)
     return and_(
+        Merchant.verification_status == MerchantVerificationStatus.VERIFIED,
         Merchant.deleted_at.is_(None),
         Merchant.suspended_at.is_(None),
         not_(exists().where(User.id == Merchant.user_id, User.is_suspended)),

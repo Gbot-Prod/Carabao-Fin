@@ -43,6 +43,10 @@ export type MerchantApplication = {
   address: string | null;
   postal_code: string | null;
   available_days: string[];
+  /** The farm pin saved with step 1 (owner and admin views). */
+  lat?: number | null;
+  lng?: number | null;
+  pin_confirmed?: boolean;
   rsbsa_number: string | null;
   rsbsa_document_original_name: string | null;
   rsbsa_document_content_type: string | null;
@@ -51,6 +55,25 @@ export type MerchantApplication = {
   gov_id_document_content_type: string | null;
   admin_note: string | null;
   reviewed_at: string | null;
+  merchant_id?: number | null;
+  /** Admin view only: the automated document checks (backend document_checks.py). */
+  check_status?: 'pending' | 'completed' | 'failed' | null;
+  checked_at?: string | null;
+  name_match_score?: number | null;
+  check_checklist?: ChecklistItem[] | null;
+  check_confirmations?: Record<string, { by: number | null; at: string; result: string }> | null;
+};
+
+export type ChecklistResult = 'pass' | 'warn' | 'fail' | 'not_checked';
+export type ChecklistItem = {
+  id: string;
+  label: string;
+  result: ChecklistResult;
+  reason: string;
+  /** rsbsa | gov_id | bir_cert, when the item is about one document. */
+  document: 'rsbsa' | 'gov_id' | 'bir_cert' | null;
+  /** Other applications sharing a number or file (duplicates check). */
+  related_application_ids: number[];
 };
 
 export type RsbsaDocumentUrl = {
@@ -231,11 +254,20 @@ export const reviewMerchantApplication = async (
   id: number,
   status: "approved" | "rejected" | "clarification" | "suspended",
   admin_note?: string,
+  /** The checklist items the admin ticked; Accept needs every warn and fail one. */
+  confirmed_items: string[] = [],
 ): Promise<MerchantApplication> => {
   const res = await apiClient.patch<MerchantApplication>(`/admin/merchant-applications/${id}`, {
     status,
     admin_note: admin_note ?? null,
+    confirmed_items,
   });
+  return res.data;
+};
+
+/** Run the automated document checks again (they failed, or need a refresh). */
+export const rerunDocumentChecks = async (id: number): Promise<MerchantApplication> => {
+  const res = await apiClient.post<MerchantApplication>(`/admin/merchant-applications/${id}/checks/rerun`);
   return res.data;
 };
 

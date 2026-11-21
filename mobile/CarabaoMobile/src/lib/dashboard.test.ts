@@ -2,7 +2,7 @@
 // Run with `npm test`. CF-0125.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { alertCounts, cancelRate, peso, statTiles, unmetSearches, type MerchantPerformance } from './dashboard.ts';
+import { alertCounts, cancelRate, peso, statTiles, unmetSearches, verificationBanner, type MerchantPerformance } from './dashboard.ts';
 
 const perf: MerchantPerformance = {
   merchant_id: 1, merchant_name: 'Dela Cruz', rating: 4.5, rating_count: 2, total_products: 7, total_orders: 30,
@@ -41,4 +41,13 @@ test('unmet searches: only no-result ones, most first, capped', () => {
   assert.deepEqual(unmetSearches(d).map((t) => t.query), ['ube', 'strawberry']);
   assert.deepEqual(unmetSearches(d, 1).map((t) => t.query), ['ube']);
   assert.deepEqual(unmetSearches(null), []);
+});
+
+test('verification banner shows until the farm is verified', () => {
+  assert.equal(verificationBanner('verified'), null);
+  assert.equal(verificationBanner(undefined), null);
+  for (const status of ['setup', 'under_review', 'needs_changes', 'suspended']) {
+    assert.ok(verificationBanner(status));
+  }
+  assert.match(verificationBanner('setup') ?? '', /business information/);
 });

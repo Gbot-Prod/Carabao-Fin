@@ -293,6 +293,7 @@ def make_user(db, email, first, last, idx, **address) -> User:
 
 def make_merchant(db, user, farm, idx) -> Merchant:
     merchant = Merchant(
+        verification_status="verified",
         user_id=user.id,
         merchant_name=farm["name"],
         contact_number=phone(500 + idx),

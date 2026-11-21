@@ -42,7 +42,7 @@ from app.models import (  # noqa: F401
     voucher,
 )
 from app.services import otp as otp_service
-from app.services import rate_limit, retention
+from app.services import rate_limit, retention, setup_reminders
 from app.services.chat import send_unread_merchant_sms
 from app.services.order_reservations import (
     expire_stale_reservations,
@@ -192,6 +192,19 @@ async def lifespan(_: FastAPI):
         finally:
             db.close()
 
+    def remind_unfinished_applications() -> None:
+        # Submit later: "finish your business information" on days 1, 3, 7, 14.
+        db = SessionLocal()
+        try:
+            sent = setup_reminders.send_due_reminders(db)
+            if sent:
+                logger.info("Sent %s setup reminder(s)", sent)
+        except Exception:
+            db.rollback()
+            logger.exception("Could not send setup reminders")
+        finally:
+            db.close()
+
     async def reservation_cleanup_loop() -> None:
         while True:
             # DB and PayMongo calls block, so keep them off the event loop.
@@ -201,6 +214,7 @@ async def lifespan(_: FastAPI):
             await asyncio.to_thread(text_merchants_about_unread_chat)
             await asyncio.to_thread(purge_expired_codes_and_limits)
             await asyncio.to_thread(purge_old_order_details)
+            await asyncio.to_thread(remind_unfinished_applications)
             await asyncio.sleep(60)
 
     cleanup_task = asyncio.create_task(reservation_cleanup_loop())

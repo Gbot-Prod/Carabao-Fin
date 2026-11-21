@@ -64,6 +64,9 @@ class AccountDeleteConfirm(BaseModel):
 class UserMerchantInfo(BaseModel):
     id: int
     merchant_name: str
+    # The apps open the merchant screens for any merchant row and show a
+    # "not live yet" banner unless this is "verified".
+    verification_status: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

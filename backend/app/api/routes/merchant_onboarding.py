@@ -26,13 +26,17 @@ from app.schemas.merchant_application import (
     MerchantOnboardingPayload,
     full_name,
 )
-from app.services import r2_service, rate_limit, upload_validation
+from app.services import document_checks, r2_service, rate_limit, upload_validation
 from app.services.application_review import (
     PENDING_DOCUMENTS,
     SUBMITTED,
     check_can_resubmit,
 )
 from app.services.merchant_service import get_active_merchant
+from app.services.merchant_verification import (
+    ensure_merchant_for_application,
+    sync_verification_status,
+)
 from app.services.phone_verification import normalize_ph_mobile, read_token
 from app.services.pinned_location import PinCheck, apply_pin, validate_pin
 from app.services.rate_limit import lock_keys
@@ -299,11 +303,10 @@ def submit_my_merchant_onboarding_route(
     if not email_verified:
         raise FieldErrors({"contact_email": "Please verify your contact email first."})
 
+    # The merchant row exists from the first save (Submit now or later), so it
+    # no longer means "approved"; check_can_resubmit decides from the
+    # application status.
     has_active_merchant = get_active_merchant(db, current_user.id) is not None
-    if has_active_merchant:
-        raise HTTPException(
-            status_code=409, detail="User already has a merchant profile"
-        )
     application = (
         db.query(MerchantApplication)
         .filter(MerchantApplication.user_id == current_user.id)
@@ -325,6 +328,7 @@ def submit_my_merchant_onboarding_route(
         application.seller_type = data.seller_type
         application.status = PENDING_DOCUMENTS
         application.submitted_at = None
+        _ensure_merchant(db, application)
         return _commit(db, application, uploaded=[], replaced=[])
 
     tin = details.get("tin")
@@ -394,9 +398,38 @@ def submit_my_merchant_onboarding_route(
     application.terms_accepted_at = now
     application.status = SUBMITTED
     application.submitted_at = now
-    return _commit(
+    try:
+        _ensure_merchant(db, application)
+    except Exception:
+        _discard_uploads(*uploaded.values())
+        raise
+    saved = _commit(
         db, application, uploaded=list(uploaded.values()), replaced=replaced
     )
+    # The automated review checklist, from the files this submit sent. It only
+    # assists the admin and never blocks the submit (check_status "failed").
+    document_checks.run_and_save(
+        db,
+        saved,
+        {
+            _DOCUMENT_COLUMNS[f].removesuffix("_document"): c.data
+            for f, c in checked.items()
+        },
+    )
+    return saved
+
+
+def _ensure_merchant(db: Session, application: MerchantApplication) -> None:
+    """The Merchant Centre opens from the first save: create the merchant (and
+    its draft shop page) in this transaction and follow the application status."""
+    try:
+        db.flush()
+        merchant = ensure_merchant_for_application(db, application)
+        sync_verification_status(merchant, application)
+    except Exception:
+        # Nothing of this submit is saved (e.g. the number is another shop's).
+        db.rollback()
+        raise
 
 
 # Section 2 columns set from the business details. A column the seller type
@@ -456,6 +489,10 @@ def _validate_payload(
     except ValidationError as exc:
         # Name the fields that failed so the form can mark each one.
         raise FieldErrors(_payload_field_errors(exc)) from exc
+    # The shop name is part of step 1: the merchant and its draft shop page are
+    # created on the first save, Submit later included.
+    if data.merchant_name is None:
+        raise FieldErrors({"merchant_name": "Merchant name is required."})
     if data.submit_mode == "later":
         return data, None
     model = BUSINESS_DETAILS_MODELS[data.seller_type]
@@ -501,6 +538,7 @@ def _apply_operations(
     pin: PinCheck | None,
 ) -> None:
     """Step 1: location, availability and the verified contact details."""
+    application.merchant_name = data.merchant_name
     application.contact_email = contact_email
     # The +639XXXXXXXXX form that was verified (CF-0011).
     application.contact_number = contact_number

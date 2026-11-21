@@ -511,6 +511,7 @@ def get_my_merchant_performance(
     return MerchantPerformanceResponse(
         merchant_id=merchant.id,
         merchant_name=merchant.merchant_name,
+        verification_status=str(merchant.verification_status),
         rating=merchant.rating,
         rating_count=merchant.rating_count or 0,
         total_products=int(total_products),

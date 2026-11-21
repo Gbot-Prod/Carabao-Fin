@@ -102,6 +102,14 @@ def delete_private_document(stored_path: str) -> None:
     _client().delete_object(Bucket=_private_bucket(), Key=_object_key(stored_path))
 
 
+def get_private_document(stored_path: str) -> bytes:
+    """A private document's bytes (the automated checks re-read them)."""
+    response = _client().get_object(
+        Bucket=_private_bucket(), Key=_object_key(stored_path)
+    )
+    return response["Body"].read()
+
+
 def _object_key(stored_path: str) -> str:
     parsed = urlparse(stored_path)
     return (

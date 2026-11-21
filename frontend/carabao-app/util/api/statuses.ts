@@ -31,6 +31,20 @@ export type PaymentStatus =
 
 export type PayoutStatus = 'pending' | 'approved' | 'processing' | 'released' | 'failed';
 
+/**
+ * Whether a merchant may sell (merchants.verification_status). The Merchant
+ * Centre opens for any merchant row; only "verified" can publish, appear to
+ * buyers, take orders and request payouts.
+ */
+export const MERCHANT_VERIFICATION_STATUSES = [
+  'setup', // Submit later: business information not sent yet
+  'under_review',
+  'needs_changes', // clarification requested or rejected
+  'verified',
+  'suspended',
+] as const;
+export type MerchantVerificationStatus = (typeof MERCHANT_VERIFICATION_STATUSES)[number];
+
 export const IN_TRANSIT_ORDER_STATUSES: readonly OrderStatus[] = ['shipped', 'out_for_delivery'];
 export const CLOSED_ORDER_STATUSES: readonly OrderStatus[] = ['delivered', 'cancelled', 'payment_mismatch'];
 

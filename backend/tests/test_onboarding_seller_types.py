@@ -146,14 +146,23 @@ def _submit(db, user, seller_type="individual_farmer", files=None, **overrides):
 
 
 def _later(db, user, seller_type="individual_farmer", files=None, **overrides):
-    body = {"submit_mode": "later", "seller_type": seller_type, **overrides}
+    # The shop name is part of step 1, so Submit later sends it too.
+    body = {
+        "submit_mode": "later",
+        "seller_type": seller_type,
+        "merchant_name": "Bulacan Farm",
+        **overrides,
+    }
     return _post(db, user, body, files)
 
 
 def _review(db, application, status):  # noqa: F811
+    # The admin ticks every checklist item they reviewed (Accept needs them).
+    db.refresh(application)
+    confirmed = [item["id"] for item in application.check_checklist or []]
     return _admin_client(db, _staff(db)).patch(
         f"/admin/merchant-applications/{application.id}",
-        json={"status": status},
+        json={"status": status, "confirmed_items": confirmed},
     )
 
 
@@ -471,6 +480,7 @@ def test_a_certificate_a_merchant_still_holds_is_kept(  # noqa: F811
     application.bir_cert_document_path = "bir-2303/kept.pdf"
     db.add(
         Merchant(
+            verification_status="verified",
             user_id=make_user(db, "closed@example.com").id,
             merchant_name="Closed",
             region="Region III",
@@ -516,7 +526,7 @@ def test_submit_later_flow(db, applicant):  # noqa: F811
     assert body["status"] == "pending_documents"
     assert body["submitted_at"] is None
     assert body["seller_type"] == "sole_proprietor"
-    assert body["merchant_name"] is None
+    assert body["merchant_name"] == "Bulacan Farm"
     application = db.query(MerchantApplication).one()
     assert application.terms_accepted_at is None
     assert application.rsbsa_document_path is None
@@ -528,7 +538,12 @@ def test_submit_later_flow(db, applicant):  # noqa: F811
         assert "no business information yet" in resp.json()["detail"]
     db.refresh(application)
     assert application.status == "pending_documents"
-    assert db.query(Merchant).count() == 0
+    # The Merchant Centre opens at once; the merchant cannot sell yet.
+    merchant = db.query(Merchant).one()
+    assert application.merchant_id == merchant.id
+    assert merchant.verification_status == "setup"
+    assert merchant.seller_type == "sole_proprietor"
+    assert merchant.vat_status is None
 
     # Saving again later is fine; it stays incomplete.
     assert _later(db, applicant, "sole_proprietor").status_code == 200
@@ -538,9 +553,14 @@ def test_submit_later_flow(db, applicant):  # noqa: F811
     db.refresh(application)
     assert application.status == "submitted"
     assert application.submitted_at is not None
+    db.refresh(merchant)
+    assert merchant.verification_status == "under_review"
 
     assert _review(db, application, "approved").status_code == 200
-    merchant = db.query(Merchant).filter(Merchant.user_id == applicant.id).one()
+    # Approval updates the same merchant; it does not create another.
+    assert db.query(Merchant).filter(Merchant.user_id == applicant.id).one() is merchant
+    db.refresh(merchant)
+    assert merchant.verification_status == "verified"
     assert merchant.seller_type == "sole_proprietor"
     assert merchant.vat_status == "non_vat"
     assert merchant.small_agri_producer is False
@@ -554,7 +574,14 @@ def test_submit_later_ignores_business_fields(db, applicant):  # noqa: F811
     assert "tin" in resp.json()["errors"]
     resp = _later(db, applicant, merchant_name="Bulacan Farm", tin="")
     assert resp.status_code == 200, resp.text
-    assert resp.json()["merchant_name"] is None
+    assert resp.json()["tin"] is None
+
+
+def test_submit_later_needs_a_shop_name(db, applicant):  # noqa: F811
+    resp = _later(db, applicant, merchant_name="")
+    assert resp.status_code == 400
+    assert resp.json()["errors"] == {"merchant_name": "Merchant name is required."}
+    assert db.query(Merchant).count() == 0
 
 
 def test_submit_later_needs_a_seller_type(db, applicant):  # noqa: F811
