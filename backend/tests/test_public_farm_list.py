@@ -41,7 +41,7 @@ def _farm(db: Session, n: int) -> Merchant:
         postal_code="3000",
         available_days=["mon"],
         operating_hours={},
-        business_type="individual",
+        seller_type="individual_farmer",
         rsbsa_document_path="rsbsa/1.pdf",
         gov_id_type="Passport",
         gov_id_document_path="gov-id/x.pdf",

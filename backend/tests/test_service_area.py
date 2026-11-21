@@ -130,12 +130,14 @@ def _client(db, user) -> TestClient:
 
 def test_onboarding_outside_luzon_is_rejected(db, buyer):  # noqa: F811
     payload = {
+        "submit_mode": "now",
+        "seller_type": "individual_farmer",
         "merchant_name": "Cebu Farm",
-        "legal_business_name": "Cebu Farm",
-        "business_type": "Farmer",
-        "tin": "123456789",
-        "registration_type": "DTI",
-        "registration_number": "X1",
+        "last_name": "Dela Cruz",
+        "first_name": "Juan",
+        "small_agri_producer": True,
+        "terms_accepted": True,
+        "terms_version": "May 21, 2026",
         "contact_email": "farm@example.com",
         "contact_number": "09171234567",
         "region": "Region VII (Central Visayas)",

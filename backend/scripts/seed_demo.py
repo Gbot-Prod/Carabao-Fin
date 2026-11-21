@@ -310,7 +310,7 @@ def make_merchant(db, user, farm, idx) -> Merchant:
         delivery_time=2,
         delivery_price=RNG.choice([80, 90, 100]),
         legal_business_name=farm["name"],
-        business_type="Farm",
+        seller_type="individual_farmer",
         rsbsa_number=f"03-49-{idx:02d}-{RNG.randint(100, 999)}-{RNG.randint(10000, 99999)}",
         rsbsa_document_path="demo/rsbsa-placeholder.pdf",
         gov_id_type="Passport",
@@ -559,7 +559,7 @@ def seed(db, hub_email: str, n_ready: int, n_history: int) -> None:
     db.add(MerchantApplication(
         user_id=applicant.id, status="submitted", submitted_at=NOW - timedelta(hours=5),
         merchant_name="Capas Organic Vegetables", legal_business_name="Capas Organic Vegetables",
-        business_type="Farm",
+        seller_type="individual_farmer",
         contact_email=applicant.email, contact_number=phone(401),
         rsbsa_number="03-69-04-012-34567",
         rsbsa_document_path="demo/rsbsa-placeholder.pdf",

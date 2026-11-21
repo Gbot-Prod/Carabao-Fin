@@ -156,7 +156,7 @@ def _second_merchant(db, **fields):  # noqa: F811
         postal_code="3000",
         available_days=["Mon"],
         operating_hours={},
-        business_type="Farmer",
+        seller_type="individual_farmer",
         rsbsa_document_path="rsbsa/2.pdf",
         gov_id_type="Passport",
         gov_id_document_path="gov-id/x.pdf",
@@ -243,7 +243,7 @@ def test_onboarding_tin_is_optional(db, applicant):  # noqa: F811
         {"delivery_price": 50},
         {"delivery_time": 2},
         {"is_admin": True},
-        {"business_type": "Pirate"},
+        {"seller_type": "Pirate"},
         {"registration_type": "XYZ"},
         {"available_days": ["Funday"]},
         {"available_days": ["Mon", "Mon"]},
@@ -267,11 +267,16 @@ def test_onboarding_refuses_bad_payloads(db, applicant, overrides):  # noqa: F81
             "merchant_name",
             "Merchant name must be at least 3 characters.",
         ),
-        ({"tin": "123"}, "tin", "TIN must be at least 6 characters."),
         (
-            {"business_type": "Pirate"},
-            "business_type",
-            "Business type is not one of the allowed options.",
+            {"tin": "123"},
+            "tin",
+            "TIN: must be 9 digits plus a 3-5 digit branch code, e.g. "
+            "123-456-789-000 (use 000 if there is no branch).",
+        ),
+        (
+            {"seller_type": "Pirate"},
+            "seller_type",
+            "Seller type is not one of the allowed options.",
         ),
         ({"lat": 999, "lng": 999}, "pin", None),
         (
@@ -280,9 +285,9 @@ def test_onboarding_refuses_bad_payloads(db, applicant, overrides):  # noqa: F81
             "Merchant name must be at most 50 characters.",
         ),
         (
-            {"legal_business_name": "x" * 51},
-            "legal_business_name",
-            "Legal business name must be at most 50 characters.",
+            {"last_name": "x" * 81},
+            "last_name",
+            "Last name must be at most 80 characters.",
         ),
     ],
 )
@@ -296,8 +301,8 @@ def test_onboarding_says_which_field_failed(db, applicant, overrides, field, exp
         assert body["detail"] == expected
 
 
-def test_onboarding_accepts_50_character_names(db, applicant):  # noqa: F811
-    resp = _submit(db, applicant, merchant_name="x" * 50, legal_business_name="y" * 50)
+def test_onboarding_accepts_names_at_their_limits(db, applicant):  # noqa: F811
+    resp = _submit(db, applicant, merchant_name="x" * 50, last_name="y" * 80)
     assert resp.status_code == 200, resp.text
 
 
@@ -324,7 +329,7 @@ def _application(db, user, status):  # noqa: F811
         merchant_name="Applicant Farm",
         legal_business_name="Applicant Farm",
         barangay="Santo Rosario",
-        business_type="Farmer",
+        seller_type="individual_farmer",
         contact_email="applicant@example.com",
         contact_number="+639170000001",
         rsbsa_document_path="rsbsa/3.pdf",

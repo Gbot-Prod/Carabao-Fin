@@ -119,7 +119,7 @@ def build_merchants(n_merchants: int, first_user_id: int, now: datetime) -> list
             "operating_hours": {"open": "06:00", "close": "18:00"},
             "delivery_time": 60,
             "delivery_price": 40,
-            "business_type": "individual",
+            "seller_type": "individual_farmer",
             "rsbsa_document_path": "perf/rsbsa.pdf",
             "gov_id_type": "Passport",
             "gov_id_document_path": "perf/gov-id.pdf",

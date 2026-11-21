@@ -14,13 +14,17 @@ from app.services.phone_verification import sign_token
 from tests.better_auth import make_user
 from tests.files import pdf_bytes
 
+# A Submit now from an individual farmer (the least demanding seller type).
 PAYLOAD = {
+    "submit_mode": "now",
+    "seller_type": "individual_farmer",
     "merchant_name": "Bulacan Farm",
-    "legal_business_name": "Bulacan Farm",
-    "business_type": "Farmer",
-    "tin": "123456789",
-    "registration_type": "DTI",
-    "registration_number": "X1",
+    "last_name": "Dela Cruz",
+    "first_name": "Juan",
+    "tin": "123-456-789-000",
+    "small_agri_producer": True,
+    "terms_accepted": True,
+    "terms_version": "May 21, 2026",
     "contact_email": "farm@example.com",
     "contact_number": "09171234567",
     "region": "Region III (Central Luzon)",
@@ -46,6 +50,7 @@ def patch_uploads(monkeypatch) -> None:
     uploads = {
         "upload_rsbsa_document": "rsbsa/x.pdf",
         "upload_gov_id_document": "gov-id/x.pdf",
+        "upload_bir_cert_document": "bir-2303/x.pdf",
         "delete_private_document": None,
     }
     for name, result in uploads.items():
