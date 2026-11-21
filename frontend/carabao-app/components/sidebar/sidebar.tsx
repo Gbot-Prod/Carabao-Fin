@@ -240,6 +240,12 @@ export default function Sidebar() {
         <div className="sidebar__brand">
           <Image src={Logo} alt="Carabao Logo" className="sidebar__brand-icon" />
           <span className="sidebarBrandName">Carabao</span>
+          {/* Everyone can reach the merchant site: its /auth is the Merchant Centre sign-in. */}
+          {!onMerchantHost && (
+            <a href={merchantUrl("/")} className="sidebar__merchant-site">
+              {t.nav.merchant}
+            </a>
+          )}
         </div>
 
         

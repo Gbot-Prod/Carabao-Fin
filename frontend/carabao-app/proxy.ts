@@ -30,6 +30,9 @@ const TURNSTILE = "https://challenges.cloudflare.com";
 
 const MAPBOX = ["https://api.mapbox.com", "https://*.tiles.mapbox.com", "https://events.mapbox.com"];
 
+// Region/province/city/barangay lists for every address form (util/psgc.ts).
+const PSGC = "https://psgc.cloud";
+
 // nonce null: a statically rendered page (help). Its HTML is made at build, so
 // it has no nonce, and Next.js puts inline scripts in it. Those pages have no
 // sign-in and no user data.
@@ -53,7 +56,7 @@ function buildPolicy(nonce: string | null): string {
     // Product photos and avatars come from R2 and Google; map tiles from Mapbox.
     "img-src": ["'self'", "data:", "blob:", "https:"],
     "font-src": ["'self'", "data:"],
-    "connect-src": ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...MAPBOX, ...(isDev ? ["ws:"] : [])],
+    "connect-src": ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...MAPBOX, PSGC, ...(isDev ? ["ws:"] : [])],
     // Mapbox GL runs its workers from blob: URLs.
     "worker-src": ["'self'", "blob:"],
     "child-src": ["'self'", "blob:"],

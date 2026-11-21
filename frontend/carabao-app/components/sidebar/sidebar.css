@@ -36,6 +36,31 @@
   letter-spacing: -0.01em;
 }
 
+/* Small link to the merchant site, at the right of the green header. */
+.sidebar__merchant-site {
+  margin-left: auto;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease;
+}
+
+.sidebar__merchant-site:hover,
+.sidebar__merchant-site:focus-visible {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.sidebar__merchant-site:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
 /* Nav */
 .sidebar__nav {
   flex: 1;
@@ -323,6 +348,11 @@
     height: 2px;
     border-radius: var(--radius-sm);
     background: var(--success-text);
+  }
+
+  /* Keep clear of the close button in the header's corner. */
+  .sidebar__merchant-site {
+    margin-right: 2.75rem;
   }
 
   .sidebar__mobile-close {
