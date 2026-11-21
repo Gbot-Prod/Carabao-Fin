@@ -166,11 +166,31 @@ class MerchantApplication(Base):
     check_flags = Column(JSON, nullable=True)
     check_status = Column(String, nullable=True, index=True)  # pending|completed|failed
     checked_at = Column(DateTime(timezone=True), nullable=True)
+    # Read from the uploaded BIR Form 2303. The TIN and name are encrypted;
+    # ocr_bir_tin_hmac is for duplicate lookups.
+    bir_file_sha256 = Column(String(64), nullable=True, index=True)
+    ocr_bir_tin = Column(EncryptedString("tin"), nullable=True)
+    ocr_bir_tin_hmac = Column(String(64), nullable=True)
+    ocr_bir_name = Column(EncryptedString("ocr_bir_name"), nullable=True)
+    ocr_bir_vat_status = Column(String(20), nullable=True)
+    # The review checklist built from the checks: a list of
+    # {id, label, result (pass|warn|fail|not_checked), reason, document,
+    # related_application_ids}. Stored so the review page does not recompute it.
+    check_checklist = Column(JSON, nullable=True)
+    # The items an admin ticked as reviewed: {item_id: {"by": id, "at": iso}}.
+    # Approval needs every warn and fail item here (application_review.py).
+    check_confirmations = Column(JSON, nullable=True)
 
     @validates("tin")
     def _set_tin_hmac(self, _key: str, value: str | None) -> str | None:
         value = value or None
         self.tin_hmac = blind_index(value)
+        return value
+
+    @validates("ocr_bir_tin")
+    def _set_ocr_bir_tin_hmac(self, _key: str, value: str | None) -> str | None:
+        value = value or None
+        self.ocr_bir_tin_hmac = blind_index(value)
         return value
 
     @validates("rsbsa_number")

@@ -16,6 +16,7 @@ from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.field_crypto import EncryptedString, blind_index
+from app.models.statuses import MerchantVerificationStatus, status_type
 
 
 class Merchant(Base):
@@ -61,6 +62,16 @@ class Merchant(Base):
     # Set when an admin suspends the approved application (CF-0010). Buyers no
     # longer see the shop and it takes no new orders.
     suspended_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    # Whether the merchant may sell (statuses.MerchantVerificationStatus). The
+    # row exists from the first onboarding step; only "verified" sells. Written
+    # only by services/merchant_verification.sync_verification_status.
+    verification_status = Column(
+        status_type(MerchantVerificationStatus, "ck_merchants_verification_status"),
+        nullable=False,
+        index=True,
+        default=MerchantVerificationStatus.SETUP,
+        server_default=MerchantVerificationStatus.SETUP.value,
+    )
 
     # Location / availability
     region = Column(String, nullable=False, index=True)
@@ -99,8 +110,10 @@ class Merchant(Base):
 
     # Legal details
     legal_business_name = Column(String, nullable=True)
-    # Copied from the approved application (merchant_applications.seller_type).
-    seller_type = Column(String, nullable=False)
+    # Copied from the application (merchant_applications.seller_type); the
+    # reviewed tax and document fields below are copied at approval, so they
+    # are NULL on a merchant that is not verified yet.
+    seller_type = Column(String, nullable=True)
     vat_status = Column(String(20), nullable=True)
     # BIR RR No. 12-2023 declaration; receipts for a declared seller say they
     # are not BIR invoices (services/receipts.py).
@@ -114,12 +127,12 @@ class Merchant(Base):
     contact_email = Column(String, nullable=True, index=True)
     rsbsa_number = Column(EncryptedString("rsbsa_number"), nullable=True)
     rsbsa_number_hmac = Column(String(64), nullable=True, index=True)
-    rsbsa_document_path = Column(String, nullable=False)
+    rsbsa_document_path = Column(String, nullable=True)
     rsbsa_document_original_name = Column(String, nullable=True)
     rsbsa_document_content_type = Column(String, nullable=True)
     # Copied from the approved application (R2 keys, not the files).
-    gov_id_type = Column(String, nullable=False)
-    gov_id_document_path = Column(String, nullable=False)
+    gov_id_type = Column(String, nullable=True)
+    gov_id_document_path = Column(String, nullable=True)
     gov_id_document_original_name = Column(String, nullable=True)
     gov_id_document_content_type = Column(String, nullable=True)
     # BIR Form 2303 (registered seller types), R2 key and metadata.
