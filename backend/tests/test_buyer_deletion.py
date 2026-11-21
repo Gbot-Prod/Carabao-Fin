@@ -238,6 +238,7 @@ def test_account_delete_removes_identity_documents(db, seller, r2_deleted):
             rsbsa_document_path="rsbsa/2.pdf",
             gov_id_type="Passport",
             gov_id_document_path="gov-id/y.pdf",
+            bir_cert_document_path="bir-2303/z.pdf",
             region="Region III",
             province="Bulacan",
             city="Malolos",
@@ -250,6 +251,7 @@ def test_account_delete_removes_identity_documents(db, seller, r2_deleted):
 
     assert delete_account(_client(db, user)).status_code == 204
     assert sorted(r2_deleted) == [
+        "bir-2303/z.pdf",
         "gov-id/x.pdf",
         "gov-id/y.pdf",
         "rsbsa/1.pdf",
