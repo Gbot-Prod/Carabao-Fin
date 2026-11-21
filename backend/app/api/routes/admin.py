@@ -289,7 +289,13 @@ def reinstate_account(
 ADMIN_LIST_DEFAULT = 200
 ADMIN_LIST_MAX = 500
 ApplicationStatus = Literal[
-    "submitted", "clarification", "approved", "rejected", "suspended"
+    "submitted",
+    "clarification",
+    "approved",
+    "rejected",
+    "suspended",
+    # Saved with "Submit later": incomplete, cannot be reviewed.
+    "pending_documents",
 ]
 # CF-0094 (B102): a status filter names each status at most once.
 _STATUS_COUNT = len(get_args(ApplicationStatus))
@@ -470,6 +476,13 @@ def get_admin_stats(
         .scalar()
         or 0
     )
+    # Saved with "Submit later": not admin work yet, shown as incomplete.
+    incomplete_applications = (
+        db.query(func.count(MerchantApplication.id))
+        .filter(MerchantApplication.status == "pending_documents")
+        .scalar()
+        or 0
+    )
 
     # Work waiting on an admin (A5a). Payouts: requested, approved, or failed and
     # needing a resend; "processing" is waiting on PayMongo, not on an admin.
@@ -532,6 +545,7 @@ def get_admin_stats(
         "total_users": int(total_users),
         "active_merchants": int(active_merchants),
         "pending_applications": int(pending_applications),
+        "incomplete_applications": int(incomplete_applications),
         "pending_work": {
             "applications": int(pending_applications),
             "payouts_to_send": int(payouts_to_send),
@@ -839,3 +853,14 @@ def get_gov_id_document_url(
     _: User = Depends(_require_admin),
 ):
     return _document_url_response(db, app_id, "gov_id", "government ID")
+
+
+@router.get("/admin/merchant-applications/{app_id}/bir-cert-document")
+def get_bir_cert_document_url(
+    app_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(_require_admin),
+):
+    return _document_url_response(
+        db, app_id, "bir_cert", "BIR Certificate of Registration"
+    )

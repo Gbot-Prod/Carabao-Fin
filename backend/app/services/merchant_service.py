@@ -137,7 +137,10 @@ def create_merchant_from_application(
     fields = {
         "merchant_name": application.merchant_name,
         "legal_business_name": application.legal_business_name,
-        "business_type": application.business_type,
+        "seller_type": application.seller_type,
+        "vat_status": application.vat_status,
+        "small_agri_producer": application.small_agri_producer,
+        "small_agri_declared_year": application.small_agri_declared_year,
         "tin": application.tin,
         "registration_type": application.registration_type,
         "registration_number": application.registration_number,
@@ -164,6 +167,9 @@ def create_merchant_from_application(
         "gov_id_document_path": application.gov_id_document_path,
         "gov_id_document_original_name": application.gov_id_document_original_name,
         "gov_id_document_content_type": application.gov_id_document_content_type,
+        "bir_cert_document_path": application.bir_cert_document_path,
+        "bir_cert_document_original_name": application.bir_cert_document_original_name,
+        "bir_cert_document_content_type": application.bir_cert_document_content_type,
     }
 
     existing_merchant = (
