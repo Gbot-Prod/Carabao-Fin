@@ -5,6 +5,8 @@
 export type MerchantPerformance = {
   merchant_id: number;
   merchant_name: string;
+  /** setup | under_review | needs_changes | verified | suspended. Only verified sells. */
+  verification_status?: string;
   rating?: number | null;
   rating_count: number;
   total_products: number;
@@ -17,6 +19,29 @@ export type MerchantPerformance = {
   last_30_days_orders: number;
   last_30_days_revenue: number;
 };
+
+/**
+ * The "not live yet" banner while Carabao has not verified the farm, or null.
+ * The merchant screens open for any merchant row; the server refuses selling.
+ * Business documents are sent on the web Merchant Centre.
+ */
+export function verificationBanner(status: string | undefined): string | null {
+  switch (status) {
+    case undefined:
+    case 'verified':
+      return null;
+    case 'setup':
+      return 'Your shop isn’t live yet. Next: add your business information in the Merchant Centre on the web.';
+    case 'under_review':
+      return 'Your shop isn’t live yet. Carabao is reviewing your documents; you can keep adding produce.';
+    case 'needs_changes':
+      return 'Your shop isn’t live yet. Carabao asked for changes to your business information (Merchant Centre on the web).';
+    case 'suspended':
+      return 'Your shop is suspended, so buyers cannot see it. Contact Carabao support.';
+    default:
+      return 'Your shop isn’t live yet.';
+  }
+}
 
 export type DemandTerm = { query: string; searches: number; no_result_searches: number };
 export type DemandInsight = {

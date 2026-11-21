@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { api, type ApiStockAlerts } from '../lib/api';
-import { alertCounts, cancelRate, statTiles, unmetSearches, type DemandInsight, type MerchantPerformance } from '../lib/dashboard';
+import { alertCounts, cancelRate, statTiles, unmetSearches, verificationBanner, type DemandInsight, type MerchantPerformance } from '../lib/dashboard';
 import { ratingLabel } from '../lib/farms';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -67,6 +67,7 @@ function Content() {
   const counts = alertCounts(alerts);
   const rate = cancelRate(perf);
   const unmet = unmetSearches(demand);
+  const banner = verificationBanner(perf.verification_status);
   const link = (icon: React.ComponentProps<typeof Ionicons>['name'], label: string, href: Href, badge?: number) => (
     <TouchableOpacity key={label} style={styles.link} onPress={() => router.push(href)} accessibilityRole="button" accessibilityLabel={badge ? `${label}, ${badge}` : label}>
       <Ionicons name={icon} size={20} color={Colors.primary} />
@@ -83,6 +84,12 @@ function Content() {
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); setAttempt((n) => n + 1); }} />}
       >
+        {banner && (
+          <View style={styles.banner} accessibilityRole="alert">
+            <Ionicons name="time-outline" size={18} color={Colors.text} />
+            <Text style={styles.bannerText}>{banner}</Text>
+          </View>
+        )}
         <View style={styles.tiles}>
           {statTiles(perf).map((t) => (
             <View key={t.key} style={styles.tile} accessible accessibilityLabel={`${t.label}: ${t.value}`}>
@@ -149,6 +156,11 @@ export default function MerchantDashboardScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.offWhite },
+  banner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, padding: Spacing.md,
+    borderRadius: Radius.md, backgroundColor: Colors.warningBg, borderWidth: 1, borderColor: Colors.warning,
+  },
+  bannerText: { flex: 1, fontSize: FontSize.sm, color: Colors.text },
   header: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
     backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border,
