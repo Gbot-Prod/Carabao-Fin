@@ -41,7 +41,7 @@ def _applications(db: Session, statuses: list[str]) -> list[int]:
             user_id=user.id,
             status=status,
             merchant_name=f"Farm {i}",
-            business_type="individual",
+            seller_type="individual_farmer",
             contact_email=f"applicant{i}@example.com",
             contact_number=f"63917000000{i}",
             rsbsa_document_path="rsbsa/3.pdf",

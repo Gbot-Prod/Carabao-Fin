@@ -92,6 +92,11 @@ def upload_gov_id_document(user_id: int, file: CheckedFile) -> str:
     return _put_private(f"gov-id/{user_id}", file)
 
 
+def upload_bir_cert_document(user_id: int, file: CheckedFile) -> str:
+    """BIR Certificate of Registration (Form 2303)."""
+    return _put_private(f"bir-2303/{user_id}", file)
+
+
 def delete_private_document(stored_path: str) -> None:
     """Remove a document that was uploaded for a submit that then failed."""
     _client().delete_object(Bucket=_private_bucket(), Key=_object_key(stored_path))

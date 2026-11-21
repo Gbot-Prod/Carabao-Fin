@@ -27,10 +27,8 @@ from tests.test_merchant_onboarding_phone import (
 # The same TIN as the first account, written without dashes.
 VALID_PAYLOAD = {
     **PAYLOAD,
-    "business_type": "Farmer",
-    "registration_type": "DTI",
     "available_days": ["Mon"],
-    "tin": "123456789",
+    "tin": "123456789000",
 }
 
 
@@ -119,7 +117,7 @@ def _application(db, user, tin="123-456-789-000", rsbsa="03-69-04-012-34567"):  
         merchant_name="Farm",
         legal_business_name="Farm",
         barangay="Poblacion",
-        business_type="Farmer",
+        seller_type="individual_farmer",
         tin=tin,
         contact_email="f@example.com",
         contact_number="09171234567",
@@ -173,7 +171,7 @@ def test_onboarding_rejects_a_tin_used_by_another_account(db, monkeypatch):  # n
     monkeypatch.setenv("AUTH_SYNC_SHARED_SECRET", "test-secret")
     patch_uploads(monkeypatch)
     first = make_user(db, "a@example.com", phone_number="+639170000001")
-    _application(db, first, tin="123-456-789")
+    _application(db, first, tin="123-456-789-000")
     second = make_user(db, "b@example.com", phone_number="+639171234567")
     db.commit()
 

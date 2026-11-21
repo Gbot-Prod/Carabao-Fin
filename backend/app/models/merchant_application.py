@@ -69,25 +69,59 @@ class MerchantApplication(Base):
         nullable=False,
     )
 
-    # Legal details
-    merchant_name = Column(String, nullable=False)
+    # Business information. A pending_documents application ("Submit later")
+    # has only seller_type here; the rest is filled in when it is submitted.
+    merchant_name = Column(String, nullable=True)
+    # individual_farmer | sole_proprietor | corporation | cooperative
+    # (schemas/merchant_application.py SellerType).
+    seller_type = Column(String, nullable=True, index=True)
+    # Computed by the server: company_name, or "First Middle Last Suffix".
     legal_business_name = Column(String, nullable=True)
-    business_type = Column(String, nullable=False)
+    # The individual's legal name (individual_farmer, sole_proprietor).
+    last_name = Column(String(80), nullable=True)
+    first_name = Column(String(80), nullable=True)
+    middle_name = Column(String(80), nullable=True)
+    suffix = Column(String(10), nullable=True)
+    # A corporation's authorized representative (their government ID).
+    rep_last_name = Column(String(80), nullable=True)
+    rep_first_name = Column(String(80), nullable=True)
+    rep_middle_name = Column(String(80), nullable=True)
+    rep_suffix = Column(String(10), nullable=True)
+    # Registered company / cooperative name, and the business or trade name.
+    company_name = Column(String(255), nullable=True)
+    trade_name = Column(String(255), nullable=True)
     # Encrypted at rest (CF-0007); tin_hmac is for lookups and duplicates.
     tin = Column(EncryptedString("tin"), nullable=True)
     tin_hmac = Column(String(64), nullable=True, index=True)
+    # Derived from seller_type (DTI, SEC, CDA; none for an individual farmer).
     registration_type = Column(String, nullable=True)
     registration_number = Column(String, nullable=True)
+    # vat_registered | non_vat (registered seller types).
+    vat_status = Column(String(20), nullable=True)
+    # BIR Certificate of Registration (Form 2303), private bucket.
+    bir_cert_document_path = Column(String, nullable=True)
+    bir_cert_document_original_name = Column(String, nullable=True)
+    bir_cert_document_content_type = Column(String, nullable=True)
+    # Small agricultural producer declaration (BIR RR No. 12-2023), for
+    # individual_farmer and sole_proprietor only; NULL for other types.
+    # TODO: ask declared sellers to confirm again each year
+    # (small_agri_declared_year); no reminder is built yet.
+    small_agri_producer = Column(Boolean, nullable=True)
+    small_agri_declared_at = Column(DateTime(timezone=True), nullable=True)
+    small_agri_declared_year = Column(Integer, nullable=True)
+    # The Terms and Data Privacy checkbox on the final submit.
+    terms_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    terms_version = Column(String(40), nullable=True)
     contact_email = Column(String, nullable=False, index=True)
     contact_number = Column(String, nullable=False, index=True)
     rsbsa_number = Column(EncryptedString("rsbsa_number"), nullable=True)
     rsbsa_number_hmac = Column(String(64), nullable=True, index=True)
-    rsbsa_document_path = Column(String, nullable=False)
+    rsbsa_document_path = Column(String, nullable=True)
     rsbsa_document_original_name = Column(String, nullable=True)
     rsbsa_document_content_type = Column(String, nullable=True)
     # Any valid government ID (onboarding section 2), private bucket.
-    gov_id_type = Column(String, nullable=False)
-    gov_id_document_path = Column(String, nullable=False)
+    gov_id_type = Column(String, nullable=True)
+    gov_id_document_path = Column(String, nullable=True)
     gov_id_document_original_name = Column(String, nullable=True)
     gov_id_document_content_type = Column(String, nullable=True)
 

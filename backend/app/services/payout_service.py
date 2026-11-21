@@ -9,6 +9,10 @@ succeeded (``released``) or failed (``failed``, which an admin can resend).
 Sending is guarded so money never goes out twice: the batch is locked and
 moved to ``processing`` (and committed) before PayMongo is called, and a
 ``processing`` batch cannot be sent again.
+
+No tax is withheld from payouts: BIR RR No. 16-2023 (0.5% e-marketplace
+withholding) was declared void by the CTA on October 22, 2026 (CTA Case No.
+SCA-0027). Revisit if the ruling is reversed on appeal.
 """
 
 import logging

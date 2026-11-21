@@ -110,7 +110,9 @@ class AdminMerchantResponse(MerchantResponse):
     owner_suspension_reason: str | None = None
     # Details for the admin's expanded row. No encrypted IDs (TIN, RSBSA).
     owner_name: str | None = None
-    business_type: str | None = None
+    seller_type: str | None = None
+    vat_status: str | None = None
+    small_agri_producer: bool | None = None
     registration_type: str | None = None
     registration_number: str | None = None
     low_stock_threshold: int | None = None

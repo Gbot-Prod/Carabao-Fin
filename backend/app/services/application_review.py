@@ -1,15 +1,19 @@
 """Merchant application statuses and the moves allowed between them (CF-0010).
 
 ``submitted`` is the pending state: the applicant sent the form and an admin
-has yet to decide.
+has yet to decide. ``pending_documents`` is an application saved with
+"Submit later": step 1 and the seller type only. It cannot be reviewed, and
+the applicant cannot sell, until they send the business information.
 
 Admin moves (PATCH /admin/merchant-applications/{id}):
     submitted -> approved | rejected | clarification
     approved  -> suspended   (also suspends the merchant)
 
 Applicant moves (POST /merchant-onboarding/me):
-    (none) | rejected | clarification -> submitted
-    approved -> submitted, only after the merchant closed their account
+    (none) | rejected | clarification | pending_documents
+        -> submitted (Submit now) | pending_documents (Submit later)
+    approved -> submitted | pending_documents, only after the merchant closed
+        their account
 
 Any other move is refused with 409.
 """
@@ -30,6 +34,7 @@ APPROVED = "approved"
 REJECTED = "rejected"
 CLARIFICATION = "clarification"
 SUSPENDED = "suspended"
+PENDING_DOCUMENTS = "pending_documents"
 
 ADMIN_TRANSITIONS: dict[str, frozenset[str]] = {
     SUBMITTED: frozenset({APPROVED, REJECTED, CLARIFICATION}),
@@ -37,10 +42,17 @@ ADMIN_TRANSITIONS: dict[str, frozenset[str]] = {
 }
 
 # Statuses from which the applicant may send the form again.
-RESUBMITTABLE = frozenset({REJECTED, CLARIFICATION})
+RESUBMITTABLE = frozenset({REJECTED, CLARIFICATION, PENDING_DOCUMENTS})
+
+NOT_SUBMITTED_DETAIL = (
+    "This application has no business information yet (Submit later), so it "
+    "cannot be reviewed until the applicant submits it."
+)
 
 
 def check_admin_transition(current: str, target: str) -> None:
+    if current == PENDING_DOCUMENTS:
+        raise HTTPException(status_code=409, detail=NOT_SUBMITTED_DETAIL)
     if target not in ADMIN_TRANSITIONS.get(current, frozenset()):
         raise HTTPException(
             status_code=409,

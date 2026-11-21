@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -14,11 +15,69 @@ from pydantic import (
 
 from app.core.field_crypto import mask
 
-# The choices the onboarding form offers (merchantOnboarding/page.tsx).
-BusinessType = Literal[
-    "Sole Proprietor", "Partnership", "Corporation", "Cooperative", "Farmer"
+# Who is selling (merchant/onboarding/page.tsx). It decides the name fields,
+# the registration agency and the tax fields.
+SellerType = Literal[
+    "individual_farmer", "sole_proprietor", "corporation", "cooperative"
 ]
+SELLER_TYPES: tuple[str, ...] = (
+    "individual_farmer",
+    "sole_proprietor",
+    "corporation",
+    "cooperative",
+)
+# "now": the business information is sent with this submit. "later": only
+# step 1 and the seller type are saved (status pending_documents).
+SubmitMode = Literal["now", "later"]
+VatStatus = Literal["vat_registered", "non_vat"]
+NameSuffix = Literal["Jr.", "Sr.", "II", "III", "IV", "V"]
+# Old rows may still hold "LGU"; new submissions only ever derive these.
 RegistrationType = Literal["DTI", "SEC", "CDA", "LGU"]
+
+# The registration agency each seller type implies, set by the server (the
+# form has no registration type field, so Corporation + DTI cannot happen).
+REGISTRATION_FOR_SELLER: dict[str, str | None] = {
+    "individual_farmer": None,
+    "sole_proprietor": "DTI",
+    "corporation": "SEC",
+    "cooperative": "CDA",
+}
+# The registered types: TIN, VAT status and BIR Form 2303 are required.
+REGISTERED_SELLERS = frozenset({"sole_proprietor", "corporation", "cooperative"})
+# BIR RR No. 12-2023 covers individuals: these see the small agricultural
+# producer declaration.
+INDIVIDUAL_SELLERS = frozenset({"individual_farmer", "sole_proprietor"})
+
+PERSON_NAME_MAX = 80
+COMPANY_NAME_MAX = 255
+TERMS_VERSION_MAX = 40
+
+# 9 digits plus a 3-5 digit branch code ("000" when there is no branch).
+_TIN_DIGITS = re.compile(r"^\d{12,14}$")
+
+
+def normalize_tin(value: str) -> str:
+    """``123456789000`` or ``123-456-789-000`` as ``123-456-789-000``.
+
+    Raises ValueError unless it is 9 digits plus a 3-5 digit branch code.
+    """
+    digits = re.sub(r"[\s-]", "", value)
+    if not _TIN_DIGITS.match(digits):
+        raise ValueError(
+            "must be 9 digits plus a 3-5 digit branch code, e.g. 123-456-789-000 "
+            "(use 000 if there is no branch)"
+        )
+    return f"{digits[0:3]}-{digits[3:6]}-{digits[6:9]}-{digits[9:]}"
+
+
+def full_name(
+    first: str | None, middle: str | None, last: str | None, suffix: str | None
+) -> str | None:
+    """ "First Middle Last Suffix", skipping the empty parts."""
+    name = " ".join(part for part in (first, middle, last, suffix) if part)
+    return name or None
+
+
 # Valid Philippine government IDs (onboarding section 2). RSBSA is a separate
 # upload, not one of these.
 GovIdType = Literal[
@@ -73,27 +132,71 @@ class MerchantOnboardingPayload(BaseModel):
     email_verification_token: str | None = Field(default=None, max_length=2000)
     phone_verification_token: str | None = Field(default=None, max_length=2000)
 
-    # Section 2: legal details and documents
-    # The form shows a 0/50 counter for both names (MERCHANT_NAME_MAX).
-    merchant_name: str = Field(min_length=3, max_length=MERCHANT_NAME_MAX)
-    legal_business_name: str = Field(min_length=3, max_length=MERCHANT_NAME_MAX)
-    business_type: BusinessType
-    # Optional; a blank value is stored as no TIN.
-    tin: str | None = Field(default=None, min_length=6, max_length=20)
-    registration_type: RegistrationType | None = None
-    registration_number: str = Field(default="", max_length=30)
+    # Section 2: business information. Every field here is optional on this
+    # model; which ones a submit needs depends on submit_mode and seller_type
+    # and is checked by the per-type models below (business_details_model).
+    submit_mode: SubmitMode
+    seller_type: SellerType
+    # The public store name; 0/50 counter on the form (MERCHANT_NAME_MAX).
+    merchant_name: str | None = Field(
+        default=None, min_length=3, max_length=MERCHANT_NAME_MAX
+    )
+    # The individual's (or, for a corporation, the authorized
+    # representative's) legal name, as on their government ID.
+    last_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
+    first_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
+    middle_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
+    suffix: NameSuffix | None = None
+    rep_last_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
+    rep_first_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
+    rep_middle_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
+    rep_suffix: NameSuffix | None = None
+    company_name: str | None = Field(default=None, max_length=COMPANY_NAME_MAX)
+    trade_name: str | None = Field(default=None, max_length=COMPANY_NAME_MAX)
+    registration_number: str | None = Field(default=None, max_length=30)
+    # Normalized to 999-999-999-000 (normalize_tin).
+    tin: str | None = Field(default=None, max_length=20)
+    vat_status: VatStatus | None = None
+    # BIR RR No. 12-2023 declaration (individual types only).
+    small_agri_producer: bool | None = None
     rsbsa_number: str | None = Field(default=None, max_length=30)
-    gov_id_type: GovIdType
+    gov_id_type: GovIdType | None = None
+    terms_accepted: bool = False
+    terms_version: str | None = Field(default=None, max_length=TERMS_VERSION_MAX)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    @field_validator("tin", "registration_type", "rsbsa_number", mode="before")
+    @field_validator(
+        "merchant_name",
+        "last_name",
+        "first_name",
+        "middle_name",
+        "suffix",
+        "rep_last_name",
+        "rep_first_name",
+        "rep_middle_name",
+        "rep_suffix",
+        "company_name",
+        "trade_name",
+        "registration_number",
+        "tin",
+        "vat_status",
+        "rsbsa_number",
+        "gov_id_type",
+        "terms_version",
+        mode="before",
+    )
     @classmethod
     def blank_is_none(cls, value: object) -> object:
-        # The form sends "" for "None" / an empty optional field.
+        # The form sends "" for an empty optional field.
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+    @field_validator("tin")
+    @classmethod
+    def tin_format(cls, value: str | None) -> str | None:
+        return normalize_tin(value) if value is not None else None
 
     @field_validator("available_days")
     @classmethod
@@ -101,6 +204,104 @@ class MerchantOnboardingPayload(BaseModel):
         if len(days) != len(set(days)):
             raise ValueError("Each day may appear only once")
         return days
+
+    def business_fields(self) -> dict[str, object]:
+        """The section 2 values that were filled in, for the per-type check."""
+        return {
+            name: value
+            for name in BUSINESS_FIELDS
+            if (value := getattr(self, name)) is not None
+        }
+
+
+# The section 2 fields a Submit now is checked against (one model per type).
+BUSINESS_FIELDS = (
+    "merchant_name",
+    "last_name",
+    "first_name",
+    "middle_name",
+    "suffix",
+    "rep_last_name",
+    "rep_first_name",
+    "rep_middle_name",
+    "rep_suffix",
+    "company_name",
+    "trade_name",
+    "registration_number",
+    "tin",
+    "vat_status",
+    "small_agri_producer",
+    "rsbsa_number",
+    "gov_id_type",
+    "terms_accepted",
+    "terms_version",
+)
+
+PersonName = Annotated[str, Field(min_length=1, max_length=PERSON_NAME_MAX)]
+CompanyName = Annotated[str, Field(min_length=1, max_length=COMPANY_NAME_MAX)]
+
+
+class _SubmitNowCommon(BaseModel):
+    """What every Submit now needs. A field a type does not use is refused
+    (extra="forbid"), e.g. a small producer declaration from a corporation."""
+
+    merchant_name: str = Field(min_length=3, max_length=MERCHANT_NAME_MAX)
+    rsbsa_number: str | None = None
+    gov_id_type: GovIdType
+    # The Terms and Data Privacy checkbox.
+    terms_accepted: Literal[True]
+    terms_version: str = Field(min_length=1, max_length=TERMS_VERSION_MAX)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class _Person(BaseModel):
+    last_name: PersonName
+    first_name: PersonName
+    middle_name: str | None = None
+    suffix: NameSuffix | None = None
+
+
+class _Registered(BaseModel):
+    registration_number: str = Field(min_length=1, max_length=30)
+    tin: str
+    vat_status: VatStatus
+
+
+class IndividualFarmerDetails(_SubmitNowCommon, _Person):
+    # "You can add this later."
+    tin: str | None = None
+    small_agri_producer: bool
+
+
+class SoleProprietorDetails(_SubmitNowCommon, _Person, _Registered):
+    trade_name: CompanyName
+    small_agri_producer: bool
+
+
+class CorporationDetails(_SubmitNowCommon, _Registered):
+    """Corporation, partnership or one person corporation (SEC)."""
+
+    company_name: CompanyName
+    trade_name: CompanyName
+    # The authorized representative; the government ID upload is theirs.
+    rep_last_name: PersonName
+    rep_first_name: PersonName
+    rep_middle_name: str | None = None
+    rep_suffix: NameSuffix | None = None
+
+
+class CooperativeDetails(_SubmitNowCommon, _Registered):
+    company_name: CompanyName
+    trade_name: str | None = None
+
+
+BUSINESS_DETAILS_MODELS: dict[str, type[_SubmitNowCommon]] = {
+    "individual_farmer": IndividualFarmerDetails,
+    "sole_proprietor": SoleProprietorDetails,
+    "corporation": CorporationDetails,
+    "cooperative": CooperativeDetails,
+}
 
 
 class MerchantApplicationResponse(BaseModel):
@@ -112,9 +313,28 @@ class MerchantApplicationResponse(BaseModel):
     status: str
     submitted_at: datetime | None = None
 
-    merchant_name: str
-    legal_business_name: str
-    business_type: str
+    # Unset on a pending_documents application (only step 1 was sent).
+    merchant_name: str | None = None
+    legal_business_name: str | None = None
+    seller_type: str | None = None
+    last_name: str | None = None
+    first_name: str | None = None
+    middle_name: str | None = None
+    suffix: str | None = None
+    rep_last_name: str | None = None
+    rep_first_name: str | None = None
+    rep_middle_name: str | None = None
+    rep_suffix: str | None = None
+    company_name: str | None = None
+    trade_name: str | None = None
+    vat_status: str | None = None
+    bir_cert_document_original_name: str | None = None
+    bir_cert_document_content_type: str | None = None
+    small_agri_producer: bool | None = None
+    small_agri_declared_at: datetime | None = None
+    small_agri_declared_year: int | None = None
+    terms_accepted_at: datetime | None = None
+    terms_version: str | None = None
     tin: str | None = None
     registration_type: str | None = None
     registration_number: str | None = None
@@ -132,7 +352,7 @@ class MerchantApplicationResponse(BaseModel):
     rsbsa_number: str | None = None
     rsbsa_document_original_name: str | None = None
     rsbsa_document_content_type: str | None = None
-    gov_id_type: str
+    gov_id_type: str | None = None
     gov_id_document_original_name: str | None = None
     gov_id_document_content_type: str | None = None
 

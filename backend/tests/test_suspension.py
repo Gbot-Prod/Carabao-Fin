@@ -148,6 +148,6 @@ def test_admin_merchant_list_has_detail_fields(db, merchant):
     item = res.json()["items"][0]
     assert item["shop_page"]["logo_url"] == "https://x/logo.png"
     assert [p["name"] for p in item["produces"]] == ["Talong"]
-    assert item["business_type"] == merchant.business_type
+    assert item["seller_type"] == merchant.seller_type
     assert "created_at" in item and "owner_name" in item
     assert "tin" not in item and "rsbsa_number" not in item

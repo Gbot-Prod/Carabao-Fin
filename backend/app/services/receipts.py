@@ -58,6 +58,9 @@ def receipt_lines(items: Any) -> list[ReceiptLine]:
     return lines
 
 
+SMALL_PRODUCER_LABEL = "Acknowledgement receipt — not a BIR invoice"
+
+
 def build_receipt(order: Order, payment: Transaction) -> ReceiptResponse:
     delivery_fee = _int(order.delivery_fee)
     total = _int(order.total_price)
@@ -69,6 +72,13 @@ def build_receipt(order: Order, payment: Transaction) -> ReceiptResponse:
         town = ", ".join(str(p) for p in (merchant.city, merchant.province) if p)
     data: dict[str, Any] = {
         "receipt_number": order_ref(order),
+        # BIR RR No. 12-2023: a declared small agricultural producer issues no
+        # invoice for these sales, so the receipt must not look like one.
+        "document_label": (
+            SMALL_PRODUCER_LABEL
+            if merchant is not None and merchant.small_agri_producer
+            else None
+        ),
         "order_id": order.id,
         "order_status": str(order.status),
         "ordered_at": order.ordered_at,

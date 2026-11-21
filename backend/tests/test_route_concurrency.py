@@ -92,7 +92,7 @@ def _add_merchants(session, count):
                 postal_code="1100",
                 available_days=["Mon"],
                 operating_hours={},
-                business_type="individual",
+                seller_type="individual_farmer",
                 rsbsa_document_path="x.pdf",
                 gov_id_type="Passport",
                 gov_id_document_path="gov-id/x.pdf",

@@ -69,3 +69,27 @@ def test_submits_are_limited_before_any_document_work(
 def test_default_leaves_room_for_corrections() -> None:
     limit = rate_limit.ACTION_LIMITS["onboarding_submit"]
     assert limit.max_hits >= 5 and limit.window_seconds == 3600
+
+
+def test_submit_later_counts_toward_the_same_limit(
+    db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Saving with "Submit later" (no documents) is limited like Submit now."""
+    import json
+
+    monkeypatch.setitem(
+        rate_limit.ACTION_LIMITS, "onboarding_submit", rate_limit.Limit(2, 60)
+    )
+    user, _ = _buyer(db, "later@example.com")
+    app = FastAPI()
+    app.include_router(merchant_onboarding.router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    client = TestClient(app)
+    later = json.dumps({"submit_mode": "later", "seller_type": "individual_farmer"})
+
+    for _ in range(2):
+        res = client.post("/merchant-onboarding/me", data={"payload": later})
+        assert res.status_code != 429
+    res = client.post("/merchant-onboarding/me", data={"payload": later})
+    assert res.status_code == 429

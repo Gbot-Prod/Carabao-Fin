@@ -82,3 +82,13 @@ test('CF-0135 in step with web and backend', () => {
   assert.match(routes, /"\/orders\/me\/\{order_id\}\/receipt"/);
   assert.match(routes, /status_code=409, detail="This order has no payment yet, so no receipt\."/);
 });
+
+test('BIR RR 12-2023: a small producer receipt says it is not an invoice', () => {
+  const base = {
+    receipt_number: 'CB-2026-0043', order_id: 43, payment_status: 'paid', farm_name: 'Mang Ben Farm',
+    lines: [], subtotal: 0, delivery_fee: 0, discount: 0, total: 0,
+  };
+  const label = 'Acknowledgement receipt — not a BIR invoice';
+  assert.match(receiptShareText({ ...base, document_label: label }, 'Nov 21, 2026'), new RegExp(label));
+  assert.doesNotMatch(receiptShareText(base, 'Nov 21, 2026'), /BIR invoice/);
+});

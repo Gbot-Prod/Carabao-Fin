@@ -94,6 +94,7 @@ export default function OrderReceiptPage() {
           <div>
             <p className={styles.brand}>Carabao</p>
             <h1 id="receipt-title" className={styles.title}>Receipt</h1>
+            {r.document_label && <p className={styles.documentLabel}>{r.document_label}</p>}
           </div>
           <dl className={styles.meta}>
             <dt>Receipt no.</dt><dd>{r.receipt_number}</dd>

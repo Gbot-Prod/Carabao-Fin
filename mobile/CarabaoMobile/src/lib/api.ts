@@ -262,6 +262,8 @@ export type ApiReceiptLine = {
 
 export type ApiReceipt = {
   receipt_number: string;
+  /** "Acknowledgement receipt — not a BIR invoice" for a declared small producer (BIR RR No. 12-2023). */
+  document_label?: string | null;
   order_id: number;
   order_status: string;
   ordered_at: string | null;

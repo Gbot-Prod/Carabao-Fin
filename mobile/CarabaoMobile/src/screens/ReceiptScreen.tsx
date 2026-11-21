@@ -131,6 +131,7 @@ function ReceiptContent() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.card}>
           <Text style={styles.brand}>Carabao</Text>
+          {r.document_label ? <Text style={styles.cardTitle}>{r.document_label}</Text> : null}
           <Meta label="Receipt no." value={r.receipt_number} />
           <Meta label="Paid" value={formatDateTime(r.paid_at)} />
           <Meta label="Ordered" value={formatDateTime(r.ordered_at)} />

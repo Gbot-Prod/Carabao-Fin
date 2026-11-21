@@ -306,7 +306,10 @@ export default function AdminDashboard() {
           tone={stats.pending_applications > 0 ? "amber" : "green"}
           label="Pending applications"
           value={stats.pending_applications.toLocaleString()}
-          sub={stats.pending_applications > 0 ? "Waiting for review →" : "All caught up"}
+          sub={
+            (stats.pending_applications > 0 ? "Waiting for review →" : "All caught up") +
+            (stats.incomplete_applications ? ` · ${stats.incomplete_applications.toLocaleString()} incomplete` : "")
+          }
           href="/admin/review"
           alert={stats.pending_applications > 0}
         />

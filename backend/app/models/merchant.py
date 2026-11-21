@@ -99,7 +99,13 @@ class Merchant(Base):
 
     # Legal details
     legal_business_name = Column(String, nullable=True)
-    business_type = Column(String, nullable=False)
+    # Copied from the approved application (merchant_applications.seller_type).
+    seller_type = Column(String, nullable=False)
+    vat_status = Column(String(20), nullable=True)
+    # BIR RR No. 12-2023 declaration; receipts for a declared seller say they
+    # are not BIR invoices (services/receipts.py).
+    small_agri_producer = Column(Boolean, nullable=True)
+    small_agri_declared_year = Column(Integer, nullable=True)
     # Encrypted at rest (CF-0007); tin_hmac is for lookups and duplicates.
     tin = Column(EncryptedString("tin"), nullable=True)
     tin_hmac = Column(String(64), nullable=True, index=True)
@@ -116,6 +122,10 @@ class Merchant(Base):
     gov_id_document_path = Column(String, nullable=False)
     gov_id_document_original_name = Column(String, nullable=True)
     gov_id_document_content_type = Column(String, nullable=True)
+    # BIR Form 2303 (registered seller types), R2 key and metadata.
+    bir_cert_document_path = Column(String, nullable=True)
+    bir_cert_document_original_name = Column(String, nullable=True)
+    bir_cert_document_content_type = Column(String, nullable=True)
     # The admin who approved the application, and when.
     verified_by_user_id = Column(
         Integer, ForeignKey("backend_users.id", ondelete="SET NULL"), nullable=True

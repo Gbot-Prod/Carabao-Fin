@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { UserProfile } from './users';
-import type { Merchant, MerchantPayoutBatch, PayoutProvider, PayoutType } from './merchants';
+import type { Merchant, MerchantPayoutBatch, PayoutProvider, PayoutType, SellerType, VatStatus } from './merchants';
 import type { OrderStatus, PayoutStatus, TransactionStatus } from './statuses';
 import type { Produce } from './produce';
 
@@ -9,9 +9,28 @@ export type MerchantApplication = {
   user_id: number;
   status: string;
   submitted_at: string | null;
-  merchant_name: string;
-  legal_business_name: string;
-  business_type: string;
+  /** Unset while the application is pending_documents (Submit later). */
+  merchant_name: string | null;
+  legal_business_name: string | null;
+  seller_type: SellerType | null;
+  last_name: string | null;
+  first_name: string | null;
+  middle_name: string | null;
+  suffix: string | null;
+  rep_last_name: string | null;
+  rep_first_name: string | null;
+  rep_middle_name: string | null;
+  rep_suffix: string | null;
+  company_name: string | null;
+  trade_name: string | null;
+  vat_status: VatStatus | null;
+  bir_cert_document_original_name: string | null;
+  bir_cert_document_content_type: string | null;
+  small_agri_producer: boolean | null;
+  small_agri_declared_at: string | null;
+  small_agri_declared_year: number | null;
+  terms_accepted_at: string | null;
+  terms_version: string | null;
   tin: string | null;
   registration_type: string | null;
   registration_number: string | null;
@@ -27,7 +46,7 @@ export type MerchantApplication = {
   rsbsa_number: string | null;
   rsbsa_document_original_name: string | null;
   rsbsa_document_content_type: string | null;
-  gov_id_type: string;
+  gov_id_type: string | null;
   gov_id_document_original_name: string | null;
   gov_id_document_content_type: string | null;
   admin_note: string | null;
@@ -76,6 +95,8 @@ export type AdminStats = {
   total_users: number;
   active_merchants: number;
   pending_applications: number;
+  /** Saved with "Submit later": no business information yet, nothing to review. */
+  incomplete_applications?: number;
   pending_work: {
     applications: number;
     payouts_to_send: number;
@@ -138,7 +159,9 @@ export type AdminMerchant = Merchant & {
   owner_suspension_reason: string | null;
   owner_name: string | null;
   legal_business_name: string | null;
-  business_type: string | null;
+  seller_type: SellerType | null;
+  vat_status: VatStatus | null;
+  small_agri_producer: boolean | null;
   registration_type: string | null;
   registration_number: string | null;
   low_stock_threshold: number | null;
@@ -231,6 +254,17 @@ export const fetchGovIdDocumentUrl = async (
 ): Promise<RsbsaDocumentUrl> => {
   const response = await apiClient.get<RsbsaDocumentUrl>(
     `/admin/merchant-applications/${applicationId}/gov-id-document`,
+  );
+
+  return response.data;
+};
+
+/** BIR Certificate of Registration (Form 2303), registered seller types. */
+export const fetchBirCertDocumentUrl = async (
+  applicationId: number,
+): Promise<RsbsaDocumentUrl> => {
+  const response = await apiClient.get<RsbsaDocumentUrl>(
+    `/admin/merchant-applications/${applicationId}/bir-cert-document`,
   );
 
   return response.data;

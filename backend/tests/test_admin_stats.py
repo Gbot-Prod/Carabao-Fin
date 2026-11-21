@@ -30,7 +30,7 @@ def test_pending_work_counts(db, merchant):
                 user_id=applicant.id,
                 status=status,
                 merchant_name="Farm",
-                business_type="individual",
+                seller_type="individual_farmer",
                 contact_email="applicant@example.com",
                 contact_number="639170000001",
                 rsbsa_document_path="rsbsa/3.pdf",
