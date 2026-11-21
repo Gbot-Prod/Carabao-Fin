@@ -148,6 +148,7 @@ def _second_merchant(db, **fields):  # noqa: F811
     owner = make_user(db, "second@example.com")
     db.flush()
     return Merchant(
+        verification_status="verified",
         user_id=owner.id,
         merchant_name="Second Farm",
         region="Region III",

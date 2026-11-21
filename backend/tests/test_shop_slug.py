@@ -33,6 +33,7 @@ def _other_merchant(db) -> Merchant:
     db.add(owner)
     db.flush()
     other = Merchant(
+        verification_status="verified",
         user_id=owner.id,
         merchant_name="Santos Farm",
         contact_number="639171234568",

@@ -51,6 +51,7 @@ def seller(db):
     db.add(user)
     db.flush()
     merchant = Merchant(
+        verification_status="verified",
         user_id=user.id,
         merchant_name="Dela Cruz Farm",
         contact_number="639171234567",

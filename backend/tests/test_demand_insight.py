@@ -28,6 +28,7 @@ def _other_farm(db, province):  # noqa: F811
     db.add(owner)
     db.flush()
     farm = Merchant(
+        verification_status="verified",
         user_id=owner.id,
         merchant_name=f"{province} Farm",
         contact_number=f"6391700{len(province):05d}",

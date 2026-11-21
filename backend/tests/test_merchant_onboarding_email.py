@@ -190,9 +190,9 @@ def test_gov_id_is_saved(db):  # noqa: F811
     assert application.gov_id_document_path == "gov-id/x.pdf"
     assert application.gov_id_document_original_name == "id.pdf"
     assert application.gov_id_document_content_type == "application/pdf"
-    # The checks do not run yet, and nothing is decided automatically.
+    # The automated checks ran; nothing is decided automatically.
     assert application.status == "submitted"
-    assert application.check_status is None
+    assert application.check_status == "completed"
 
 
 def test_gov_id_file_is_required(db):  # noqa: F811

@@ -55,6 +55,7 @@ def merchant(db: Session) -> Merchant:
     db.add(owner)
     db.flush()
     merchant = Merchant(
+        verification_status="verified",
         user_id=owner.id,
         merchant_name="Dela Cruz Farm",
         contact_number="639171234567",

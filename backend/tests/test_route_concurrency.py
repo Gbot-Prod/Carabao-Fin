@@ -83,6 +83,7 @@ def _add_merchants(session, count):
         session.add(User(id=i, notifications_preferences={}))
         session.add(
             Merchant(
+                verification_status="verified",
                 id=i,
                 user_id=i,
                 merchant_name=f"Farm {i}",
