@@ -10,7 +10,9 @@ import {
   type MerchantApplication,
 } from "@/util/api/admin";
 import { SELLER_TYPE_LABELS } from "@/util/api/merchants";
+import getApiErrorMessage from "@/util/errorHelper";
 import styles from "./page.module.css";
+import ReviewChecklist, { initialTicks, itemsToConfirm, type DocumentKind } from "./ReviewChecklist";
 import { ADMIN_LIST_LIMIT, ADMIN_LIST_MAX, mayHaveMore, mergeById } from "@/lib/admin-window";
 
 // CF-0067: always load every application waiting for a decision, and the
@@ -39,8 +41,6 @@ function declarationText(app: MerchantApplication): string | null {
   const year = app.small_agri_declared_year ? ` (declared ${app.small_agri_declared_year})` : "";
   return `${app.small_agri_producer ? "Yes" : "No"}${year}`;
 }
-
-type DocumentKind = "rsbsa" | "govId" | "birCert";
 
 const DOCUMENTS: Record<
   DocumentKind,
@@ -82,6 +82,24 @@ function ApplicationCard({
   const [documentLoading, setDocumentLoading] = useState<DocumentKind | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
   const allowed = ALLOWED_ACTIONS[app.status] ?? [];
+  // The checklist items the admin ticked as reviewed. Accept needs every warn
+  // and fail item ticked; the server refuses otherwise.
+  const [ticked, setTicked] = useState<Set<string>>(() => initialTicks(app));
+  const [checkedAt, setCheckedAt] = useState(app.checked_at);
+  if (checkedAt !== app.checked_at) {
+    // A re-run is a new review: start from its results.
+    setCheckedAt(app.checked_at);
+    setTicked(initialTicks(app));
+  }
+  const toggleTick = (id: string) =>
+    setTicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const unreviewed = itemsToConfirm(app).filter((i) => !ticked.has(i.id));
+  const acceptBlocked = unreviewed.length > 0;
 
   const selectAction = (a: ReviewAction) => {
     setAction((prev) => (prev === a ? null : a));
@@ -97,12 +115,13 @@ function ApplicationCard({
         app.id,
         action,
         action === "clarification" || action === "suspended" ? note.trim() || undefined : undefined,
+        action === "approved" ? [...ticked] : [],
       );
       onUpdate(updated);
       setAction(null);
       setNote("");
-    } catch {
-      setError("Failed to update application. Please try again.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Failed to update application. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -166,6 +185,16 @@ function ApplicationCard({
 
       {open && (
         <div className={styles.cardBody}>
+          {app.status !== "pending_documents" && (
+            <ReviewChecklist
+              app={app}
+              ticked={ticked}
+              onToggle={toggleTick}
+              onViewDocument={(kind) => void handleViewDocument(kind)}
+              onUpdate={onUpdate}
+              readOnly={!allowed.includes("approved")}
+            />
+          )}
           <div className={styles.grid}>
             <Field label="Seller Type" value={app.seller_type ? SELLER_TYPE_LABELS[app.seller_type] ?? app.seller_type : null} />
             {(app.seller_type === "individual_farmer" || app.seller_type === "sole_proprietor") && (
@@ -251,6 +280,8 @@ function ApplicationCard({
               <button
                 className={`${styles.actionBtn} ${styles.actionBtnApprove} ${action === "approved" ? styles.actionBtnSelected : ""}`}
                 onClick={() => selectAction("approved")}
+                disabled={acceptBlocked}
+                title={acceptBlocked ? "Tick every flagged checklist item as reviewed first." : undefined}
               >
                 Accept
               </button>
@@ -280,6 +311,12 @@ function ApplicationCard({
               </button>
               )}
             </div>
+            {allowed.includes("approved") && acceptBlocked && (
+              <p className={styles.adminNoteText}>
+                Accept is available once you tick the {unreviewed.length === 1 ? "flagged item" : `${unreviewed.length} flagged items`} above as
+                reviewed. Reject and Request Clarification do not need the checklist.
+              </p>
+            )}
 
             {(action === "clarification" || action === "suspended") && (
               <textarea
@@ -300,7 +337,8 @@ function ApplicationCard({
                   className={styles.submitBtn}
                   disabled={
                     submitting ||
-                    (action === "clarification" && !note.trim())
+                    (action === "clarification" && !note.trim()) ||
+                    (action === "approved" && acceptBlocked)
                   }
                   onClick={handleSubmit}
                 >
