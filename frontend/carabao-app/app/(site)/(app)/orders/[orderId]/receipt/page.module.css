@@ -73,6 +73,13 @@
   font-size: 1.75rem;
 }
 
+/* BIR RR No. 12-2023: a small producer's receipt says it is not an invoice. */
+.documentLabel {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
 .meta {
   display: grid;
   grid-template-columns: auto auto;

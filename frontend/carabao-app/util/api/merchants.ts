@@ -45,13 +45,48 @@ export type Merchant = {
   produces: Produce[];
 };
 
+/** Who is selling (backend SellerType). It decides the name, registration and tax fields. */
+export const SELLER_TYPES = ["individual_farmer", "sole_proprietor", "corporation", "cooperative"] as const;
+export type SellerType = (typeof SELLER_TYPES)[number];
+/** Short labels for admin screens. */
+export const SELLER_TYPE_LABELS: Record<SellerType, string> = {
+  individual_farmer: "Individual farmer (not business-registered)",
+  sole_proprietor: "Sole proprietorship",
+  corporation: "Corporation / Partnership / OPC",
+  cooperative: "Cooperative",
+};
+export const NAME_SUFFIXES = ["Jr.", "Sr.", "II", "III", "IV", "V"] as const;
+export type NameSuffix = (typeof NAME_SUFFIXES)[number];
+export type VatStatus = "vat_registered" | "non_vat";
+/** "now": the business information comes with this submit. "later": step 1 and the seller type only. */
+export type SubmitMode = "now" | "later";
+
+/**
+ * The onboarding form. Section 2 fields are optional here; which ones a
+ * submit needs depends on submit_mode and seller_type (backend
+ * BUSINESS_DETAILS_MODELS). The registration type and legal name are worked
+ * out by the server.
+ */
 export type MerchantOnboardingPayload = {
-  merchant_name: string;
-  legal_business_name: string;
-  business_type: string;
+  submit_mode: SubmitMode;
+  seller_type: SellerType;
+  merchant_name?: string;
+  last_name?: string;
+  first_name?: string;
+  middle_name?: string;
+  suffix?: NameSuffix | "";
+  rep_last_name?: string;
+  rep_first_name?: string;
+  rep_middle_name?: string;
+  rep_suffix?: NameSuffix | "";
+  company_name?: string;
+  trade_name?: string;
+  registration_number?: string;
   tin?: string | null;
-  registration_type: string;
-  registration_number: string ;
+  vat_status?: VatStatus | null;
+  small_agri_producer?: boolean | null;
+  terms_accepted?: boolean;
+  terms_version?: string;
   contact_email: string;
   contact_number: string;
   region: string;
@@ -67,7 +102,7 @@ export type MerchantOnboardingPayload = {
   pin_confirmed?: boolean;
   available_days: string[];
   rsbsa_number?: string;
-  gov_id_type: GovIdType;
+  gov_id_type?: GovIdType;
   phone_verification_token?: string;
   email_verification_token?: string;
 };
@@ -190,15 +225,23 @@ export const resumeMyStore = async (): Promise<Merchant> => {
   return response.data;
 };
 
+/** The documents a Submit now sends. Submit later sends none. */
+export type OnboardingFiles = {
+  rsbsa?: File | null;
+  govId?: File | null;
+  /** BIR Form 2303, registered seller types only. */
+  birCert?: File | null;
+};
+
 export const submitMyMerchantOnboarding = async (
   payload: MerchantOnboardingPayload,
-  rsbsaFile: File,
-  govIdFile: File,
+  files: OnboardingFiles = {},
 ): Promise<MerchantApplication> => {
   const formData = new FormData();
   formData.append('payload', JSON.stringify(payload));
-  formData.append('rsbsa_file', rsbsaFile);
-  formData.append('gov_id_file', govIdFile);
+  if (files.rsbsa) formData.append('rsbsa_file', files.rsbsa);
+  if (files.govId) formData.append('gov_id_file', files.govId);
+  if (files.birCert) formData.append('bir_cert_file', files.birCert);
   const response = await apiClient.post<MerchantApplication>('/merchant-onboarding/me', formData);
   return response.data;
 };

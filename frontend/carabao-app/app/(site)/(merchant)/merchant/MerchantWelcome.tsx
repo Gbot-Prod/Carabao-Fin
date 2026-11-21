@@ -80,6 +80,14 @@ export default function MerchantWelcome({ applicationStatus }: { applicationStat
           approve it.
         </Card>
       );
+    case "pending_documents":
+      // Saved with "Submit later": nothing to review until it is sent.
+      return (
+        <Card title="Finish your business information to start selling" action={startLink("Finish business information")}>
+          We saved your contact and operations details. Add your business, tax and document details to send your
+          application for review.
+        </Card>
+      );
     case "clarification":
       return (
         <Card title="More information needed" action={startLink("Update application")}>

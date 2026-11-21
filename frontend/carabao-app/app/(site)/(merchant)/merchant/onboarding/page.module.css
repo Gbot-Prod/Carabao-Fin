@@ -631,3 +631,76 @@
   color: var(--text-subtle);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Business information: radios, helper text, sections ──────────── */
+.radioGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.radioGroupStacked {
+  flex-direction: column;
+}
+
+.radioOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(23, 61, 37, 0.16);
+  background: rgba(23, 61, 37, 0.03);
+  color: var(--green-900);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.radioOption input {
+  margin-top: 2px;
+  accent-color: var(--green-600);
+}
+
+.radioOptionActive {
+  border-color: rgba(49, 146, 93, 0.5);
+  background: rgba(49, 146, 93, 0.14);
+}
+
+.helper {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.sectionTitle {
+  grid-column: 1 / -1;
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(23, 61, 37, 0.1);
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--green-900);
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--green-900);
+}
+
+.checkboxRow input {
+  margin-top: 3px;
+  accent-color: var(--green-600);
+}
+
+.checkboxRow a {
+  color: var(--green-600);
+  font-weight: 700;
+}
