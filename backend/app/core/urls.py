@@ -5,7 +5,8 @@
 - ``ADMIN_URL``: the admin site (2FA setup links). Falls back to ``APP_URL``,
   for a local setup that runs one web app only.
 
-The merchant site makes no links from the API yet, so it has no setting here.
+- ``MERCHANT_URL``: the merchant site (setup reminders). Falls back to
+  ``APP_URL`` + ``/merchant``, where one local web app serves those pages.
 Values are read on each call, so a test or a restart picks up a change.
 """
 
@@ -34,3 +35,10 @@ def app_url() -> str:
 
 def admin_url() -> str:
     return _origin(os.getenv("ADMIN_URL")) or app_url()
+
+
+def merchant_url(path: str = "/") -> str:
+    """A Merchant Centre page, e.g. merchant_url("/onboarding?step=business")."""
+    origin = _origin(os.getenv("MERCHANT_URL"))
+    base = origin if origin else f"{app_url()}/merchant"
+    return f"{base}{path if path.startswith('/') else '/' + path}"

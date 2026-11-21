@@ -27,10 +27,7 @@ NOTE_SPACED = "color:#8a9a8c;font-size:12px;margin:24px 0 0"
 TEXT_16 = "color:#4a5e4d;margin:0 0 16px"
 TEXT_4 = "color:#4a5e4d;margin:0 0 4px"
 NOTE = "color:#8a9a8c;font-size:12px;margin:0"
-CODE = (
-    "font-size:28px;letter-spacing:6px;font-weight:700;"
-    "color:#173d25;margin:0 0 24px"
-)
+CODE = "font-size:28px;letter-spacing:6px;font-weight:700;color:#173d25;margin:0 0 24px"
 
 
 def send_verification_email(to: str, verification_url: str) -> None:
@@ -163,6 +160,29 @@ def send_contact_email_code(to: str, code: str) -> None:
                   <p style="{CODE}">{escape(code)}</p>
                   <p style="{NOTE}">The code expires in 10 minutes. Do not share it.
                     If you did not apply as a merchant, you can ignore this email.</p>
+                </div>
+            """,
+        }
+    )
+
+
+def send_setup_reminder_email(to: str, *, shop_name: str, url: str) -> None:
+    """Submit later: a reminder to send the business information."""
+    resend.Emails.send(
+        {
+            "from": FROM_ADDRESS,
+            "to": [to],
+            "subject": "Finish your business information to start selling",
+            "html": f"""
+                <div style="{BOX}">
+                  <h2 style="{TITLE}">Finish your business information to start
+                    selling</h2>
+                  <p style="{TEXT_24}">{escape(shop_name)} is set up in the Merchant
+                    Centre, but it can't go live until Carabao reviews your business
+                    documents. It only takes a few minutes.</p>
+                  <a href="{escape(url)}" style="{BUTTON}">Add business information</a>
+                  <p style="{NOTE_SPACED}">You can turn off email alerts in your
+                    account settings.</p>
                 </div>
             """,
         }
