@@ -15,6 +15,10 @@ class ReceiptLine(BaseModel):
 
 class ReceiptResponse(BaseModel):
     receipt_number: str  # the order reference, e.g. CB-2026-0042
+    # Shown as the receipt's heading note. Set for a farm that declared itself
+    # a small agricultural producer (BIR RR No. 12-2023), which issues no
+    # invoices: "Acknowledgement receipt — not a BIR invoice".
+    document_label: str | None = None
     order_id: int
     order_status: str
     ordered_at: datetime | None = None
