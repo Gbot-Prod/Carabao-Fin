@@ -73,6 +73,7 @@ export function receiptSummaryRows(r: ReceiptSummary): { label: string; value: s
 
 export type ReceiptForText = ReceiptSummary & {
   receipt_number: string;
+  document_label?: string | null;
   order_id: number;
   payment_status: string;
   farm_name: string | null;
@@ -84,6 +85,8 @@ export type ReceiptForText = ReceiptSummary & {
 export function receiptShareText(r: ReceiptForText, paidAt: string): string {
   const out = [
     `Carabao receipt ${r.receipt_number}`,
+    // BIR RR No. 12-2023: a small producer's receipt is not an invoice.
+    ...(r.document_label ? [r.document_label] : []),
     `Sold by: ${r.farm_name ?? '—'}`,
     `Paid: ${paidAt}`,
     '',
