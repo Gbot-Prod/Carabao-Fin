@@ -15,8 +15,8 @@ npm start   # then press a / i, or scan the QR code
 
 ## Environment
 
-Copy `.env.example` (or set these before `npm start`); the values are the same as in the buyer
-app and are described in `documentation/manuals/SYSTEM_REFERENCE.md` §4.3:
+Create a `.env.local` in this folder (git-ignored, same as the buyer app) before `npm start`;
+the values are described in `documentation/manuals/SYSTEM_REFERENCE.md` §4.3:
 
 | Variable | Meaning |
 |---|---|
@@ -42,5 +42,6 @@ npm test          # node --test "src/lib/**/*.test.ts"
 - Bundle identifiers are `online.carabao.merchant` for both iOS and Android. TODO confirm with
   the store listing before the first build - they must differ from the buyer app's.
 - TODO merchant icon and splash artwork: `assets/` currently reuses the buyer app's images.
-- Deep links handled in the app: `carabaomerchant://orders`, `.../chats`, `.../produce`,
-  `.../reviews`, `.../notifications`, `.../order-chat?orderId=<id>`, `.../onboarding`.
+- Deep links this app will handle once the merchant screens move here:
+  `carabaomerchant://orders`, `.../chats`, `.../produce`, `.../reviews`, `.../notifications`,
+  `.../order-chat?orderId=<id>`, `.../onboarding`.

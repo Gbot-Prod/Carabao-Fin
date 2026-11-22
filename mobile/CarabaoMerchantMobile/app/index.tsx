@@ -1,9 +1,10 @@
 // app/index.tsx
 // Placeholder while the app is scaffolded (plan §4.1). Replaced by the dashboard tab in the
-// section that moves the merchant screens out of the buyer app.
+// section that moves the merchant screens out of the buyer app. Styles are inline on purpose:
+// this section only creates the bootable tree, `src/lib/theme.ts` arrives with the shared
+// copies (S2).
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
-import { Colors, Spacing, FontSize } from '../src/lib/theme';
 
 export default function PlaceholderScreen() {
   return (
@@ -17,8 +18,8 @@ export default function PlaceholderScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.offWhite },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xxl, gap: Spacing.sm },
-  title: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.text },
-  sub: { fontSize: FontSize.sm, color: Colors.textMuted },
+  root: { flex: 1, backgroundColor: '#f9fafb' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
+  title: { fontSize: 17, fontWeight: '800', color: '#111827' },
+  sub: { fontSize: 13, color: '#6b7280' },
 });
