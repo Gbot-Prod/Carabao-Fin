@@ -65,6 +65,9 @@ test('a session passed the code step only after a code', () => {
 test('mobile app requests are recognised', () => {
   assert.equal(isMobileRequest(new Headers({ 'expo-origin': 'carabaomobile://' })), true);
   assert.equal(isMobileRequest(new Headers({ origin: 'carabaomobile://' })), true);
+  // The merchant app gets the same refusal (plan §6).
+  assert.equal(isMobileRequest(new Headers({ 'expo-origin': 'carabaomerchant://' })), true);
+  assert.equal(isMobileRequest(new Headers({ origin: 'carabaomerchant://' })), true);
   assert.equal(isMobileRequest(new Headers({ origin: 'exp://192.168.1.2:8081' })), true);
   assert.equal(isMobileRequest(new Headers({ origin: 'https://carabao.ph' })), false);
   assert.equal(isMobileRequest(new Headers()), false);

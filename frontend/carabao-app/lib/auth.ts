@@ -110,11 +110,11 @@ const appBaseUrl =
 //     the key that signed it (backend/app/core/security.py).
 const isAdminSurface = appSurface === "admin";
 
-// The mobile app (Expo) signs in here too. Its requests carry the app scheme as
+// The mobile apps (Expo) sign in here too. Their requests carry the app scheme as
 // their origin; custom schemes have no URL origin, so they're listed as-is.
-const MOBILE_APP_SCHEME = "carabaomobile";
+const MOBILE_APP_SCHEMES = ["carabaomobile", "carabaomerchant"];
 const mobileOrigins = [
-  `${MOBILE_APP_SCHEME}://`,
+  ...MOBILE_APP_SCHEMES.map((s) => `${s}://`),
   // Expo Go / dev builds on the LAN.
   ...(process.env.NODE_ENV !== "production" ? ["exp://", "exp://**"] : []),
 ];

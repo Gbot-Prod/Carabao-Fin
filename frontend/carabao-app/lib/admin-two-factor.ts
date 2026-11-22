@@ -84,11 +84,11 @@ export function sessionPassedTotp(path: string | undefined, twoFactorEnabled: bo
  * session that passed the TOTP step may use them. */
 export const TOTP_SECRET_PATHS = ["/two-factor/get-totp-uri", "/two-factor/generate-backup-codes"];
 
-// ── The mobile app ───────────────────────────────────────────────────────
-// Admins sign in on the website only. The Expo client sends its app scheme
-// in "expo-origin" (the @better-auth/expo plugin copies it to Origin).
+// ── The mobile apps ──────────────────────────────────────────────────────
+// Admins sign in on the website only. The Expo apps send their app scheme in
+// "expo-origin" (the @better-auth/expo plugin copies it to Origin).
 
-const MOBILE_ORIGIN_PREFIXES = ["carabaomobile://", "exp://"];
+const MOBILE_ORIGIN_PREFIXES = ["carabaomobile://", "carabaomerchant://", "exp://"];
 
 export function isMobileRequest(headers: Headers | null | undefined): boolean {
   if (!headers) return false;

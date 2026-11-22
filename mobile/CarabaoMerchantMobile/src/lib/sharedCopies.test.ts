@@ -24,6 +24,9 @@ const buyerMissing = existsSync(buyerApp) ? false : 'mobile/CarabaoMobile is not
 const SHARED = [
   'hooks/use-color-scheme.ts',
   'hooks/use-color-scheme.web.ts',
+  'src/components/AddEmailSheet.tsx',
+  'src/components/PasswordResetSheet.tsx',
+  'src/components/PhoneVerifySheet.tsx',
   'src/components/Skeleton.tsx',
   'src/components/UI.tsx',
   'src/lib/apiErrors.ts',
@@ -63,8 +66,6 @@ const SHARED = [
 //    merchant app maps notification links of its own in S12.
 //  - src/lib/webPages.test.ts: its last test reads the buyer src/screens/ProfileScreen.tsx, which
 //    this app does not have.
-// The three auth sheets (PasswordResetSheet, PhoneVerifySheet, AddEmailSheet) join SHARED in S3,
-// when src/lib/authClient.ts, AuthContext.tsx and api.ts exist here.
 const COPIED_BY_HAND = ['src/lib/notificationList.test.ts', 'src/lib/webPages.test.ts'];
 
 const markerFor = (path: string) =>
