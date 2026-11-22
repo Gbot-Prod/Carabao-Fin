@@ -51,9 +51,8 @@ test('admin deploy: only its own endpoints are open', () => {
     '/api/auth/jwks',
     '/api/auth/two-factor/verify-totp',
     '/api/auth/two-factor/enable',
-    '/api/auth/request-password-reset',
-    '/api/auth/reset-password',
-    '/api/auth/reset-password/abc123',
+    '/api/auth/change-password',
+    '/api/auth/update-user',
   ]) {
     assert.equal(isBlockedOnAdminSurface(path), false, path);
   }
@@ -64,7 +63,12 @@ test('admin deploy: only its own endpoints are open', () => {
     '/api/auth/phone-number/send-otp',
     '/api/auth/phone-number/verify',
     '/api/auth/callback/google',
-    '/api/auth/update-user',
+    // No password reset on the admin deploy (make_admin.py --recover instead).
+    '/api/auth/request-password-reset',
+    '/api/auth/reset-password',
+    '/api/auth/reset-password/abc123',
+    '/api/auth/set-password',
+    '/api/auth/change-email',
     '/api/auth/admin/set-role',
     '/api/auth/Sign-In/Social',
     '/api/auth//sign-up/email',

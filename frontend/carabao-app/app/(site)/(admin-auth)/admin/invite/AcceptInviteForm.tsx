@@ -4,21 +4,12 @@ import { useState, type FormEvent } from "react";
 import { acceptAdminInvite } from "@/util/api/admin";
 import { getApiErrorDetail, getApiErrorStatus } from "@/util/errorHelper";
 import FieldError, { focusFirstInvalid, invalidClass, invalidProps, type FieldErrors } from "@/components/FieldError/FieldError";
-
-// Keep in step with backend app/services/admin_accounts.py admin_password_ok:
-// the site's password rule (lib/password-policy.ts) at 12+ characters.
-const MIN_ADMIN_PASSWORD = 12;
-const MAX_PASSWORD = 128;
-const ADMIN_PASSWORD_RULE =
-  "Use 12 to 128 characters, with an uppercase letter, a lowercase letter, a number and a symbol.";
-
-const adminPasswordOk = (p: string) =>
-  p.length >= MIN_ADMIN_PASSWORD &&
-  p.length <= MAX_PASSWORD &&
-  /\p{Lu}/u.test(p) &&
-  /\p{Ll}/u.test(p) &&
-  /\p{Nd}/u.test(p) &&
-  /[^\p{L}\p{N}\s]/u.test(p);
+// Same rule as backend app/services/admin_accounts.py admin_password_ok.
+import {
+  ADMIN_PASSWORD_RULE_MESSAGE as ADMIN_PASSWORD_RULE,
+  PASSWORD_MAX_LENGTH as MAX_PASSWORD,
+  isStrongAdminPassword as adminPasswordOk,
+} from "@/lib/password-policy";
 
 type Field = "code" | "password" | "confirm";
 

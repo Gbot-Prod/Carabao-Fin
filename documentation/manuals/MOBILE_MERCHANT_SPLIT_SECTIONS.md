@@ -7,7 +7,7 @@ dependency line of each section) and §6 (traceability).
 
 ## 0. How to use this file
 
-- Do one section per commit. Never start the next section with a failing check.
+- Do one section per task. Never start the next section with a failing check.
 - Every section ends with the same three checks in **both** mobile apps and, where the web
   changed, in `frontend/carabao-app`. Rules 1-7 of the plan apply to every section
   (no `backend/` changes, pure logic + `*.test.ts`, keep `CF-xxxx` comments, `git mv` for
@@ -108,9 +108,18 @@ dependency line of each section) and §6 (traceability).
 3. Record the versions in `mobile/CarabaoMobile/package.json` (expo ^58.0.0, RN 0.88.1,
    react 19.3.0, expo-router ~58.0.32, better-auth ^1.7.26, typescript ~6.0.3) - S1 copies
    them verbatim.
-**Baseline recorded (2026-11-22):** buyer `tsc` exit 0, `lint` exit 0, `npm test`
-169 tests / 169 pass / 0 fail (~2.2 s). Every later buyer count is compared with 169
-(it must hold at S1-S13, drop only where S4/S14 delete tests, and stay green).
+**Baseline recorded (2026-11-22, branch `main`):** `git status --porcelain` shows only
+documentation changes - `M "documentation/manuals/Admin creation.md"`,
+`M documentation/manuals/DB_ROLE_SPLIT_PLAN.md`, `M documentation/manuals/SUBDOMAINS.md`,
+no untracked files (this plan and the sections file are already committed). Nothing under
+`mobile/` or `backend/` is dirty.
+Buyer (`mobile/CarabaoMobile`): `npx tsc --noEmit` exit 0, `npm run lint` exit 0 (no
+errors/warnings), `npm test` 169 tests / 169 pass / 0 fail (node `duration_ms` 487).
+Versions confirmed verbatim in `package.json`: expo ^58.0.0, react-native 0.88.1,
+react 19.3.0 (react-dom 19.3.0), expo-router ~58.0.32, better-auth ^1.7.26
+(@better-auth/core, @better-auth/expo also ^1.7.26), typescript ~6.0.3 - S1 copies them.
+Every later buyer count is compared with 169 (it must hold at S1-S13, drop only where
+S4/S14 delete tests, and stay green).
 **Verify:** all three pass.
 **Done when:** the buyer app is green and the baseline is written down.
 **Commit:** none.
@@ -142,7 +151,7 @@ dependency line of each section) and §6 (traceability).
 - `npm test` may report "no test files" here - fine until S2 adds the copies.
 - `npx expo start` shows the placeholder screen.
 **Done when:** the new app type-checks, lints and boots; the buyer app is untouched.
-**Commit:** `chore(mobile): scaffold CarabaoMerchantMobile`
+**Commit:** none
 
 ---
 
@@ -242,7 +251,7 @@ dependency line of each section) and §6 (traceability).
   refused; dev network log shows no `/merchants/me/*` before `allowed`.
 **Done when:** every gate case behaves like the old `ProtectedScreen`, with its wording, and
 the buyer app builds without `access.ts`.
-**Commit:** `feat(mobile-merchant): root role gate and not-merchant screen`
+**Commit:** none
 
 ---
 
@@ -263,7 +272,7 @@ the buyer app builds without `access.ts`.
 **Verify:** merchant tsc, lint, test; manual: 5 tabs render, every More row opens something,
 sign out returns to `/auth`, a buyer account is still stopped by the gate.
 **Done when:** the shell is navigable; placeholders exist only for screens owned by S8-S12.
-**Commit:** `feat(mobile-merchant): tab shell and More screen`
+**Commit:** none
 
 ---
 
@@ -294,7 +303,7 @@ sign out returns to `/auth`, a buyer account is still stopped by the gate.
   `backend/` and `frontend/` from the same repo root).
 - Buyer: tsc, lint, test unchanged.
 **Done when:** `myReviews`, `format`, `orderChat` and the merchant `inStep` are green.
-**Commit:** `feat(mobile-merchant): pure modules for merchant screens`
+**Commit:** none
 
 ---
 
@@ -322,7 +331,7 @@ sign out returns to `/auth`, a buyer account is still stopped by the gate.
   saved, follows, search, reorder, support, referencePrices).
 **Verify:** merchant tsc, lint, test. Buyer green.
 **Done when:** every method the moved screens call exists with the buyer's signatures.
-**Commit:** `feat(mobile-merchant): merchant API methods and types`
+**Commit:** none
 
 ---
 
@@ -381,7 +390,7 @@ sign out returns to `/auth`, a buyer account is still stopped by the gate.
   when it is not installed).
 **Done when:** the three screens run in the merchant app, the buyer app no longer references
 them, and its merchant notifications hand off instead of opening a dead route.
-**Commit:** `feat(mobile-merchant): move dashboard, orders and chats; drop buyer routes`
+**Commit:** none
 
 ---
 
@@ -402,7 +411,7 @@ them, and its merchant notifications hand off instead of opening a dead route.
   buyer grep for `'/listings'|'/onboarding'` returns nothing.
 - Manual: create/edit/delete a listing, stock alerts show, onboarding intro opens the web form.
 **Done when:** produce management works in the merchant app; the buyer has no listings route.
-**Commit:** `feat(mobile-merchant): move listings and onboarding; drop buyer routes`
+**Commit:** none
 
 ---
 
@@ -425,7 +434,7 @@ them, and its merchant notifications hand off instead of opening a dead route.
 - Manual: summary + breakdown, star/comment filters, paging, write/edit/delete a reply
   (404 on an admin-hidden review still shows the error).
 **Done when:** the reviews screen works with `myReviews.ts` and the buyer app is clean.
-**Commit:** `feat(mobile-merchant): move reviews screen; use myReviews`
+**Commit:** none
 
 ---
 
@@ -447,7 +456,7 @@ them, and its merchant notifications hand off instead of opening a dead route.
 - Manual: open a chat from Orders and from Chats, send a message, reopen after backgrounding
   (polling resumes), unverified phone shows the verify sheet.
 **Done when:** both apps open their own order-chat screens against the same endpoints.
-**Commit:** `feat(mobile-merchant): order chat screen`
+**Commit:** none
 
 ---
 
@@ -483,7 +492,7 @@ them, and its merchant notifications hand off instead of opening a dead route.
   once signed in as a merchant.
 **Done when:** merchant notifications route only to merchant screens and both the mapping and
 the filter are covered by tests.
-**Commit:** `feat(mobile-merchant): notifications screen and merchant link mapping`
+**Commit:** none
 
 ---
 
@@ -504,7 +513,7 @@ the filter are covered by tests.
 **Verify:** the three checks are clean and the matrix passes on a device/simulator.
 **Done when:** the merchant app is feature-complete against plan §3.5 and nothing buyer-only
 is left in it.
-**Commit:** `chore(mobile-merchant): acceptance fixes`
+**Commit:** none
 
 ---
 
@@ -541,7 +550,7 @@ is left in it.
    references outside profile/admin copy.
 **Verify:** buyer tsc, lint, test; merchant tsc, lint, test; web `npm test`.
 **Done when:** the buyer app carries no merchant code path and stays green.
-**Commit:** `refactor(mobile): drop merchant code from the buyer app`
+**Commit:** none
 
 ---
 
@@ -561,7 +570,7 @@ is left in it.
    the merchant app when installed and the web page when it is not.
 **Verify:** the grep is empty, all three suites pass, the manual pass is done.
 **Done when:** the buyer app has no merchant code path and every buyer flow still works.
-**Commit:** `chore(mobile): buyer acceptance after the split`
+**Commit:** none
 
 ---
 

@@ -27,8 +27,12 @@ export function isBlockedAuthPath(pathname: string, basePath = AUTH_BASE_PATH): 
 }
 
 // The admin deploy (APP_SURFACE=admin) opens only what its pages use: email +
-// password sign-in, the TOTP steps, password reset by email, sessions and
-// tokens. No sign-up, no phone, no Google/Facebook, no mobile.
+// password sign-in, the TOTP steps, sessions and tokens, and the profile page
+// (change password, display name). No sign-up, no phone, no Google/Facebook,
+// no mobile, and no password reset: an admin who forgot the password is
+// recovered with make_admin.py (documentation/manuals/Admin creation.md).
+// lib/auth.ts (adminProfileGuard) asks for a session that passed the code step
+// on /change-password and /update-user, and allows only "name" on /update-user.
 const ADMIN_SURFACE_ENDPOINTS = [
   "/sign-in/email",
   "/sign-out",
@@ -36,9 +40,8 @@ const ADMIN_SURFACE_ENDPOINTS = [
   "/token",
   "/jwks",
   "/two-factor",
-  "/request-password-reset",
-  "/reset-password",
   "/change-password",
+  "/update-user",
   // Profile page: whether the account has a password (read-only, own account).
   "/list-accounts",
   "/list-sessions",

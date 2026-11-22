@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { use, useState, type FormEvent } from "react";
 import { signIn } from "@/lib/auth-client";
 import { safeNextPath } from "@/lib/next-path";
@@ -77,7 +76,9 @@ export default function AdminLoginPage({
               {busy ? "Please wait…" : "Sign in"}
             </button>
           </form>
-          <Link href="/forgot-password" className="auth-link">Forgot password?</Link>
+          {/* No password reset for admins: the operator recovers the account
+              (make_admin.py, documentation/manuals/Admin creation.md). */}
+          <p className="auth-help">Forgot your password? Ask the Carabao operator to recover your account.</p>
         </div>
       </section>
     </div>

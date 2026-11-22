@@ -57,7 +57,8 @@ const BUYER_PREFIXES = [
 const MOVED_TO_HELP = ["/terms", "/privacy"];
 // R2: paths the admin deploy serves as they are. /api and /_next are not in
 // the proxy matcher, so they never get here.
-const ADMIN_PASS_PREFIXES = ["/api", "/two-factor", "/reset-password", "/forgot-password"];
+// No /forgot-password or /reset-password: admins have no password reset.
+const ADMIN_PASS_PREFIXES = ["/api", "/two-factor"];
 
 function origin(value: string | undefined): string | null {
   const trimmed = value?.trim().replace(/^"|"$/g, "");

@@ -26,7 +26,14 @@ import {
 } from "@/lib/otp-cooldown";
 import { authRateLimit } from "@/lib/auth-rate-limit";
 import { CAPTCHA_FAILED_MESSAGE, CAPTCHA_HEADER, needsCaptcha, verifyTurnstile } from "@/lib/captcha";
-import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, PASSWORD_RULE_MESSAGE, isStrongPassword } from "@/lib/password-policy";
+import {
+  ADMIN_PASSWORD_RULE_MESSAGE,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_RULE_MESSAGE,
+  isStrongAdminPassword,
+  isStrongPassword,
+} from "@/lib/password-policy";
 import {
   ENROLMENT_TOKEN_HEADER,
   TOTP_SECRET_PATHS,
@@ -722,8 +729,47 @@ const passwordPolicy = (): BetterAuthPlugin => ({
         matcher: (ctx) => NEW_PASSWORD_PATHS.includes(ctx.path ?? ""),
         handler: createAuthMiddleware(async (ctx) => {
           const newPassword = (ctx.body as { newPassword?: unknown } | undefined)?.newPassword;
-          if (typeof newPassword !== "string" || !isStrongPassword(newPassword)) {
-            throw new APIError("BAD_REQUEST", { code: "WEAK_PASSWORD", message: PASSWORD_RULE_MESSAGE });
+          // The admin deploy has admins only, so it uses the admin rule (12+).
+          const ok = isAdminSurface ? isStrongAdminPassword : isStrongPassword;
+          if (typeof newPassword !== "string" || !ok(newPassword)) {
+            const message = isAdminSurface ? ADMIN_PASSWORD_RULE_MESSAGE : PASSWORD_RULE_MESSAGE;
+            throw new APIError("BAD_REQUEST", { code: "WEAK_PASSWORD", message });
+          }
+        }),
+      },
+    ],
+  },
+});
+
+// Admin deploy: the profile page (app/(site)/(admin)/admin/profile).
+//   - /change-password and /update-user need a session that passed the code
+//     step, as the admin pages and the admin API do. A session of an admin who
+//     has not set up TOTP yet cannot change the password.
+//   - /update-user changes the display name only. Role, ban and 2FA fields are
+//     input: false in BetterAuth, and guard G1 refuses them in the database;
+//     this also keeps "image" and any later field out.
+//   - /change-password keeps 2FA as it is. The client asks to sign out the
+//     other sessions; the new session keeps mfaVerified (session.create.before).
+const ADMIN_NAME_MAX_LENGTH = 100;
+
+const adminProfileGuard = (): BetterAuthPlugin => ({
+  id: "carabao-admin-profile-guard",
+  hooks: {
+    before: [
+      {
+        matcher: (ctx) => ctx.path === "/change-password" || ctx.path === "/update-user",
+        handler: createAuthMiddleware(async (ctx) => {
+          const session = await getSessionFromCtx(ctx);
+          if ((session?.session as SessionRow | undefined)?.mfaVerified !== true) {
+            throw new APIError("FORBIDDEN", { message: "Sign in again with your authenticator code first." });
+          }
+          if (ctx.path !== "/update-user") return;
+          const body = (ctx.body ?? {}) as Record<string, unknown>;
+          const name = typeof body.name === "string" ? body.name.trim() : "";
+          if (Object.keys(body).some((key) => key !== "name") || !name || name.length > ADMIN_NAME_MAX_LENGTH) {
+            throw new APIError("BAD_REQUEST", {
+              message: `Only the display name can be changed here (1 to ${ADMIN_NAME_MAX_LENGTH} characters).`,
+            });
           }
         }),
       },
@@ -788,7 +834,7 @@ function createAuth() {
       // After twoFactor(), so that its after-hook has the last word on the response.
       adminTwoFactor(),
       // Last: it has the final word on whether a session stays.
-      ...(isAdminSurface ? [adminSurfaceOnly()] : [expo()]),
+      ...(isAdminSurface ? [adminProfileGuard(), adminSurfaceOnly()] : [expo()]),
       jwt({
         // Admin deploy: own key table, so the API can tell its tokens apart.
         // The private keys stay encrypted with this deploy's BETTER_AUTH_SECRET.

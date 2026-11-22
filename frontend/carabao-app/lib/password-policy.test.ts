@@ -1,7 +1,14 @@
 // Run with `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isStrongPassword } from './password-policy.ts';
+import { isStrongAdminPassword, isStrongPassword } from './password-policy.ts';
+
+test('admin rule: the same rule at 12+ characters', () => {
+  assert.equal(isStrongAdminPassword('Carabao1!'), false, '9 characters');
+  assert.equal(isStrongAdminPassword('Carabao2026!'), true);
+  assert.equal(isStrongAdminPassword('carabao2026!'), false, 'no uppercase');
+  assert.equal(isStrongAdminPassword(`Aa1!${'x'.repeat(125)}`), false, 'too long');
+});
 
 test('accepts a password with every kind of character', () => {
   assert.equal(isStrongPassword('Carabao1!'), true);

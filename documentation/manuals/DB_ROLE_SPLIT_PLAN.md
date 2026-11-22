@@ -1,6 +1,6 @@
 # Plan: one database login per service
 
-Status: **draft.** Written 2026-11-21, rewritten 2026-11-22. Step 0 passed 2026-11-22. Step 1 completed 2026-11-22. Step 2 code done 2026-11-22 (manual checklist pending). Step 3 rehearsed 2026-11-22 on a local restore of the production dump, because Railway forks failed to create: steps 5–8 all passed. Step 4: production logical dump taken and verified 2026-11-22; the Railway volume backup is still to do. Step 5 completed 2026-11-22 09:15 UTC on production (`backend/db/apply_roles.ps1`, all checks ok, service-login passwords set). Step 6 is split in two, because production's API runs `main`, which lacks the step 2 code. **Step 6a completed 2026-11-22 09:46 UTC: the API runs as `carabao_api`.** web and web-admin still use `postgres`. Step 6b (smoke-test the admin-account flows) waits for step 2 to be merged and deployed. **Next: step 7** (web-admin to `carabao_web_admin`), or step 2's merge first, then 6b.
+Status: **complete (2026-11-22).** Written 2026-11-21, rewritten 2026-11-22. Step 0 passed 2026-11-22. Step 1 completed 2026-11-22. Step 2 code done 2026-11-22 (manual checklist pending). Step 3 rehearsed 2026-11-22 on a local restore of the production dump, because Railway forks failed to create: steps 5–8 all passed. Step 4: production logical dump taken and verified 2026-11-22; the Railway volume backup is still to do. Step 5 completed 2026-11-22 09:15 UTC on production (`backend/db/apply_roles.ps1`, all checks ok, service-login passwords set). Step 2 merged to `main` (#41). **Step 6 completed 2026-11-22: the API runs as `carabao_api`** (6a at 09:46 UTC; 6b, the admin-account smoke test, done and reviewed). **Steps 7 and 8 completed 2026-11-22:** web-admin runs as `carabao_web_admin` and web as `carabao_web_public`, both tested. **Step 9 completed 2026-11-22. The plan is complete.** Next: a wipe of the production data and a new round of account and admin tests ([Admin creation.md](Admin%20creation.md) section 9).
 
 Decisions in section 9 are settled. Open checks were resolved from the Better Auth 1.7.26 source. Admin accounts move to invite-only with an out-of-band code (section 2), shipped before the database change (section 8, step 2). In-place migration chosen (section 8).
 
@@ -334,7 +334,7 @@ The end-to-end web flows (Better Auth against the role logins) are a manual chec
 
    **Tested 2026-11-22** on a fresh Docker `postgres:17` restore of the step 4 dump: first run moved all 261 objects to `carabao_owner` in 1.1 s with only the expected `guard_user_write … does not exist, skipping` notice, and all 14 checks passed; a second run passed the same checks and changed nothing; `tests_pg` passed 12/12 against it. Refusal and failure paths: a `carabao_api` connection is refused before anything runs; after granting the public login `orders`, disabling the trigger, dropping a policy and setting `carabao_owner LOGIN`, the checks flagged all four, and a rerun repaired the first three and failed on `NOLOGIN` (the files deliberately leave `LOGIN` alone). `-SetPasswords` was not tested locally, because `\password` needs a real terminal.
 
-6. Switch the API's `DATABASE_URL` to `carabao_api` and restart. Smoke-test invite, deactivate, reactivate and 2FA reset. 🟡 **Prepared 2026-11-22** (branch `db-role-split`); the switch itself is not done yet.
+6. Switch the API's `DATABASE_URL` to `carabao_api` and restart. Smoke-test invite, deactivate, reactivate and 2FA reset. ✅ **Completed 2026-11-22** (6a and 6b below; step 2 merged to `main` in #41).
 
    **Findings before the switch.**
    1. **Production's API runs `main`, not this branch.** The Backend service builds `Gbot-Prod/Carabao-Fin` `main` (root `/backend`). `db-role-split` is at the same commit as `main` (`bde9b1f`), and the code for steps 1–3 is uncommitted. So production has none of the step 2 endpoints yet (invite, resend, accept, deactivate, reactivate, `two-factor/enrolled`). Step 6's smoke test of those can only run once step 2 is merged and deployed. Hence the two parts below.
@@ -352,10 +352,27 @@ The end-to-end web flows (Better Auth against the role logins) are a manual chec
    4. Smoke-test on the admin site (signed in with password + TOTP): users list, stats, audit log, orders and transactions pages; suspend and reinstate a test buyer; reset a test admin's 2FA (setup link sent, `TWO_FACTOR_RESET` in the audit log); on the public site, change a test buyer's avatar and place or view an order. Then check the Backend and Postgres logs again.
    5. **Rollback:** set `DATABASE_URL` back to the saved `postgres` URL and save.
 
-   **6b. After step 2 is merged and deployed** (API and web-axdmin): invite → accept with a wrong code then the right one → sign in → set up TOTP (`admin.two_factor_enrolled` in the audit log); deactivate → sign-in refused → reactivate → setup link; 2FA reset. The rehearsal already passed all of these as `carabao_api` (step 3). Then mark step 6 completed.
+   **6b. After step 2 is merged and deployed** (API and web-admin). ✅ **Completed and reviewed 2026-11-22**, after #41 was deployed: invite → accept with a wrong code then the right one → sign in → set up TOTP (`admin.two_factor_enrolled` in the audit log); deactivate → sign-in refused → reactivate → setup link; 2FA reset. The rehearsal already passed all of these as `carabao_api` (step 3).
 7. Switch web-admin to `carabao_web_admin`. Test invite acceptance, sign-in, TOTP setup, the redirect to `/two-factor/enrol` after a reset, and API calls.
-8. Switch web to `carabao_web_public`. Test buyer sign-up, sign-in, reset, Google sign-in and the admin-refused message.
+
+   **Before the switch (checked 2026-11-22).** The Carabao Admin Web service builds `main` (root `/frontend/carabao-app`) with no pre-deploy command, and `build`/`start` do not run `auth:migrate:apply`. So no step runs migrations as `carabao_web_admin`. Do the switch the same way as 6a (copy the `postgres` URL first, change only the user and password, keep host, port, database, query string, `PGSSL_CA` and `PGSSL_SERVERNAME`).
+   ✅ **Completed 2026-11-22.** Switched and tested.
+8. Switch web to `carabao_web_public`. Test buyer sign-up, sign-in, reset, Google sign-in and the admin-refused message. ✅ **Completed 2026-11-22.** Switched and tested.
 9. Set `carabao_owner` to `NOLOGIN` between migrations, or keep its URL out of every service. Leave `postgres` enabled (section 1). Check that no service still references `${{Postgres.DATABASE_URL}}` or another variable that resolves to the `postgres` login; each service's `DATABASE_URL` must be its own role URL.
+
+   **What step 9 is.** It is a final check, not a change. The guards let every superuser through (section 4), so one service that still connects as `postgres` cancels the role split for that service. Step 9 makes sure that no such leftover exists.
+   - `carabao_owner` is `NOLOGIN` since step 5 (`roles.sql` makes it so, and `apply_roles.ps1` checks it). Nothing to do, except to keep it `NOLOGIN` after each migration (SUBDOMAINS.md 3.1).
+   - **Variables (checked 2026-11-22 with the Railway MCP, names only, values hidden).** Carabao Backend, Carabao Admin Web and Carabao Web Application each have one `DATABASE_URL`. Carabao Help Web has no database variable. The values must still be checked by hand: in Railway > each service > Variables > `DATABASE_URL`, the raw value must start with `postgresql://carabao_api:`, `postgresql://carabao_web_admin:` or `postgresql://carabao_web_public:`, and must not contain `${{Postgres.`. Also make sure that no other variable (for example `DATABASE_PUBLIC_URL` or `PGUSER`) was copied into a service.
+   - **Live check (as the superuser, in psql):**
+     ```sql
+     SELECT usename, count(*) FROM pg_stat_activity
+     WHERE datname = current_database() AND backend_type = 'client backend'
+     GROUP BY usename ORDER BY usename;
+     ```
+     Expect `carabao_api`, `carabao_web_admin` and `carabao_web_public`, and `postgres` only for your own psql session (count 1). More `postgres` connections mean that something still uses the superuser login. Find it with `client_addr` and `application_name` from the same view.
+   - When both checks pass, mark step 9 completed here.
+
+   ✅ **Completed 2026-11-22.** Each service's `DATABASE_URL` checked by hand: its own role login, no `${{Postgres.…}}` reference. Live check: `carabao_api 2`, `postgres 1` (the psql session of the check itself). The web logins had no open connection at that moment, which is normal: their pools close idle connections. **The plan is complete.**
 
 **Rollback** for any step from 5 on: point that service's `DATABASE_URL` back at the `postgres` login and restart. The guards let the superuser through, so the old setup works with them in place.
 

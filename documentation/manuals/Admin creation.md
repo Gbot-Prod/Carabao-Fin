@@ -1,65 +1,280 @@
-# Admin creation
+# Admin accounts
 
-Admin accounts are made only as admin accounts. Nobody is promoted: a buyer or merchant account never becomes an admin, and admin and buyer accounts never share an email. There are two ways to make one:
+This manual tells you how to make, monitor, reset and remove Carabao admin accounts. Updated 2026-11-22, after the database login split ([DB_ROLE_SPLIT_PLAN.md](DB_ROLE_SPLIT_PLAN.md), steps 5–8).
 
-- **Invite** (normal): an existing admin invites the new admin from the admin site.
-- **`make_admin.py --create`** (first admin only, or when no admin can sign in): a script in the API service shell.
+Contents:
 
-Background and the full rules: [DB_ROLE_SPLIT_PLAN.md](DB_ROLE_SPLIT_PLAN.md) section 2.
+1. Rules
+2. Monitor admin accounts
+3. Make the first admin (`make_admin.py --create`)
+4. Invite an admin
+5. Admin profile and password change (no password reset)
+6. Admin 2FA reset
+7. Deactivate and reactivate
+8. Recovery (`make_admin.py --recover`)
+9. Start again from an empty database
 
-## Invite (every admin after the first)
+## 1. Rules
 
-Becoming an admin takes three things: the **link** (sent by email), the **code** (handed over by the inviting admin) and an **authenticator app**.
+- An admin account is made only as an admin account. Nobody is promoted. A buyer or merchant account never becomes an admin.
+- Admin accounts and buyer accounts never share an email. An invite to an email that has a Carabao account is refused.
+- The public site (`carabao.`, `merchant.`) refuses admin accounts. The admin site (`admin.`) refuses all other accounts.
+- On the admin site, an admin signs in with email + password, then a TOTP code. Only a session that passed the TOTP step can open the admin pages and call the admin API.
+- Every admin-account change goes through the API. The API writes an audit row for each change.
+- An admin cannot deactivate themselves or reset their own 2FA. An admin cannot turn off their own 2FA.
+- Admin accounts are not deleted and not suspended. To remove access, use **Deactivate**.
+- The admin site is behind Cloudflare Access. Each admin's email must be on the Access allow list, or the admin cannot open the site or the invite link.
 
-1. **Invite.** On the admin site, open **Users** and press **Invite admin**. Enter the new admin's name and an email that has no Carabao account yet. You need a session that passed the TOTP step.
-   - The API makes the account (role admin, no password yet), emails the link `admin.<root>/admin/invite?invite=…&token=…` and shows you an 8-character code (`XXXX-XXXX`) **once**.
-   - Give the code to the new admin yourself, in person or over a channel you both trust. Don't send it in the same email or chat as the link. Only its hash is stored, so it can't be shown again.
-   - The link and the code both last 24 hours.
-2. **Accept.** The new admin opens the link, enters the code and chooses a password (12+ characters, with upper and lower case, a number and a symbol). The 5th wrong code ends the invite; then you press **Resend invite**.
-   - The admin site is behind Cloudflare Access: the new admin's email must be allowed there too, or they can't open the link.
-3. **Set up TOTP.** The page sends them to the admin sign-in. After signing in with email and password, they land on the setup page (the link's token comes along). They type the password again, scan the QR code, enter the code and keep the backup codes.
-4. **Sign in for real.** Sign out, then sign in with password + code. Only that session reaches the admin area and the API.
+## 2. Monitor admin accounts
 
-**Resend invite** (on the Users page, only while the invite is not accepted): a new link and a new code. The old ones stop working.
+### 2.1 Users page (`admin.<root>/admin/users`)
 
-Every step is in the audit log: `admin.invite`, `admin.invite_resent`, `admin.invite_locked`, `admin.invite_accepted`, `admin.two_factor_enrolled`.
+The **Role** column shows **Admin** and one of these states for each admin account:
 
-## First admin: `make_admin.py --create`
+| State | Meaning | Actions on the page |
+|---|---|---|
+| Invite pending | Invited. The invitee has not set a password yet. | Resend invite, Deactivate |
+| 2-step: not set up | Has a password. TOTP is not set up (new admin, or after a 2FA reset). | Send new setup link, Deactivate |
+| 2-step: on | Can sign in with password + TOTP. | Reset 2-step, Deactivate |
+| Deactivated | Cannot sign in. History is kept. | Reactivate |
 
-Run it in the API service shell (in production, as the last deploy step). It asks for the password twice; the password is never an argument, so it isn't in the shell history.
+Only an admin in the **2-step: on** state counts as an active admin. The API refuses to deactivate the last active admin.
 
-```sh
-cd backend
-uv run python scripts/make_admin.py --create --email admin@example.com --name "Admin Name"
-```
+### 2.2 Audit log (`admin.<root>/admin/audit-log`)
 
-It refuses an email that already has any Carabao account. It makes the admin with a verified email and password, writes an audit row (`admin.create`, actor `system`) and prints a one-time setup link on `ADMIN_URL`, valid for 24 hours. There is no code: you are the one at the shell. Then:
+Use the **Action** filter to see one type of event. Rows cannot be changed or deleted.
 
-1. Sign in at `admin.<root>/admin/login` with the email and password. You are sent to the setup page.
-2. Open the printed setup link (`/two-factor/enrol?token=…`). Scan the QR code, enter the code and save the backup codes.
-3. Sign out, then sign in again with password + TOTP.
+| Action (filter label) | Written when |
+|---|---|
+| `admin.create` (Admin created (script)) | `make_admin.py --create` ran. Actor `system`. |
+| `admin.invite` (Admin invited) | An admin sent an invite. |
+| `admin.invite_resent` (Admin invite resent) | An admin pressed **Resend invite**. |
+| `admin.invite_locked` (Admin invite locked) | The 5th wrong invite code. The link and code stop working. |
+| `admin.invite_accepted` (Admin invite accepted) | The invitee set a password. |
+| `admin.two_factor_enrolled` (Admin two-step set up) | TOTP setup is complete. Written only if the database shows 2FA on. |
+| `user.two_factor_reset` (Two-step reset) | An admin pressed **Reset 2-step** or **Send new setup link**. |
+| `admin.deactivate` (Admin deactivated) | An admin was deactivated. |
+| `admin.reactivate` (Admin reactivated) | An admin was reactivated. |
+| `admin.recover` (Admin recovered (script)) | `make_admin.py --recover` ran. Actor `system`. |
+| `user.role_change` (Role change) | Not written any more. Old rows only. |
 
-Only on a fresh deploy, after that first sign-in: run `uv run python scripts/admin_jwk_thumbprints.py`. Once the database logins are split (SUBDOMAINS.md 3.1), the API's own login (`carabao_api`) cannot read `jwks_admin`, so run it from your machine with `DATABASE_URL` set to the Postgres superuser's public URL, not in the API service shell. Check that every key it lists was made by web-admin, put the output in the API's `ADMIN_JWKS_THUMBPRINTS`, then restart the API. Until you do, the admin site lets you sign in but its API calls return 401 (SUBDOMAINS.md section 7).
+**Not in the audit log:** sign-ins, sign-outs, password changes and name changes on the profile page. Better Auth does these on the admin site, and only the API writes audit rows. To examine them, use the Admin Web service logs on Railway, and the `session` table (as the superuser).
 
-## Lost authenticator: Reset 2-step
+### 2.3 Check often
 
-Another admin presses **Reset 2-step** on the Users page. The admin's TOTP, trusted devices and sessions are cleared, and a new 24-hour setup link goes to their verified number and email. When they next sign in with email + password, they are sent to the setup page; setup still needs that link. No code is involved.
+- An **Invite pending** account that is older than 24 hours has an expired invite. Resend it, or deactivate the account.
+- An account in **2-step: not set up** for a long time did not complete setup. Send a new setup link, or deactivate it.
+- An `admin.invite_locked` row means that someone typed 5 wrong codes. Speak to the invitee before you resend.
+- Every admin account must belong to a person that you know. Deactivate an account that nobody claims.
 
-Reset is refused for yourself, for an admin who hasn't accepted the invite yet (use **Resend invite**), and for a deactivated admin (reactivate first). Admins can't turn off their own 2FA.
+## 3. Make the first admin (`make_admin.py --create`)
 
-## Removing an admin: Deactivate
+Use this only when no admin exists (a new or empty database), or when no admin can sign in. All other admins are invited (section 4).
 
-Admin accounts are never deleted or suspended. **Deactivate** keeps the role, blocks sign-in, ends every session and clears 2FA. History and audit rows stay. It is refused for yourself and for the last admin who can sign in.
+1. Open a shell in the API service: `railway ssh` on the **Carabao Backend** service. The script connects as `carabao_api`, which has the permissions it needs.
+2. Run the script. It asks for the password two times (12+ characters, upper and lower case, a number and a symbol). The password is never an argument, so it is not in the shell history.
 
-**Reactivate** lets them back in: an admin with a password gets a new 2FA setup link; one who never accepted the invite gets a fresh invite (a new link and a new code shown to you).
+   ```sh
+   cd backend   # skip if the shell already starts in the backend folder
+   uv run python scripts/make_admin.py --create --email admin@example.com --name "Admin Name"
+   ```
 
-## Recovery: `make_admin.py --recover`
+   The script refuses an email that has a Carabao account. It makes the admin with a verified email and a password, writes `admin.create` (actor `system`) and prints a one-time setup link on `ADMIN_URL`. The link is valid for 24 hours.
+3. Make sure that the email is on the Cloudflare Access allow list for the admin host.
+4. Open `admin.<root>/admin/login`. Sign in with the email and password. The site sends you to the setup page.
+5. Open the printed setup link (`/two-factor/enrol?token=…`). Type the password again, scan the QR code, enter the code, and keep the backup codes in a safe place.
+6. Sign out. Sign in again with password + TOTP. You see the dashboard.
 
-When no admin can sign in. For an existing **admin** account only; any other account is refused.
+**`ADMIN_JWKS_THUMBPRINTS`.** The API accepts admin tokens only from the keys listed in this variable. You must update it only when the `jwks_admin` table has a new key (a new database, or a key rotation). A wipe that keeps `jwks_admin` (section 9) does not need it. To update it: after the first admin sign-in, run `uv run python scripts/admin_jwk_thumbprints.py` **from your computer**, with `DATABASE_URL`, `PGSSL_CA` and `PGSSL_SERVERNAME` set to the superuser's Railway values. Do not run it in the API shell: `carabao_api` cannot read `jwks_admin`. Make sure that web-admin made every listed key. Put the output in the API's `ADMIN_JWKS_THUMBPRINTS`, then restart the API. Until you do this, the admin site lets you sign in, but its API calls return 401.
+
+## 4. Invite an admin
+
+An invited admin needs three things: the **link** (sent by email), the **code** (you give it to them) and an **authenticator app**.
+
+### 4.1 Send the invite
+
+1. Sign in on the admin site with password + TOTP.
+2. Open **Users**. Push **Invite admin**.
+3. Enter the name and the email. The email must not have a Carabao account.
+4. Push **Send invite**. The API makes the account (role admin, no password), emails the link `admin.<root>/admin/invite?invite=…&token=…`, and shows you an 8-character code (`XXXX-XXXX`) **one time only**.
+5. Give the code to the new admin yourself: in person, or on a different channel that you both trust. Do not send the code in the same email or chat as the link. Only a hash of the code is kept, so nobody can show it again.
+6. Add the email to the Cloudflare Access allow list.
+
+The link and the code are both valid for 24 hours.
+
+### 4.2 Accept the invite (the new admin does this)
+
+1. Open the link from the email.
+2. Enter the code and a new password two times.
+3. The site opens the admin sign-in page with the email filled in. Sign in with the password.
+4. The site opens the TOTP setup page (the link's token comes with it). Type the password again, scan the QR code, enter the code and keep the backup codes.
+5. Sign out. Sign in again with password + TOTP.
+
+If the link, the token or the code is wrong or expired, the page always shows the same message: "This invite link or code is not valid. Ask the admin who invited you to resend it." The message does not tell which part is wrong.
+
+### 4.3 Resend, expiry and lock
+
+- **Resend invite** (Users page, only while the state is **Invite pending**): sends a new link and shows a new code. The old link and code stop working immediately.
+- **Expiry:** after 24 hours the link and code stop working. Use **Resend invite**.
+- **Lock:** the 5th wrong code deletes the code and the setup token, and writes `admin.invite_locked`. Use **Resend invite**. A guess with a wrong link token does not count, so a person who knows only the invite id cannot lock the invite.
+- After the invitee sets a password, **Resend invite** is refused. Use **Send new setup link** if TOTP setup is not complete.
+
+## 5. Admin profile and password change (no password reset)
+
+### 5.1 Profile page (`admin.<root>/admin/profile`)
+
+Open **Profile** in the **Account** group of the sidebar. The page shows your name, email, role, 2FA state, the date the account was made, and the start time of this session. You can change two things only:
+
+- **Display name** (1 to 100 characters). Other admins see it on the Users page and in the audit log.
+- **Password** (section 5.2).
+
+You cannot change your email, turn off 2FA or see your TOTP secret on this page. For a lost authenticator, see section 6.
+
+Both changes need a session that passed the TOTP step. The server refuses all other fields on the name change (only `name`). The database (guard G1) also refuses role, ban and 2FA-off changes from the admin site.
+
+### 5.2 Change the password
+
+1. On **Profile**, under **Password**, enter the current password.
+2. Enter the new password two times. Rule: 12 to 128 characters, with an uppercase letter, a lowercase letter, a number and a symbol. It must be different from the current password.
+3. Push **Change password**.
+4. Your other sessions end. This session stays open. 2FA does not change: your authenticator continues to work.
+
+### 5.3 Forgotten password
+
+There is **no password reset** on the admin site. The **Forgot password?** link, the `/forgot-password` and `/reset-password` pages, and the Better Auth reset endpoints are closed on the admin host. An admin who forgot the password asks the operator to recover the account (section 8.1).
+
+On the public site, a reset request for an admin email or number gives the usual answer ("If this email exists…") and sends nothing. This keeps the public site from telling that an address belongs to an admin.
+
+Only one endpoint can set a first password: invite acceptance (`POST /admin/invites/accept`). It refuses an account that already has a password, so a 2FA setup link can never set or replace a password.
+
+## 6. Admin 2FA reset
+
+Use this when an admin lost their authenticator. Another admin does it. You cannot reset your own 2FA.
+
+1. On **Users**, find the admin (state **2-step: on**). Push **Reset 2-step** and confirm.
+2. The API removes the admin's TOTP, trusted devices, any open setup link and all sessions. It sends a new 24-hour setup link by SMS (if the account has a verified number) and email. It writes `user.two_factor_reset`.
+3. The admin signs in with email + password. The site opens the setup page.
+4. The admin opens the new link from the SMS or email, then sets up TOTP again. Without the link, the setup page shows only "Use the setup link we sent you."
+5. The admin signs out and signs in with password + TOTP. The audit log shows `admin.two_factor_enrolled`.
+
+Rules:
+
+- For an admin in **2-step: not set up**, the button is **Send new setup link**. It does the same, and the old links stop working.
+- Reset is refused for yourself, for an admin with **Invite pending** (use **Resend invite**), and for a **Deactivated** admin (reactivate first).
+- If no admin can sign in to do the reset, use `make_admin.py --recover` (section 8).
+
+## 7. Deactivate and reactivate
+
+**Deactivate** removes an admin's access:
+
+1. On **Users**, push **Deactivate** for the admin and confirm.
+2. The account keeps the admin role. Sign-in is blocked, all sessions end, 2FA is removed, and any open invite code is deleted. History and audit rows stay. The API writes `admin.deactivate`.
+3. Also remove the email from the Cloudflare Access allow list.
+
+Deactivate is refused for yourself and for the last active admin (section 2.1).
+
+**Reactivate** gives access again:
+
+- An admin with a password gets a new 2FA setup link by SMS and email. Then they do the steps in section 6, from step 3.
+- An admin who never accepted the invite gets a new invite: a new link by email and a new code, which the page shows to you one time. Give the code as in section 4.1.
+- The API writes `admin.reactivate`.
+
+## 8. Recovery (`make_admin.py --recover`)
+
+Use this only when no admin can sign in. It works only on an existing **admin** account. It refuses all other accounts.
 
 ```sh
 cd backend
 uv run python scripts/make_admin.py --recover admin@example.com
 ```
 
-It clears 2FA, any deactivation and all sessions, then prints a new setup link. If the account never accepted its invite, it also asks for a password. Audit row `admin.recover`, actor `system`. Then do the sign-in and setup steps above.
+Run it in the API shell (`railway ssh`, Carabao Backend). It removes 2FA, any deactivation and all sessions, then prints a new setup link (24 hours). If the account has no password (it never accepted its invite), it also asks for a password. It does not change a password that exists. It writes `admin.recover` (actor `system`). Then do section 3, steps 4–6.
+
+### 8.1 Forgotten admin password
+
+The operator does this, after confirming the person's identity outside the system (in person or by a known phone number). `carabao_api` cannot change a password that exists, so the old password row is first deleted as the superuser.
+
+1. Open psql as the superuser (the Postgres service's `DATABASE_PUBLIC_URL`). Delete the admin's password row only:
+
+   ```sql
+   BEGIN;
+   DELETE FROM account
+   WHERE "providerId" = 'credential'
+     AND "userId" = (SELECT id FROM "user" WHERE email = 'admin@example.com' AND role = 'admin');
+   -- Expect: DELETE 1. If the count is not 1, run ROLLBACK and stop.
+   COMMIT;
+   ```
+
+2. In the API shell, run `make_admin.py --recover admin@example.com`. The account now has no password, so the script asks for a new one (12+ characters, two times). It also removes 2FA and all sessions, and prints a new setup link.
+3. Give the password and the link to the admin by two different channels.
+4. The admin signs in, sets up TOTP again with the link, then signs out and signs in with password + TOTP.
+5. Ask the admin to change the password on **Profile** (section 5.2), so that only the admin knows it.
+
+The audit log shows `admin.recover` (with `password_set: yes`) and then `admin.two_factor_enrolled`.
+
+## 9. Start again from an empty database
+
+Use this to remove all accounts and data from production and test again from zero. On 2026-11-22 production holds test data only, so this is permitted. **Do not do this when real users exist.**
+
+The schema, the database logins, the grants and the guards stay. Only rows are removed. You do not run migrations or `roles.sql` again.
+
+### 9.1 What stays and what goes
+
+| Kept | Why |
+|---|---|
+| `alembic_version` | The schema version. `truncate_db.py` always keeps it. |
+| `jwks`, `jwks_admin` | The token signing keys. If you keep them, all tokens stay valid, and `ADMIN_JWKS_THUMBPRINTS` does not change. If you delete `jwks_admin`, you must update `ADMIN_JWKS_THUMBPRINTS` (section 3). |
+| `reference_prices` | Seed data (sample prices). Optional: remove `--keep reference_prices` to delete it, then load it again with `scripts/load_reference_prices.py`. |
+
+All other tables are emptied: users, sessions, passwords, 2FA, merchants, orders, payouts, audit log and the rest. Everybody is signed out.
+
+### 9.2 Procedure
+
+1. **Back up** (recommended). Railway > Postgres > Backups > Create backup. Optionally also run `powershell -ExecutionPolicy Bypass -File backend\db\backup.ps1`.
+2. **Set the superuser connection** in a PowerShell window, from the `backend` folder. The `carabao_api` login cannot empty tables (it has no TRUNCATE permission), and `carabao_owner` is `NOLOGIN`. So use the Postgres service's `DATABASE_PUBLIC_URL`. The TLS values are on the Carabao Backend service (`PGSSL_CA`, `PGSSL_SERVERNAME`). These variables override `backend/.env`, which points to the local Docker database.
+
+   `PGSSL_CA` is a certificate on many lines, and `Read-Host` reads one line only. So first copy its value into a file outside the repo, for example `%USERPROFILE%\carabao-backups\railway-ca.pem`. (It is a public CA certificate, not a secret.)
+
+   ```powershell
+   cd backend
+   $env:DATABASE_URL     = Read-Host "Postgres DATABASE_PUBLIC_URL" -MaskInput
+   $env:PGSSL_CA         = Get-Content "$env:USERPROFILE\carabao-backups\railway-ca.pem" -Raw
+   $env:PGSSL_SERVERNAME = Read-Host "PGSSL_SERVERNAME (from Carabao Backend)"
+   ```
+
+3. **Dry run.** Make sure that the target is the Railway host and that the KEEP list is correct.
+
+   ```powershell
+   uv run python scripts/truncate_db.py --keep jwks --keep jwks_admin --keep reference_prices
+   ```
+
+4. **Wipe.** Use the database name that the dry run printed (usually `railway`). It is one transaction: if a step fails, nothing changes.
+
+   ```powershell
+   uv run python scripts/truncate_db.py --keep jwks --keep jwks_admin --keep reference_prices --yes --confirm railway
+   ```
+
+5. **Remove the variables** from the window:
+
+   ```powershell
+   Remove-Item Env:DATABASE_URL, Env:PGSSL_CA, Env:PGSSL_SERVERNAME
+   ```
+
+6. **Check the guards.** Run `powershell -ExecutionPolicy Bypass -File backend\db\apply_roles.ps1` (no `-SetPasswords`). All 14 checks must be ok. A wipe does not change the logins or the guards, so this run changes nothing.
+7. **Make the first admin** (section 3). Do not update `ADMIN_JWKS_THUMBPRINTS`: `jwks_admin` was kept.
+8. **Do the test round** (section 9.3).
+
+### 9.3 Test round after a wipe
+
+Do the tests in this order. Write the result of each one in [SUBDOMAINS.md](SUBDOMAINS.md) section 6 (rows 10, 12, 16–28).
+
+1. First admin: `--create`, sign-in, TOTP setup, sign-in with password + TOTP. Audit log shows `admin.create` and `admin.two_factor_enrolled`.
+2. Admin site: sign-in with a buyer account is refused (row 10). Dashboard and API calls work (row 12).
+3. Invite: email that has an account is refused; wrong code 4 times, then the right code; setup; sign-in (rows 16–20).
+4. Invite lock and resend (row 21).
+5. 2FA reset (row 22).
+6. Deactivate, sign-in refused, reactivate (rows 23–24). Refusals for yourself and for suspension (row 25).
+7. Admin profile: change the name and the password; the admin site has no password reset (row 26). Forgotten password recovery (section 8.1).
+8. Public site: buyer sign-up by phone, sign-in, SMS password reset, Google sign-in. An admin email is refused, and a reset for an admin email sends nothing (rows 27–28).
+9. `make_admin.py --recover` on an admin, and on a buyer (refused).
+10. Look at the Backend, Admin Web, Web Application and Postgres logs. There must be no `permission denied`, `InsufficientPrivilege` or 500 errors.

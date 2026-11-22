@@ -17,6 +17,7 @@ import {
   ShoppingBag,
   Store,
   Undo2,
+  UserRound,
   Users,
   X,
 } from "lucide-react";
@@ -55,6 +56,10 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/support", label: "Support", icon: LifeBuoy },
       { href: "/admin/audit-log", label: "Audit log", icon: ScrollText },
     ],
+  },
+  {
+    title: "Account",
+    items: [{ href: "/admin/profile", label: "Profile", icon: UserRound }],
   },
 ];
 

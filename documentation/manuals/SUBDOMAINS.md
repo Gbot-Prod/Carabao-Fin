@@ -268,7 +268,7 @@ Run it before the first start of web-admin. Alembic ignores `jwks`, `jwks_admin`
 
 ### 3.1 Database logins
 
-**Status: logins and guards are on Railway (2026-11-22, [DB_ROLE_SPLIT_PLAN.md](DB_ROLE_SPLIT_PLAN.md) step 5). The API uses `carabao_api` (step 6a, 2026-11-22).** web and web-admin still use the `postgres` login until steps 7–8.
+**Status: logins and guards are on Railway (2026-11-22, [DB_ROLE_SPLIT_PLAN.md](DB_ROLE_SPLIT_PLAN.md) step 5). Each service uses its own login (steps 6–8, 2026-11-22): the API `carabao_api`, web-admin `carabao_web_admin`, web `carabao_web_public`.** No service uses the `postgres` login. To check this, see DB_ROLE_SPLIT_PLAN.md step 9.
 
 The API's pre-deploy command `uv run alembic upgrade head` now runs as `carabao_api`. With no new migration it does nothing. With one, the deploy fails (`must be owner of table …`) and the previous deployment stays live: run the migration as `carabao_owner` (below), then redeploy.
 
@@ -329,7 +329,7 @@ A new Better Auth table stays closed to both web logins until `roles.sql` grants
 
 ## 4. Admin accounts
 
-The admin site signs in with email + password only. Admin accounts are made only as admin accounts (never promoted from a buyer account): an existing admin invites them from the Users page, or `make_admin.py --create` makes the first one in the API service shell. Full steps, reset, deactivation and recovery: [Admin creation.md](Admin%20creation.md).
+The admin site signs in with email + password only. Admin accounts are made only as admin accounts (never promoted from a buyer account): an existing admin invites them from the Users page, or `make_admin.py --create` makes the first one in the API service shell. Full steps for creation, monitoring, invites, password reset, 2FA reset, deactivation, recovery and an empty-database restart: [Admin creation.md](Admin%20creation.md).
 
 ```
 cd backend
@@ -346,7 +346,7 @@ Each run writes an audit log row with the actor `system` and prints a one-time s
 
 An invited admin opens `admin.<root>/admin/invite?...` from the email, so their email must be allowed by Cloudflare Access on the admin host.
 
-Password reset on the admin site works by email only. The SMS reset endpoints are closed there, so the SMS option on `/forgot-password` gives an error.
+The admin site has **no password reset**: `/forgot-password`, `/reset-password` and the Better Auth reset endpoints are closed on the admin host. A signed-in admin changes the password and display name on `/admin/profile` (needs a session that passed the TOTP step). A forgotten admin password is recovered by the operator (Admin creation.md section 8.1).
 
 ---
 
@@ -541,6 +541,9 @@ Automatic checks: `npm test`, `npm run lint` and `npm run build` in `frontend/ca
 | 23 | **Deactivate** an admin, then try to sign in as them | sign-in refused; their sessions end |
 | 24 | **Reactivate** them | new setup link by SMS/email (or a new invite and code if they never accepted) |
 | 25 | Deactivate yourself; suspend an admin from the Users page | refused; admins show Deactivate, not Suspend |
+| 26 | Admin site: open `/admin/profile`; change the name; change the password (wrong current password once, an 11-character password once, then a valid one); open `admin.<root>/forgot-password` and `POST /api/auth/request-password-reset` | name shows in the sidebar; refused twice, then "Your password is changed…", other sessions end, sign-in needs the new password + TOTP; reset page and endpoint give 404 |
+| 27 | Public site: buyer phone sign-up, sign-in, SMS reset, Google sign-in | all work; sign-in with the new password works |
+| 28 | Public site: sign in with an admin's email and correct password; request a reset for an admin's email | "Invalid email or password"; reset answers "If this email exists…" and no email is sent |
 
 Hardcoded-host grep:
 

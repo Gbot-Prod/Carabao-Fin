@@ -157,9 +157,12 @@ test('admin deploy: only /admin/* and the allow-list (R2)', () => {
   assert.deepEqual(admin.route(req(host, '/')), { kind: 'rewrite', path: '/admin/dashboard' });
   assert.deepEqual(admin.route(req(host, '/orders')), { kind: 'rewrite', path: '/admin/orders' });
   assert.deepEqual(admin.route(req(host, '/order')), { kind: 'rewrite', path: '/admin/order' });
-  for (const p of ['/two-factor', '/two-factor/enrol?token=x', '/reset-password', '/forgot-password', '/api/auth/x']) {
+  for (const p of ['/two-factor', '/two-factor/enrol?token=x', '/api/auth/x']) {
     assert.deepEqual(admin.route(req(host, p)), { kind: 'next' }, p);
   }
+  // No password reset pages on the admin host: they go under /admin and 404.
+  assert.deepEqual(admin.route(req(host, '/forgot-password')), { kind: 'rewrite', path: '/admin/forgot-password' });
+  assert.deepEqual(admin.route(req(host, '/reset-password')), { kind: 'rewrite', path: '/admin/reset-password' });
 });
 
 test('one-host config ignores the host header (no redirect loops)', () => {
