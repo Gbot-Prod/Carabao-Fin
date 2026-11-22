@@ -6,14 +6,18 @@ is the only source of identity. The backend reads "user" through the read-only
 actions and its own profile data, in the same transaction as the backend change:
 
 - suspending / reinstating (admin plugin's ``banned`` / ``banReason``; a ban
-  also ends the user's sessions so no new access token can be fetched),
-- changing the admin role (admin plugin's ``role``),
+  also ends the user's sessions so no new access token can be fetched), and
+  deactivating / reactivating an admin (the same columns),
+- admin accounts (documentation/manuals/DB_ROLE_SPLIT_PLAN.md section 2): an
+  invited admin's "user" row (no password yet), the invite code and its attempt
+  counter, and the password written when the invite is accepted. There is no
+  promotion: the role is only ever set when the row is made,
 - admin 2FA enrolment: the one-time setup token (a "verification" row that
   lib/auth.ts checks on /two-factor/enable) and an admin's 2FA reset,
 - the uploaded avatar (``image``), so the BetterAuth session shows it too,
-- deleting an account (its sessions, logins and 2FA rows cascade),
+- deleting a non-admin account (its sessions, logins and 2FA rows cascade),
 - creating an admin account with email + password (scripts/make_admin.py
-  --create only; there is no HTTP endpoint for it).
+  --create).
 
 Name, email and phone are changed by the BetterAuth client, never here. A failed
 write raises (503) so the whole request rolls back.
@@ -64,6 +68,17 @@ def _run(
         db.expire(loaded)
 
 
+def _is_postgres(db: Session) -> bool:
+    return db.get_bind().dialect.name == "postgresql"
+
+
+def _as_datetime(value: datetime | str) -> datetime:
+    # SQLite (tests) returns text or naive datetimes; Postgres aware ones.
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
 # ── Passwords and ids, as BetterAuth makes them ─────────────────────────────
 
 # @better-auth/utils/password: scrypt N=16384, r=16, p=1, 64 bytes, over the
@@ -91,7 +106,8 @@ def hash_password(password: str, *, salt: str | None = None) -> str:
 
 def stored_password(db: Session, identity_id: str | None) -> str | None:
     """The account's password hash, or None when it has no password
-    (Google/Facebook sign-in only). A read, not a write."""
+    (Google/Facebook sign-in only, or an admin invite not accepted yet).
+    A read, not a write."""
     if not identity_id:
         return None
     stored = db.execute(
@@ -102,6 +118,37 @@ def stored_password(db: Session, identity_id: str | None) -> str | None:
         {"uid": identity_id},
     ).scalar()
     return stored if stored and ":" in stored else None
+
+
+def has_credential_account(db: Session, identity_id: str) -> bool:
+    """Whether the account has a "credential" row at all (with or without a
+    password). An admin invite can be accepted only while it has none."""
+    return (
+        db.execute(
+            text(
+                'SELECT 1 FROM "account" WHERE "userId" = :uid '
+                "AND \"providerId\" = 'credential'"
+            ),
+            {"uid": identity_id},
+        ).first()
+        is not None
+    )
+
+
+def identities_with_password(db: Session, identity_ids: list[str]) -> set[str]:
+    """Which of these accounts have a "credential" row (the users list)."""
+    if not identity_ids:
+        return set()
+    params = {f"u{i}": uid for i, uid in enumerate(identity_ids)}
+    names = ", ".join(f":{key}" for key in params)
+    rows = db.execute(
+        text(
+            'SELECT DISTINCT "userId" FROM "account" '
+            f'WHERE "providerId" = \'credential\' AND "userId" IN ({names})'
+        ),
+        params,
+    ).all()
+    return {row[0] for row in rows}
 
 
 def password_matches(stored: str, password: str) -> bool:
@@ -115,45 +162,127 @@ def new_id() -> str:
     return "".join(secrets.choice(_ID_ALPHABET) for _ in range(32))
 
 
+def email_taken(db: Session, email: str) -> bool:
+    """Whether any BetterAuth user (any role) has this email. A read."""
+    return (
+        db.execute(
+            text('SELECT 1 FROM "user" WHERE lower(email) = lower(:email)'),
+            {"email": email},
+        ).first()
+        is not None
+    )
+
+
+def lock_active_admins(db: Session) -> list[str]:
+    """Lock every admin row that is not banned (FOR UPDATE, until the
+    transaction ends) and return the ids of those that can sign in (2FA on).
+    Two admins deactivating each other at the same moment queue here, and the
+    second one sees the first one's change. SQLite (tests) has no row locks."""
+    sql = (
+        'SELECT id, "twoFactorEnabled" FROM "user" '
+        "WHERE role = 'admin' AND banned IS NOT TRUE"
+    )
+    if _is_postgres(db):
+        sql += " FOR UPDATE"
+    return [row[0] for row in db.execute(text(sql)).all() if row[1]]
+
+
 # ── Writes ──────────────────────────────────────────────────────────────────
 
 
-def create_email_identity(db: Session, *, email: str, name: str, password: str) -> str:
-    """A BetterAuth user that signs in with email + password (email verified),
-    for scripts/make_admin.py --create. Returns its id. The caller sets the role
-    and commits."""
-    identity_id = new_id()
+def _admin_user_row(
+    identity_id: str, *, email: str, name: str, email_verified: bool
+) -> tuple[str, dict]:
     now = datetime.now(UTC)
+    return (
+        'INSERT INTO "user" (id, name, email, "emailVerified", role, banned, '
+        '"twoFactorEnabled", "createdAt", "updatedAt") VALUES (:id, :name, :email, '
+        ":verified, 'admin', false, false, :now, :now)",
+        {
+            "id": identity_id,
+            "name": name,
+            "email": email,
+            "verified": email_verified,
+            "now": now,
+        },
+    )
+
+
+def _password_row(identity_id: str, password: str) -> tuple[str, dict]:
+    now = datetime.now(UTC)
+    return (
+        'INSERT INTO "account" (id, "accountId", "providerId", "userId", '
+        'password, "createdAt", "updatedAt") VALUES (:aid, :uid, '
+        "'credential', :uid, :password, :now, :now)",
+        {
+            "aid": new_id(),
+            "uid": identity_id,
+            "password": hash_password(password),
+            "now": now,
+        },
+    )
+
+
+def create_admin_with_password(
+    db: Session, *, email: str, name: str, password: str
+) -> str:
+    """An admin that signs in with email + password (email verified), for
+    scripts/make_admin.py --create. 2FA stays off until the admin sets it up
+    with the setup link. Returns its id. The caller commits."""
+    identity_id = new_id()
     _run(
         db,
         "create the account",
         identity_id,
         [
-            (
-                'INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", '
-                '"updatedAt") VALUES (:id, :name, :email, :verified, :now, :now)',
-                {
-                    "id": identity_id,
-                    "name": name,
-                    "email": email,
-                    "verified": True,
-                    "now": now,
-                },
-            ),
-            (
-                'INSERT INTO "account" (id, "accountId", "providerId", "userId", '
-                'password, "createdAt", "updatedAt") VALUES (:aid, :uid, '
-                "'credential', :uid, :password, :now, :now)",
-                {
-                    "aid": new_id(),
-                    "uid": identity_id,
-                    "password": hash_password(password),
-                    "now": now,
-                },
-            ),
+            _admin_user_row(identity_id, email=email, name=name, email_verified=True),
+            _password_row(identity_id, password),
         ],
     )
     return identity_id
+
+
+def create_admin_invitee(db: Session, *, email: str, name: str) -> str:
+    """An invited admin: role admin, email not verified yet, 2FA off and no
+    "account" row, so no password until the invite is accepted. Returns its
+    id. The caller commits."""
+    identity_id = new_id()
+    _run(
+        db,
+        "create the invited admin",
+        identity_id,
+        [_admin_user_row(identity_id, email=email, name=name, email_verified=False)],
+    )
+    return identity_id
+
+
+def accept_admin_invite(db: Session, identity_id: str, *, password: str) -> None:
+    """The accepted invite's password ("credential" account, BetterAuth's
+    scrypt format), the email marked verified (the link went to it) and the
+    invite code removed. The setup token stays: TOTP setup still needs it."""
+    _run(
+        db,
+        "save the password",
+        identity_id,
+        [
+            _password_row(identity_id, password),
+            (
+                'UPDATE "user" SET "emailVerified" = true, '
+                '"updatedAt" = CURRENT_TIMESTAMP WHERE id = :id',
+                {"id": identity_id},
+            ),
+            (
+                'DELETE FROM "verification" WHERE identifier = :identifier',
+                {"identifier": invite_code_identifier(identity_id)},
+            ),
+        ],
+    )
+
+
+def set_password(db: Session, identity_id: str, *, password: str) -> None:
+    """A password for an account that has none (scripts/make_admin.py
+    --recover, for an admin who never accepted the invite)."""
+    _run(db, "save the password", identity_id, [_password_row(identity_id, password)])
 
 
 def set_banned(
@@ -163,7 +292,8 @@ def set_banned(
         return
     statements = [
         (
-            'UPDATE "user" SET banned = :banned, "banReason" = :reason WHERE id = :id',
+            'UPDATE "user" SET banned = :banned, "banReason" = :reason, '
+            '"banExpires" = NULL WHERE id = :id',
             {"banned": banned, "reason": reason if banned else None, "id": identity_id},
         )
     ]
@@ -174,27 +304,13 @@ def set_banned(
     _run(db, "update the ban", identity_id, statements)
 
 
-def set_role(db: Session, identity_id: str | None, *, is_admin: bool) -> None:
-    if not identity_id:
-        return
-    _run(
-        db,
-        "update the role",
-        identity_id,
-        [
-            (
-                'UPDATE "user" SET role = :role WHERE id = :id',
-                {"role": "admin" if is_admin else "user", "id": identity_id},
-            ),
-            # A role change ends every session. A promoted user loses the buyer
-            # session (the public site gives admins no session); a demoted admin
-            # loses the admin session.
-            ('DELETE FROM "session" WHERE "userId" = :id', {"id": identity_id}),
-        ],
-    )
-
+# ── Verification rows: setup tokens and invite codes ────────────────────────
+# Identifiers are stored in plain text (lib/auth.ts sets no
+# verification.storeIdentifier and no secondaryStorage). The database guards
+# (DB_ROLE_SPLIT_PLAN.md section 4, G3) match on these prefixes.
 
 ENROLMENT_IDENTIFIER_PREFIX = "admin-2fa-enrol-"
+INVITE_CODE_IDENTIFIER_PREFIX = "admin-invite-code-"
 
 
 def enrolment_identifier(identity_id: str) -> str:
@@ -202,42 +318,121 @@ def enrolment_identifier(identity_id: str) -> str:
     return f"{ENROLMENT_IDENTIFIER_PREFIX}{identity_id}"
 
 
+def invite_code_identifier(identity_id: str) -> str:
+    """The invite's out-of-band code. Only the API reads or writes it."""
+    return f"{INVITE_CODE_IDENTIFIER_PREFIX}{identity_id}"
+
+
+def _replace_verification(
+    identifier: str, value: str, expires_at: datetime
+) -> list[tuple[str, dict]]:
+    now = datetime.now(UTC)
+    return [
+        (
+            'DELETE FROM "verification" WHERE identifier = :identifier',
+            {"identifier": identifier},
+        ),
+        (
+            'INSERT INTO "verification" (id, identifier, value, "expiresAt", '
+            '"createdAt", "updatedAt") VALUES (:vid, :identifier, :value, '
+            ":expires, :now, :now)",
+            {
+                "vid": secrets.token_urlsafe(24),
+                "identifier": identifier,
+                "value": value,
+                "expires": expires_at,
+                "now": now,
+            },
+        ),
+    ]
+
+
+def verification_row(
+    db: Session, identifier: str, *, lock: bool = False
+) -> tuple[str, datetime] | None:
+    """(value, expiresAt) of the row, or None. ``lock`` holds the row
+    FOR UPDATE until the transaction ends (Postgres only)."""
+    sql = 'SELECT value, "expiresAt" FROM "verification" WHERE identifier = :i'
+    if lock and _is_postgres(db):
+        sql += " FOR UPDATE"
+    row = db.execute(text(sql), {"i": identifier}).first()
+    if row is None:
+        return None
+    return row[0], _as_datetime(row[1])
+
+
 def set_enrolment_token(
     db: Session, identity_id: str, *, token_hash: str, expires_at: datetime
 ) -> None:
     """Replace the user's admin 2FA setup token (CF-0018). Only its SHA-256
     is stored; BetterAuth deletes the row when setup finishes."""
-    identifier = enrolment_identifier(identity_id)
-    now = datetime.now(UTC)
     _run(
         db,
         "save the two-step setup link",
         identity_id,
+        _replace_verification(
+            enrolment_identifier(identity_id), token_hash, expires_at
+        ),
+    )
+
+
+def set_invite_code(
+    db: Session, identity_id: str, *, code_hash: str, expires_at: datetime
+) -> None:
+    """Replace the invite code. Stored as "<SHA-256>:<failed attempts>"."""
+    _run(
+        db,
+        "save the invite code",
+        identity_id,
+        _replace_verification(
+            invite_code_identifier(identity_id), f"{code_hash}:0", expires_at
+        ),
+    )
+
+
+def set_invite_code_attempts(
+    db: Session, identity_id: str, *, code_hash: str, attempts: int
+) -> None:
+    _run(
+        db,
+        "count the attempt",
+        identity_id,
         [
             (
-                'DELETE FROM "verification" WHERE identifier = :identifier',
-                {"identifier": identifier},
-            ),
-            (
-                'INSERT INTO "verification" (id, identifier, value, "expiresAt", '
-                '"createdAt", "updatedAt") VALUES (:vid, :identifier, :value, '
-                ":expires, :now, :now)",
+                'UPDATE "verification" SET value = :value, '
+                '"updatedAt" = CURRENT_TIMESTAMP WHERE identifier = :identifier',
                 {
-                    "vid": secrets.token_urlsafe(24),
-                    "identifier": identifier,
-                    "value": token_hash,
-                    "expires": expires_at,
-                    "now": now,
+                    "value": f"{code_hash}:{attempts}",
+                    "identifier": invite_code_identifier(identity_id),
                 },
-            ),
+            )
+        ],
+    )
+
+
+def delete_invite(db: Session, identity_id: str) -> None:
+    """End an invite: its code and its setup token both go."""
+    _run(
+        db,
+        "end the invite",
+        identity_id,
+        [
+            (
+                'DELETE FROM "verification" WHERE identifier IN (:code, :token)',
+                {
+                    "code": invite_code_identifier(identity_id),
+                    "token": enrolment_identifier(identity_id),
+                },
+            )
         ],
     )
 
 
 def clear_two_factor(db: Session, identity_id: str | None) -> None:
     """Turn 2FA off for an account: its TOTP secret and backup codes, its
-    trusted devices, any open setup token and all its sessions go. Used for a
-    demoted admin and for an admin's 2FA reset by another admin."""
+    trusted devices, any open setup token and invite code, and all its
+    sessions go. Used for an admin's 2FA reset by another admin, for a
+    deactivated admin and by scripts/make_admin.py --recover."""
     if not identity_id:
         return
     params = {"id": identity_id}
@@ -258,8 +453,11 @@ def clear_two_factor(db: Session, identity_id: str | None) -> None:
                 params,
             ),
             (
-                'DELETE FROM "verification" WHERE identifier = :identifier',
-                {"identifier": enrolment_identifier(identity_id)},
+                'DELETE FROM "verification" WHERE identifier IN (:token, :code)',
+                {
+                    "token": enrolment_identifier(identity_id),
+                    "code": invite_code_identifier(identity_id),
+                },
             ),
             ('DELETE FROM "session" WHERE "userId" = :id', params),
         ],
@@ -285,7 +483,8 @@ def set_image(db: Session, identity_id: str | None, url: str | None) -> None:
 
 
 def delete_identity(db: Session, identity_id: str | None) -> None:
-    """Remove the BetterAuth user; sessions, accounts and 2FA rows cascade."""
+    """Remove the BetterAuth user; sessions, accounts and 2FA rows cascade.
+    Never an admin's (callers refuse admin accounts)."""
     if not identity_id:
         return
     _run(

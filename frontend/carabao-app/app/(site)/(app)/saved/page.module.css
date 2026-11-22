@@ -142,7 +142,13 @@
   color: var(--text-subtle);
 }
 
+/* Empty state fills the rest of the screen (desktop; phones scroll the page). */
+.scroll:has(> .empty) {
+  align-content: stretch;
+}
+
 .empty {
+  align-content: center;
   background: var(--bg-white);
   border: 1px solid #d9e7dd;
   border-radius: var(--radius-md);

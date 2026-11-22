@@ -13,6 +13,8 @@ export type UserProfile = {
   is_admin: boolean;
   // Two-step verification (admins only, E8).
   two_factor_enabled?: boolean;
+  // Admin users list only: an invited admin who has not set a password yet.
+  admin_invite_pending?: boolean;
   // An admin suspended the account (A3).
   is_suspended?: boolean;
   suspension_reason?: string | null;

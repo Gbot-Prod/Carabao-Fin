@@ -380,6 +380,16 @@ a.farmGroupName:hover {
   padding: 1.25rem;
 }
 
+/* Empty cart: the card fills the rest of the screen. */
+.page:has(.emptyState) {
+  min-height: 100%;
+  grid-template-rows: auto 1fr;
+}
+
+.card:has(> .emptyState) {
+  display: grid;
+}
+
 .emptyState {
   min-height: 300px;
   display: grid;

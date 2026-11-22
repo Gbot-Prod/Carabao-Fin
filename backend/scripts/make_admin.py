@@ -1,23 +1,21 @@
 """Make the first admin, or recover when no admin can sign in (CF-0018).
 
-Admins are normally made by another admin (PATCH /admin/users/{id}/role). This
-script is for the server only. It gives an account the admin role, turns off
-any old 2FA, ends its sessions and makes a one-time setup link (24 hours) for
-the admin site. The link is printed here, not sent. Each run is in the admin
-audit log with the actor "system".
+Admins are normally invited by another admin on the admin site (Users page,
+"Invite admin"). This script is for the API service shell only, run as the
+API's database login. It never promotes an existing account: buyer and admin
+accounts never share an email. Each run is in the admin audit log with the
+actor "system". Setup links are printed here, not sent.
 
-Promote an account (found by its verified mobile number or email):
+Create a new admin with email + password (asks for the password twice; it is
+never an argument, so it is not in the shell history):
 
-    uv run python scripts/make_admin.py +639171234567
-    uv run python scripts/make_admin.py admin@example.com
+    uv run python scripts/make_admin.py --create --email admin@example.com         --name "Ana Cruz"
 
-Create an email + password account and make it an admin (asks for the
-password; it is never an argument, so it is not in the shell history):
+Recover an existing admin account (break glass): clears its 2FA, any
+deactivation and all its sessions, then prints a new setup link. If the
+account never accepted its invite, it also asks for a password:
 
-    uv run python scripts/make_admin.py --create --email admin@example.com
-
-The admin site signs in with email + password only, so an admin needs a
-verified email. With --create the email is marked verified.
+    uv run python scripts/make_admin.py --recover admin@example.com
 """
 
 import argparse
@@ -31,72 +29,111 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from fastapi import HTTPException  # noqa: E402
-
 # Every model, so relationships by name (User -> "Merchant") resolve.
 import app.models as models_pkg  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
-from app.models.auth_identity import AuthIdentity  # noqa: E402
+from app.models.auth_identity import AuthIdentity, is_placeholder_email  # noqa: E402
 from app.models.user import User, normalize_email  # noqa: E402
-from app.services import admin_enrolment, audit_log, better_auth_store  # noqa: E402
-from app.services.auth_identity import Identity, resolve_user  # noqa: E402
-from app.services.phone_verification import normalize_ph_mobile  # noqa: E402
+from app.services import (  # noqa: E402
+    admin_accounts,
+    admin_enrolment,
+    audit_log,
+    better_auth_store,
+)
 
 for _module in pkgutil.iter_modules(models_pkg.__path__):
     importlib.import_module(f"{models_pkg.__name__}.{_module.name}")
 
-# Longer than the site's 8 for everyone else: this account can release payouts.
-MIN_ADMIN_PASSWORD = 12
-MAX_PASSWORD = 128  # Better Auth's maximum
+MIN_ADMIN_PASSWORD = admin_accounts.MIN_ADMIN_PASSWORD
+MAX_PASSWORD = admin_accounts.MAX_PASSWORD
+VIA = "scripts/make_admin.py"
 
-def _find_identity(db, contact: str) -> AuthIdentity | None:
-    if "@" in contact:
-        return (
-            db.query(AuthIdentity)
-            .filter(AuthIdentity.email == normalize_email(contact))
-            .first()
-        )
-    number = normalize_ph_mobile(contact)  # "639XXXXXXXXX"
-    if not number:
-        return None
-    # BetterAuth stores "+639XXXXXXXXX" (lib/phone.ts normalizePhMobile).
-    return (
-        db.query(AuthIdentity).filter(AuthIdentity.phone_number == f"+{number}").first()
-    )
 
 def _ask_password() -> str:
     """Asked twice, without echo."""
     if not sys.stdin.isatty():
-        sys.exit("--create needs a terminal to ask for the password.")
+        sys.exit("This needs a terminal to ask for the password.")
     password = getpass.getpass(
-        f"Password for the new admin ({MIN_ADMIN_PASSWORD}+ characters): "
+        f"Password for the admin ({MIN_ADMIN_PASSWORD}+ characters, with upper "
+        "and lower case, a number and a symbol): "
     )
-    if not MIN_ADMIN_PASSWORD <= len(password) <= MAX_PASSWORD:
-        sys.exit(f"Use {MIN_ADMIN_PASSWORD} to {MAX_PASSWORD} characters.")
+    if not admin_accounts.admin_password_ok(password):
+        sys.exit(admin_accounts.PASSWORD_RULE_DETAIL)
     if getpass.getpass("Same password again: ") != password:
         sys.exit("The passwords are not the same.")
     return password
 
 
-def make_admin(db, identity: AuthIdentity, *, created: bool) -> str:
-    """Admin role, old 2FA off, sessions ended, setup link. Logged with the
-    "system" actor in the same commit. Returns the setup link token."""
-    user: User = resolve_user(db, Identity(subject=identity.id))
-    try:
-        admin_enrolment.require_contact(user)
-    except HTTPException as exc:
-        sys.exit(exc.detail)
-    was_admin = user.is_admin
-    better_auth_store.set_role(db, identity.id, is_admin=True)
-    better_auth_store.clear_two_factor(db, identity.id)
-    token = admin_enrolment.issue(db, user)
+def _backend_user(db, identity_id: str) -> User:
+    user = db.query(User).filter(User.external_auth_id == identity_id).first()
+    if user is None:
+        user = User(external_auth_id=identity_id, notifications_preferences={})
+        db.add(user)
+        db.flush()
+    return user
+
+
+def create_admin(db, *, email: str, name: str, password: str) -> str:
+    """A new admin account with email + password, and its setup link token.
+    Refused when the email already has any account."""
+    email = normalize_email(email)
+    if "@" not in email or is_placeholder_email(email):
+        sys.exit("That is not an email address.")
+    if better_auth_store.email_taken(db, email):
+        sys.exit(
+            f"{email} already has a Carabao account. Admin accounts are separate: "
+            "use a different address, or --recover if it is already an admin."
+        )
+    identity_id = better_auth_store.create_admin_with_password(
+        db, email=email, name=name.strip(), password=password
+    )
+    user = _backend_user(db, identity_id)
+    token = admin_enrolment.issue_token(db, identity_id)
     audit_log.record_system_action(
         db,
-        action=audit_log.ROLE_CHANGE,
+        action=audit_log.ADMIN_CREATE,
         target_type="user",
         target_id=user.id,
-        before=None if created else {"is_admin": was_admin},
-        after={"is_admin": True, "created": created, "via": "scripts/make_admin.py"},
+        after={"email": email, "via": VIA},
+    )
+    db.commit()
+    return token
+
+
+def recover_admin(db, identity: AuthIdentity, *, password: str | None) -> str:
+    """Clear 2FA, any deactivation and all sessions of an existing admin, and
+    make a new setup link. ``password`` is required when the account has none
+    (an invite never accepted)."""
+    if identity.role != "admin":
+        sys.exit(
+            "That account is not an admin account. Admins are never promoted: "
+            "use --create with a different email."
+        )
+    has_password = better_auth_store.has_credential_account(db, identity.id)
+    if not has_password and password is None:
+        raise ValueError("a password is needed")
+    user = _backend_user(db, identity.id)
+    before = {
+        "is_deactivated": bool(identity.banned),
+        "two_factor_enabled": bool(identity.two_factor_enabled),
+    }
+    better_auth_store.set_banned(db, identity.id, banned=False, reason=None)
+    better_auth_store.clear_two_factor(db, identity.id)
+    if not has_password:
+        better_auth_store.set_password(db, identity.id, password=password)
+    token = admin_enrolment.issue_token(db, identity.id)
+    audit_log.record_system_action(
+        db,
+        action=audit_log.ADMIN_RECOVER,
+        target_type="user",
+        target_id=user.id,
+        before=before,
+        after={
+            "is_deactivated": False,
+            "two_factor_enabled": False,
+            "password_set": not has_password,
+            "via": VIA,
+        },
     )
     db.commit()
     return token
@@ -106,56 +143,44 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("contact", nargs="?", help="verified mobile number or email")
-    parser.add_argument(
-        "--create", action="store_true", help="create an email + password account"
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--create", action="store_true", help="create a new email + password admin"
     )
-    parser.add_argument("--email", help="email of the account to create (--create)")
+    mode.add_argument("--recover", metavar="EMAIL", help="recover an existing admin")
+    parser.add_argument("--email", help="email of the admin to create (--create)")
     parser.add_argument("--name", default="", help="display name (--create)")
     args = parser.parse_args()
 
-    if args.create == bool(args.contact):
-        parser.error("give a number or email to promote, or --create --email ...")
     if args.create and not args.email:
         parser.error("--create needs --email")
 
     db = SessionLocal()
     try:
         if args.create:
-            email = normalize_email(args.email)
-            if "@" not in email:
-                sys.exit("That is not an email address.")
-            identity = _find_identity(db, email)
-            created = identity is None
-            if created:
-                password = _ask_password()
-                identity_id = better_auth_store.create_email_identity(
-                    db, email=email, name=args.name.strip(), password=password
-                )
-                identity = db.get(AuthIdentity, identity_id)
-            else:
-                print(
-                    f"{email} already has an account. It is promoted; "
-                    "its password does not change."
-                )
-            contact = email
-        else:
-            contact = args.contact.strip()
-            identity = _find_identity(db, contact)
-            if identity is None:
-                sys.exit(
-                    "No account has that number or email. "
-                    "Sign up first, or use --create."
-                )
-            created = False
-
-        if identity is not None and not identity.email_verified:
-            print(
-                "Note: this account has no verified email. The admin site signs in "
-                "with email + password only, so add and verify an email first."
+            password = _ask_password()
+            token = create_admin(
+                db, email=args.email, name=args.name, password=password
             )
-        token = make_admin(db, identity, created=created)
-        print(f"{contact} is now an admin. All its sessions were ended.")
+            print(f"{normalize_email(args.email)} is a new admin account.")
+        else:
+            email = normalize_email(args.recover)
+            identity = (
+                db.query(AuthIdentity).filter(AuthIdentity.email == email).first()
+            )
+            if identity is None:
+                sys.exit("No account has that email.")
+            password = None
+            if (
+                identity.role == "admin"
+                and not better_auth_store.has_credential_account(db, identity.id)
+            ):
+                print(
+                    "This admin never accepted the invite, so it has no password yet."
+                )
+                password = _ask_password()
+            token = recover_admin(db, identity, password=password)
+            print(f"{email} was recovered. Its 2FA is off and all sessions ended.")
         print("Sign in on the admin site, then open this link (one time, 24 hours):")
         print(admin_enrolment.setup_url(token))
     finally:

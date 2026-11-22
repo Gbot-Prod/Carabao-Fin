@@ -9,10 +9,25 @@
 /** Seconds to wait after a code is sent before another goes to the same target. */
 export const OTP_RESEND_SECONDS = 60;
 
-/** BetterAuth endpoints that text a code, and the verification row each writes. */
-export const OTP_SEND_PATHS: Record<string, (phoneNumber: string) => string> = {
-  "/phone-number/send-otp": (phone) => phone,
-  "/phone-number/request-password-reset": (phone) => `${phone}-request-password-reset`,
+/**
+ * The verification rows BetterAuth's phoneNumber plugin writes (1.7.26,
+ * plugins/phone-number/routes.mjs phoneNumberOTPIdentifier and
+ * phoneNumberResetIdentifier). Recheck when BetterAuth is upgraded: a wrong
+ * name silently turns the resend wait off.
+ */
+export const phoneOtpIdentifier = (phone: string) => `phone-number-otp-${phone}`;
+export const phoneResetIdentifier = (phone: string) => `phone-number-reset-${phone}`;
+
+/**
+ * Written instead of a reset code when the number belongs to an admin (lib/auth.ts
+ * noAdminsOnPublicSurface), so the resend wait looks the same as for any other number.
+ */
+export const adminResetWaitIdentifier = (phone: string) => `phone-reset-wait-${phone}`;
+
+/** BetterAuth endpoints that text a code, and the verification rows that start the wait. */
+export const OTP_SEND_PATHS: Record<string, (phoneNumber: string) => string[]> = {
+  "/phone-number/send-otp": (phone) => [phoneOtpIdentifier(phone)],
+  "/phone-number/request-password-reset": (phone) => [phoneResetIdentifier(phone), adminResetWaitIdentifier(phone)],
 };
 
 /** Seconds left before another code may go out, or 0. `lastSentAt` is the newest code's time. */

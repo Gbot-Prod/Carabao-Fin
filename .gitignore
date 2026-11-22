@@ -42,3 +42,5 @@ documentation/*
 !documentation/manuals/
 
 .editorConfig
+# Database backups (backend/db/backup.ps1). They hold password hashes and TOTP secrets.
+*.dump

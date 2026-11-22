@@ -483,34 +483,11 @@ def test_deleting_the_account_removes_the_login_too(client, db):
     assert db.query(User).filter_by(external_auth_id="ba_me").count() == 0
 
 
-def test_role_writes(db):
+def test_there_is_no_role_write(db):
+    """Admins are invited, never promoted (DB_ROLE_SPLIT_PLAN.md section 2)."""
     from app.services import better_auth_store
 
-    better_auth_store.set_role(db, "ba_user", is_admin=True)
-    assert better_auth.get_identity(db, "ba_user")["role"] == "admin"
-    better_auth_store.set_role(db, "ba_user", is_admin=False)
-    assert better_auth.get_identity(db, "ba_user")["role"] == "user"
-
-
-def test_role_change_ends_every_session(db):
-    """A promoted user must not keep a buyer session: the public site gives
-    admins no session."""
-    from sqlalchemy import text
-
-    from app.services import better_auth_store
-
-    for sid, uid in (("s1", "ba_user"), ("s2", "ba_user"), ("s3", "ba_other")):
-        db.execute(
-            text('INSERT INTO "session" (id, "userId") VALUES (:s, :u)'),
-            {"s": sid, "u": uid},
-        )
-    db.commit()
-
-    better_auth_store.set_role(db, "ba_user", is_admin=True)
-
-    count = 'SELECT COUNT(*) FROM "session" WHERE "userId" = :u'
-    assert db.execute(text(count), {"u": "ba_user"}).scalar() == 0
-    assert db.execute(text(count), {"u": "ba_other"}).scalar() == 1
+    assert not hasattr(better_auth_store, "set_role")
 
 
 def test_writes_refresh_an_identity_already_loaded(client, db):
@@ -518,9 +495,9 @@ def test_writes_refresh_an_identity_already_loaded(client, db):
 
     _me(client)
     user = _row(db, "ba_user")
-    assert user.is_admin is False
-    better_auth_store.set_role(db, "ba_user", is_admin=True)
-    assert user.is_admin is True
+    assert user.is_suspended is False
+    better_auth_store.set_banned(db, "ba_user", banned=True, reason="Spam")
+    assert user.is_suspended is True
 
 
 def test_avatar_upload_is_written_back_to_better_auth(client, db, monkeypatch):

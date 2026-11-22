@@ -15,8 +15,20 @@ from sqlalchemy.orm import Session
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.user import User
 
+# No longer written: admins are invited, not promoted. Kept so older rows can
+# still be filtered in the audit log.
 ROLE_CHANGE = "user.role_change"
 TWO_FACTOR_RESET = "user.two_factor_reset"
+# Admin accounts (DB_ROLE_SPLIT_PLAN.md section 2).
+ADMIN_INVITE = "admin.invite"
+ADMIN_INVITE_RESENT = "admin.invite_resent"
+ADMIN_INVITE_LOCKED = "admin.invite_locked"
+ADMIN_INVITE_ACCEPTED = "admin.invite_accepted"
+ADMIN_TWO_FACTOR_ENROLLED = "admin.two_factor_enrolled"
+ADMIN_DEACTIVATE = "admin.deactivate"
+ADMIN_REACTIVATE = "admin.reactivate"
+ADMIN_CREATE = "admin.create"  # scripts/make_admin.py --create
+ADMIN_RECOVER = "admin.recover"  # scripts/make_admin.py --recover
 SUSPEND = "user.suspend"
 REINSTATE = "user.reinstate"
 APPLICATION_REVIEW = "merchant_application.review"
@@ -32,6 +44,15 @@ ORDER_CANCEL = "order.cancel"  # CF-0045
 ACTIONS = (
     ROLE_CHANGE,
     TWO_FACTOR_RESET,
+    ADMIN_INVITE,
+    ADMIN_INVITE_RESENT,
+    ADMIN_INVITE_LOCKED,
+    ADMIN_INVITE_ACCEPTED,
+    ADMIN_TWO_FACTOR_ENROLLED,
+    ADMIN_DEACTIVATE,
+    ADMIN_REACTIVATE,
+    ADMIN_CREATE,
+    ADMIN_RECOVER,
     SUSPEND,
     REINSTATE,
     APPLICATION_REVIEW,

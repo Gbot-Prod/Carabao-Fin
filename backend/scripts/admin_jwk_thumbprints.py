@@ -6,6 +6,9 @@ first admin sign-in does), and again after any new key:
 
     uv run python scripts/admin_jwk_thumbprints.py
 
+With the database logins split (SUBDOMAINS.md 3.1), carabao_api cannot read
+"jwks_admin": set DATABASE_URL to the superuser's URL for this run.
+
 It reads the "jwks_admin" table through DATABASE_URL and prints each key with
 its creation time. Check the list before you pin it: every row should be one
 the admin deploy made (expect one per rotation, created when an admin first

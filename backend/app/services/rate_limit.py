@@ -45,6 +45,9 @@ LIMITS: dict[str, tuple[Limit, Limit]] = {
     "email_otp_verify": (Limit(30, 900), Limit(10, 900)),
     # The password typed before an account-deletion code; the identifier is the user id.
     "password_check": (Limit(20, 900), Limit(5, 900)),
+    # POST /admin/invites/accept (public); the identifier is the invite id. The
+    # 5th wrong code ends the invite anyway (app/services/admin_accounts.py).
+    "admin_invite_accept": (Limit(20, 900), Limit(10, 900)),
 }
 
 # scope -> per identifier, for server-to-server calls where the client IP is
