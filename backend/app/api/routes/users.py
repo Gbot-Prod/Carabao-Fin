@@ -148,7 +148,15 @@ def export_my_data(
     )
 
 
+ADMIN_DELETE_DETAIL = (
+    "Admin accounts cannot be deleted. Ask another admin to deactivate it."
+)
+
+
 def _refuse_if_blocked(db: Session, user: User) -> None:
+    # DB_ROLE_SPLIT_PLAN.md section 2: an admin is deactivated, never deleted.
+    if user.is_admin:
+        raise HTTPException(status_code=403, detail=ADMIN_DELETE_DETAIL)
     blockers = _account_deletion_blockers(db, user)
     if blockers:
         raise HTTPException(

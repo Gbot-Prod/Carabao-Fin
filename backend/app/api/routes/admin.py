@@ -31,6 +31,7 @@ from app.schemas.payout import (
 )
 from app.schemas.user import UserResponse
 from app.services import (
+    admin_accounts,
     admin_enrolment,
     audit_log,
     better_auth_store,
@@ -87,50 +88,12 @@ def _require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-class RolePayload(BaseModel):
-    is_admin: bool
+# There is no role endpoint: admins are invited (routes/admin_accounts.py),
+# never promoted, and an admin's access is removed by deactivation.
 
-    model_config = ConfigDict(extra="forbid")  # CF-0063
-
-
-@router.patch("/admin/users/{user_id}/role", response_model=UserResponse)
-def set_user_admin_role(
-    user_id: int,
-    payload: RolePayload,
-    db: Session = Depends(get_db),
-    current_admin: User = Depends(_require_admin),
-):
-    if current_admin.id == user_id:
-        raise HTTPException(status_code=400, detail="Cannot change your own role")
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    before = {"is_admin": user.is_admin}
-    promoted = payload.is_admin and not user.is_admin
-    demoted = user.is_admin and not payload.is_admin
-    if promoted:
-        # CF-0018: the new admin sets up 2FA only with the link sent here.
-        admin_enrolment.require_contact(user)
-    better_auth_store.set_role(db, user.external_auth_id, is_admin=payload.is_admin)
-    token = admin_enrolment.issue(db, user) if promoted else None
-    if demoted:
-        # 2FA is for admins only; this also ends the old admin sessions.
-        better_auth_store.clear_two_factor(db, user.external_auth_id)
-    audit_log.record_admin_action(
-        db,
-        admin=current_admin,
-        action=audit_log.ROLE_CHANGE,
-        target_type="user",
-        target_id=user.id,
-        before=before,
-        after={"is_admin": payload.is_admin},
-    )
-    db.commit()
-    db.refresh(user)
-    if token:
-        admin_enrolment.deliver(user, token)
-    return user
+INVITE_PENDING_RESET_DETAIL = (
+    'This admin has not accepted the invite yet. Use "Resend invite" instead.'
+)
 
 
 class TwoFactorResetResponse(BaseModel):
@@ -161,6 +124,11 @@ def reset_admin_two_factor(
         raise HTTPException(
             status_code=400, detail="Only admin accounts use two-step verification"
         )
+    if user.is_suspended:
+        raise HTTPException(status_code=409, detail=admin_accounts.DEACTIVATED_DETAIL)
+    # A reset link only sets up TOTP; the password comes from the invite.
+    if not better_auth_store.has_credential_account(db, user.external_auth_id):
+        raise HTTPException(status_code=409, detail=INVITE_PENDING_RESET_DETAIL)
     admin_enrolment.require_contact(user)
     before = {"two_factor_enabled": user.two_factor_enabled}
     if user.two_factor_enabled:
@@ -188,13 +156,26 @@ def list_all_users(
 ):
     q = db.query(User)
     total = q.count()
-    items = (
+    users = (
         q.options(selectinload(User.addresses))
         .order_by(User.id.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
+    # An invited admin has no password until the invite is accepted.
+    with_password = better_auth_store.identities_with_password(
+        db, [u.external_auth_id for u in users if u.is_admin and u.external_auth_id]
+    )
+    items = [
+        UserResponse.model_validate(u).model_copy(
+            update={
+                "admin_invite_pending": u.is_admin
+                and u.external_auth_id not in with_password
+            }
+        )
+        for u in users
+    ]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
@@ -250,12 +231,20 @@ class SuspendPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")  # CF-0063
 
 
+ADMIN_SUSPEND_DETAIL = (
+    'Admin accounts are not suspended. Use "Deactivate" or "Reactivate" instead.'
+)
+
+
 def _get_other_user(db: Session, user_id: int, admin: User) -> User:
     if admin.id == user_id:
         raise HTTPException(status_code=400, detail="You cannot suspend yourself")
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    # Deactivation also handles 2FA and the last-admin rule.
+    if user.is_admin:
+        raise HTTPException(status_code=400, detail=ADMIN_SUSPEND_DETAIL)
     return user
 
 

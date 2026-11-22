@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { use, useState, type FormEvent } from "react";
 import { signIn } from "@/lib/auth-client";
 import { safeNextPath } from "@/lib/next-path";
 import "@/app/(site)/(standalone)/auth/page.css";
@@ -10,8 +10,14 @@ import "@/app/(site)/(standalone)/auth/page.css";
 // verification goes on to /two-factor (the client's onTwoFactorRedirect).
 // The server gives a session only to admin accounts (lib/auth.ts
 // adminSurfaceOnly) and blocks phone, Google and Facebook sign-in here.
-export default function AdminLoginPage() {
-  const [email, setEmail] = useState("");
+export default function AdminLoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ email?: string | string[] }>;
+}) {
+  // An accepted admin invite sends the invitee here with their email.
+  const { email: given } = use(searchParams);
+  const [email, setEmail] = useState(typeof given === "string" ? given : "");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

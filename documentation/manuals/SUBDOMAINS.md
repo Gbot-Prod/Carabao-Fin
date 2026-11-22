@@ -266,33 +266,85 @@ Do not give web-help `DATABASE_URL`, `BETTER_AUTH_SECRET` or OAuth keys. It does
 
 Run it before the first start of web-admin. Alembic ignores `jwks`, `jwks_admin` and `twoFactor`.
 
+### 3.1 Database logins
+
+**Status: logins and guards are on Railway (2026-11-22, [DB_ROLE_SPLIT_PLAN.md](DB_ROLE_SPLIT_PLAN.md) step 5). The API uses `carabao_api` (step 6a, 2026-11-22).** web and web-admin still use the `postgres` login until steps 7–8.
+
+The API's pre-deploy command `uv run alembic upgrade head` now runs as `carabao_api`. With no new migration it does nothing. With one, the deploy fails (`must be owner of table …`) and the previous deployment stays live: run the migration as `carabao_owner` (below), then redeploy.
+
+Each service gets its own Postgres login. It is still one database.
+
+| Login | Service | Can use |
+|---|---|---|
+| `carabao_owner` | migrations only | owns every table. `NOLOGIN`, except while a migration runs |
+| `carabao_api` | API and the backend scripts (`make_admin.py`) | business and audit tables; reads Better Auth tables and makes the admin-account writes (`better_auth_store.py`). It cannot change `"user".role` |
+| `carabao_web_public` | web (`carabao.`, `merchant.`) | Better Auth tables and `jwks`. Cannot see or change admin accounts (guards G1–G3) |
+| `carabao_web_admin` | web-admin | Better Auth tables (no `user` or `account` insert) and `jwks_admin`. Cannot change roles or bans, turn 2FA off, make setup tokens or touch invite codes |
+
+The files:
+
+- `backend/db/roles.sql`: makes the logins, gives every table to `carabao_owner`, and sets the grants. Run it as the superuser.
+- `backend/db/guards.sql`: the trigger and row-level security policies (G1–G3). Run it as the superuser, after `roles.sql`.
+- `backend/tests_pg/test_db_roles.py`: checks both files on a throwaway Postgres ([LOCAL_DATABASE.md](LOCAL_DATABASE.md) section 11).
+- `backend/db/apply_roles.ps1`: runs both files against a database and checks the result (needs Docker only). It asks for the superuser URL at a hidden prompt, shows the target and its current state, and asks you to type the database name before it changes anything. Then it checks ownership, login attributes, RLS, the 18 policies, the trigger, the guard functions, what each web login can reach, and that no row count changed. `-SetPasswords` then opens psql's `\password` prompt for the three service logins.
+
+Both files can be run again safely. Each one is a single transaction.
+
+```
+powershell -ExecutionPolicy Bypass -File backend\db\apply_roles.ps1 -SetPasswords
+```
+
+Or by hand:
+
+```
+psql "$SUPERUSER_URL" -v ON_ERROR_STOP=1 -f backend/db/roles.sql -f backend/db/guards.sql
+psql "$SUPERUSER_URL"
+  \password carabao_api
+  \password carabao_web_public
+  \password carabao_web_admin
+```
+
+The service logins have no password until you set one. `\password` hashes it in psql, so it is never in the shell history or the server log. Each service's `DATABASE_URL` is then its own login's URL. It must never be `${{Postgres.DATABASE_URL}}`, because that URL is the superuser.
+
+**Migrations** run as `carabao_owner`. That way the owner owns new tables, and the API gets them through default privileges.
+
+```
+-- as the superuser
+ALTER ROLE carabao_owner LOGIN;
+\password carabao_owner
+-- run the migrations with DATABASE_URL = the carabao_owner URL:
+--   frontend/carabao-app: npm run auth:migrate:apply
+--   backend:              uv run alembic upgrade head
+-- then, as the superuser:
+\i backend/db/roles.sql     -- grants for any new Better Auth table
+\i backend/db/guards.sql    -- always after auth:migrate:apply
+ALTER ROLE carabao_owner NOLOGIN;
+```
+
+A new Better Auth table stays closed to both web logins until `roles.sql` grants it. That shows up as a sign-in error, not a silent opening.
+
+**Rollback:** point the service's `DATABASE_URL` back at the `postgres` login and restart it. The guards let superusers through.
+
 ---
 
 ## 4. Admin accounts
 
-The admin site signs in with email + password only. An admin needs a verified email.
+The admin site signs in with email + password only. Admin accounts are made only as admin accounts (never promoted from a buyer account): an existing admin invites them from the Users page, or `make_admin.py --create` makes the first one in the API service shell. Full steps, reset, deactivation and recovery: [Admin creation.md](Admin%20creation.md).
 
 ```
 cd backend
-# promote an existing account (verified mobile number or email)
-uv run python scripts/make_admin.py admin@example.com
-# create an email + password account and promote it (asks for the password twice, 12+ characters)
+# first admin (asks for the password twice, 12+ characters)
 uv run python scripts/make_admin.py --create --email admin@example.com --name "Admin Name"
+# no admin can sign in: clear an existing admin's 2FA, ban and sessions
+uv run python scripts/make_admin.py --recover admin@example.com
 ```
 
-The script:
-- gives the admin role;
-- clears old 2FA and ends the account's sessions;
-- prints a one-time setup link on `ADMIN_URL` (24 h).
-
-Each run writes an audit log row with the actor `system`.
-
-Then:
-1. Open `admin.<root>/admin/login` and sign in with the email and password.
+Each run writes an audit log row with the actor `system` and prints a one-time setup link on `ADMIN_URL` (24 h). Then:
+1. Open `admin.<root>/admin/login` and sign in with the email and password. You are sent to the setup page.
 2. Open the setup link, scan the QR code, enter the code, and keep the backup codes.
 3. Sign out, then sign in again with the password and the code.
 
-A phone-only account (phone signup, placeholder email) cannot sign in on the admin site. Add and verify an email first, or use `--create`.
+An invited admin opens `admin.<root>/admin/invite?...` from the email, so their email must be allowed by Cloudflare Access on the admin host.
 
 Password reset on the admin site works by email only. The SMS reset endpoints are closed there, so the SMS option on `/forgot-password` gives an error.
 
@@ -479,6 +531,16 @@ Automatic checks: `npm test`, `npm run lint` and `npm run build` in `frontend/ca
 | 13 | Merchant: in the sidebar click "View my shop" and "Buyer site", the top-bar profile link, and a "Routing" link on Shipments | apex shop page, apex `/order`, apex profile, `merchant.` routing page |
 | 14 | Open a "New paid order" notification (stored link `/merchantDashboard`) | opens `merchant.` `/sales` |
 | 15 | Run the hardcoded-host grep (below) | only the localhost fallbacks |
+| 16 | Admin site, Users: **Invite admin** with an email that already has an account | error under the Email field, no invite |
+| 17 | Invite a new email; note the code; open the emailed link (local: the link is in the API log when `RESEND_KEY` is not set and `APP_ENV=development`) | "Accept your invite" page |
+| 18 | On that page: wrong code 4 times, then the right code + a 12+ password | "This invite link or code is not valid…" 4 times, then the admin sign-in page with the email filled in |
+| 19 | Sign in with the new password | setup page with the link's token; set up TOTP, keep the backup codes |
+| 20 | Sign out, sign in with password + code | dashboard; audit log shows invite, accepted, two-step set up |
+| 21 | Another invite: 5 wrong codes, then the right one | refused; audit log shows "invite locked"; **Resend invite** gives a new link and code that work |
+| 22 | **Reset 2-step** on an admin, then sign in as them with email + password | sent to `/two-factor/enrol`, "Use the setup link we sent you." without a token; the SMS/email link sets it up again |
+| 23 | **Deactivate** an admin, then try to sign in as them | sign-in refused; their sessions end |
+| 24 | **Reactivate** them | new setup link by SMS/email (or a new invite and code if they never accepted) |
+| 25 | Deactivate yourself; suspend an admin from the Users page | refused; admins show Deactivate, not Suspend |
 
 Hardcoded-host grep:
 
@@ -505,7 +567,7 @@ Expected: only the dev fallbacks (`localhost`) and the `carabao.online` default 
    - API: `api.carabao.online`
 5. Put Cloudflare Access in front of `admin.carabao.online` only.
 6. API: set `ALLOWED_ORIGINS`, `APP_URL`, `ADMIN_URL`, and `ADMIN_JWKS_URL` (private network URL), then restart.
-6a. Sign in once on the admin site (this makes the first admin key). Then run `uv run python scripts/admin_jwk_thumbprints.py` in `backend` against the production database, check that every listed key is one web-admin made, and set `ADMIN_JWKS_THUMBPRINTS` on the API. Restart the API. Until then, the admin site signs in but its API calls get 401.
+6a. Sign in once on the admin site (this makes the first admin key). Then run `uv run python scripts/admin_jwk_thumbprints.py` in `backend` against the production database, with `DATABASE_URL` set to the superuser's public URL (`carabao_api` cannot read `jwks_admin`, section 3.1), check that every listed key is one web-admin made, and set `ADMIN_JWKS_THUMBPRINTS` on the API. Restart the API. Until then, the admin site signs in but its API calls get 401.
 7. Set web vars (2.1), then rebuild web (the `NEXT_PUBLIC_*` values are fixed at build).
 8. OAuth redirect URIs stay on the apex (`https://carabao.online/api/auth/callback/...`).
 9. Do the checklist in section 6 on the real hosts.

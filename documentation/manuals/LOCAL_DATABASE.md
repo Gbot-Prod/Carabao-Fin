@@ -393,3 +393,33 @@ psycopg.errors.UndefinedColumn: column "email" does not exist
 **Fix:** Stop the API (Ctrl+C) and start it again. Then reload the page while signed in. You do not need to sign up again.
 
 **Rule:** After each change to `backend/.env`, restart the API manually.
+
+---
+
+## 11. Database logins test (roles and guards)
+
+`backend/tests_pg/test_db_roles.py` checks `backend/db/roles.sql` and `backend/db/guards.sql` on a real Postgres. It checks the logins and their limits ([SUBDOMAINS.md](SUBDOMAINS.md) section 3.1, [DB_ROLE_SPLIT_PLAN.md](DB_ROLE_SPLIT_PLAN.md) section 7). The normal `uv run pytest` runs on SQLite and cannot see roles or row-level security. This test is separate and runs only when `PG_TEST_URL` is set.
+
+Your day-to-day database (`carabao-pg`, one full-access login) stays as it is. The test needs its own throwaway server, because it sets passwords on the `carabao_*` logins, and logins belong to the whole server:
+
+```powershell
+docker run -d --name carabao-pg-roletest -e POSTGRES_PASSWORD=postgres -p 5433:5432 postgres:17
+
+cd backend
+$env:PG_TEST_URL = "postgresql://postgres:postgres@localhost:5433/postgres"
+uv run pytest tests_pg -v
+Remove-Item Env:PG_TEST_URL
+```
+
+What it does:
+
+1. Makes a new database `carabao_roletest_<random>` on that server, and drops it at the end.
+2. Builds it the way production was built, all as the superuser: `npm run auth:migrate:apply`, then `create_tables.py` and `alembic stamp head`. This needs `node` and the `frontend/carabao-app` packages installed.
+3. Seeds a few accounts (an admin with TOTP, an admin without 2FA, an invited admin with no password, buyers), then runs `roles.sql` and `guards.sql` twice. The second run checks that they can be run again safely.
+4. Runs each check as `carabao_web_public`, `carabao_web_admin` or `carabao_api`, never as the superuser. Superusers skip row-level security, so a check run as `postgres` would prove nothing. The API checks run the backend's own code (`admin_accounts`, `better_auth_store`, `make_admin.py`) through the `carabao_api` login.
+
+`PG_TEST_URL` must be a superuser URL. Only `localhost` is accepted, unless `PG_TEST_ALLOW_REMOTE=1` is set (a disposable Railway fork). Never point it at production.
+
+Run it after any change to `roles.sql`, `guards.sql`, the Better Auth schema or version, `lib/auth.ts` verification storage, or `better_auth_store.py`.
+
+To remove the test server: `docker rm -f carabao-pg-roletest`.

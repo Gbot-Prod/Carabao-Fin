@@ -273,7 +273,13 @@
   justify-self: center;
 }
 
+/* Empty state fills the rest of the screen (desktop; phones scroll the page). */
+.scroll:has(> .empty) {
+  align-content: stretch;
+}
+
 .empty {
+  align-content: center;
   display: grid;
   justify-items: center;
   gap: 0.75rem;

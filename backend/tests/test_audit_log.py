@@ -4,11 +4,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_current_user, get_db
-from app.api.routes import admin, admin_audit, admin_orders
+from app.api.routes import admin, admin_accounts, admin_audit, admin_orders
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.merchant_application import MerchantApplication
 from app.models.user import User
-from app.services import admin_enrolment, refund_service
+from app.services import admin_accounts as admin_accounts_service
+from app.services import refund_service
 from tests.better_auth import make_user
 from tests.test_admin_orders import _order, _txn
 from tests.test_payouts import _env, _requested_batch, transfers  # noqa: F401
@@ -17,7 +18,12 @@ from tests.test_reviews import _buyer
 
 def _client(db, user) -> TestClient:
     app = FastAPI()
-    for r in (admin.router, admin_audit.router, admin_orders.router):
+    for r in (
+        admin.router,
+        admin_accounts.router,
+        admin_audit.router,
+        admin_orders.router,
+    ):
         app.include_router(r)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: user
@@ -38,20 +44,22 @@ def _entries(db, action=None):
     return q.order_by(AdminAuditLog.id).all()
 
 
-def test_role_change_is_logged(db, merchant, monkeypatch):
-    # Promoting sends a 2FA setup link; capture it, do not text or email it.
-    monkeypatch.setattr(admin_enrolment, "send_sms", lambda **_: None)
-    monkeypatch.setattr(admin_enrolment, "send_admin_enrolment_email", lambda *_: None)
-    staff = _staff(db)
-    target, _ = _buyer(db)
-    res = _client(db, staff).patch(
-        f"/admin/users/{target.id}/role", json={"is_admin": True}
+def test_admin_invite_is_logged(db, merchant, monkeypatch):
+    # The invite email is captured, not sent.
+    monkeypatch.setattr(
+        admin_accounts_service, "send_admin_invite_email", lambda *a, **k: None
     )
-    assert res.status_code == 200, res.text
-    [entry] = _entries(db, "user.role_change")
+    staff = _staff(db)
+    res = _client(db, staff).post(
+        "/admin/invites", json={"email": "new-admin@example.com", "name": "Ana"}
+    )
+    assert res.status_code == 201, res.text
+    [entry] = _entries(db, "admin.invite")
     assert entry.admin_id == staff.id and entry.admin_email == "admin@example.com"
-    assert entry.target_type == "user" and entry.target_id == target.id
-    assert entry.before == {"is_admin": False} and entry.after == {"is_admin": True}
+    assert entry.target_type == "user" and entry.target_id == res.json()["user"]["id"]
+    assert entry.after["email"] == "new-admin@example.com"
+    # The code is never in the log.
+    assert res.json()["code"].replace("-", "") not in str(entry.after)
     assert entry.created_at is not None
 
 
@@ -136,15 +144,15 @@ def test_log_endpoint_is_admin_only_newest_first_and_filterable(db, merchant):
     staff = _staff(db)
     target, _ = _buyer(db)
     client = _client(db, staff)
-    client.patch(f"/admin/users/{target.id}/role", json={"is_admin": True})
     client.post(f"/admin/users/{target.id}/suspend", json={"reason": "Spam"})
+    client.post(f"/admin/users/{target.id}/reinstate")
 
     body = client.get("/admin/audit-log").json()
     assert body["total"] == 2
-    assert [e["action"] for e in body["items"]] == ["user.suspend", "user.role_change"]
+    assert [e["action"] for e in body["items"]] == ["user.reinstate", "user.suspend"]
 
-    only = client.get("/admin/audit-log?action=user.role_change").json()
-    assert [e["action"] for e in only["items"]] == ["user.role_change"]
+    only = client.get("/admin/audit-log?action=user.suspend").json()
+    assert [e["action"] for e in only["items"]] == ["user.suspend"]
     assert client.get(f"/admin/audit-log?target_id={target.id}").json()["total"] == 2
     assert "payout.release" in client.get("/admin/audit-log/actions").json()
 

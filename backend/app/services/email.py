@@ -108,14 +108,41 @@ def send_admin_enrolment_email(to: str, setup_url: str) -> None:
             "html": f"""
                 <div style="{BOX}">
                   <h2 style="{TITLE}">Set up two-step verification</h2>
-                  <p style="{TEXT_24}">Your Carabao account is now an admin account.
-                    Admins must use an authenticator app. Sign in, then use the button
-                    below to set it up.</p>
+                  <p style="{TEXT_24}">Your Carabao admin account needs two-step
+                    verification with an authenticator app. Sign in on the admin site,
+                    then use the button below to set it up.</p>
                   <a href="{escape(setup_url)}" style="{BUTTON}">Set up two-step
                     verification</a>
                   <p style="{NOTE_SPACED}">This link works one time and expires in 24
                     hours. Do not share it. If you did not expect this email, contact
                     Carabao support.</p>
+                </div>
+            """,
+        }
+    )
+
+
+def send_admin_invite_email(to: str, *, invite_url: str, invited_by: str) -> None:
+    """An admin invite (DB_ROLE_SPLIT_PLAN.md section 2). The code that goes
+    with the link is never in this email: the inviting admin hands it over."""
+    resend.Emails.send(
+        {
+            "from": FROM_ADDRESS,
+            "to": [to],
+            "subject": "You're invited to be a Carabao admin",
+            "html": f"""
+                <div style="{BOX}">
+                  <h2 style="{TITLE}">Your Carabao admin invite</h2>
+                  <p style="{TEXT_24}">{escape(invited_by)} invited you to be an admin
+                    on Carabao. Open the link below and enter the invite code. The code
+                    is not in this email: {escape(invited_by)} gives it to you
+                    directly. Then choose a password and set up an authenticator
+                    app.</p>
+                  <a href="{escape(invite_url)}" style="{BUTTON}">Accept the
+                    invite</a>
+                  <p style="{NOTE_SPACED}">The link and the code work for 24 hours. Do
+                    not share them. If you did not expect this email, ignore it and
+                    tell Carabao support.</p>
                 </div>
             """,
         }

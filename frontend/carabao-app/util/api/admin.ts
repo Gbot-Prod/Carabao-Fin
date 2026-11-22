@@ -238,8 +238,45 @@ export const releasePayoutBatch = async (batchId: number, notes?: string): Promi
   return res.data;
 };
 
-export const setUserAdminRole = async (userId: number, isAdmin: boolean): Promise<UserProfile> => {
-  const res = await apiClient.patch<UserProfile>(`/admin/users/${userId}/role`, { is_admin: isAdmin });
+// ── Admin accounts (DB_ROLE_SPLIT_PLAN.md section 2) ───────────────────────
+// Admins are invited, never promoted. The invite code is returned once, to be
+// handed to the new admin directly; it is never emailed or shown again.
+
+export type AdminInvite = { user: UserProfile; code: string; expires_at: string };
+
+export const inviteAdmin = async (email: string, name: string): Promise<AdminInvite> => {
+  const res = await apiClient.post<AdminInvite>('/admin/invites', { email, name });
+  return res.data;
+};
+
+/** A new link and code for an invite not accepted yet; the old ones stop working. */
+export const resendAdminInvite = async (userId: number): Promise<AdminInvite> => {
+  const res = await apiClient.post<AdminInvite>(`/admin/invites/${userId}/resend`);
+  return res.data;
+};
+
+/** Public: the invite link's id and token, the code and the new password. */
+export const acceptAdminInvite = async (payload: {
+  invite: string;
+  token: string;
+  code: string;
+  password: string;
+}): Promise<{ email: string }> => {
+  const res = await apiClient.post<{ email: string }>('/admin/invites/accept', payload);
+  return res.data;
+};
+
+export const deactivateAdmin = async (userId: number): Promise<UserProfile> => {
+  const res = await apiClient.post<UserProfile>(`/admin/admins/${userId}/deactivate`);
+  return res.data;
+};
+
+export type AdminReactivated = { user: UserProfile; sent_to: string[]; invite_code: string | null };
+
+/** With a password: a 2FA setup link goes out. Without one: a fresh invite,
+ * whose code is in `invite_code`. */
+export const reactivateAdmin = async (userId: number): Promise<AdminReactivated> => {
+  const res = await apiClient.post<AdminReactivated>(`/admin/admins/${userId}/reactivate`);
   return res.data;
 };
 

@@ -17,7 +17,13 @@ import { poolConfigFromUrl } from "@/lib/db-ssl.mjs";
 import { AUTH_BASE_PATH, isBlockedAuthPath, isBlockedOnAdminSurface } from "@/lib/blocked-auth-paths";
 import { appSurface, merchantUrl, rootDomain, subdomainMode } from "@/lib/urls";
 import { PH_MOBILE_PATTERN, PHONE_PLACEHOLDER_EMAIL_DOMAIN, isPlaceholderEmail } from "@/lib/phone";
-import { OTP_SEND_PATHS, resendWaitSeconds } from "@/lib/otp-cooldown";
+import {
+  OTP_SEND_PATHS,
+  adminResetWaitIdentifier,
+  phoneOtpIdentifier,
+  phoneResetIdentifier,
+  resendWaitSeconds,
+} from "@/lib/otp-cooldown";
 import { authRateLimit } from "@/lib/auth-rate-limit";
 import { CAPTCHA_FAILED_MESSAGE, CAPTCHA_HEADER, needsCaptcha, verifyTurnstile } from "@/lib/captcha";
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, PASSWORD_RULE_MESSAGE, isStrongPassword } from "@/lib/password-policy";
@@ -148,6 +154,9 @@ const JWT_AUDIENCE = "carabao-api";
 // OLD_NUMBER_ALERT_WINDOW in backend/app/services/phone_verification.py.
 const OLD_NUMBER_ALERT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
+// How long a text code lasts. Same as the backend's own codes (backend/app/services/otp.py).
+const PHONE_OTP_EXPIRES_IN_SECONDS = 600;
+
 // Closes the admin plugin's HTTP endpoints (see lib/blocked-auth-paths.ts). Ban
 // enforcement at sign-in runs in the plugin's session hook, so it keeps working;
 // server-side auth.api.* calls don't go through onRequest and are unaffected.
@@ -191,14 +200,80 @@ const adminSurfaceOnly = (): BetterAuthPlugin => ({
 // Public deploy: an admin account gets no session. The admin works on the admin
 // site only, and uses a separate account to buy or sell. Before this rule, an
 // admin who had not yet set up 2FA could still sign in here.
+//
+// The main refusal is in databaseHooks (session.create.before and
+// account.create.before, in createAuth): no session or account row is ever
+// written for an admin here. That matters once the public deploy has its own
+// database login (documentation/manuals/DB_ROLE_SPLIT_PLAN.md, guard G2):
+// the database then refuses those writes, and refusing first turns a database
+// error page into this message. The after-hook below stays as a second check.
 // Comes before adminTwoFactor(): a Google or Facebook sign-in is refused here,
 // before that plugin sends it to the code page.
 const ADMIN_ACCOUNT_MESSAGE =
   "This is a Carabao admin account. Sign in on the admin site, and use a separate account to buy or sell.";
 
+// Thrown from a database hook. An OAuth callback (GET) catches an APIError with
+// a body.code and redirects to the sign-in's errorCallbackURL with
+// ?error=admin_account (better-auth 1.7.26 api/routes/callback.mjs), which
+// lib/auth-client.ts socialErrorMessage shows. Other endpoints answer JSON.
+const refuseAdminOnPublicSurface = (ctx: GenericEndpointContext | null): never => {
+  if (ctx?.request?.method === "GET") {
+    throw new APIError("FORBIDDEN", { code: "admin_account", message: ADMIN_ACCOUNT_MESSAGE });
+  }
+  throw new APIError("FORBIDDEN", { code: "ADMIN_ACCOUNT", message: ADMIN_ACCOUNT_MESSAGE });
+};
+
+// The answers BetterAuth gives a reset request for an address or number that
+// may or may not have an account (better-auth 1.7.26 api/routes/password.mjs,
+// plugins/phone-number/routes.mjs).
+const EMAIL_RESET_RESPONSE = {
+  status: true,
+  message: "If this email exists in our system, check your email for the reset link",
+};
+const PHONE_RESET_RESPONSE = { status: true };
+
 const noAdminsOnPublicSurface = (): BetterAuthPlugin => ({
   id: "carabao-no-admins-on-public-surface",
   hooks: {
+    before: [
+      // An admin resets their password on the admin site only. Here a reset
+      // request for an admin answers exactly like one for an unknown address
+      // and writes no token, so the response doesn't reveal that the address
+      // or number is an admin's. (Once guard G3 is in place, the database
+      // would refuse the token anyway, but as an error page.)
+      {
+        matcher: (ctx) => ctx.path === "/request-password-reset",
+        handler: createAuthMiddleware(async (ctx) => {
+          const email = (ctx.body as { email?: unknown } | undefined)?.email;
+          if (typeof email !== "string" || !email) return;
+          const found = await ctx.context.internalAdapter.findUserByEmail(email);
+          if (!isAdmin(found?.user as SessionUser | undefined)) return;
+          return ctx.json(EMAIL_RESET_RESPONSE);
+        }),
+      },
+      {
+        // Runs after otpResendCooldown() (earlier in the plugin list), so a
+        // second request inside the wait is refused the same way as for any number.
+        matcher: (ctx) => ctx.path === "/phone-number/request-password-reset",
+        handler: createAuthMiddleware(async (ctx) => {
+          const phone = (ctx.body as { phoneNumber?: unknown } | undefined)?.phoneNumber;
+          if (typeof phone !== "string" || !phone) return;
+          const user = await ctx.context.adapter.findOne<SessionUser>({
+            model: "user",
+            where: [{ field: "phoneNumber", value: phone }],
+          });
+          if (!isAdmin(user ?? undefined)) return;
+          // BetterAuth writes a row even for a number with no account; this one
+          // holds no code, and starts the same resend wait.
+          await ctx.context.internalAdapter.createVerificationValue({
+            identifier: adminResetWaitIdentifier(phone),
+            value: "0",
+            expiresAt: new Date(Date.now() + PHONE_OTP_EXPIRES_IN_SECONDS * 1000),
+          });
+          return ctx.json(PHONE_RESET_RESPONSE);
+        }),
+      },
+    ],
     after: [
       {
         // Every endpoint that makes a session (password, phone, social, signup,
@@ -222,7 +297,8 @@ const noAdminsOnPublicSurface = (): BetterAuthPlugin => ({
 //
 // Only admins use 2FA, and the admin area and API require it.
 //   - Setup (/two-factor/enable) needs the one-time token from the link that
-//     the backend sends when an admin promotes a user or resets an admin's 2FA.
+//     the backend sends with an admin invite, or when an admin's 2FA is reset
+//     or the admin is reactivated. Nobody is promoted to admin.
 //     A password or a session alone is not enough, so a person who has only
 //     those cannot enrol their own authenticator. allowPasswordless lets an
 //     admin with no password (Google only) enrol. An account that has a
@@ -235,6 +311,27 @@ const noAdminsOnPublicSurface = (): BetterAuthPlugin => ({
 //   - A session that passed the code step has mfaVerified = true. It goes to
 //     the backend as the "mfa" claim, and the admin API requires it.
 //   - Admins sign in on the website only, not in the mobile app.
+
+// The API writes the audit row (ADMIN_TWO_FACTOR_ENROLLED) only if the
+// database already shows 2FA on for that admin, so this call cannot fake a
+// completion. A failure is logged and setup still succeeds
+// (DB_ROLE_SPLIT_PLAN.md section 2).
+async function reportTwoFactorEnrolled(userId: string) {
+  const sharedSecret = process.env.AUTH_SYNC_SHARED_SECRET;
+  if (!apiBaseUrl || !sharedSecret) {
+    console.info("[admin-2fa] API not configured; setup not reported for the audit log.");
+    return;
+  }
+  const res = await fetch(`${apiBaseUrl}/admin/two-factor/enrolled`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Internal-Auth-Sync-Secret": sharedSecret },
+    body: JSON.stringify({ user_id: userId }),
+  }).catch((err) => {
+    console.error("[admin-2fa] Could not report the finished setup", err);
+    return null;
+  });
+  if (res && !res.ok) console.error(`[admin-2fa] The API answered ${res.status} to the finished setup`);
+}
 
 const TWO_FACTOR_COOKIE = "two_factor"; // the twoFactor plugin's cookie name
 const TWO_FACTOR_COOKIE_MAX_AGE = 600; // the plugin's default (10 minutes)
@@ -323,6 +420,7 @@ const adminTwoFactor = (): BetterAuthPlugin => ({
             // Setup finished: the link is used up.
             if (ctx.path === "/two-factor/verify-totp" && created.user.twoFactorEnabled) {
               await ctx.context.internalAdapter.deleteVerificationByIdentifier(enrolmentIdentifier(created.user.id));
+              await reportTwoFactorEnrolled(created.user.id);
             }
             return;
           }
@@ -395,7 +493,7 @@ async function sendAccountOtp(
   }
   // Semaphore may deliver its own code instead of ours; keep the one the user got.
   if (body?.code && body.code !== code && ctx) {
-    const identifier = purpose === "password_reset" ? `${phoneNumber}-request-password-reset` : phoneNumber;
+    const identifier = purpose === "password_reset" ? phoneResetIdentifier(phoneNumber) : phoneOtpIdentifier(phoneNumber);
     await ctx.context.internalAdapter.updateVerificationByIdentifier(identifier, { value: `${body.code}:0` });
   }
 }
@@ -483,7 +581,7 @@ const otpResendCooldown = (): BetterAuthPlugin => ({
           if (typeof phone !== "string" || !phone) return;
           const [latest] = await ctx.context.adapter.findMany<{ createdAt: Date }>({
             model: "verification",
-            where: [{ field: "identifier", value: OTP_SEND_PATHS[ctx.path!](phone) }],
+            where: [{ field: "identifier", operator: "in", value: OTP_SEND_PATHS[ctx.path!](phone) }],
             sortBy: { field: "createdAt", direction: "desc" },
             limit: 1,
           });
@@ -669,8 +767,7 @@ function createAuth() {
         // Clients normalize first (lib/phone.ts normalizePhMobile).
         phoneNumberValidator: (value) => PH_MOBILE_PATTERN.test(value),
         otpLength: 6,
-        // Same as the backend's own codes (backend/app/services/otp.py).
-        expiresIn: 600,
+        expiresIn: PHONE_OTP_EXPIRES_IN_SECONDS,
         allowedAttempts: 5,
         sendOTP: ({ phoneNumber, code }, ctx) => sendAccountOtp(phoneNumber, code, "verify", ctx),
         sendPasswordResetOTP: ({ phoneNumber, code }, ctx) =>
@@ -720,6 +817,13 @@ function createAuth() {
       // a Google sign-in links to the account holding the same email.
       changeEmail: { enabled: true },
     },
+    // Each deploy has its own database login (carabao_web_public or
+    // carabao_web_admin), and the database's guards (backend/db/guards.sql,
+    // G3) match "verification" identifiers by their prefix. Do NOT set
+    // verification.storeIdentifier or secondaryStorage: identifiers would become
+    // hashes or leave the table, and G3 would silently match nothing. If either
+    // ever changes, run backend/tests_pg (it asserts an admin's reset token
+    // insert fails).
     database: createPool(),
     databaseHooks: {
       session: {
@@ -729,6 +833,8 @@ function createAuth() {
           before: async (session, ctx) => {
             if (!ctx) return;
             const user = (await ctx.context.internalAdapter.findUserById(session.userId)) as SessionUser | null;
+            // Public deploy: no session for an admin (see noAdminsOnPublicSurface).
+            if (!isAdminSurface && isAdmin(user ?? undefined)) refuseAdminOnPublicSurface(ctx);
             // The caller's own session, when this one replaces it (e.g. change
             // password with "sign out other devices").
             const caller = ctx.context.session as { session: SessionRow; user: SessionUser } | null | undefined;
@@ -738,6 +844,17 @@ function createAuth() {
               (caller?.user.id === session.userId && caller.session.mfaVerified === true) ||
               sessionPassedTotp(ctx.path, Boolean(user?.twoFactorEnabled));
             return { data: { ...session, mfaVerified: passed } };
+          },
+        },
+      },
+      account: {
+        create: {
+          // Public deploy: no new sign-in method for an admin, e.g. a Google
+          // account linked by email during an OAuth sign-in (see noAdminsOnPublicSurface).
+          before: async (account, ctx) => {
+            if (isAdminSurface || !ctx) return;
+            const user = (await ctx.context.internalAdapter.findUserById(account.userId)) as SessionUser | null;
+            if (isAdmin(user ?? undefined)) refuseAdminOnPublicSurface(ctx);
           },
         },
       },

@@ -83,6 +83,8 @@ class UserResponse(UserBase):
     id: int
     is_admin: bool = False
     two_factor_enabled: bool = False
+    # Admin list only: an invited admin who has not set a password yet.
+    admin_invite_pending: bool = False
     is_suspended: bool = False
     suspension_reason: str | None = None
     notifications_preferences: dict | None = None

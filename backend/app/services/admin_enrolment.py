@@ -2,10 +2,11 @@
 
 A password or a session alone must not be enough to set up an admin's
 authenticator, because then whoever has them could enrol their own. So setup
-needs a one-time token that only an admin action makes: promoting a user, or
-resetting an admin's 2FA. The link goes by SMS to the verified number and by
-email to the verified address. A token is only made by an admin action, so a
-person who changes the account's number or email does not get one.
+needs a one-time token that only an admin action makes: an admin invite
+(app/services/admin_accounts.py, the link goes by email with the invite), or
+an admin's 2FA reset or reactivation (the link goes by SMS to the verified
+number and by email to the verified address). A token is only made by an admin
+action, so a person who changes the account's number or email does not get one.
 
 The token's SHA-256 is kept in BetterAuth's "verification" table
 (better_auth_store.set_enrolment_token); lib/auth.ts checks it on
@@ -45,8 +46,8 @@ NOT_SENT_DETAIL = (
 )
 
 _SMS = (
-    "Carabao: your account is now an admin account. Sign in on the website and "
-    "set up two-step verification within 24 hours: {url} . Do not share this "
+    "Carabao: set up two-step verification for your admin account within 24 "
+    "hours. Sign in on the admin site, then open: {url} . Do not share this "
     "link. If you did not expect this, contact support."
 )
 
@@ -61,18 +62,24 @@ def require_contact(user: User) -> None:
         raise HTTPException(status_code=400, detail=NO_CONTACT_DETAIL)
 
 
-def issue(db: Session, user: User) -> str:
-    """Make a new setup token for ``user`` (replaces an older one). The
-    caller commits, then calls ``deliver``."""
-    require_contact(user)
+def issue_token(db: Session, identity_id: str) -> str:
+    """Make a new setup token (replaces an older one) and return it. The
+    caller commits and sends it."""
     token = secrets.token_urlsafe(32)
     better_auth_store.set_enrolment_token(
         db,
-        user.external_auth_id,
+        identity_id,
         token_hash=hash_token(token),
         expires_at=datetime.now(UTC) + TOKEN_TTL,
     )
     return token
+
+
+def issue(db: Session, user: User) -> str:
+    """A new setup token for ``user``, who must have somewhere to receive it.
+    The caller commits, then calls ``deliver``."""
+    require_contact(user)
+    return issue_token(db, user.external_auth_id)
 
 
 def setup_url(token: str) -> str:

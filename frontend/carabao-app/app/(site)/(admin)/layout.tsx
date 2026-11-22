@@ -35,20 +35,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     );
   }
 
+  // A new admin, or one whose 2FA was reset: set it up first. Setup still
+  // needs the one-time token from the invite or reset link (lib/auth.ts), so
+  // the enrol page without one only says to use that link. Every other admin
+  // route stays closed, and the admin API refuses tokens without mfa.
   const twoFactorOn = Boolean((session.user as { twoFactorEnabled?: boolean | null }).twoFactorEnabled);
   if (!twoFactorOn) {
-    return (
-      <div className={styles.gate}>
-        <div className={styles.gateCard} role="alert">
-          <h1>Two-step verification required</h1>
-          <p>
-            Admin accounts must use two-step verification with an authenticator app. Open the setup link that we sent
-            to your verified mobile number and email. If the link expired, ask another admin to send a new one.
-          </p>
-          <SignInAgainButton className={styles.gateButton} label="Sign out" />
-        </div>
-      </div>
-    );
+    redirect("/two-factor/enrol");
   }
 
   const passedCodeStep = (session.session as { mfaVerified?: boolean | null }).mfaVerified === true;

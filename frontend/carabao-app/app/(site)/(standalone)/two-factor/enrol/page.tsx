@@ -29,10 +29,15 @@ export default async function TwoFactorEnrolPage({
 
   let body: React.ReactNode;
   if (!token) {
+    // The admin layout sends an admin without 2FA here. Setup needs the
+    // invite or reset link's token, so there is nothing else to offer.
     body = (
-      <div className="auth-error" role="alert">
-        This link is not complete. Open the full link from the SMS or email again.
-      </div>
+      <>
+        <div className="auth-error" role="alert">
+          Use the setup link we sent you. If it expired, ask another admin to send a new one.
+        </div>
+        {user && <SignInAgainButton className="auth-link auth-link--button" label="Sign out" />}
+      </>
     );
   } else if (!user) {
     body = (

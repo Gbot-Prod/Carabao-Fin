@@ -1,7 +1,23 @@
 // Run with `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { OTP_RESEND_SECONDS, formatCountdown, resendWaitSeconds, retryAfterFromError } from './otp-cooldown.ts';
+import {
+  OTP_RESEND_SECONDS,
+  OTP_SEND_PATHS,
+  formatCountdown,
+  resendWaitSeconds,
+  retryAfterFromError,
+} from './otp-cooldown.ts';
+
+// BetterAuth 1.7.26's own row names (plugins/phone-number/routes.mjs). If an
+// upgrade renames them, this fails instead of the resend wait silently stopping.
+test('OTP_SEND_PATHS uses the rows BetterAuth writes', () => {
+  assert.deepEqual(OTP_SEND_PATHS['/phone-number/send-otp']('+639171234567'), ['phone-number-otp-+639171234567']);
+  assert.deepEqual(OTP_SEND_PATHS['/phone-number/request-password-reset']('+639171234567'), [
+    'phone-number-reset-+639171234567',
+    'phone-reset-wait-+639171234567',
+  ]);
+});
 
 const now = new Date('2026-11-17T00:01:00Z');
 

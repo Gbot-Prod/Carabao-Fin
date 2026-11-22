@@ -11,7 +11,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ValidationError
 
-from app.api.routes import admin, admin_produce, chat, email_otp, sms, stock_alerts
+from app.api.routes import (
+    admin,
+    admin_accounts,
+    admin_produce,
+    chat,
+    email_otp,
+    sms,
+    stock_alerts,
+)
 from app.api.routes import email as email_routes
 from app.api.routes.merchants import MerchantOrderStatusUpdate
 from app.api.routes.support_chat import SupportPost
@@ -38,7 +46,12 @@ GOOD: list[tuple[type[BaseModel], dict[str, Any]]] = [
             "code": "123456",
         },
     ),
-    (admin.RolePayload, {"is_admin": False}),
+    (admin_accounts.InvitePayload, {"email": "a@example.com", "name": "Ana"}),
+    (
+        admin_accounts.AcceptPayload,
+        {"invite": "abc", "token": "t", "code": "ABCD-EFGH", "password": "x"},
+    ),
+    (admin_accounts.EnrolledPayload, {"user_id": "abc"}),
     (admin.SuspendPayload, {"reason": "spam"}),
     (admin_produce.HidePayload, {"reason": "fake listing"}),
     (chat.ChatPost, {"body": "hello"}),

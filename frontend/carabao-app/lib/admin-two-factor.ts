@@ -4,9 +4,12 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 // ── Enrolment links (CF-0018) ─────────────────────────────────────────────
-// The backend makes a one-time token when an admin promotes a user or resets
-// an admin's 2FA (backend/app/services/admin_enrolment.py). It keeps only the
-// SHA-256 in BetterAuth's "verification" table under this identifier.
+// The backend makes a one-time token with an admin invite, and when an admin's
+// 2FA is reset or the admin is reactivated (backend/app/services/
+// admin_enrolment.py). It keeps only the SHA-256 in BetterAuth's
+// "verification" table under this identifier. The identifier is stored in
+// plain text (no verification.storeIdentifier, no secondaryStorage): the
+// database guards planned in DB_ROLE_SPLIT_PLAN.md (G3) match on it.
 
 export const ENROLMENT_IDENTIFIER_PREFIX = "admin-2fa-enrol-";
 

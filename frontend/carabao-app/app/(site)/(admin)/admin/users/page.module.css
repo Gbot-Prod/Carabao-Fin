@@ -73,55 +73,6 @@
   font-size: 14px;
 }
 
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-}
-
-.toggle input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggleTrack {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  background: var(--border-strong);
-  border-radius: var(--radius-md);
-  transition: background 0.2s ease;
-  flex-shrink: 0;
-}
-
-.toggle input:checked + .toggleTrack {
-  background: var(--green-600);
-}
-
-.toggleThumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background: var(--bg-white);
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  transition: transform 0.2s ease;
-}
-
-.toggle input:checked + .toggleTrack .toggleThumb {
-  transform: translateX(16px);
-}
-
-.toggleBusy {
-  opacity: 0.5;
-  cursor: default;
-  pointer-events: none;
-}
-
 .notice {
   margin: 0 0 16px;
   padding: 12px 16px;
@@ -163,4 +114,127 @@
 .linkButton:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.dangerLink {
+  color: var(--danger);
+}
+
+.adminBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e6f2ea;
+  color: var(--green-600);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Invite an admin */
+
+.inviteBar {
+  margin: 0 0 16px;
+}
+
+.primaryButton {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--green-600);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.inviteForm {
+  margin: 0 0 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
+  background: var(--bg-white);
+  box-shadow: var(--admin-card-shadow);
+  max-width: 640px;
+}
+
+.inviteTitle {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.inviteHelp {
+  margin: 0 0 14px;
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+
+.inviteFields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.input {
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: var(--text-strong);
+}
+
+.formError {
+  margin: 14px 0 0;
+}
+
+.inviteActions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+/* The invite code, shown once */
+
+.codePanel {
+  margin: 0 0 16px;
+  padding: 18px 20px;
+  border: 1px solid #cfe3d6;
+  border-radius: var(--radius-md);
+  background: #f2f9f4;
+  max-width: 640px;
+}
+
+.codeLead,
+.codeHelp {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.code {
+  margin: 10px 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-strong);
+  user-select: all;
+}
+
+.codeHelp {
+  margin-bottom: 14px;
+  color: var(--text-subtle);
 }

@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.webhooks.paymongo import router as paymongo_webhook_router
 
 from .admin import router as admin_router
+from .admin_accounts import router as admin_accounts_router
 from .admin_audit import router as admin_audit_router
 from .admin_orders import router as admin_orders_router
 from .admin_produce import router as admin_produce_router
@@ -51,6 +52,7 @@ router.include_router(stock_alerts_router)
 router.include_router(merchant_sales_router)
 router.include_router(demand_insight_router)
 router.include_router(admin_router)
+router.include_router(admin_accounts_router)
 router.include_router(admin_orders_router)
 router.include_router(admin_transactions_router)
 router.include_router(admin_audit_router)
