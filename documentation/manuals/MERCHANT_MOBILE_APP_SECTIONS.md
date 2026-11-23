@@ -42,8 +42,8 @@ executed and verified one at a time, in this order. Do not reorder sections with
 
 | Fact | Value |
 |---|---|
-| Plan 1 state | S1-S12 are done in the working tree but **not committed** (`git status` shows the moves). Plan 2 starts only after Plan 1 S16 is committed (S0 below). |
-| `MM/app/` routes | `(tabs)/_layout`, `(tabs)/index`, `orders`, `chats`, `produce`, `more`; `auth`, `not-merchant`, `notifications`, `onboarding`, `order-chat`, `reviews` |
+| Plan 1 state | S1-S12 are done and committed (`cad9df9` carries S9-S12: earnings, shipments, route). S13-S16 remain. Plan 2 starts only after Plan 1 S16 is committed (S0 below). |
+| `MM/app/` routes | `(tabs)/_layout`, `(tabs)/index`, `orders`, `chats`, `produce`, `more`; `auth`, `not-merchant`, `notifications`, `onboarding`, `order-chat`, `reviews`, `earnings`, `inventory`, `shipments`, `route`, `shop`, `vouchers`, `settings`, `application` |
 | `MM/src/lib/MerchantContext.tsx` | **already exists**: it is the root gate (`status`, `profile`, `retry`; CF-0120). It does not load data. See §2.1. |
 | `MM/src/lib/api.ts` | 384 lines; `send()` always sets `'Content-Type': 'application/json'` (line ~71), so multipart needs a change (S2) |
 | `MM/src/lib/notificationLinks.ts` | `payout_released` / `payout_destination_changed` go to `/(tabs)` (comment: "Earnings is Plan 2") |
