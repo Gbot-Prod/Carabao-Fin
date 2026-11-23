@@ -11,6 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider } from '../src/lib/AuthContext';
+import { MerchantDataProvider } from '../src/lib/MerchantDataContext';
 import { MerchantProvider, useMerchantGate } from '../src/lib/MerchantContext';
 import { Colors, FontSize, Radius, Spacing } from '../src/lib/theme';
 
@@ -62,7 +63,7 @@ function RootGate() {
     );
   }
 
-  return (
+  const navigator = (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected
         guard={status === 'allowed'}
@@ -72,6 +73,15 @@ function RootGate() {
         <Stack.Screen name="reviews" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="order-chat" options={{ headerShown: false }} />
+        {/* Decision D2: placeholders until S7/S9/S11/S12/S14/S15/S16/S18. */}
+        <Stack.Screen name="shipments" options={{ headerShown: false }} />
+        <Stack.Screen name="route" options={{ headerShown: false }} />
+        <Stack.Screen name="earnings" options={{ headerShown: false }} />
+        <Stack.Screen name="inventory" options={{ headerShown: false }} />
+        <Stack.Screen name="shop" options={{ headerShown: false }} />
+        <Stack.Screen name="vouchers" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="application" options={{ headerShown: false }} />
       </Stack.Protected>
       <Stack.Protected
         guard={status === 'signin'}
@@ -87,6 +97,14 @@ function RootGate() {
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       </Stack.Protected>
     </Stack>
+  );
+
+  // S3: the shared data (and its /merchants/me/* calls) exists only for a farm account,
+  // so the provider mounts inside the gate; signing out unmounts it with its data.
+  return status === 'allowed' ? (
+    <MerchantDataProvider>{navigator}</MerchantDataProvider>
+  ) : (
+    navigator
   );
 }
 

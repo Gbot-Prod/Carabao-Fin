@@ -10,6 +10,7 @@ import type { DemandInsight, MerchantPerformance } from './dashboard';
 import { getAccessToken } from './authClient';
 import { emitSessionExpired, sessionGone } from './sessionEvents';
 import { parseErrorBody } from './apiErrors';
+import { contentTypeFor } from './uploads';
 import { API_BASE } from './config';
 import { UNREAD_COUNT_QUERY } from './polling';
 
@@ -61,6 +62,9 @@ async function send<T>(
 ): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // S2: JSON only for a string body. A FormData body goes without a Content-Type, so
+  // fetch writes multipart/form-data with the boundary it generated.
+  const contentType = contentTypeFor(options?.body);
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
@@ -68,7 +72,7 @@ async function send<T>(
       signal: controller.signal,
       headers: {
         Accept: 'application/json',
-        'Content-Type': 'application/json',
+        ...(contentType ? { 'Content-Type': contentType } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...((options?.headers as Record<string, string>) ?? {}),
       },
@@ -238,6 +242,27 @@ export type ApiMerchantOrder = {
   notes: string | null;
   // Why it was cancelled, as the buyer was told.
   cancel_reason?: string | null;
+  // Set once the order is on a route (ready-to-ship orders have none yet).
+  shipment_id: number | null;
+};
+
+// The owner's shop page (backend ShopPageOwnerResponse, app/schemas/shopPage.py): the
+// live page plus the unpublished draft. The endpoint is 404 until one is created.
+export type ApiShopPage = {
+  id: number;
+  merchant_id: number;
+  title: string;
+  slug: string;
+  banner_image_url: string | null;
+  logo_url: string | null;
+  description: string | null;
+  draft_title: string;
+  draft_description: string | null;
+  draft_logo_url: string | null;
+  draft_banner_image_url: string | null;
+  published_at: string | null;
+  is_published: boolean;
+  has_unpublished_changes: boolean;
 };
 
 // Stock alerts (F1), same as the web merchant dashboard.
@@ -295,6 +320,9 @@ export const api = {
       request<ApiProduce[]>('/merchants/me/produce', token),
     myOrders: (token: string | null) =>
       request<ApiMerchantOrder[]>('/merchants/me/orders', token),
+    // S14: the owner's shop page, draft included. 404 until the farm creates one.
+    shopPage: (token: string | null) =>
+      request<ApiShopPage>('/merchants/me/shoppage', token),
     // CF-0127: the farm's order chats, newest message first.
     chats: (token: string | null) => request<ChatSummary[]>('/merchants/me/chats', token),
     // CF-0125: dashboard numbers and province demand.

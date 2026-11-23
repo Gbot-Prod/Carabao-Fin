@@ -1,9 +1,9 @@
 // src/screens/MoreScreen.tsx
 // The More tab (plan §4.4). Small on purpose: the farm name and its verification status
-// at the top, plus the rows that do not need a tab. The name comes from the gate's
-// /users/me profile (loaded before the tabs mount); the status comes from
-// /merchants/me/performance, read the same way as the Home tab (`verificationBanner`).
-import React, { useEffect, useState } from 'react';
+// at the top, plus the rows that do not need a tab (plan §4 order). The name comes from
+// the gate's /users/me profile (loaded before the tabs mount); the status comes from the
+// shared data context (S3), read the same way as the Home tab (`verificationBanner`).
+import React, { useState } from 'react';
 import {
   ActivityIndicator, Alert, Linking, SafeAreaView, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
@@ -13,7 +13,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../lib/AuthContext';
 import { useMerchantGate } from '../lib/MerchantContext';
-import { api, WEB_BASE } from '../lib/api';
+import { useMerchantData } from '../lib/MerchantDataContext';
+import { WEB_BASE } from '../lib/api';
+import { readyToShipCount } from '../lib/badges';
 import { verificationBanner } from '../lib/dashboard';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '../lib/theme';
 
@@ -60,21 +62,14 @@ function SectionHeader({ title }: { title: string }) {
 
 export default function MoreScreen() {
   const router = useRouter();
-  const { signOut, token } = useAuth();
+  const { signOut } = useAuth();
   const { profile } = useMerchantGate();
+  const { performance, orders } = useMerchantData();
   const [signingOut, setSigningOut] = useState(false);
-  // undefined until read; a failed read shows no banner (the Home tab shows the error).
-  const [status, setStatus] = useState<string | undefined>(undefined);
-
-  useEffect(() => {
-    let active = true;
-    api.merchants
-      .performance(token)
-      .then((p) => { if (active) setStatus(p.verification_status); })
-      .catch(() => {});
-    return () => { active = false; };
-  }, [token]);
-  const banner = verificationBanner(status);
+  // undefined until the shared load finishes; no banner then (the Home tab shows the error).
+  const banner = verificationBanner(performance?.verification_status);
+  // The web's Shipments row count (MerchantShell.tsx): the orders waiting for a route.
+  const ready = orders ? readyToShipCount(orders) : 0;
 
   const farmName = profile?.merchant?.merchant_name ?? 'Your farm';
   const account = profile?.name || profile?.email || profile?.phone_number || '';
@@ -140,7 +135,29 @@ export default function MoreScreen() {
 
         <SectionHeader title="Farm" />
         <View style={styles.group}>
+          {/* Plan §4 order. Shipments is the first row and carries the ready-to-ship
+              count (alert colour), as the web's Shipments row does. */}
+          <Row
+            icon="cube-outline"
+            label="Shipments"
+            right={
+              <View style={styles.rowRight}>
+                {ready > 0 ? (
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countBadgeText}>{ready > 99 ? '99+' : String(ready)}</Text>
+                  </View>
+                ) : null}
+                <Ionicons name="chevron-forward" size={16} color={Colors.textLight} />
+              </View>
+            }
+            onPress={() => router.push('/shipments')}
+          />
+          <Row icon="cash-outline" label="Earnings" onPress={() => router.push('/earnings')} />
           <Row icon="star-outline" label="Reviews" onPress={() => router.push('/reviews')} />
+          <Row icon="layers-outline" label="Inventory" onPress={() => router.push('/inventory')} />
+          <Row icon="storefront-outline" label="Shop page" onPress={() => router.push('/shop')} />
+          <Row icon="pricetag-outline" label="Vouchers" onPress={() => router.push('/vouchers')} />
+          <Row icon="settings-outline" label="Store settings" onPress={() => router.push('/settings')} />
           <Row icon="notifications-outline" label="Notifications" onPress={() => router.push('/notifications')} />
         </View>
 
@@ -225,6 +242,13 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.text },
   rowLabelDanger: { color: Colors.error },
   rowValue: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: 1 },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  // The alert count of the web's Shipments row (MerchantShell.tsx countTone="alert").
+  countBadge: {
+    minWidth: 22, height: 22, borderRadius: Radius.full, paddingHorizontal: 6,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.error,
+  },
+  countBadgeText: { fontSize: FontSize.xs, fontWeight: '800', color: Colors.white },
   signOutGroup: { marginTop: Spacing.lg },
 
   version: {

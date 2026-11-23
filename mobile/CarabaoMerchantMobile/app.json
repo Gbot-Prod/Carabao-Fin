@@ -46,7 +46,16 @@
       "expo-font",
       "expo-image",
       "expo-web-browser",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Carabao Merchant uses your photos for produce and shop pictures.",
+          "cameraPermission": "Carabao Merchant uses your camera to take photos of produce and your shop."
+        }
+      ],
+      "react-native-maps"
     ],
     "experiments": {
       "typedRoutes": true,

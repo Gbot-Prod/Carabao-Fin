@@ -40,10 +40,12 @@ test('a bad order id opens the chat list, never a chat', () => {
   }
 });
 
-test('a payout, an unknown kind and a link without a kind open the dashboard', () => {
-  // Earnings is Plan 2; the web bell opens /earnings for both payout kinds.
-  assert.deepEqual(appRoute('/merchantDashboard', 'payout_released'), { pathname: '/(tabs)' });
-  assert.deepEqual(appRoute('/merchantDashboard', 'payout_destination_changed'), { pathname: '/(tabs)' });
+test('a payout opens Earnings, as the web bell does', () => {
+  assert.deepEqual(appRoute('/merchantDashboard', 'payout_released'), { pathname: '/earnings' });
+  assert.deepEqual(appRoute('/merchantDashboard?tab=earnings', 'payout_destination_changed'), { pathname: '/earnings' });
+});
+
+test('an unknown kind and a link without a kind open the dashboard', () => {
   assert.deepEqual(appRoute('/merchantDashboard', 'stock_low'), { pathname: '/(tabs)' });
   assert.deepEqual(appRoute('/merchantDashboard'), { pathname: '/(tabs)' });
 });

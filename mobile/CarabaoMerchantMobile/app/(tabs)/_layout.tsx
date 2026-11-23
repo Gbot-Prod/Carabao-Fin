@@ -3,9 +3,14 @@
 // Ionicons and no new dependency - the buyer app's `CustomTabBar` is buyer-only (its
 // middle tab is the cart). Screens own their headers, so the bar hides them. Each icon
 // is filled when its tab is active and outlined otherwise.
+//
+// S3: the badges are the web MerchantShell.tsx counts (src/lib/badges.ts): Orders =
+// active orders, Chats = chats with unread messages (alert colour), Produce = listings.
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useMerchantData } from '../../src/lib/MerchantDataContext';
+import { activeOrderCount, productCount, unreadChatCount } from '../../src/lib/badges';
 import { Colors, FontSize } from '../../src/lib/theme';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -31,7 +36,18 @@ function TabBarIcon({ focused, color, size, active, inactive }: TabBarIconProps)
   return <Ionicons name={focused ? active : inactive} size={size} color={tint(color)} />;
 }
 
+/** The tab bar draws nothing for 0; a badge means "look at this tab". */
+function badge(count: number): number | undefined {
+  return count > 0 ? count : undefined;
+}
+
 export default function TabsLayout() {
+  // null until the shared load finishes (MerchantDataContext.tsx): no badge, no 0.
+  const { orders, chats, produce } = useMerchantData();
+  const activeOrders = orders ? activeOrderCount(orders) : 0;
+  const unreadChats = chats ? unreadChatCount(chats) : 0;
+  const products = produce ? productCount(produce) : 0;
+
   return (
     <Tabs
       screenOptions={{
@@ -53,6 +69,7 @@ export default function TabsLayout() {
         name="orders"
         options={{
           title: 'Orders',
+          tabBarBadge: badge(activeOrders),
           tabBarIcon: (props) => <TabBarIcon {...props} active="receipt" inactive="receipt-outline" />,
         }}
       />
@@ -60,6 +77,9 @@ export default function TabsLayout() {
         name="chats"
         options={{
           title: 'Chats',
+          tabBarBadge: badge(unreadChats),
+          // The web's alert tone for the chats count (MerchantShell.tsx countTone="alert").
+          tabBarBadgeStyle: { backgroundColor: Colors.error },
           tabBarIcon: (props) => <TabBarIcon {...props} active="chatbubbles" inactive="chatbubbles-outline" />,
         }}
       />
@@ -67,6 +87,7 @@ export default function TabsLayout() {
         name="produce"
         options={{
           title: 'Produce',
+          tabBarBadge: badge(products),
           tabBarIcon: (props) => <TabBarIcon {...props} active="leaf" inactive="leaf-outline" />,
         }}
       />

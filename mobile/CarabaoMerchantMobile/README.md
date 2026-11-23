@@ -38,10 +38,29 @@ the values are described in [`SYSTEM_REFERENCE.md` §4.3](../../documentation/ma
 | `EXPO_PUBLIC_API_URL` | FastAPI base URL, e.g. `http://localhost:8000` |
 | `EXPO_PUBLIC_WEB_URL` | Website base URL, e.g. `http://localhost:3000` |
 | `EXPO_PUBLIC_IDLE_TIMEOUT_MINUTES` | minutes of inactivity before the app signs out |
+| `EXPO_PUBLIC_GOOGLE_MAPS_KEY` | Android only, optional: Google Maps SDK for Android key for `react-native-maps` (route map). Read by `app.config.ts`; without it the route screen shows the stop list and a "Map not available" note on Android. iOS uses Apple Maps and needs no key. Restart `npm start` after changing it, and rebuild a native build (`expo prebuild` / EAS) for the manifest change to apply. |
 
 Signing in also needs the web change in
 [`MOBILE_MERCHANT_SPLIT_PLAN.md` §6](../../documentation/manuals/MOBILE_MERCHANT_SPLIT_PLAN.md) (`carabaomerchant://` must be an
 allowed mobile origin on the web app), so use a web app that has it before testing sign-in.
+
+## Dependencies added in Plan 2
+
+Installed with `npx expo install` (SDK 58 versions in `package.json`):
+
+| Package | Used for |
+|---|---|
+| `react-native-maps` | route map (Shipments) and address pin (Store settings, Onboarding) |
+| `expo-image-picker` | produce photo, shop logo, shop banner |
+| `expo-document-picker` | onboarding documents (RSBSA, government ID, BIR certificate) |
+| `expo-file-system`, `expo-sharing` | sales CSV export |
+| `expo-clipboard` | copy voucher code and shop link |
+
+`expo-file-system` is now a direct dependency (it was transitive only). `app.json` holds the
+`expo-image-picker` photo/camera permission text and the `react-native-maps` plugin;
+`app.config.ts` adds the Android key from `EXPO_PUBLIC_GOOGLE_MAPS_KEY` when it is set.
+`expo-document-picker` needs no plugin entry in SDK 58 (its plugin only adds optional iCloud
+entitlements).
 
 ## Test and check
 

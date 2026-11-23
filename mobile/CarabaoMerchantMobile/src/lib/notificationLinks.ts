@@ -7,7 +7,7 @@ import { parseOrderId } from './orderChat.ts';
 // The merchant app has no `/track` and no order-detail screen (plan §4.2): a farm reads an
 // order in the Orders tab and chats in `/order-chat`.
 export type AppRoute =
-  | { pathname: '/(tabs)' | '/(tabs)/orders' | '/(tabs)/chats' | '/reviews' }
+  | { pathname: '/(tabs)' | '/(tabs)/orders' | '/(tabs)/chats' | '/reviews' | '/earnings' }
   | { pathname: '/order-chat'; params: { orderId: string } };
 
 /** The order a chat notification is about: "/merchantDashboard?order=12", else null. */
@@ -46,7 +46,10 @@ export function appRoute(link: string | null, kind?: string): AppRoute | null {
   }
   if (kind === 'new_order') return { pathname: '/(tabs)/orders' };
   if (kind === 'review_received') return { pathname: '/reviews' };
-  // payout_released and payout_destination_changed: Earnings is Plan 2, so the dashboard for
-  // now (the web bell opens /earnings). Every other kind opens the dashboard too.
+  // S3 (plan §4): the web bell opens /earnings for both payout kinds, so this app does too.
+  if (kind === 'payout_released' || kind === 'payout_destination_changed') {
+    return { pathname: '/earnings' };
+  }
+  // Every other kind opens the dashboard.
   return { pathname: '/(tabs)' };
 }
