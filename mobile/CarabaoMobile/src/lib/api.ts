@@ -7,9 +7,7 @@ import { API_BASE } from './config';
 import { historyQueryString, type HistoryQuery } from './orderHistory';
 import type { ServerCartLine } from './cartSync';
 import type { AddressPayload } from './addresses';
-import type { MerchantReviews, MyMerchantReviews, MyReview } from './reviews';
-import type { DemandInsight, MerchantPerformance } from './dashboard';
-import type { ChatSummary } from './chatInbox';
+import type { MerchantReviews } from './reviews';
 import type { VoucherPreview } from './vouchers';
 import type { NotificationPrefs } from './notificationPrefs';
 import { UNREAD_COUNT_QUERY } from './polling';
@@ -122,7 +120,8 @@ export type ApiMerchant = {
   delivery_price: number | null;
   delivery_time: number | null;
   rating: number | null;
-  // CF-0066 holiday mode (shown by M57).
+  // CF-0066 holiday mode: a paused farm still shows, and checkout is refused with
+  // the backend's message (see inStep.ts).
   paused_until?: string | null;
   pause_message?: string | null;
   produces: ApiProduce[];
@@ -153,35 +152,7 @@ export type ApiProduce = {
   min_order_qty: number;
   // Unit price once a cart line reaches min_qty; the server applies it.
   price_tiers: { min_qty: number; unit_price: number }[];
-  // Set when an admin hides the listing; only the merchant's own list has it.
-  hidden_at?: string | null;
-  hidden_reason?: string | null;
 };
-
-// Mirrors backend ProduceCreate / ProduceUpdate (app/schemas/produce.py).
-export type ProduceCategory = 'Vegetables' | 'Fruits';
-export type ProduceUnit = 'kg' | 'lbs';
-
-export type ProduceCreatePayload = {
-  name: string;
-  description?: string | null;
-  category?: ProduceCategory | null;
-  price: number;
-  unit?: ProduceUnit;
-  unit_quantity?: number;
-  stock_quantity?: number;
-  image_url?: string | null;
-  // YYYY-MM-DD. Required by the backend on create and checked on every edit (CF-0107).
-  harvest_date?: string | null;
-  best_before?: string | null;
-  // CF-0116: backend checks these with produce_pricing.pricing_error.
-  min_order_qty?: number;
-  price_tiers?: { min_qty: number; unit_price: number }[];
-};
-
-export type ProduceUpdatePayload = Partial<{
-  [K in keyof ProduceCreatePayload]: ProduceCreatePayload[K] | null;
-}>;
 
 export type ApiCurrentOrder = {
   id: number;
@@ -419,31 +390,6 @@ export type ApiTracking = {
   tracking_state: 'estimated' | 'waiting_for_shipment';
 };
 
-export type MerchantOrderStatus =
-  | 'pending' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
-
-// Mirrors backend MerchantOrderResponse (app/schemas/payout.py). Merchants only
-// receive orders a payment has landed on.
-export type ApiMerchantOrder = {
-  id: number;
-  status: MerchantOrderStatus;
-  payment_status: 'awaiting_payment' | 'paid' | 'refund_pending' | 'refunded' | 'unpaid';
-  total_price: number;
-  items: { name?: string; produce_name?: string; quantity?: number; price?: number }[];
-  delivery_address: string | null;
-  ordered_at: string;
-  buyer_name: string | null;
-  buyer_email: string | null;
-  buyer_phone: string | null;
-  shipped: boolean;
-  time_of_arrival: string | null;
-  requested_delivery_date: string | null;
-  delivery_window: string | null;
-  notes: string | null;
-  // Why it was cancelled, as the buyer was told.
-  cancel_reason?: string | null;
-};
-
 // GET /produce/search (U2).
 export type ApiProduceSearchResult = ApiProduce & {
   merchant_name: string;
@@ -484,24 +430,6 @@ export type ApiChatThread = {
   messages: ApiChatMessage[];
 };
 
-// Stock alerts (F1), same as the web merchant dashboard.
-export type ApiStockAlertItem = {
-  id: number;
-  name: string;
-  unit: string;
-  stock_quantity: number;
-  best_before: string | null;
-  days_left: number | null;
-};
-
-export type ApiStockAlerts = {
-  low_stock_threshold: number;
-  expiry_warning_days: number;
-  low_stock: ApiStockAlertItem[];
-  expiring_soon: ApiStockAlertItem[];
-  expired: ApiStockAlertItem[];
-};
-
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -512,38 +440,6 @@ export const api = {
       request<ApiMerchant>(`/merchants/${id}`, token),
     produce: (id: number, token: string | null) =>
       request<ApiProduce[]>(`/merchants/${id}/produce`, token),
-    // The merchant's own listings, including expired and admin-hidden ones.
-    myProduce: (token: string | null) =>
-      request<ApiProduce[]>('/merchants/me/produce', token),
-    myOrders: (token: string | null) =>
-      request<ApiMerchantOrder[]>('/merchants/me/orders', token),
-    // CF-0127: the farm's order chats, newest message first.
-    chats: (token: string | null) => request<ChatSummary[]>('/merchants/me/chats', token),
-    // CF-0125: dashboard numbers and province demand.
-    performance: (token: string | null) => request<MerchantPerformance>('/merchants/me/performance', token),
-    demand: (token: string | null) => request<DemandInsight>('/merchants/me/demand', token),
-    // CF-0119: query from src/lib/reviews.ts myReviewsQuery.
-    myReviews: (token: string | null, query: string) =>
-      request<MyMerchantReviews>(`/merchants/me/reviews?${query}`, token),
-    // CF-0133: the farm's one public reply; PUT writes or edits it, DELETE removes it
-    // (204, also when there is none). A review an admin hid gives 404.
-    setReviewReply: (token: string | null, reviewId: number, reply: string) =>
-      request<MyReview>(`/merchants/me/reviews/${reviewId}/reply`, token, { method: 'PUT', body: JSON.stringify({ reply }) }),
-    deleteReviewReply: (token: string | null, reviewId: number) =>
-      request<null>(`/merchants/me/reviews/${reviewId}/reply`, token, { method: 'DELETE' }),
-    stockAlerts: (token: string | null) =>
-      request<ApiStockAlerts>('/merchants/me/stock-alerts', token),
-    updateOrderStatus: (token: string | null, orderId: number, status: Exclude<MerchantOrderStatus, 'cancelled'>) =>
-      request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/status`, token, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      }),
-    // Cancelling needs a reason (src/components/CancelOrderSheet.tsx); "other" needs a note.
-    cancelOrder: (token: string | null, orderId: number, reason: string, note: string) =>
-      request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/status`, token, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'cancelled', cancel_reason: reason, cancel_note: note.trim() || null }),
-      }),
   },
   cart: {
     get: (token: string | null) =>
@@ -589,21 +485,6 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
-  },
-  produce: {
-    create: (token: string | null, payload: ProduceCreatePayload) =>
-      request<ApiProduce>('/produce/', token, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }),
-    update: (token: string | null, produceId: number, payload: ProduceUpdatePayload) =>
-      request<ApiProduce>(`/produce/${produceId}`, token, {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-      }),
-    // CF-0116: the owner deletes a listing (backend DELETE /produce/{id}).
-    remove: (token: string | null, produceId: number) =>
-      request<null>(`/produce/${produceId}`, token, { method: 'DELETE' }),
   },
   payments: {
     // CF-0124: give up an unpaid checkout; the server releases the held stock.

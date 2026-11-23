@@ -29,9 +29,6 @@ export default function RootLayout() {
                   <Stack.Screen name="merchant" options={{ headerShown: false }} />
                   <Stack.Screen name="checkout" options={{ headerShown: false }} />
                   <Stack.Screen name="confirmation" options={{ headerShown: false }} />
-                  <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-                  <Stack.Screen name="listings" options={{ headerShown: false }} />
-                  <Stack.Screen name="merchant-orders" options={{ headerShown: false }} />
                   <Stack.Screen name="notifications" options={{ headerShown: false }} />
                   <Stack.Screen name="order-chat" options={{ headerShown: false }} />
                   <Stack.Screen name="saved" options={{ headerShown: false }} />
@@ -39,9 +36,6 @@ export default function RootLayout() {
                   <Stack.Screen name="order-receipt" options={{ headerShown: false }} />
                   <Stack.Screen name="addresses" options={{ headerShown: false }} />
                   <Stack.Screen name="search" options={{ headerShown: false }} />
-                  <Stack.Screen name="merchant-reviews" options={{ headerShown: false }} />
-                  <Stack.Screen name="merchant-dashboard" options={{ headerShown: false }} />
-                  <Stack.Screen name="merchant-chats" options={{ headerShown: false }} />
                 </Stack>
                 <StatusBar style="auto" />
               </ThemeProvider>

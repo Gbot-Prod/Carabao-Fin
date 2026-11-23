@@ -64,6 +64,11 @@ dependency line of each section) and §6 (traceability).
    so the same commit strips `ProtectedScreen` down to a sign-in wrapper (plan §3.2) and keeps
    its `requiredRole` prop accepted but ignored until S14. Same for the profile banner: buyer
    `ProfileScreen` pushes `/merchant-*` routes, so plan §3.4 lands in S8.
+10. **`listingForm.ts` was not fully merchant-only.** Buyer `src/lib/checkoutOptions.ts` and
+    `src/screens/CheckoutScreen.tsx` import its `addDays`/`phToday`, so S9 splits those two
+    pure helpers into a new shared copy, `src/lib/dates.ts` (both apps, guarded by
+    `sharedCopies.test.ts`). Merchant `listingForm.ts` re-exports them, so its API, its test
+    and every message stay as they were.
 
 ## 3. Decisions to confirm (defaults in brackets)
 
@@ -402,7 +407,8 @@ them, and its merchant notifications hand off instead of opening a dead route.
    `src/components/ListingForm.tsx`, `src/lib/listingForm.ts` + `listingForm.test.ts`.
 2. `git rm` buyer `app/listings.tsx`, `app/onboarding.tsx` **and** their `<Stack.Screen>`
    lines (`app/_layout.tsx` 32, 33 before S8's deletions - re-locate by route name).
-3. `(tabs)/produce.tsx` re-exports `ListingsScreen`; merchant `app/onboarding.tsx` re-exports
+3. `(tabs)/produce.tsx` re-exports the produce screen (`ListingsScreen` when moved; renamed
+   `ProduceScreen` in S13); merchant `app/onboarding.tsx` re-exports
    `OnboardingScreen` (it still opens the web form via `WEB_BASE`); the gate's
    "Apply to sell" already points at `/onboarding`.
 4. Drop `ProtectedScreen` from both screens; keep every `Alert`/validation text unchanged.
@@ -617,6 +623,7 @@ is left in it.
 | §2.3 OrderChatScreen copy | S11 |
 | §2.4 reviews.ts split | S6, S10, S14 |
 | §2.4 dashboard.ts / chatInbox.ts / listingForm.ts | S8, S9 |
+| §2.4 shared date helpers (`dates.ts`, split out of `listingForm.ts`) | S9 |
 | §2.4 farms.ts ratingLabel | S6 |
 | §3.1 merchant routes removed from the buyer | S8-S10 |
 | §3.2 ProtectedScreen sign-in only | S4, S14 |

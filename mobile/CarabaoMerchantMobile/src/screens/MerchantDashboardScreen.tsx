@@ -8,14 +8,15 @@ import { useRouter, type Href } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { api, type ApiStockAlerts } from '../lib/api';
 import { alertCounts, cancelRate, statTiles, unmetSearches, verificationBanner, type DemandInsight, type MerchantPerformance } from '../lib/dashboard';
-import { ratingLabel } from '../lib/farms';
+import { ratingLabel } from '../lib/format';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
-import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 
 type Data = { perf: MerchantPerformance; alerts: ApiStockAlerts | null; demand: DemandInsight | null };
 
-function Content() {
+// The Home tab. The root gate (app/_layout.tsx) already checked the farm, so this
+// screen does not repeat that check.
+export default function MerchantDashboardScreen() {
   const router = useRouter();
   const { token } = useAuth();
   const [data, setData] = useState<Data | null>(null);
@@ -104,10 +105,10 @@ function Content() {
         </Text>
 
         <View style={styles.card}>
-          {link('receipt-outline', 'Incoming orders', '/merchant-orders', perf.active_orders)}
-          {link('leaf-outline', 'My listings', '/listings', counts.total)}
-          {link('chatbubbles-outline', 'Chats', '/merchant-chats')}
-          {link('star-outline', 'Reviews', '/merchant-reviews')}
+          {link('receipt-outline', 'Incoming orders', '/(tabs)/orders', perf.active_orders)}
+          {link('leaf-outline', 'My listings', '/(tabs)/produce', counts.total)}
+          {link('chatbubbles-outline', 'Chats', '/(tabs)/chats')}
+          {link('star-outline', 'Reviews', '/reviews')}
         </View>
 
         {counts.total > 0 && (
@@ -143,14 +144,6 @@ function Content() {
         )}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-export default function MerchantDashboardScreen() {
-  return (
-    <ProtectedScreen requiredRole="merchant">
-      <Content />
-    </ProtectedScreen>
   );
 }
 

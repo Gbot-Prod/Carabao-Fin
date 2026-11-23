@@ -12,7 +12,6 @@ import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, type ApiMerchantOrder, type MerchantOrderStatus } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
-import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { CancelOrderSheet, type MerchantCancelReason } from '../components/CancelOrderSheet';
 
@@ -144,7 +143,9 @@ async function fetchMerchantOrders(token: string): Promise<OrdersLoad> {
   }
 }
 
-function MerchantOrdersContent() {
+// The Orders tab. The root gate (app/_layout.tsx) already checked the farm, so this
+// screen does not repeat that check.
+export default function MerchantOrdersScreen() {
   const router = useRouter();
   const { token } = useAuth();
   const [orders, setOrders] = useState<ApiMerchantOrder[]>([]);
@@ -297,14 +298,6 @@ function MerchantOrdersContent() {
       {body}
       <CancelOrderSheet orderId={cancelId} onClose={() => setCancelId(null)} onSubmit={cancelOrder} />
     </SafeAreaView>
-  );
-}
-
-export default function MerchantOrdersScreen() {
-  return (
-    <ProtectedScreen requiredRole="merchant">
-      <MerchantOrdersContent />
-    </ProtectedScreen>
   );
 }
 

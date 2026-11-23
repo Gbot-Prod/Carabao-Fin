@@ -42,6 +42,8 @@ npm test          # node --test "src/lib/**/*.test.ts"
 - Bundle identifiers are `online.carabao.merchant` for both iOS and Android. TODO confirm with
   the store listing before the first build - they must differ from the buyer app's.
 - TODO merchant icon and splash artwork: `assets/` currently reuses the buyer app's images.
-- Deep links this app will handle once the merchant screens move here:
-  `carabaomerchant://orders`, `.../chats`, `.../produce`, `.../reviews`, `.../notifications`,
-  `.../order-chat?orderId=<id>`, `.../onboarding`.
+- Deep links: `carabaomerchant://` (the dashboard), plus `.../orders`, `.../chats`,
+  `.../produce`, `.../reviews`, `.../notifications`, `.../order-chat?orderId=<id>` and
+  `.../onboarding`. The buyer app hands a merchant notification over with the path its kind
+  maps to (`../CarabaoMobile/src/lib/merchantHandoff.ts`), and opens the web page
+  (`/merchantDashboard`, `/merchantOnboarding`) when this app is not installed.

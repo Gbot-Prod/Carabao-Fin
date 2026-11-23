@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { inboxChatTitle, preview, sinceLabel, sortInbox, totalUnread, type ChatSummary } from './chatInbox.ts';
-import { chatTitle } from './orderDetail.ts';
+import { chatTitle } from './orderChat.ts';
 
 const row = (id: number, over: Partial<ChatSummary> = {}): ChatSummary => ({
   order_id: id, order_ref: `CB-2026-${String(id).padStart(4, '0')}`, order_status: 'processing', buyer_name: 'Ana',

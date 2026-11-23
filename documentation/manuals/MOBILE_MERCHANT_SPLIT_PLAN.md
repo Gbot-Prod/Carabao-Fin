@@ -30,7 +30,7 @@ Paths are relative to `mobile/CarabaoMobile/`.
 | `app/merchant-orders.tsx` → `src/screens/MerchantOrdersScreen.tsx` | incoming orders, status changes, cancel |
 | `app/merchant-chats.tsx` → `src/screens/MerchantChatsScreen.tsx` | chat inbox; opens `/order-chat` |
 | `app/merchant-reviews.tsx` → `src/screens/MerchantReviewsScreen.tsx` | reviews + reply |
-| `app/listings.tsx` → `src/screens/ListingsScreen.tsx` | merchant's own produce list, create/edit/delete |
+| `app/listings.tsx` → `src/screens/ProduceScreen.tsx` | merchant's own produce list, create/edit/delete (renamed from `ListingsScreen` in the S13 pass) |
 | `app/onboarding.tsx` → `src/screens/OnboardingScreen.tsx` | "become a merchant"; today opens the web form |
 | `src/components/ListingForm.tsx` | |
 | `src/components/CancelOrderSheet.tsx` | farm cancel reasons |
@@ -159,7 +159,7 @@ app/
   (tabs)/index.tsx      MerchantDashboardScreen
   (tabs)/orders.tsx     MerchantOrdersScreen
   (tabs)/chats.tsx      MerchantChatsScreen
-  (tabs)/produce.tsx    ListingsScreen
+  (tabs)/produce.tsx    ProduceScreen
   (tabs)/more.tsx       MoreScreen (new, small)
   reviews.tsx           MerchantReviewsScreen
   order-chat.tsx        OrderChatScreen

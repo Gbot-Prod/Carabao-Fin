@@ -34,9 +34,9 @@ test('unread count follows the change and never goes below zero', () => {
   assert.equal(unreadAfter(5, list, { type: 'readAll' }), 0);
 });
 
-test('merchant notifications open the screen for their kind (M50)', () => {
-  assert.deepEqual(appRoute('/merchantDashboard', 'review_received'), { pathname: '/merchant-reviews' });
-  assert.deepEqual(appRoute('/merchantDashboard', 'new_order'), { pathname: '/merchant-orders' });
-  assert.deepEqual(appRoute('/merchantDashboard'), { pathname: '/merchant-orders' });
+test('merchant notifications hand off to the merchant app (M50 / CF-0125)', () => {
+  assert.deepEqual(appRoute('/merchantDashboard', 'review_received'), { merchant: 'review_received' });
+  assert.deepEqual(appRoute('/merchantDashboard', 'new_order'), { merchant: 'new_order' });
+  assert.deepEqual(appRoute('/merchantDashboard'), { merchant: undefined });
   assert.deepEqual(appRoute('/orders/7', 'review_received'), { pathname: '/order-detail', params: { orderId: '7' } });
 });

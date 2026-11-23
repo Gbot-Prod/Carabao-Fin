@@ -7,12 +7,9 @@ export const LISTING_PRICE_MAX = 1_000_000; // backend MAX_PRICE
 export const LISTING_STOCK_MAX = 10_000_000; // backend MAX_STOCK
 export const LISTING_TIERS_MAX = 5; // backend MAX_PRICE_TIERS (CF-0116)
 
-const PH_OFFSET_MS = 8 * 60 * 60 * 1000;
-
-/** Today's date in the Philippines as YYYY-MM-DD (backend ph_today). */
-export function phToday(now: Date = new Date()): string {
-  return new Date(now.getTime() + PH_OFFSET_MS).toISOString().slice(0, 10);
-}
+// The date helpers live in ./dates.ts, a copy the buyer app has too (its checkout
+// uses them); re-exported so this module keeps its old API.
+export { addDays, phToday } from './dates.ts';
 
 /** A real calendar date written as YYYY-MM-DD, else null ("2026-02-30" is null). */
 export function parseYmd(value: string): string | null {
@@ -24,11 +21,6 @@ export function parseYmd(value: string): string | null {
 }
 
 /** YYYY-MM-DD plus n days (n may be negative). */
-export function addDays(ymd: string, n: number): string {
-  const [y, mo, d] = ymd.split('-').map(Number);
-  return new Date(Date.UTC(y, mo - 1, d + n)).toISOString().slice(0, 10);
-}
-
 /** Backend freshness_error, word for word. YYYY-MM-DD strings compare as dates. */
 export function freshnessError(harvest: string | null, bestBefore: string | null, today: string): string | null {
   if (harvest === null || bestBefore === null) return 'Harvest date and best-before date are required';

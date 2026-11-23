@@ -9,7 +9,6 @@ import { useAuth } from '../lib/AuthContext';
 import * as WebBrowser from 'expo-web-browser';
 import { WEB_BASE } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
-import { ProtectedScreen } from '../components/ProtectedScreen';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -20,7 +19,7 @@ const BENEFITS: { icon: IoniconName; title: string; desc: string }[] = [
   { icon: 'bar-chart-outline', title: 'Sales analytics', desc: 'Track your performance in real-time' },
 ];
 
-function OnboardingScreenContent() {
+export default function OnboardingScreen() {
   const router = useRouter();
   const { token } = useAuth();
   const [step, setStep] = useState<'intro' | 'form'>('intro');
@@ -174,14 +173,6 @@ function OnboardingScreenContent() {
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-export default function OnboardingScreen() {
-  return (
-    <ProtectedScreen>
-      <OnboardingScreenContent />
-    </ProtectedScreen>
   );
 }
 

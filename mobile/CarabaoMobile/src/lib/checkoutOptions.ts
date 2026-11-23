@@ -2,7 +2,7 @@
 // place_order_from_cart (not in the past, at most MAX_DELIVERY_DAYS_AHEAD days
 // ahead, Philippine time); the default is tomorrow, as on the web checkout.
 // Pure, for `npm test`.
-import { addDays } from './listingForm.ts';
+import { addDays } from './dates.ts';
 
 export const MAX_DELIVERY_DAYS_AHEAD = 30; // backend routes/orders.py
 export const DATE_CHOICES = 14;

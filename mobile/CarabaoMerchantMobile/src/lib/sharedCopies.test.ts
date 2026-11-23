@@ -34,6 +34,7 @@ const SHARED = [
   'src/lib/baseUrl.ts',
   'src/lib/baseUrl.test.ts',
   'src/lib/config.ts',
+  'src/lib/dates.ts',
   'src/lib/idle.ts',
   'src/lib/idle.test.ts',
   'src/lib/imageUri.ts',

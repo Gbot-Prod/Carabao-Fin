@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "online.carabao.merchant"
+      "bundleIdentifier": "online.carabao.merchant",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["carabaomobile"]
+      }
     },
     "android": {
       "package": "online.carabao.merchant",

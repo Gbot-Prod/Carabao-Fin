@@ -90,15 +90,3 @@ test('CF-0131 voucher code rules = web lib/vouchers.ts, texts = web en.ts, max =
   assert.ok(en.includes("voucherApplied: '{code} applied: PHP {amount} off {farm}',"));
   assert.ok(en.includes("voucherDiscount: 'Voucher ({code})',"));
 });
-
-test('CF-0133 review reply max length = backend REPLY_MAX_LENGTH = web lib/review-reply.ts', async () => {
-  const { REPLY_MAX_LENGTH } = await import('./reviews.ts');
-  const py = read('backend/app/schemas/review.py');
-  assert.equal(Number(/^REPLY_MAX_LENGTH = (\d+)$/m.exec(py)?.[1]), REPLY_MAX_LENGTH);
-  assert.match(py, /reply: str = Field\(min_length=1, max_length=REPLY_MAX_LENGTH\)/);
-  const web = read('frontend/carabao-app/lib/review-reply.ts');
-  assert.equal(Number(/REPLY_MAX_LENGTH = (\d+);/.exec(web)?.[1]), REPLY_MAX_LENGTH);
-  assert.match(web, /'Write a reply first\.'/);
-  // Web "Reply from {farm}" (en.ts shop.farmReply) is the farm-screen label.
-  assert.match(read('frontend/carabao-app/lib/i18n/strings/en.ts'), /farmReply: 'Reply from \{farm\}'/);
-});

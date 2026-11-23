@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { appRoute } from '../lib/notificationLinks';
+import { openMerchant } from '../lib/openMerchant';
 import { applyNoteAction, NOTES_PAGE, notesQuery, unreadAfter, type NoteAction } from '../lib/notificationList';
 import { useAuth } from '../lib/AuthContext';
 import { api, type ApiNotification } from '../lib/api';
@@ -72,7 +73,15 @@ function NotificationsContent() {
   const open = (n: ApiNotification) => {
     if (!n.read) act({ type: 'read', id: n.id }, () => api.notifications.markRead(token, n.id));
     const route = appRoute(n.link, n.kind);
-    if (route) router.push(route as Href);
+    if (!route) return;
+    // CF-0125: merchant notifications belong to the merchant app now.
+    if ('merchant' in route) {
+      void openMerchant('dashboard', route.merchant).catch(() =>
+        Alert.alert('Could not open Carabao Merchant', 'Please try again.'),
+      );
+      return;
+    }
+    router.push(route as Href);
   };
 
   const rowMenu = (n: ApiNotification) =>

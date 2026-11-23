@@ -11,10 +11,11 @@ import { inboxChatTitle, preview, sinceLabel, sortInbox, type ChatSummary } from
 import { orderStatusLabel } from '../lib/orderStatus';
 import { usePolling } from '../lib/usePolling';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
-import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 
-function Content() {
+// The Chats tab. The root gate (app/_layout.tsx) already checked the farm, so this
+// screen does not repeat that check.
+export default function MerchantChatsScreen() {
   const router = useRouter();
   const { token } = useAuth();
   const [rows, setRows] = useState<ChatSummary[] | null>(null);
@@ -98,14 +99,6 @@ function Content() {
         )}
       />
     </SafeAreaView>
-  );
-}
-
-export default function MerchantChatsScreen() {
-  return (
-    <ProtectedScreen requiredRole="merchant">
-      <Content />
-    </ProtectedScreen>
   );
 }
 

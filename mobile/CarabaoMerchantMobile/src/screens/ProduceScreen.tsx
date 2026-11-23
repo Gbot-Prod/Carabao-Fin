@@ -1,5 +1,5 @@
-// src/screens/ListingsScreen.tsx
-// Merchant's own produce listings. Uses the same endpoints as the web
+// src/screens/ProduceScreen.tsx
+// Merchant's own produce (the Produce tab). Uses the same endpoints as the web
 // merchant dashboard: /users/me to find the merchant, then /merchants/me/produce
 // (which, unlike the public list, includes expired and admin-hidden listings).
 import React, { useCallback, useEffect, useState } from 'react';
@@ -13,7 +13,6 @@ import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, type ApiProduce, type ApiStockAlerts, type ProduceCreatePayload } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
-import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { ListingForm } from '../components/ListingForm';
 
@@ -79,7 +78,7 @@ async function fetchListings(token: string): Promise<ListingsLoad> {
   }
 }
 
-function ListingsScreenContent() {
+export default function ProduceScreen() {
   const router = useRouter();
   const { token } = useAuth();
   const [items, setItems] = useState<ApiProduce[]>([]);
@@ -259,14 +258,6 @@ function ListingsScreenContent() {
         onDelete={editing && editing !== 'new' ? () => confirmDelete(editing) : undefined}
       />
     </SafeAreaView>
-  );
-}
-
-export default function ListingsScreen() {
-  return (
-    <ProtectedScreen requiredRole="merchant">
-      <ListingsScreenContent />
-    </ProtectedScreen>
   );
 }
 

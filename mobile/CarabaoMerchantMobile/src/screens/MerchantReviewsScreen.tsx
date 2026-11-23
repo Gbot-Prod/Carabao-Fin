@@ -15,9 +15,8 @@ import {
   breakdownRows, mergeReviews, MY_REVIEWS_PAGE, myReviewsQuery, replaceReview, REPLY_MAX_LENGTH, replyProblem,
   reviewSummary, shownReply, stars, toggleRating, wasEdited,
   type MyMerchantReviews, type MyReview, type MyReviewsFilter,
-} from '../lib/reviews';
+} from '../lib/myReviews';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
-import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 
 function formatDate(iso: string): string {
@@ -27,7 +26,9 @@ function formatDate(iso: string): string {
 
 type Status = 'loading' | 'ready' | 'error' | 'notMerchant';
 
-function Content() {
+// The Reviews screen (opened from the dashboard and the More tab). The root gate
+// (app/_layout.tsx) already checked the farm, so this screen does not repeat that check.
+export default function MerchantReviewsScreen() {
   const router = useRouter();
   const { token } = useAuth();
   const [filter, setFilter] = useState<MyReviewsFilter>({ ratings: [], hasComment: null });
@@ -285,14 +286,6 @@ function Content() {
       />
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-export default function MerchantReviewsScreen() {
-  return (
-    <ProtectedScreen requiredRole="merchant">
-      <Content />
-    </ProtectedScreen>
   );
 }
 

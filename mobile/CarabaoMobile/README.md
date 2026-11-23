@@ -25,6 +25,26 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Merchant hand-off
+
+The merchant screens live in the Carabao Merchant app (`../CarabaoMerchantMobile`), so the
+buyer app opens them there - from the Profile banner and from merchant notifications
+(`src/lib/openMerchant.ts`):
+
+- the app first, via `carabaomerchant://<path>`; `src/lib/merchantHandoff.ts` builds the
+  path: `/` for the dashboard, `/orders`, `/chats` or `/reviews` for a notification's kind,
+  `/onboarding` for the farm form (the same mapping the merchant app uses for its links);
+- the website when the app is not installed: `${EXPO_PUBLIC_WEB_URL}/merchantDashboard` or
+  `/merchantOnboarding`, both of which redirect to the `merchant.` host
+  (`documentation/manuals/SUBDOMAINS.md` 1.1).
+
+iOS needs `ios.infoPlist.LSApplicationQueriesSchemes: ["carabaomerchant"]` in `app.json`
+before `Linking.canOpenURL` can see the app; it is there. Android 11+ cannot be told about
+the scheme from `app.json` (Expo's config has no `android.queries`), so `canOpenURL` may
+answer false on a phone that does have the app - the hand-off then opens the web page
+instead, the same fallback as an uninstalled app. Add the `<queries>` entry to the Android
+manifest (a config plugin or `expo prebuild`) if a native build needs the app to win.
+
 ## Get a fresh project
 
 When you're ready, run:

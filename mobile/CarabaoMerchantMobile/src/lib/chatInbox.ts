@@ -44,7 +44,7 @@ export function sinceLabel(iso: string, now: number = Date.now()): string {
   return new Date(t).toISOString().slice(0, 10);
 }
 
-/** The chat header the order chat screen accepts (orderDetail.chatTitle: "Chat with …"). */
+/** The chat header the order chat screen accepts (orderChat.chatTitle: "Chat with …"). */
 export function inboxChatTitle(row: Pick<ChatSummary, 'buyer_name' | 'order_ref'>): string {
   const who = (row.buyer_name ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
   return `Chat with ${who || `buyer of ${row.order_ref}`}`;

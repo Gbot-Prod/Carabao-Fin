@@ -3,31 +3,37 @@
 import { parseOrderId } from './orderDetail.ts';
 
 export type AppRoute =
-  | { pathname: '/(tabs)/track' | '/(tabs)/history' | '/merchant-orders' | '/merchant-reviews' | '/merchant-chats' }
+  | { pathname: '/(tabs)/track' | '/(tabs)/history' }
   | { pathname: '/order-detail'; params: { orderId: string } }
-  | { pathname: '/order-chat'; params: { orderId: string } };
+  | { pathname: '/order-chat'; params: { orderId: string } }
+  // CF-0125 / CF-0127: merchant work is Carabao Merchant's, so the buyer app hands these
+  // over (src/lib/openMerchant.ts) instead of opening a screen of its own.
+  | { merchant: string | undefined };
 
-/** The order a chat notification is about: "/chats?order=12", "/merchantDashboard?order=12", or (older) "/orders/12". */
+/** The order a chat notification is about: "/chats?order=12" or (older) "/orders/12". */
 function chatOrderId(link: string): number | null {
   const [path, rest = ''] = link.split('?');
   const query = rest.split('#')[0];
   const fromQuery = /(?:^|&)order=([^&]*)/.exec(query)?.[1];
-  if (fromQuery !== undefined && (path === '/chats' || path.startsWith('/merchantDashboard'))) return parseOrderId(fromQuery);
+  if (fromQuery !== undefined && path === '/chats') return parseOrderId(fromQuery);
   const m = /^\/orders\/([^/]+)\/?$/.exec(path);
   return m ? parseOrderId(m[1]) : null;
 }
 
 // CF-0121 (M50): every merchant notification links to /merchantDashboard; the kind
-// says which merchant screen matches (backend services/notifications.py kinds).
+// says which merchant screen matches (backend services/notifications.py kinds). The
+// merchant app reads the same kind (src/lib/notificationLinks.ts there).
 export function appRoute(link: string | null, kind?: string): AppRoute | null {
   if (!link) return null;
   const path = link.split(/[?#]/)[0];
-  // A chat message opens its chat. Farm questions (no order) have no app
-  // screen for buyers; farms see them in their chat list.
+  // Merchant links: the whole dashboard, and the chat message for one of its orders
+  // ("/merchantDashboard?order=12"), belong to the merchant app - buyers never see them.
+  if (path.startsWith('/merchantDashboard')) return { merchant: kind };
+  // A chat message opens its chat. Farm questions (no order) have no app screen for
+  // buyers; farms see them in their chat list, in the merchant app.
   if (kind === 'chat_message') {
     const orderId = chatOrderId(link);
     if (orderId !== null) return { pathname: '/order-chat', params: { orderId: String(orderId) } };
-    if (path.startsWith('/merchantDashboard')) return { pathname: '/merchant-chats' };
   }
   if (path.startsWith('/track')) return { pathname: '/(tabs)/track' };
   // "/orders/42" opens that order; the id is checked before it is used.
@@ -37,8 +43,5 @@ export function appRoute(link: string | null, kind?: string): AppRoute | null {
     return id === null ? { pathname: '/(tabs)/history' } : { pathname: '/order-detail', params: { orderId: String(id) } };
   }
   if (path === '/orders' || path.startsWith('/orders/')) return { pathname: '/(tabs)/history' };
-  if (path.startsWith('/merchantDashboard')) {
-    return kind === 'review_received' ? { pathname: '/merchant-reviews' } : { pathname: '/merchant-orders' };
-  }
   return null;
 }

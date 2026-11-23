@@ -17,6 +17,7 @@ import { formatPhMobile } from '../lib/phone';
 import * as WebBrowser from 'expo-web-browser';
 import { WEB_BASE } from '../lib/config';
 import { webPageUrl, type WebPage } from '../lib/webPages';
+import { openMerchant } from '../lib/openMerchant';
 import {
   NOTIFICATION_PREF_ITEMS, readNotificationPrefs, togglePrefs, type NotificationPrefKey,
 } from '../lib/notificationPrefs';
@@ -129,8 +130,12 @@ function ProfileScreenContent() {
 
   const isMerchant = !!profile?.merchant;
 
+  // CF-0125: merchant work belongs to the Carabao Merchant app, so this hands over to it
+  // (the website when it is not installed) instead of opening a screen of our own.
   const handleMerchant = () => {
-    router.push(isMerchant ? '/listings' : '/onboarding');
+    void openMerchant(isMerchant ? 'dashboard' : 'onboarding').catch(() => {
+      Alert.alert('Could not open Carabao Merchant', 'Please try again later.');
+    });
   };
 
   return (
@@ -159,10 +164,10 @@ function ProfileScreenContent() {
             <Ionicons name={isMerchant ? 'storefront' : 'leaf'} size={28} color={Colors.white} />
             <View>
               <Text style={styles.merchantBannerTitle}>
-                {isMerchant ? profile!.merchant!.merchant_name : 'Become a Merchant'}
+                {isMerchant ? profile!.merchant!.merchant_name : 'Sell on Carabao'}
               </Text>
               <Text style={styles.merchantBannerSub}>
-                {isMerchant ? 'View your listings' : 'Sell your produce on Carabao'}
+                {isMerchant ? 'Manage your farm in Carabao Merchant' : 'Set up your farm in the Carabao Merchant app'}
               </Text>
             </View>
           </View>
@@ -170,19 +175,6 @@ function ProfileScreenContent() {
         </TouchableOpacity>
 
         <View style={styles.sections}>
-          {isMerchant ? (
-            <>
-              <SectionHeader title="My shop" />
-              <View style={styles.settingsGroup}>
-                <SettingItem icon="grid-outline" label="Dashboard" onPress={() => router.push('/merchant-dashboard')} />
-                <SettingItem icon="receipt-outline" label="Incoming orders" onPress={() => router.push('/merchant-orders')} />
-                <SettingItem icon="leaf-outline" label="My listings" onPress={() => router.push('/listings')} />
-                <SettingItem icon="chatbubbles-outline" label="Chats" onPress={() => router.push('/merchant-chats')} />
-                <SettingItem icon="star-outline" label="Reviews" onPress={() => router.push('/merchant-reviews')} />
-              </View>
-            </>
-          ) : null}
-
           {/* Account */}
           <SectionHeader title="Account" />
           <View style={styles.settingsGroup}>

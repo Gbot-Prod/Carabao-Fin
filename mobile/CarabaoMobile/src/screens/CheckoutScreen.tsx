@@ -11,7 +11,7 @@ import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, defaultAddress, type ApiUserAddress } from '../lib/api';
 import { defaultDeliveryDate, deliveryDateChoices, deliveryDateError, placeOrderFailure } from '../lib/checkoutOptions';
-import { phToday } from '../lib/listingForm';
+import { phToday } from '../lib/dates';
 import { DELIVERY_ADDRESS_MAX, ORDER_NOTES_MAX } from '../lib/inputLimits';
 import { addressLine, addressSummary, deliveryFields } from '../lib/addresses';
 import { cartTotals, groupCartByFarm, type PendingOrder } from '../lib/cartGroups';

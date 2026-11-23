@@ -8,7 +8,10 @@
     "scheme": "carabaomobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["carabaomerchant"]
+      }
     },
     "android": {
       "adaptiveIcon": {
