@@ -51,10 +51,14 @@ test('readyToShipCount: processing, not shipped and not on a route yet', () => {
   assert.equal(readyToShipCount([]), 0);
 });
 
-test('unreadChatCount counts chats, not messages', () => {
+test('unreadChatCount counts chats and questions, not messages', () => {
   const chats = [{ unread: 0 }, { unread: 3 }, { unread: 1 }];
+  const inquiries = [{ unread: 0 }, { unread: 2 }];
   assert.equal(unreadChatCount(chats), 2);
-  assert.equal(unreadChatCount([]), 0);
+  // S5: the Chats badge is the web's count — order chats + questions with an unread row.
+  assert.equal(unreadChatCount(chats, inquiries), 3);
+  assert.equal(unreadChatCount([], inquiries), 1);
+  assert.equal(unreadChatCount([], []), 0);
 });
 
 test('productCount is the number of listings', () => {

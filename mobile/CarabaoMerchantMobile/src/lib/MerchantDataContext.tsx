@@ -13,7 +13,7 @@ import React, {
 } from 'react';
 import { api, ApiError, type ApiMerchantOrder, type ApiProduce, type ApiShopPage } from './api';
 import { useAuth } from './AuthContext';
-import type { ChatSummary } from './chatInbox';
+import type { ChatSummary, InquirySummary } from './chatInbox';
 import type { MerchantPerformance } from './dashboard';
 import { usePolling } from './usePolling';
 
@@ -32,12 +32,16 @@ export interface MerchantDataValue {
   shopPage: ApiShopPage | null;
   /** Every order the farm has (GET /merchants/me/orders). */
   orders: ApiMerchantOrder[] | null;
-  /** The order chats; the Chats tab and the unread badge (S5 adds inquiries). */
+  /** The order chats; the Chats tab's Orders segment and the unread badge. */
   chats: ChatSummary[] | null;
+  /** The buyers' pre-order questions; the Chats tab's Questions segment (S5). */
+  inquiries: InquirySummary[] | null;
   /** True while the first load runs. */
   loading: boolean;
   /** Why the last load or refresh failed; null once one succeeds. */
   error: string | null;
+  /** Why the chat poll failed; null once one succeeds (the Chats screen shows it, S5). */
+  chatsError: string | null;
 
   refreshPerformance: () => Promise<void>;
   refreshProduce: () => Promise<void>;
@@ -61,6 +65,8 @@ export function MerchantDataProvider({ children }: { children: ReactNode }) {
   const [shopPage, setShopPage] = useState<ApiShopPage | null>(null);
   const [orders, setOrders] = useState<ApiMerchantOrder[] | null>(null);
   const [chats, setChats] = useState<ChatSummary[] | null>(null);
+  const [inquiries, setInquiries] = useState<InquirySummary[] | null>(null);
+  const [chatsError, setChatsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,14 +141,24 @@ export function MerchantDataProvider({ children }: { children: ReactNode }) {
   const refreshShopPage = useCallback(() => run(loadShopPage), [run, loadShopPage]);
   const refreshOrders = useCallback(() => run(loadOrders), [run, loadOrders]);
 
-  // The chat badge keeps its last count when a poll fails; the Chats screen shows its
-  // own load error (S5), so an outage is never drawn as "no chats".
+  // Chats and questions move together, as on the web (useMerchantChats loads both): the
+  // Chats screen and the tab badge read them from here. A failing list keeps the other and
+  // keeps the last count; the Chats screen shows the error while it has nothing to draw
+  // (S5), so an outage is never drawn as "no chats".
   const refreshChats = useCallback(async () => {
-    try {
-      setChats(await api.merchants.chats(tokenRef.current));
-    } catch {
-      // Keep the last count.
-    }
+    const [chatList, questionList] = await Promise.allSettled([
+      api.merchants.chats(tokenRef.current),
+      api.merchants.inquiries(tokenRef.current),
+    ]);
+    if (chatList.status === 'fulfilled') setChats(chatList.value);
+    if (questionList.status === 'fulfilled') setInquiries(questionList.value);
+    setChatsError(
+      chatList.status === 'rejected'
+        ? messageOf(chatList.reason)
+        : questionList.status === 'rejected'
+          ? messageOf(questionList.reason)
+          : null,
+    );
   }, []);
 
   // The first tick runs at mount, while loadAll is already fetching the orders.
@@ -156,11 +172,11 @@ export function MerchantDataProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<MerchantDataValue>(
     () => ({
-      performance, produce, shopPage, orders, chats, loading, error,
+      performance, produce, shopPage, orders, chats, inquiries, loading, error, chatsError,
       refreshPerformance, refreshProduce, refreshShopPage, refreshOrders, refreshChats,
     }),
     [
-      performance, produce, shopPage, orders, chats, loading, error,
+      performance, produce, shopPage, orders, chats, inquiries, loading, error, chatsError,
       refreshPerformance, refreshProduce, refreshShopPage, refreshOrders, refreshChats,
     ],
   );

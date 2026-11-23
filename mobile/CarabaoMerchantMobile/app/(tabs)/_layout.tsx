@@ -6,6 +6,7 @@
 //
 // S3: the badges are the web MerchantShell.tsx counts (src/lib/badges.ts): Orders =
 // active orders, Chats = chats with unread messages (alert colour), Produce = listings.
+// S5: the Chats count is order chats plus questions (the web's Chats page total).
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,9 +44,9 @@ function badge(count: number): number | undefined {
 
 export default function TabsLayout() {
   // null until the shared load finishes (MerchantDataContext.tsx): no badge, no 0.
-  const { orders, chats, produce } = useMerchantData();
+  const { orders, chats, inquiries, produce } = useMerchantData();
   const activeOrders = orders ? activeOrderCount(orders) : 0;
-  const unreadChats = chats ? unreadChatCount(chats) : 0;
+  const unreadChats = unreadChatCount(chats ?? [], inquiries ?? []);
   const products = produce ? productCount(produce) : 0;
 
   return (

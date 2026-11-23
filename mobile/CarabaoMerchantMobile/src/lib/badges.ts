@@ -4,7 +4,7 @@
 // its MerchantContext.tsx and hooks/useMerchantOrders.ts, and inStep.test.ts keeps this
 // file in step with them. Pure (type-only imports), for `npm test`.
 import type { ApiMerchantOrder, MerchantOrderStatus } from './api.ts';
-import type { ChatSummary } from './chatInbox.ts';
+import type { ChatSummary, InquirySummary } from './chatInbox.ts';
 
 // Same statuses as ACTIVE_STATUSES in M/MerchantContext.tsx and ACTIVE_ORDER_STATUSES
 // in backend/app/services/order_status.py.
@@ -31,13 +31,16 @@ export function readyToShipCount(
 }
 
 /**
- * Chats tab: chats with at least one unread message (web MerchantShell "Chats" count).
- * The web counts chats, not messages; `totalUnread` (chatInbox.ts) sums the messages and
- * is what a chat row shows. The web's count also adds unread inquiries (useMerchantChats
- * unreadCount); S5 adds those to this app, and `chats` here is the order chats only.
+ * Chats tab: rows with at least one unread message (web MerchantShell "Chats" count).
+ * The web adds the order chats and the pre-order inquiries (useMerchantChats unreadCount),
+ * and counts rows, not messages; `totalUnread` (chatInbox.ts) sums the messages and is
+ * what a chat row shows. S5.
  */
-export function unreadChatCount(chats: readonly Pick<ChatSummary, 'unread'>[]): number {
-  return chats.filter((c) => c.unread > 0).length;
+export function unreadChatCount(
+  chats: readonly Pick<ChatSummary, 'unread'>[],
+  inquiries: readonly Pick<InquirySummary, 'unread'>[] = [],
+): number {
+  return chats.filter((c) => c.unread > 0).length + inquiries.filter((c) => c.unread > 0).length;
 }
 
 /** Produce tab: the farm's listings, expired and hidden ones included (myProduce). */

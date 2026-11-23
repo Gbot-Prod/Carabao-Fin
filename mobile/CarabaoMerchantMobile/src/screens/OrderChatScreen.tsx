@@ -2,9 +2,10 @@
 // src/screens/OrderChatScreen.tsx
 // Order chat on mobile (CH1c): the same thread as the web and the buyer app. The Orders
 // and Chats tabs open it; it polls every 10 seconds while this screen is open. With
-// `support=1` it shows the account's support chat with the admins instead (CH2).
+// `support=1` it shows the account's support chat with the admins instead (CH2); with
+// `inquiry=<conversation_id>` it shows the farm's side of a buyer's pre-order question (S5).
 // The root gate (app/_layout.tsx) already checked the farm.
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -12,7 +13,8 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { api, type ApiChatMessage } from '../lib/api';
-import { chatTitle, parseOrderId } from '../lib/orderChat';
+import { chatTarget, chatTitle } from '../lib/orderChat';
+import { useMerchantData } from '../lib/MerchantDataContext';
 import { usePolling } from '../lib/usePolling';
 import { shouldPollChat } from '../lib/livePolling';
 import { CHAT_BODY_MAX } from '../lib/inputLimits';
@@ -25,15 +27,19 @@ const ROLE_LABEL: Record<string, string> = { buyer: 'Buyer', merchant: 'Farm', a
 export default function OrderChatScreen() {
   const router = useRouter();
   const { token } = useAuth();
-  const { orderId, title, support } = useLocalSearchParams<{
+  const { orderId, inquiry, title, support } = useLocalSearchParams<{
     orderId?: string;
+    inquiry?: string;
     title?: string;
     support?: string;
   }>();
-  const isSupport = support === '1';
-  // CF-0114: route values can come from a deep link: checked before use.
-  const id = parseOrderId(orderId);
-  const headerTitle = chatTitle(title, isSupport, id);
+  // CF-0114: route values can come from a deep link: chatTarget checks the ids before use.
+  // S5: one target names the thread and its endpoint (orderChat.chatEndpoint), so the order,
+  // support and inquiry branches cannot drift.
+  const target = useMemo(() => chatTarget(orderId, inquiry, support === '1'), [orderId, inquiry, support]);
+  const headerTitle = chatTitle(title, target);
+  // Reading a thread marks it read on the server; this drops the Chats badge with it (S5).
+  const { refreshChats } = useMerchantData();
   const [messages, setMessages] = useState<ApiChatMessage[]>([]);
   const [closed, setClosed] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -47,14 +53,20 @@ export default function OrderChatScreen() {
   const listRef = useRef<FlatList<ApiChatMessage>>(null);
 
   const poll = useCallback(async () => {
-    if (!token || (!isSupport && id === null)) return;
+    if (!token || !target) return;
     try {
-      const thread = isSupport
-        ? await api.support.thread(token, lastId.current)
-        : await api.chat.thread(token, id as number, lastId.current);
+      const thread =
+        target.kind === 'support'
+          ? await api.support.thread(token, lastId.current)
+          : target.kind === 'inquiry'
+            ? await api.inquiry.thread(token, target.conversationId, lastId.current)
+            : await api.chat.thread(token, target.orderId, lastId.current);
       if (thread.messages.length) {
         lastId.current = thread.messages[thread.messages.length - 1].id;
         setMessages((prev) => [...prev, ...thread.messages.filter((m) => !prev.some((p) => p.id === m.id))]);
+        // The server has just marked these read for the farm: refresh the inbox so the
+        // Chats badge and row drop them now (web markRead / markInquiryRead).
+        void refreshChats();
       }
       setClosed(thread.closed);
       setError(null);
@@ -63,25 +75,30 @@ export default function OrderChatScreen() {
     } finally {
       setLoaded(true);
     }
-  }, [token, id, isSupport]);
+  }, [token, target, refreshChats]);
 
   // CF-0117: only while this chat is in view and the app is in the foreground.
   // CF-0134: and not after the server says the thread is closed.
-  usePolling(poll, POLL_MS, shouldPollChat(isSupport || id !== null, closed));
+  usePolling(poll, POLL_MS, shouldPollChat(target !== null, closed));
 
   const send = async () => {
     const body = draft.trim();
-    if (!body || !token || (!isSupport && id === null)) return;
+    if (!body || !token || !target) return;
     setSending(true);
     setVerified(false);
     try {
-      const message = isSupport
-        ? await api.support.send(token, body)
-        : await api.chat.send(token, id as number, body);
+      const message =
+        target.kind === 'support'
+          ? await api.support.send(token, body)
+          : target.kind === 'inquiry'
+            ? await api.inquiry.send(token, target.conversationId, body)
+            : await api.chat.send(token, target.orderId, body);
       lastId.current = Math.max(lastId.current, message.id);
       setMessages((prev) => [...prev, message]);
       setDraft('');
       setError(null);
+      // The answer moves the inbox row's preview too (S5).
+      void refreshChats();
     } catch (err) {
       // A merchant needs a verified mobile number to answer the buyer.
       if (isPhoneVerificationRequired(err)) setNeedsPhone(true);
@@ -90,6 +107,14 @@ export default function OrderChatScreen() {
       setSending(false);
     }
   };
+
+  // An inquiry has no delivery to close it: the farm's shop does that (web `closedText`).
+  const emptyText = target?.kind === 'inquiry'
+    ? 'No messages yet. Answer the buyer’s question.'
+    : 'No messages yet. Reply to the buyer or ask about the delivery.';
+  const closedText = target?.kind === 'inquiry'
+    ? 'Your shop is not taking messages right now, so this chat is read-only.'
+    : 'This chat closed 7 days after delivery.';
 
   return (
     <SafeAreaView style={styles.root}>
@@ -100,7 +125,7 @@ export default function OrderChatScreen() {
         <Text style={styles.navTitle} numberOfLines={1}>{headerTitle}</Text>
         <View style={{ width: 22 }} />
       </View>
-      {!isSupport && id === null ? (
+      {target === null ? (
         <Text style={{ margin: 40, textAlign: 'center', color: Colors.textMuted }}>
           Chat not found. The link may be wrong.
         </Text>
@@ -125,14 +150,14 @@ export default function OrderChatScreen() {
               </View>
             )}
             ListEmptyComponent={
-              <Text style={styles.note}>No messages yet. Reply to the buyer or ask about the delivery.</Text>
+              <Text style={styles.note}>{emptyText}</Text>
             }
           />
         )}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {verified && !error ? <Text style={styles.notice}>Number verified. Press Send to send your message.</Text> : null}
         {closed ? (
-          <Text style={styles.closed}>This chat closed 7 days after delivery.</Text>
+          <Text style={styles.closed}>{closedText}</Text>
         ) : (
           <View style={styles.composer}>
             <TextInput

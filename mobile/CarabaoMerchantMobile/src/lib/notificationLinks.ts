@@ -7,16 +7,23 @@ import { parseOrderId } from './orderChat.ts';
 // The merchant app has no `/track` and no order-detail screen (plan §4.2): a farm reads an
 // order in the Orders tab and chats in `/order-chat`.
 export type AppRoute =
-  | { pathname: '/(tabs)' | '/(tabs)/orders' | '/(tabs)/chats' | '/reviews' | '/earnings' }
-  | { pathname: '/order-chat'; params: { orderId: string } };
+  | { pathname: '/(tabs)' | '/(tabs)/chats' | '/reviews' | '/earnings' }
+  // S4 (plan §5.2): the Orders tab opens this order's detail sheet.
+  | { pathname: '/(tabs)/orders'; params?: { order: string } }
+  | { pathname: '/order-chat'; params: { orderId: string } }
+  // S5: a buyer's question about the farm, which has no order (conversation id).
+  | { pathname: '/order-chat'; params: { inquiry: string } };
 
-/** The order a chat notification is about: "/merchantDashboard?order=12", else null. */
-function chatOrderId(link: string): number | null {
+/**
+ * The id in a merchant link's query: "/merchantDashboard?order=12" → 12, else null. The
+ * backend writes both `?order=` (an order chat) and `?inquiry=` (a farm question, S5).
+ */
+function linkId(link: string, key: 'order' | 'inquiry'): number | null {
   const [path, rest = ''] = link.split('?');
   // The same test as isMerchantNotification, so every merchant link is read the same way.
   if (!path.startsWith('/merchantDashboard')) return null;
   const query = rest.split('#')[0];
-  const fromQuery = /(?:^|&)order=([^&]*)/.exec(query)?.[1];
+  const fromQuery = new RegExp(`(?:^|&)${key}=([^&]*)`).exec(query)?.[1];
   return fromQuery === undefined ? null : parseOrderId(fromQuery);
 }
 
@@ -36,15 +43,24 @@ export function isMerchantNotification(link: string | null): boolean {
 export function appRoute(link: string | null, kind?: string): AppRoute | null {
   // A buyer link is the buyer app's: this app opens nothing for it.
   if (!link || !isMerchantNotification(link)) return null;
-  // A chat message opens its chat. A farm question (no order) has no chat to open, so the
-  // chat list shows; the id is checked before it is used.
+  // A chat message opens its chat. S5: a farm question (no order) opens its own chat, as
+  // the web's `/merchant/chats?inquiry=` does; an id is checked before it is used. Without
+  // either id the chat list shows.
   if (kind === 'chat_message') {
-    const orderId = chatOrderId(link);
-    return orderId === null
+    const orderId = linkId(link, 'order');
+    if (orderId !== null) return { pathname: '/order-chat', params: { orderId: String(orderId) } };
+    const conversationId = linkId(link, 'inquiry');
+    return conversationId === null
       ? { pathname: '/(tabs)/chats' }
-      : { pathname: '/order-chat', params: { orderId: String(orderId) } };
+      : { pathname: '/order-chat', params: { inquiry: String(conversationId) } };
   }
-  if (kind === 'new_order') return { pathname: '/(tabs)/orders' };
+  // S4 (plan §5.2): a new order with an id opens that order's sheet, not just the tab.
+  if (kind === 'new_order') {
+    const orderId = linkId(link, 'order');
+    return orderId === null
+      ? { pathname: '/(tabs)/orders' }
+      : { pathname: '/(tabs)/orders', params: { order: String(orderId) } };
+  }
   if (kind === 'review_received') return { pathname: '/reviews' };
   // S3 (plan §4): the web bell opens /earnings for both payout kinds, so this app does too.
   if (kind === 'payout_released' || kind === 'payout_destination_changed') {

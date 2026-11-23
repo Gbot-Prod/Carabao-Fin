@@ -5,9 +5,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { appRoute, isMerchantNotification } from './notificationLinks.ts';
 
-test('a new order opens the Orders tab', () => {
+test('a new order opens the Orders tab, or that order’s sheet when it has an id', () => {
   assert.deepEqual(appRoute('/merchantDashboard', 'new_order'), { pathname: '/(tabs)/orders' });
   assert.deepEqual(appRoute('/merchantDashboard?tab=orders', 'new_order'), { pathname: '/(tabs)/orders' });
+  const order = { pathname: '/(tabs)/orders', params: { order: '12' } };
+  assert.deepEqual(appRoute('/merchantDashboard?order=12', 'new_order'), order);
+  // A bad id opens the tab, never an order: the same check as the chat link.
+  for (const link of ['/merchantDashboard?order=abc', '/merchantDashboard?order=0', '/merchantDashboard?order=1%20']) {
+    assert.deepEqual(appRoute(link, 'new_order'), { pathname: '/(tabs)/orders' }, link);
+  }
 });
 
 test('a review opens the farm’s reviews', () => {
@@ -21,9 +27,22 @@ test('a chat message opens that order chat, else the chat list', () => {
   assert.deepEqual(appRoute('/merchantDashboard?tab=chats&order=12', 'chat_message'), chat);
   // A sub-path of the dashboard is still a merchant link, read the same way.
   assert.deepEqual(appRoute('/merchantDashboard/chats?order=12', 'chat_message'), chat);
-  // A farm question has no order to open.
-  assert.deepEqual(appRoute('/merchantDashboard?inquiry=3', 'chat_message'), { pathname: '/(tabs)/chats' });
   assert.deepEqual(appRoute('/merchantDashboard', 'chat_message'), { pathname: '/(tabs)/chats' });
+});
+
+test('a question opens its own chat (S5), else the chat list', () => {
+  // The backend writes /merchantDashboard?inquiry=<conversation_id> for a farm question.
+  const question = { pathname: '/order-chat', params: { inquiry: '3' } };
+  assert.deepEqual(appRoute('/merchantDashboard?inquiry=3', 'chat_message'), question);
+  assert.deepEqual(appRoute('/merchantDashboard?tab=chats&inquiry=3', 'chat_message'), question);
+  // An order id still wins: a link names one thread.
+  assert.deepEqual(
+    appRoute('/merchantDashboard?order=12&inquiry=3', 'chat_message'),
+    { pathname: '/order-chat', params: { orderId: '12' } },
+  );
+  for (const link of ['/merchantDashboard?inquiry=abc', '/merchantDashboard?inquiry=0', '/merchantDashboard?inquiry=']) {
+    assert.deepEqual(appRoute(link, 'chat_message'), { pathname: '/(tabs)/chats' }, link);
+  }
 });
 
 test('a bad order id opens the chat list, never a chat', () => {

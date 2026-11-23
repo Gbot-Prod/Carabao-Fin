@@ -11,8 +11,18 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { ORDER_STATUSES, ORDER_STATUS_LABELS } from './orderStatus.ts';
+import {
+  canCancel,
+  MERCHANT_CANCEL_NOTE_MAX,
+  MERCHANT_CANCEL_REASONS,
+  nextStatuses,
+  ORDER_FILTERS,
+  orderCounts,
+  orderFilter,
+} from './orderActions.ts';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, PASSWORD_RULE_MESSAGE } from './passwordPolicy.ts';
 import { PH_MOBILE_PATTERN } from './phone.ts';
+import { LISTING_NAME_MAX } from './listingForm.ts';
 import {
   BODY_LIMIT_BYTES,
   DOCUMENT_MAX_BYTES,
@@ -76,6 +86,27 @@ test('image types = web ProduceTab photo input', () => {
   assert.ok(web.includes(`accept="${IMAGE_TYPES.join(',')}"`), 'accept list differs');
 });
 
+test('S6 produce name limit and photo part = web input-limits.ts and util/api/produce.ts', () => {
+  // The web name box stops at PRODUCE_NAME_MAX (ProduceFormFields.tsx); the phone's
+  // checkListing stops at the same count, so neither client sends a name the server
+  // refuses (the backend MAX_NAME side is checked in listingForm.test.ts).
+  const limits = read('frontend/carabao-app/lib/input-limits.ts');
+  assert.equal(Number(/export const PRODUCE_NAME_MAX = (\d+);/.exec(limits)?.[1]), LISTING_NAME_MAX);
+  assert.match(
+    read('frontend/carabao-app/app/(site)/(merchant)/merchant/components/ProduceFormFields.tsx'),
+    /maxLength=\{PRODUCE_NAME_MAX\}/,
+  );
+  // api.produce.uploadImage sends the multipart part the web's uploadProduceImage sends.
+  assert.ok(
+    read('frontend/carabao-app/util/api/produce.ts').includes("formData.append('image', file);"),
+    'the web upload part differs',
+  );
+  assert.ok(
+    read('mobile/CarabaoMerchantMobile/src/lib/api.ts').includes("form.append('image', file"),
+    'the phone upload part differs',
+  );
+});
+
 test('document upload rules = web DocumentDropzone.tsx', () => {
   const web = read('frontend/carabao-app/app/(site)/(merchant)/merchant/onboarding/DocumentDropzone.tsx');
   const types = /export const DOCUMENT_TYPES = \[([^\]]*)\]/.exec(web)?.[1] ?? '';
@@ -133,6 +164,115 @@ test('S3 badge status sets = web MerchantShell.tsx and its hooks', async () => {
   assert.ok(
     orders.includes(`o.status === "${READY_TO_SHIP_STATUS}" && !o.shipped && o.shipment_id == null;`),
     'ready-to-ship status differs',
+  );
+});
+
+test('S4 cancel reasons and note max = web merchants.ts = backend order_status.py', () => {
+  const web = read('frontend/carabao-app/util/api/merchants.ts');
+  const block = /export const MERCHANT_CANCEL_REASONS = \[([\s\S]*?)\] as const;/.exec(web)?.[1] ?? '';
+  const webReasons = [...block.matchAll(/\{ key: "([a-z_]+)", label: "([^"]*)" \}/g)].map((m) => ({
+    key: m[1],
+    label: m[2],
+  }));
+  assert.deepEqual([...MERCHANT_CANCEL_REASONS], webReasons);
+
+  const webMax = /export const MERCHANT_CANCEL_NOTE_MAX = (\d+);/.exec(web)?.[1];
+  assert.equal(Number(webMax), MERCHANT_CANCEL_NOTE_MAX);
+
+  // The backend stores the same keys (its values are the buyer-facing wording).
+  const backend = read('backend/app/services/order_status.py');
+  const pyBlock = /MERCHANT_CANCEL_REASONS: dict\[str, str\] = \{([\s\S]*?)\n\}/.exec(backend)?.[1] ?? '';
+  assert.deepEqual([...pyBlock.matchAll(/^\s+"([a-z_]+)":/gm)].map((m) => m[1]), webReasons.map((r) => r.key));
+});
+
+test('S4 nextStatuses = backend merchant transitions = web order buttons', () => {
+  // The server enforces the map (MERCHANT_TRANSITIONS in order_status.py).
+  const backend = read('backend/app/services/order_status.py');
+  const start = backend.indexOf('MERCHANT_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {');
+  const block = backend.slice(start, backend.indexOf('\n}', start));
+  const pyTransitions: Record<string, string[]> = {};
+  for (const m of block.matchAll(/OrderStatus\.([A-Z_]+): frozenset\(\s*(?:\{([^}]*)\})?\s*\)/g)) {
+    pyTransitions[m[1].toLowerCase()] = [...(m[2] ?? '').matchAll(/OrderStatus\.([A-Z_]+)/g)].map((x) =>
+      x[1].toLowerCase(),
+    );
+  }
+  assert.deepEqual(Object.keys(pyTransitions).sort(), [...ORDER_STATUSES].sort(), 'statuses differ');
+  for (const status of ORDER_STATUSES) {
+    assert.deepEqual(nextStatuses(status).sort(), [...(pyTransitions[status] ?? [])].sort(), status);
+  }
+
+  // The web Cancel button shows on open orders only (OrderCard.tsx + isClosed), but
+  // the server still refuses some of those (a pending order can't be cancelled).
+  const web = read('frontend/carabao-app/util/api/statuses.ts');
+  const closed = /export const CLOSED_ORDER_STATUSES: readonly OrderStatus\[\] = \[([^\]]*)\]/.exec(web)?.[1] ?? '';
+  const closedStatuses = [...closed.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+  assert.ok(
+    read('frontend/carabao-app/app/(site)/(merchant)/merchant/components/OrderCard.tsx').includes(
+      'const isOpenOrder = !isClosed(order.status);',
+    ),
+    'web cancel gating differs',
+  );
+  for (const status of ORDER_STATUSES) {
+    const webOffersCancel = !closedStatuses.includes(status);
+    assert.equal(canCancel(status), webOffersCancel && pyTransitions[status].includes('cancelled'), status);
+  }
+});
+
+test('S4 filter chips = web OrdersTab.tsx, and orderFilter/orderCounts use them', () => {
+  const web = read('frontend/carabao-app/app/(site)/(merchant)/merchant/components/OrdersTab.tsx');
+  const chips = /const ORDER_FILTERS = \[([^\]]*)\] as const;/.exec(web)?.[1] ?? '';
+  assert.deepEqual([...ORDER_FILTERS], [...chips.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]));
+  assert.ok(
+    web.includes('orders.filter((o) => activeFilter === "all" || o.status === activeFilter)'),
+    'web filter differs',
+  );
+
+  const orders = [
+    { status: 'processing' },
+    { status: 'processing' },
+    { status: 'shipped' },
+    { status: 'payment_mismatch' },
+  ] as const;
+  assert.equal(orderFilter(orders, 'all').length, orders.length);
+  assert.equal(orderFilter(orders, 'processing').length, 2);
+  assert.equal(orderFilter(orders, 'delivered').length, 0);
+  // A copy, so screens cannot mutate the context list.
+  assert.notEqual(orderFilter(orders, 'all'), orders);
+  assert.deepEqual(orderCounts(orders), {
+    all: 4,
+    processing: 2,
+    shipped: 1,
+    out_for_delivery: 0,
+    delivered: 0,
+    cancelled: 0,
+  });
+});
+
+test('S5 question tag and closed text = web merchant chats page', async () => {
+  const { chatTitle } = await import('./orderChat.ts');
+  const web = read('frontend/carabao-app/app/(site)/(merchant)/merchant/(shell)/chats/page.tsx');
+  const tag = /const INQUIRY_TAG = "([^"]+)";/.exec(web)?.[1] ?? '';
+  assert.ok(tag.length > 0, 'INQUIRY_TAG not found in the web chats page');
+  // The chat screen's header for a question is that tag (orderChat.chatTitle), so the two
+  // apps name a question the same way.
+  assert.equal(chatTitle(undefined, { kind: 'inquiry', conversationId: 1 }), tag);
+  // A question closes with the shop, not 7 days after a delivery: the web says so too.
+  assert.ok(
+    web.includes('Your shop is not taking messages right now, so this chat is read-only.'),
+    'the closed text for a question differs',
+  );
+});
+
+test('S5 Chats count = web useMerchantChats: chats + inquiries, one per unread row', () => {
+  const hook = read('frontend/carabao-app/app/(site)/(merchant)/merchant/hooks/useMerchantChats.ts');
+  // badges.unreadChatCount adds the same two sums, so the tab badge matches the web sidebar.
+  assert.ok(
+    hook.includes('chats.reduce((sum, c) => sum + (c.unread > 0 ? 1 : 0), 0)'),
+    'the order chat count differs',
+  );
+  assert.ok(
+    hook.includes('inquiries.reduce((sum, c) => sum + (c.unread > 0 ? 1 : 0), 0)'),
+    'the question count differs',
   );
 });
 

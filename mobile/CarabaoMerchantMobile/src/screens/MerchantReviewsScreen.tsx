@@ -12,8 +12,9 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { api, ApiError } from '../lib/api';
 import {
-  breakdownRows, mergeReviews, MY_REVIEWS_PAGE, myReviewsQuery, replaceReview, REPLY_MAX_LENGTH, replyProblem,
-  reviewSummary, shownReply, stars, toggleRating, wasEdited,
+  breakdownRows, CRITICAL_RATINGS, isAllReviews, isCriticalFilter, mergeReviews, MY_REVIEWS_PAGE,
+  myReviewsQuery, replaceReview, REPLY_MAX_LENGTH, replyProblem, reviewSummary, shownReply, stars,
+  toggleRating, wasEdited,
   type MyMerchantReviews, type MyReview, type MyReviewsFilter,
 } from '../lib/myReviews';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
@@ -202,30 +203,45 @@ export default function MerchantReviewsScreen() {
                   <Text style={styles.barCount}>{row.count}</Text>
                 </View>
               ))}
-              <Text style={styles.muted}>{summary.with_comment_count} with a comment</Text>
+              <Text style={styles.muted}>{summary.with_comment_count} with comments</Text>
             </View>
+            {/* S8 (plan §5.6): the web ReviewsTab's heading and three filter chips. */}
+            <Text style={styles.sectionTitle}>Customer Reviews</Text>
             <View style={styles.chips}>
+              {chip(isAllReviews(filter), 'All', () => setFilter({ ratings: [], hasComment: null }))}
+              {chip(filter.hasComment === true, 'With comments', () =>
+                setFilter((f) => ({ ...f, hasComment: f.hasComment === true ? null : true })))}
+              {chip(isCriticalFilter(filter), '1–2★', () =>
+                setFilter((f) => (isCriticalFilter(f)
+                  ? { ratings: [], hasComment: null }
+                  : { ratings: [...CRITICAL_RATINGS], hasComment: null })), '1 and 2 star reviews')}
               {[5, 4, 3, 2, 1].map((n) =>
                 chip(filter.ratings.includes(n), `${n}★`, () => setFilter((f) => ({ ...f, ratings: toggleRating(f.ratings, n) })), `${n} stars`),
               )}
-              {chip(filter.hasComment === true, 'With comment', () =>
-                setFilter((f) => ({ ...f, hasComment: f.hasComment === true ? null : true })))}
             </View>
             <Text style={styles.muted}>{summary.total} review{summary.total === 1 ? '' : 's'} shown</Text>
           </View>
         }
         ListFooterComponent={loadingMore ? <ActivityIndicator style={{ margin: Spacing.lg }} color={Colors.primary} /> : undefined}
-        ListEmptyComponent={<Text style={[styles.muted, { textAlign: 'center', marginTop: Spacing.xl }]}>No reviews match these filters.</Text>}
+        ListEmptyComponent={
+          <Text style={[styles.muted, styles.empty]}>
+            {summary.rating_count === 0
+              ? 'No reviews yet. Buyers can rate an order once it’s delivered.'
+              : 'No reviews match this filter.'}
+          </Text>
+        }
         renderItem={({ item }) => (
           <View style={styles.card}>
             <View style={styles.rowTop}>
               <Text style={styles.stars} accessibilityLabel={`${item.rating} out of 5 stars`}>{stars(item.rating)}</Text>
               <Text style={styles.muted}>{formatDate(item.created_at)}{wasEdited(item) ? ' · edited' : ''}</Text>
             </View>
-            {item.comment ? <Text style={styles.comment}>{item.comment}</Text> : null}
-            <Text style={styles.muted}>
-              {item.reviewer_name}{item.order_id ? ` · order #${item.order_id}` : ''}
-            </Text>
+            {item.comment ? (
+              <Text style={styles.comment}>{item.comment}</Text>
+            ) : (
+              <Text style={styles.muted}>No comment left.</Text>
+            )}
+            <Text style={styles.muted}>{item.reviewer_name}</Text>
             {replyingTo === item.id ? (
               <View style={styles.replyBox}>
                 <Text style={styles.replyLabel}>Your public reply</Text>
@@ -281,6 +297,17 @@ export default function MerchantReviewsScreen() {
                 <Text style={styles.linkText}>Reply</Text>
               </TouchableOpacity>
             )}
+            {/* S8 (plan §5.6): the web's "View order #N →"; the Orders tab opens that order (S4). */}
+            {item.order_id != null ? (
+              <TouchableOpacity
+                style={styles.linkBtn}
+                onPress={() => router.push({ pathname: '/orders', params: { order: String(item.order_id) } })}
+                accessibilityRole="button"
+                accessibilityLabel={`View order ${item.order_id}`}
+              >
+                <Text style={styles.linkText}>View order #{item.order_id} →</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
       />
@@ -303,6 +330,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, ...Shadow.sm,
   },
   summary: { fontSize: FontSize.md, fontWeight: '800', color: Colors.text },
+  sectionTitle: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.text },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   barLabel: { width: 28, fontSize: FontSize.xs, color: Colors.textMuted },
   barTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: Colors.borderLight, overflow: 'hidden' },
@@ -320,6 +348,7 @@ const styles = StyleSheet.create({
   stars: { fontSize: FontSize.md, color: Colors.warning },
   comment: { fontSize: FontSize.sm, color: Colors.text, lineHeight: 20 },
   muted: { fontSize: FontSize.xs, color: Colors.textMuted },
+  empty: { textAlign: 'center', marginTop: Spacing.xl },
   flex: { flex: 1 },
   replyBox: {
     marginTop: Spacing.xs, padding: Spacing.sm, gap: 6, borderRadius: Radius.md,

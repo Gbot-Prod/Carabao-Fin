@@ -1,3 +1,3 @@
 // app/inventory.tsx
-// S3 placeholder (decision D2): replaced by the real Inventory screen in S7.
-export { default } from '../src/screens/ComingSoonScreen';
+// S7 (plan §5.8): the Inventory screen (the web merchant shell's inventory page).
+export { default } from '../src/screens/InventoryScreen';

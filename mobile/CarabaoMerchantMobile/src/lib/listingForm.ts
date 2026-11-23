@@ -71,43 +71,63 @@ function parseWhole(value: string): number | null {
   return /^\d+$/.test(value.trim()) ? Number(value.trim()) : null;
 }
 
-/** The values to send, or the first problem to show. */
-export function checkListing(f: ListingFields, today: string): { ok: ListingValues } | { error: string } {
+/** The values to send, or the first problem to show under its own field (rule 8). */
+export function checkListing(f: ListingFields, today: string): { ok: ListingValues } | { error: string; field: ListingField } {
   const name = f.name.trim();
-  if (!name) return { error: 'Name is required.' };
-  if (name.length > LISTING_NAME_MAX) return { error: `Name can have at most ${LISTING_NAME_MAX} characters.` };
+  if (!name) return { error: 'Name is required.', field: 'name' };
+  if (name.length > LISTING_NAME_MAX) return { error: `Name can have at most ${LISTING_NAME_MAX} characters.`, field: 'name' };
   const price = parseWhole(f.price);
   if (price === null || price < 1 || price > LISTING_PRICE_MAX) {
-    return { error: `Price must be a whole number of pesos from 1 to ${LISTING_PRICE_MAX.toLocaleString('en-PH')}.` };
+    return {
+      error: `Price must be a whole number of pesos from 1 to ${LISTING_PRICE_MAX.toLocaleString('en-PH')}.`,
+      field: 'price',
+    };
   }
   const stock = parseWhole(f.stock);
   if (stock === null || stock > LISTING_STOCK_MAX) {
-    return { error: `Stock must be a whole number from 0 to ${LISTING_STOCK_MAX.toLocaleString('en-PH')}.` };
+    return {
+      error: `Stock must be a whole number from 0 to ${LISTING_STOCK_MAX.toLocaleString('en-PH')}.`,
+      field: 'stock',
+    };
   }
   const harvest = parseYmd(f.harvestDate);
-  if (f.harvestDate.trim() && harvest === null) return { error: 'Harvest date must be a real date, like 2026-11-19.' };
+  if (f.harvestDate.trim() && harvest === null) {
+    return { error: 'Harvest date must be a real date, like 2026-11-19.', field: 'harvestDate' };
+  }
   const best = parseYmd(f.bestBefore);
-  if (f.bestBefore.trim() && best === null) return { error: 'Best-before date must be a real date, like 2026-11-26.' };
+  if (f.bestBefore.trim() && best === null) {
+    return { error: 'Best-before date must be a real date, like 2026-11-26.', field: 'bestBefore' };
+  }
   const fresh = freshnessError(harvest, best, today);
-  if (fresh) return { error: `${fresh}.` };
+  if (fresh) {
+    // The missing or future harvest date first; otherwise the best-before date.
+    const field: ListingField = harvest === null || harvest > today ? 'harvestDate' : 'bestBefore';
+    return { error: `${fresh}.`, field };
+  }
 
   const minRaw = (f.minOrderQty ?? '').trim();
   const minOrder = minRaw === '' ? 1 : parseWhole(minRaw);
   if (minOrder === null || minOrder < 1 || minOrder > LISTING_STOCK_MAX) {
-    return { error: 'Minimum order must be a whole number of 1 or more.' };
+    return { error: 'Minimum order must be a whole number of 1 or more.', field: 'minOrderQty' };
   }
   const rows = (f.tiers ?? []).filter((t) => t.minQty.trim() !== '' || t.unitPrice.trim() !== '');
-  if (rows.length > LISTING_TIERS_MAX) return { error: `A listing can have at most ${LISTING_TIERS_MAX} bulk prices.` };
+  if (rows.length > LISTING_TIERS_MAX) {
+    return { error: `A listing can have at most ${LISTING_TIERS_MAX} bulk prices.`, field: 'tiers' };
+  }
   const tiers: PriceTier[] = [];
   for (const row of rows) {
     const q = parseWhole(row.minQty);
     const p = parseWhole(row.unitPrice);
-    if (q === null || q < 2 || q > LISTING_STOCK_MAX) return { error: 'Each bulk price needs a quantity of 2 or more.' };
-    if (p === null || p < 1 || p > LISTING_PRICE_MAX) return { error: 'Each bulk price needs a whole number of pesos.' };
+    if (q === null || q < 2 || q > LISTING_STOCK_MAX) {
+      return { error: 'Each bulk price needs a quantity of 2 or more.', field: 'tiers' };
+    }
+    if (p === null || p < 1 || p > LISTING_PRICE_MAX) {
+      return { error: 'Each bulk price needs a whole number of pesos.', field: 'tiers' };
+    }
     tiers.push({ min_qty: q, unit_price: p });
   }
   const pricing = pricingError(price, minOrder, tiers);
-  if (pricing) return { error: `${pricing}.` };
+  if (pricing) return { error: `${pricing}.`, field: 'tiers' };
   tiers.sort((a, b) => a.min_qty - b.min_qty);
 
   return {
@@ -116,4 +136,72 @@ export function checkListing(f: ListingFields, today: string): { ok: ListingValu
       min_order_qty: minOrder, price_tiers: tiers,
     },
   };
+}
+
+// ── S6: server messages on the form's fields (plan rule 8) ─────────────────────
+
+/** A photo chosen in the listing form, before it is uploaded (S6). */
+export type PickedPhoto = {
+  /** The picker's local URI (file:// or content://): shown directly, never from the server. */
+  uri: string;
+  name?: string | null;
+  mimeType?: string | null;
+};
+
+/** The controls this form has, as the screen and the form name them. */
+export type ListingField =
+  | 'name' | 'price' | 'stock' | 'harvestDate' | 'bestBefore' | 'minOrderQty' | 'tiers' | 'photo';
+
+/** One message under each of the form's fields. */
+export type ListingFieldErrors = Partial<Record<ListingField, string>>;
+
+// The backend names (schemas/produce.py, and the upload's multipart part) -> the field
+// that shows the message. Fields left out here (description, unit, category) have no
+// control on this form, so their message goes to the top instead of being lost.
+const SERVER_FIELDS: Record<string, ListingField> = {
+  name: 'name',
+  price: 'price',
+  stock_quantity: 'stock',
+  harvest_date: 'harvestDate',
+  best_before: 'bestBefore',
+  min_order_qty: 'minOrderQty',
+  price_tiers: 'tiers',
+  // The photo: the upload part (web uploadProduceImage) and the JSON field it fills.
+  image: 'photo',
+  image_url: 'photo',
+};
+
+export type ListingSaveErrors = {
+  /** Messages for the fields the form has; each shows under its field. */
+  fields: ListingFieldErrors;
+  /** Shown at the top: a network/5xx message, or a server field the form has no control for. */
+  top: string | null;
+};
+
+/**
+ * Rule 8: a server message for a field this form has goes under that field; only a
+ * message it cannot place (no field at all, or a field such as `unit`) shows at the top.
+ * The backend's FieldErrors detail is just its field messages joined, and a 422's detail
+ * is the same lines (core/errors.py, apiErrors.ts), so nothing is lost either way.
+ */
+export function listingSaveErrors(
+  message: string | null | undefined,
+  serverFields: Record<string, string> = {},
+): ListingSaveErrors {
+  const fields: ListingFieldErrors = {};
+  const unplaced: string[] = [];
+  for (const [key, raw] of Object.entries(serverFields)) {
+    const text = raw.trim();
+    if (!text) continue;
+    const field = SERVER_FIELDS[key];
+    if (!field) {
+      if (!unplaced.includes(text)) unplaced.push(text);
+      continue;
+    }
+    const shown = fields[field];
+    fields[field] = shown && shown !== text ? `${shown} ${text}` : text;
+  }
+  const placed = Object.keys(fields).length > 0;
+  const top = unplaced.length ? unplaced.join('\n') : placed ? null : message?.trim() || null;
+  return { fields, top };
 }

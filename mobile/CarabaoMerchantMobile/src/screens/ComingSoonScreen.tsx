@@ -1,8 +1,8 @@
 // src/screens/ComingSoonScreen.tsx
 // S3 (plan §4, decision D2): the screens later sections add (Shipments S11, Route S12,
-// Earnings S9, Inventory S7, Shop page S14, Vouchers S15, Store settings S16, Application
-// S18). Each route renders this one screen until its section replaces the file, so every
-// row in More opens something and no row is a dead end.
+// Earnings S9, Shop page S14, Vouchers S15, Store settings S16, Application S18). Each
+// route renders this one screen until its section replaces the file, so every row in More
+// opens something and no row is a dead end.
 import React from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +17,6 @@ const SCREENS: Record<string, { title: string; icon: IoniconName }> = {
   '/shipments': { title: 'Shipments', icon: 'cube-outline' },
   '/route': { title: 'Route', icon: 'map-outline' },
   '/earnings': { title: 'Earnings', icon: 'cash-outline' },
-  '/inventory': { title: 'Inventory', icon: 'layers-outline' },
   '/shop': { title: 'Shop page', icon: 'storefront-outline' },
   '/vouchers': { title: 'Vouchers', icon: 'pricetag-outline' },
   '/settings': { title: 'Store settings', icon: 'settings-outline' },

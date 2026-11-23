@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
   addDays, checkListing, freshnessError, LISTING_NAME_MAX, LISTING_PRICE_MAX, LISTING_STOCK_MAX, LISTING_TIERS_MAX,
-  parseYmd, phToday, pricingError,
+  listingSaveErrors, parseYmd, phToday, pricingError,
 } from './listingForm.ts';
 
 const ok = { name: 'Kale', price: '120', stock: '5', harvestDate: '2026-11-18', bestBefore: '2026-11-25' };
@@ -84,6 +84,97 @@ test('each bad field gives its message', () => {
   assert.match(err({ harvestDate: '' })!, /required/);
   assert.match(err({ harvestDate: '2026-11-20' })!, /future/);
   assert.match(err({ bestBefore: '2026-11-01' })!, /earlier than the harvest/);
+});
+
+test('S6 a local check names the field its message belongs to', () => {
+  const fieldOf = (over: Partial<typeof ok> & { minOrderQty?: string; tiers?: { minQty: string; unitPrice: string }[] }) => {
+    const r = checkListing({ ...ok, ...over }, today);
+    return 'error' in r ? r.field : null;
+  };
+  assert.equal(fieldOf({ name: '  ' }), 'name');
+  assert.equal(fieldOf({ name: 'x'.repeat(LISTING_NAME_MAX + 1) }), 'name');
+  assert.equal(fieldOf({ price: '0' }), 'price');
+  assert.equal(fieldOf({ stock: 'abc' }), 'stock');
+  assert.equal(fieldOf({ harvestDate: '2026-02-30' }), 'harvestDate');
+  // Required / future harvest dates are the harvest field; the rest is best-before.
+  assert.equal(fieldOf({ harvestDate: '' }), 'harvestDate');
+  assert.equal(fieldOf({ harvestDate: '2026-11-20' }), 'harvestDate');
+  assert.equal(fieldOf({ bestBefore: '' }), 'bestBefore');
+  assert.equal(fieldOf({ bestBefore: '2026-02-30' }), 'bestBefore');
+  assert.equal(fieldOf({ bestBefore: '2026-11-01' }), 'bestBefore');
+  assert.equal(fieldOf({ minOrderQty: '0' }), 'minOrderQty');
+  assert.equal(fieldOf({ tiers: [{ minQty: '1', unitPrice: '100' }] }), 'tiers');
+  assert.equal(fieldOf({ tiers: [{ minQty: '5', unitPrice: '120' }] }), 'tiers');
+  assert.equal(fieldOf({}), null);
+});
+
+test('S6 server messages land under the form field they belong to', () => {
+  // 422 body fields (apiErrors.fieldOf takes the first name), plus the backend's FieldErrors.
+  assert.deepEqual(listingSaveErrors(null, { name: 'Name is too long', price: 'Price must be 1 or more' }), {
+    fields: { name: 'Name is too long', price: 'Price must be 1 or more' },
+    top: null,
+  });
+  assert.deepEqual(
+    listingSaveErrors('ignored when every message found its field', {
+      stock_quantity: 'Stock is too high',
+      harvest_date: 'Harvest date cannot be in the future',
+      best_before: 'Best-before date cannot be earlier than the harvest date',
+      min_order_qty: 'Minimum order must be 1 or more',
+      price_tiers: 'Each price tier must be cheaper than the price before it',
+      image_url: 'Photo can only be changed by uploading an image.',
+    }),
+    {
+      fields: {
+        stock: 'Stock is too high',
+        harvestDate: 'Harvest date cannot be in the future',
+        bestBefore: 'Best-before date cannot be earlier than the harvest date',
+        minOrderQty: 'Minimum order must be 1 or more',
+        tiers: 'Each price tier must be cheaper than the price before it',
+        photo: 'Photo can only be changed by uploading an image.',
+      },
+      top: null,
+    },
+  );
+  // The upload's own part name as well as the JSON field.
+  assert.deepEqual(listingSaveErrors(null, { image: 'The image must be 5MB or smaller.' }), {
+    fields: { photo: 'The image must be 5MB or smaller.' },
+    top: null,
+  });
+  // Two names for one control: one message, not the same text twice.
+  assert.deepEqual(listingSaveErrors(null, { image: 'Too big', image_url: 'Too big' }), {
+    fields: { photo: 'Too big' },
+    top: null,
+  });
+  assert.deepEqual(listingSaveErrors(null, { image: 'Too big', image_url: 'It is blurry' }), {
+    fields: { photo: 'Too big It is blurry' },
+    top: null,
+  });
+  // Blank messages are dropped, and a body with nothing usable keeps the top message.
+  assert.deepEqual(listingSaveErrors('Could not save this listing', { price: '  ' }), {
+    fields: {},
+    top: 'Could not save this listing',
+  });
+});
+
+test('S6 only a message the form cannot place shows at the top', () => {
+  // Network, timeout, 5xx and a 400 with plain wording: no field errors, so the top message.
+  assert.deepEqual(listingSaveErrors('Could not reach the server at http://x. Check your connection.', {}), {
+    fields: {},
+    top: 'Could not reach the server at http://x. Check your connection.',
+  });
+  assert.deepEqual(listingSaveErrors('Stock changed to 3 since you opened this listing.', undefined), {
+    fields: {},
+    top: 'Stock changed to 3 since you opened this listing.',
+  });
+  // description/unit/category have no control on this form: the text stays visible.
+  assert.deepEqual(
+    listingSaveErrors('Category must be Vegetables or Fruits', {
+      category: 'Category must be Vegetables or Fruits',
+      price: 'Price must be 1 or more',
+    }),
+    { fields: { price: 'Price must be 1 or more' }, top: 'Category must be Vegetables or Fruits' },
+  );
+  assert.deepEqual(listingSaveErrors(null, {}), { fields: {}, top: null });
 });
 
 test('bounds = backend schemas/produce.py', () => {

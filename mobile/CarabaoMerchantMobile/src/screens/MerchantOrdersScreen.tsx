@@ -1,201 +1,151 @@
 // src/screens/MerchantOrdersScreen.tsx
-// Incoming orders for a merchant. Same endpoints as the web merchant dashboard:
-// GET /merchants/me/orders and PATCH /merchants/me/orders/{id}/status.
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+// S4 (plan §5.2): the Orders tab, matching the web merchant sales page — status
+// filter chips, an order sheet with the moves the server allows
+// (src/lib/orderActions.ts), cancel with a reason, and `orders?order=<id>` from a
+// notification opens that order. The orders come from MerchantDataContext, which
+// polls them; `refreshOrders()` updates them (and the tab badges) after a change.
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View, Text, FlatList, StyleSheet, SafeAreaView, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Alert,
+  RefreshControl, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
-import { api, ApiError, type ApiMerchantOrder, type MerchantOrderStatus } from '../lib/api';
+import { api, type ApiMerchantOrder, type MerchantOrderStatus } from '../lib/api';
+import { useMerchantData } from '../lib/MerchantDataContext';
+import {
+  orderCounts, orderFilter, orderFilterLabel, ORDER_FILTERS,
+  type MerchantCancelReason, type OrderFilterKey,
+} from '../lib/orderActions';
+import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
+import { formatPeso, formatRequestedDate } from '../lib/format';
+import { parseOrderId } from '../lib/orderChat';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
 import { SkeletonList, LoadError } from '../components/Skeleton';
-import { CancelOrderSheet, type MerchantCancelReason } from '../components/CancelOrderSheet';
-
-const STATUS_LABELS: Record<MerchantOrderStatus, string> = {
-  pending: 'Awaiting payment',
-  processing: 'Preparing',
-  shipped: 'Shipped',
-  out_for_delivery: 'Out for delivery',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
-};
-
-// Mirrors MERCHANT_TRANSITIONS in backend/app/services/order_status.py; the
-// server enforces it, this only decides which buttons to show.
-const NEXT_STEPS: Partial<Record<MerchantOrderStatus, { to: MerchantOrderStatus; label: string }[]>> = {
-  processing: [{ to: 'shipped', label: 'Mark shipped' }],
-  shipped: [{ to: 'out_for_delivery', label: 'Out for delivery' }],
-};
-const CANCELLABLE: MerchantOrderStatus[] = ['processing', 'shipped', 'out_for_delivery'];
-
-const FILTERS: { key: 'open' | 'all' | MerchantOrderStatus; label: string }[] = [
-  { key: 'open', label: 'To do' },
-  { key: 'all', label: 'All' },
-  { key: 'delivered', label: 'Delivered' },
-  { key: 'cancelled', label: 'Cancelled' },
-];
-
-const peso = (n: number) =>
-  new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(n);
-
-function badgeColor(status: MerchantOrderStatus): 'green' | 'blue' | 'yellow' | 'gray' {
-  if (status === 'delivered') return 'green';
-  if (status === 'shipped' || status === 'out_for_delivery') return 'blue';
-  if (status === 'processing') return 'yellow';
-  return 'gray';
-}
+import { CancelOrderSheet } from '../components/CancelOrderSheet';
+import { OrderDetailSheet } from '../components/OrderDetailSheet';
 
 function OrderRow({
-  order, busy, onUpdate, onChat,
+  order, focused, onOpen,
 }: {
   order: ApiMerchantOrder;
-  busy: boolean;
-  onUpdate: (order: ApiMerchantOrder, to: MerchantOrderStatus) => void;
-  onChat: (order: ApiMerchantOrder) => void;
+  focused: boolean;
+  onOpen: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const itemCount = order.items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
-  const steps = NEXT_STEPS[order.status] ?? [];
-  const canCancel = CANCELLABLE.includes(order.status);
+  // The web OrderCard counts lines, not quantities.
+  const itemCount = order.items.length;
   const refund = order.payment_status === 'refund_pending' || order.payment_status === 'refunded';
-
   return (
-    <View style={styles.card}>
-      <TouchableOpacity onPress={() => setOpen((v) => !v)} activeOpacity={0.8} accessibilityRole="button">
-        <View style={styles.cardHeader}>
-          <Text style={styles.orderId}>#{order.id}</Text>
-          <Badge label={STATUS_LABELS[order.status]} color={badgeColor(order.status)} />
-          {refund && <Badge label={order.payment_status === 'refunded' ? 'Refunded' : 'Refund pending'} color="gray" />}
-          <Text style={styles.total}>{peso(order.total_price)}</Text>
-        </View>
-        <Text style={styles.summary}>
-          {order.buyer_name ?? 'Buyer'} · {itemCount} item{itemCount === 1 ? '' : 's'} ·{' '}
-          {order.requested_delivery_date ?? 'Any day'}
-          {order.delivery_window ? `, ${order.delivery_window}` : ''}
-        </Text>
-        {order.notes ? <Text style={styles.note} numberOfLines={open ? undefined : 1}>Note: {order.notes}</Text> : null}
-      </TouchableOpacity>
-
-      {open && (
-        <View style={styles.details}>
-          {order.items.map((item, i) => (
-            <Text key={i} style={styles.detailText}>
-              {item.name ?? item.produce_name ?? `Item ${i + 1}`} × {item.quantity ?? 0}
-              {typeof item.price === 'number' ? ` · ${peso(item.price)}` : ''}
-            </Text>
-          ))}
-          {order.delivery_address ? <Text style={styles.detailMuted}>Deliver to: {order.delivery_address}</Text> : null}
-          {order.buyer_phone ? <Text style={styles.detailMuted}>Phone: {order.buyer_phone}</Text> : null}
-          <Text style={styles.detailMuted}>Ordered {new Date(order.ordered_at).toLocaleString('en-PH')}</Text>
-          {order.status === 'cancelled' && order.cancel_reason ? (
-            <Text style={styles.detailMuted}>Cancel reason: {order.cancel_reason}</Text>
-          ) : null}
-          <TouchableOpacity style={styles.chatLink} onPress={() => onChat(order)}>
-            <Text style={styles.chatLinkText}>Message buyer</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {(steps.length > 0 || canCancel) && (
-        <View style={styles.actions}>
-          {steps.map((step) => (
-            <TouchableOpacity
-              key={step.to}
-              style={[styles.primaryBtn, busy && styles.btnDisabled]}
-              disabled={busy}
-              onPress={() => onUpdate(order, step.to)}
-            >
-              <Text style={styles.primaryBtnText}>{step.label}</Text>
-            </TouchableOpacity>
-          ))}
-          {canCancel && (
-            <TouchableOpacity
-              style={[styles.cancelBtn, busy && styles.btnDisabled]}
-              disabled={busy}
-              onPress={() => onUpdate(order, 'cancelled')}
-            >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          )}
-          {busy && <ActivityIndicator color={Colors.primary} />}
-        </View>
-      )}
-    </View>
+    <TouchableOpacity
+      style={[styles.card, focused && styles.cardFocused]}
+      onPress={onOpen}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={`Order ${order.id}`}
+    >
+      <View style={styles.cardHeader}>
+        <Text style={styles.orderId}>#{order.id}</Text>
+        <Badge label={orderStatusLabel(order.status)} color={orderStatusColor(order.status)} />
+        {refund && (
+          <Badge label={order.payment_status === 'refunded' ? 'Refunded' : 'Refund pending'} color="gray" />
+        )}
+        <Text style={styles.total}>{formatPeso(order.total_price)}</Text>
+        <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+      </View>
+      {/* The web OrderCard summary line: buyer · requested date · items. */}
+      <Text style={styles.summary}>
+        {order.buyer_name ?? '—'} ·{' '}
+        {order.requested_delivery_date ? formatRequestedDate(order.requested_delivery_date) : 'Any day'} ·{' '}
+        {itemCount} item{itemCount === 1 ? '' : 's'}
+      </Text>
+      {order.notes ? (
+        <Text style={styles.note} numberOfLines={1}>Note: {order.notes}</Text>
+      ) : null}
+    </TouchableOpacity>
   );
 }
 
-// CF-0101: fetch without touching state; applied in a .then callback by the screen.
-type OrdersLoad =
-  | { kind: 'ok'; orders: ApiMerchantOrder[] }
-  | { kind: 'notMerchant' }
-  | { kind: 'error'; message: string };
-
-async function fetchMerchantOrders(token: string): Promise<OrdersLoad> {
-  try {
-    return { kind: 'ok', orders: await api.merchants.myOrders(token) };
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) return { kind: 'notMerchant' };
-    return { kind: 'error', message: err instanceof Error ? err.message : 'Could not load your orders' };
-  }
-}
-
-// The Orders tab. The root gate (app/_layout.tsx) already checked the farm, so this
-// screen does not repeat that check.
 export default function MerchantOrdersScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ order?: string }>();
   const { token } = useAuth();
-  const [orders, setOrders] = useState<ApiMerchantOrder[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { orders, loading, error, refreshOrders } = useMerchantData();
+  const [filter, setFilter] = useState<OrderFilterKey>('all');
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notMerchant, setNotMerchant] = useState(false);
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]['key']>('open');
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
   const [cancelId, setCancelId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  // Set when a notification or a link names an order: scroll to it and highlight it.
+  const [focusId, setFocusId] = useState<number | null>(null);
+  const listRef = useRef<FlatList<ApiMerchantOrder>>(null);
+  const handledOrder = useRef<number | null>(null);
 
-  const apply = useCallback((r: OrdersLoad) => {
-    if (r.kind === 'notMerchant') {
-      setNotMerchant(true);
-    } else if (r.kind === 'error') {
-      setError(r.message);
-    } else {
-      setOrders(r.orders);
-      setError(null);
+  const counts = useMemo(() => orderCounts(orders ?? []), [orders]);
+  const visible = useMemo(() => orderFilter(orders ?? [], filter), [orders, filter]);
+  const detail = useMemo(() => orders?.find((o) => o.id === detailId) ?? null, [orders, detailId]);
+
+  // S4: carabaomerchant://orders?order=12 — or a new_order notification — opens that
+  // order. The param is cleared once used, so coming back to the tab shows the list.
+  useEffect(() => {
+    const id = parseOrderId(params.order);
+    if (id === null) {
+      handledOrder.current = null;
+      return;
     }
-  }, []);
-
-  const load = useCallback(
-    () => (token ? fetchMerchantOrders(token).then(apply) : Promise.resolve()),
-    [token, apply],
-  );
+    if (!orders) return;
+    if (handledOrder.current === id) {
+      // Already opened (the orders reloaded under it): just drop the param.
+      router.setParams({ order: undefined });
+      return;
+    }
+    const order = orders.find((o) => o.id === id);
+    // Not in this farm's orders (yet): leave the param, the next poll may have it.
+    if (!order) return;
+    // Deferred: opening the sheet is a state change, which an effect body must not
+    // make synchronously (react-hooks/set-state-in-effect). A poll re-render clears
+    // this timer and schedules again.
+    const t = setTimeout(() => {
+      handledOrder.current = id;
+      setFilter('all');
+      setDetailId(id);
+      setFocusId(id);
+      router.setParams({ order: undefined });
+    }, 0);
+    return () => clearTimeout(t);
+  }, [params.order, orders, router]);
 
   useEffect(() => {
-    void load().finally(() => setLoading(false));
-  }, [load]);
+    if (focusId === null) return;
+    const index = visible.findIndex((o) => o.id === focusId);
+    if (index >= 0) {
+      const t = setTimeout(() => {
+        listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+      }, 100);
+      return () => clearTimeout(t);
+    }
+    return undefined;
+  }, [focusId, visible]);
+
+  // The highlight fades, as the web's focused card does.
+  useEffect(() => {
+    if (focusId === null) return undefined;
+    const t = setTimeout(() => setFocusId(null), 2500);
+    return () => clearTimeout(t);
+  }, [focusId]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
+    await refreshOrders();
     setRefreshing(false);
-  };
-
-  const cancelOrder = async (reason: MerchantCancelReason, note: string) => {
-    if (cancelId == null) return;
-    // Errors are thrown back to the sheet, which shows them.
-    const updated = await api.merchants.cancelOrder(token, cancelId, reason, note);
-    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
-    setCancelId(null);
   };
 
   const send = async (order: ApiMerchantOrder, to: Exclude<MerchantOrderStatus, 'cancelled'>) => {
     setBusyId(order.id);
     try {
-      const updated = await api.merchants.updateOrderStatus(token, order.id, to);
-      setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+      await api.merchants.updateOrderStatus(token, order.id, to);
+      await refreshOrders();
     } catch (err) {
       Alert.alert('Could not update order', err instanceof Error ? err.message : 'Please try again.');
     } finally {
@@ -203,82 +153,77 @@ export default function MerchantOrdersScreen() {
     }
   };
 
-  const onUpdate = (order: ApiMerchantOrder, to: MerchantOrderStatus) => {
+  const advance = (order: ApiMerchantOrder, to: MerchantOrderStatus) => {
     if (to === 'cancelled') {
+      // Cancelling needs a reason, so its own sheet replaces the detail one.
+      setDetailId(null);
       setCancelId(order.id);
       return;
     }
-    Alert.alert('Update order', `Move order #${order.id} to "${STATUS_LABELS[to]}"?`, [
+    Alert.alert('Update order', `Move order #${order.id} to "${orderStatusLabel(to)}"?`, [
       { text: 'Back', style: 'cancel' },
       { text: 'Confirm', onPress: () => void send(order, to) },
     ]);
   };
 
-  const visible = useMemo(() => {
-    if (filter === 'all') return orders;
-    if (filter === 'open') return orders.filter((o) => CANCELLABLE.includes(o.status));
-    return orders.filter((o) => o.status === filter);
-  }, [orders, filter]);
+  const cancelOrder = async (reason: MerchantCancelReason, note: string) => {
+    if (cancelId == null) return;
+    // Errors are thrown back to the sheet, which shows them.
+    await api.merchants.cancelOrder(token, cancelId, reason, note);
+    await refreshOrders();
+    setCancelId(null);
+  };
+
+  const openChat = (order: ApiMerchantOrder) => {
+    setDetailId(null);
+    router.push({
+      pathname: '/order-chat',
+      params: { orderId: String(order.id), title: `Chat with ${order.buyer_name ?? 'buyer'}` },
+    });
+  };
 
   let body: React.ReactNode;
-  if (loading) {
+  if (loading && !orders) {
     body = <SkeletonList label="Loading incoming orders" rows={4} />;
-  } else if (notMerchant) {
-    body = (
-      <EmptyState
-        icon={<Ionicons name="storefront-outline" size={48} color={Colors.textLight} />}
-        title="Not a merchant yet"
-        message="Register as a merchant to receive orders."
-      />
-    );
-  } else if (error) {
-    body = (
-      <LoadError
-        message={error}
-        onRetry={() => {
-          setLoading(true);
-          void load().finally(() => setLoading(false));
-        }}
-      />
-    );
+  } else if (orders === null) {
+    body = <LoadError message={error ?? 'Could not load your orders.'} onRetry={() => void onRefresh()} />;
   } else {
     body = (
       <FlatList
+        ref={listRef}
         data={visible}
         keyExtractor={(o) => String(o.id)}
         renderItem={({ item }) => (
-          <OrderRow
-            order={item}
-            busy={busyId === item.id}
-            onUpdate={onUpdate}
-            onChat={(o) =>
-              router.push({
-                pathname: '/order-chat',
-                params: { orderId: String(o.id), title: `Chat with ${o.buyer_name ?? 'buyer'}` },
-              })
-            }
-          />
+          <OrderRow order={item} focused={focusId === item.id} onOpen={() => setDetailId(item.id)} />
         )}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        onScrollToIndexFailed={(info) => {
+          listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
+        }}
         ListHeaderComponent={
           <View style={styles.filters}>
-            {FILTERS.map((f) => (
-              <TouchableOpacity
-                key={f.key}
-                style={[styles.chip, filter === f.key && styles.chipActive]}
-                onPress={() => setFilter(f.key)}
-                accessibilityState={{ selected: filter === f.key }}
-              >
-                <Text style={[styles.chipText, filter === f.key && styles.chipTextActive]}>{f.label}</Text>
-              </TouchableOpacity>
-            ))}
+            {ORDER_FILTERS.map((key) => {
+              const active = filter === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => setFilter(key)}
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                    {orderFilterLabel(key)} {counts[key]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         }
         ListEmptyComponent={
           <EmptyState
             icon={<Ionicons name="receipt-outline" size={48} color={Colors.textLight} />}
-            title={filter === 'open' ? 'Nothing to do' : 'No orders here'}
+            title={filter === 'all' ? 'No orders yet' : `No ${orderFilterLabel(filter).toLowerCase()} orders`}
             message="Paid orders from buyers appear here."
           />
         }
@@ -293,10 +238,19 @@ export default function MerchantOrdersScreen() {
         <Text style={styles.navTitle}>Incoming orders</Text>
       </View>
       {body}
+      <OrderDetailSheet
+        order={detail}
+        busy={detail != null && busyId === detail.id}
+        onClose={() => setDetailId(null)}
+        onChat={() => detail && openChat(detail)}
+        onAdvance={(to) => detail && advance(detail, to)}
+        onCancel={() => detail && advance(detail, 'cancelled')}
+      />
       <CancelOrderSheet orderId={cancelId} onClose={() => setCancelId(null)} onSubmit={cancelOrder} />
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.offWhite },
@@ -319,26 +273,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white, borderRadius: Radius.lg, padding: Spacing.lg,
     borderWidth: 1, borderColor: Colors.border, ...Shadow.sm,
   },
+  // The web highlights the order a link or a review named (orderCardFocused).
+  cardFocused: { borderColor: Colors.primary, borderWidth: 2 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexWrap: 'wrap' },
   orderId: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   total: { marginLeft: 'auto', fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   summary: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 6 },
   note: { fontSize: FontSize.sm, color: Colors.text, marginTop: 4, fontStyle: 'italic' },
-  details: { marginTop: Spacing.md, gap: 4, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: Spacing.md },
-  detailText: { fontSize: FontSize.sm, color: Colors.text },
-  detailMuted: { fontSize: FontSize.xs, color: Colors.textMuted },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.md },
-  primaryBtn: {
-    backgroundColor: Colors.primary, borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-  },
-  primaryBtnText: { color: Colors.white, fontWeight: '700', fontSize: FontSize.sm },
-  cancelBtn: {
-    borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.error,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-  },
-  cancelBtnText: { color: Colors.error, fontWeight: '700', fontSize: FontSize.sm },
-  btnDisabled: { opacity: 0.5 },
-  chatLink: { marginTop: Spacing.sm, alignSelf: 'flex-start' },
-  chatLinkText: { color: Colors.primary, fontWeight: '700', fontSize: FontSize.sm },
 });

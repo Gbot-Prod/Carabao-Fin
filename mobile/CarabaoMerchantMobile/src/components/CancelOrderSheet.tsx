@@ -1,19 +1,15 @@
 // A farm must say why before cancelling (web: merchant CancelOrderForm). The
-// reason goes to the buyer by notification and SMS. Keys mirror
-// MERCHANT_CANCEL_REASONS in backend/app/services/order_status.py.
+// reason goes to the buyer by notification and SMS. The reasons and the note limit
+// live in src/lib/orderActions.ts (S4), so `npm test` checks them against the web;
+// their keys mirror MERCHANT_CANCEL_REASONS in backend/app/services/order_status.py.
 import React, { useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
-
-export const MERCHANT_CANCEL_REASONS = [
-  { key: 'out_of_stock', label: 'Out of stock' },
-  { key: 'quality', label: "Produce didn't meet quality standards" },
-  { key: 'cannot_deliver', label: "Can't deliver to this address or date" },
-  { key: 'buyer_request', label: 'The buyer asked to cancel' },
-  { key: 'other', label: 'Other' },
-] as const;
-export type MerchantCancelReason = (typeof MERCHANT_CANCEL_REASONS)[number]['key'];
-export const MERCHANT_CANCEL_NOTE_MAX = 300;
+import {
+  MERCHANT_CANCEL_NOTE_MAX,
+  MERCHANT_CANCEL_REASONS,
+  type MerchantCancelReason,
+} from '../lib/orderActions';
 
 type Props = {
   orderId: number | null;

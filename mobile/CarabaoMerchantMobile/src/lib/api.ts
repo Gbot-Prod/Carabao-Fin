@@ -4,13 +4,14 @@
 // order-chat screen keeps the buyer's `support=1` branch (S11) and the endpoint is shared.
 // This file is not in sharedCopies.test.ts.
 import type { MyMerchantReviews, MyReview } from './myReviews';
-import type { ChatSummary } from './chatInbox';
+import type { ChatSummary, InquirySummary } from './chatInbox';
 import type { DemandInsight, MerchantPerformance } from './dashboard';
 
 import { getAccessToken } from './authClient';
+import { chatEndpoint } from './orderChat';
 import { emitSessionExpired, sessionGone } from './sessionEvents';
 import { parseErrorBody } from './apiErrors';
-import { contentTypeFor } from './uploads';
+import { contentTypeFor, type FilePart } from './uploads';
 import { API_BASE } from './config';
 import { UNREAD_COUNT_QUERY } from './polling';
 
@@ -217,7 +218,12 @@ export type ProduceCreatePayload = {
 
 export type ProduceUpdatePayload = Partial<{
   [K in keyof ProduceCreatePayload]: ProduceCreatePayload[K] | null;
-}>;
+}> & {
+  // CF-0049: the stock the screen loaded. If an order changed it since (a checkout or a
+  // cancel), the server answers 409 instead of overwriting that change; left out when a
+  // payload does not send stock at all.
+  expected_stock_quantity?: number | null;
+};
 
 export type MerchantOrderStatus =
   | 'pending' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
@@ -229,7 +235,15 @@ export type ApiMerchantOrder = {
   status: MerchantOrderStatus;
   payment_status: 'awaiting_payment' | 'paid' | 'refund_pending' | 'refunded' | 'unpaid';
   total_price: number;
-  items: { name?: string; produce_name?: string; quantity?: number; price?: number }[];
+  // A checkout snapshot: produce/name (the listing's name), unit, price and quantity
+  // (backend api/routes/_order_helpers.py order_line).
+  items: {
+    name?: string;
+    produce?: string;
+    unit?: string;
+    quantity?: number;
+    price?: number;
+  }[];
   delivery_address: string | null;
   ordered_at: string;
   buyer_name: string | null;
@@ -240,6 +254,11 @@ export type ApiMerchantOrder = {
   requested_delivery_date: string | null;
   delivery_window: string | null;
   notes: string | null;
+  // CF-0065: why a total can be lower than its lines + delivery fee.
+  discount?: number;
+  voucher_code?: string | null;
+  // Set while the order is in transit: when the buyer's window closes (web OrderCard).
+  auto_confirm_at?: string | null;
   // Why it was cancelled, as the buyer was told.
   cancel_reason?: string | null;
   // Set once the order is on a route (ready-to-ship orders have none yet).
@@ -311,6 +330,17 @@ export type ApiChatThread = {
   messages: ApiChatMessage[];
 };
 
+// S5: a buyer's pre-order question, as the farm sees it (backend InquiryThread). Same
+// messages as an order chat; `conversation_id` is null only when the buyer has none yet.
+export type ApiInquiryThread = {
+  conversation_id: number | null;
+  merchant_id: number;
+  my_role: string;
+  closed: boolean;
+  closes_at: string | null;
+  messages: ApiChatMessage[];
+};
+
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const api = {
@@ -325,6 +355,9 @@ export const api = {
       request<ApiShopPage>('/merchants/me/shoppage', token),
     // CF-0127: the farm's order chats, newest message first.
     chats: (token: string | null) => request<ChatSummary[]>('/merchants/me/chats', token),
+    // S5: buyers' pre-order questions (backend GET /merchants/me/inquiries, web
+    // fetchMyMerchantInquiries), newest message first like the chats.
+    inquiries: (token: string | null) => request<InquirySummary[]>('/merchants/me/inquiries', token),
     // CF-0125: dashboard numbers and province demand.
     performance: (token: string | null) => request<MerchantPerformance>('/merchants/me/performance', token),
     demand: (token: string | null) => request<DemandInsight>('/merchants/me/demand', token),
@@ -339,6 +372,14 @@ export const api = {
       request<null>(`/merchants/me/reviews/${reviewId}/reply`, token, { method: 'DELETE' }),
     stockAlerts: (token: string | null) =>
       request<ApiStockAlerts>('/merchants/me/stock-alerts', token),
+    // S7: the farm's own low-stock threshold (web updateMyLowStockThreshold). The server
+    // answers with the alerts re-ranked at the new threshold; 0 turns low-stock alerts
+    // off (backend ThresholdUpdate: 0 to 100,000).
+    setLowStockThreshold: (token: string | null, lowStockThreshold: number) =>
+      request<ApiStockAlerts>('/merchants/me/stock-alerts', token, {
+        method: 'PATCH',
+        body: JSON.stringify({ low_stock_threshold: lowStockThreshold }),
+      }),
     updateOrderStatus: (token: string | null, orderId: number, status: Exclude<MerchantOrderStatus, 'cancelled'>) =>
       request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/status`, token, {
         method: 'PATCH',
@@ -365,23 +406,48 @@ export const api = {
     // CF-0116: the owner deletes a listing (backend DELETE /produce/{id}).
     remove: (token: string | null, produceId: number) =>
       request<null>(`/produce/${produceId}`, token, { method: 'DELETE' }),
+    // S6: the listing's photo (backend POST /produce/{produce_id}/image). The part name is
+    // `image`, the same as the web uploadProduceImage (util/api/produce.ts), and the
+    // FormData body goes without a JSON Content-Type (see send() above).
+    uploadImage: (token: string | null, produceId: number, file: FilePart) => {
+      const form = new FormData();
+      // React Native's FormData takes { uri, name, type } as the file part.
+      form.append('image', file as unknown as Blob);
+      return request<ApiProduce>(`/produce/${produceId}/image`, token, { method: 'POST', body: form });
+    },
   },
   // S11: the order-chat screen keeps the buyer's support branch (`support=1`); the endpoint
-  // is the same for both apps (backend api/routes/support_chat.py).
+  // is the same for both apps (backend api/routes/support_chat.py). Every path below comes
+  // from orderChat.chatEndpoint, so the screen's three threads and their URLs cannot drift.
   support: {
     thread: (token: string | null, afterId = 0) =>
-      request<ApiChatThread>(`/support/messages?after_id=${afterId}`, token),
+      request<ApiChatThread>(`${chatEndpoint({ kind: 'support' })}?after_id=${afterId}`, token),
     send: (token: string | null, body: string) =>
-      request<ApiChatMessage>('/support/messages', token, {
+      request<ApiChatMessage>(chatEndpoint({ kind: 'support' }), token, {
         method: 'POST',
         body: JSON.stringify({ body }),
       }),
   },
   chat: {
     thread: (token: string | null, orderId: number, afterId = 0) =>
-      request<ApiChatThread>(`/orders/${orderId}/messages?after_id=${afterId}`, token),
+      request<ApiChatThread>(`${chatEndpoint({ kind: 'order', orderId })}?after_id=${afterId}`, token),
     send: (token: string | null, orderId: number, body: string) =>
-      request<ApiChatMessage>(`/orders/${orderId}/messages`, token, {
+      request<ApiChatMessage>(chatEndpoint({ kind: 'order', orderId }), token, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      }),
+  },
+  // S5: the farm answers a buyer's pre-order question (backend
+  // GET/POST /inquiries/{conversation_id}/messages, web inquiryEndpoint). Reading marks it
+  // read for the farm, exactly like an order chat.
+  inquiry: {
+    thread: (token: string | null, conversationId: number, afterId = 0) =>
+      request<ApiInquiryThread>(
+        `${chatEndpoint({ kind: 'inquiry', conversationId })}?after_id=${afterId}`,
+        token,
+      ),
+    send: (token: string | null, conversationId: number, body: string) =>
+      request<ApiChatMessage>(chatEndpoint({ kind: 'inquiry', conversationId }), token, {
         method: 'POST',
         body: JSON.stringify({ body }),
       }),

@@ -6,8 +6,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  breakdownRows, mergeReviews, myReviewsQuery, replaceReview, REPLY_MAX_LENGTH, replyProblem,
-  reviewSummary, shownReply, stars, toggleRating, wasEdited, type PublicReview,
+  breakdownRows, CRITICAL_RATINGS, isAllReviews, isCriticalFilter, mergeReviews, myReviewsQuery,
+  replaceReview, REPLY_MAX_LENGTH, replyProblem, reviewSummary, shownReply, stars, toggleRating,
+  wasEdited, type PublicReview,
 } from './myReviews.ts';
 
 const r = (id: number, over: Partial<PublicReview> = {}): PublicReview => ({
@@ -59,6 +60,30 @@ test('star filter toggles', () => {
   assert.deepEqual(toggleRating([], 4), [4]);
   assert.deepEqual(toggleRating([4, 1], 2), [1, 2, 4]);
   assert.deepEqual(toggleRating([1, 4], 4), [1]);
+});
+
+// ---- S8 (plan §5.6): the web ReviewsTab's "All" and "1–2★" filters ----
+
+test('S8 all-reviews filter: no stars and no comment filter', () => {
+  assert.equal(isAllReviews({ ratings: [], hasComment: null }), true);
+  assert.equal(isAllReviews({ ratings: [3], hasComment: null }), false);
+  assert.equal(isAllReviews({ ratings: [], hasComment: false }), false);
+  assert.equal(isAllReviews({ ratings: [], hasComment: true }), false);
+});
+
+test('S8 critical filter: exactly stars 1 and 2, with no comment filter', () => {
+  assert.deepEqual([...CRITICAL_RATINGS], [1, 2]);
+  assert.equal(isCriticalFilter({ ratings: [1, 2], hasComment: null }), true);
+  assert.equal(isCriticalFilter({ ratings: [2, 1, 1], hasComment: null }), true);
+  assert.equal(isCriticalFilter({ ratings: [1], hasComment: null }), false);
+  assert.equal(isCriticalFilter({ ratings: [1, 2, 3], hasComment: null }), false);
+  assert.equal(isCriticalFilter({ ratings: [1, 2], hasComment: true }), false);
+  assert.equal(isCriticalFilter({ ratings: [], hasComment: null }), false);
+  // The chip's query is the web's filterQuery("critical") = { ratings: [1, 2] }.
+  assert.equal(
+    myReviewsQuery({ ratings: [...CRITICAL_RATINGS], hasComment: null }, 0),
+    'rating=1&rating=2&limit=20&offset=0',
+  );
 });
 
 // ---- CF-0133 (M55): the farm's reply ----

@@ -86,6 +86,24 @@ export function toggleRating(ratings: readonly number[], stars: number): number[
   return ratings.includes(stars) ? ratings.filter((n) => n !== stars) : [...ratings, stars].sort();
 }
 
+// S8 (plan §5.6): the web ReviewsTab's "All" and "1–2★" chips, which the phone lacked.
+
+/** The web's "1–2★" (critical) chip: the two lowest star values. */
+export const CRITICAL_RATINGS: readonly number[] = [1, 2];
+
+/** True when nothing is filtered — the web's "All" chip is the active one. */
+export function isAllReviews(f: MyReviewsFilter): boolean {
+  return f.ratings.length === 0 && f.hasComment === null;
+}
+
+/** True when the filter is exactly the web's "1–2★" chip: stars 1 and 2, no comment filter. */
+export function isCriticalFilter(f: MyReviewsFilter): boolean {
+  const unique = [...new Set(f.ratings)].sort();
+  return f.hasComment === null
+    && unique.length === CRITICAL_RATINGS.length
+    && unique.every((n, i) => n === CRITICAL_RATINGS[i]);
+}
+
 // ---- the farm's reply (PUT / DELETE /merchants/me/reviews/{id}/reply), CF-0133 ----
 // Copied from web lib/review-reply.ts. Keep REPLY_MAX_LENGTH in step with backend
 // app/schemas/review.py (inStep.test.ts checks it).

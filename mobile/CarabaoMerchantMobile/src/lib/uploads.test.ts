@@ -13,6 +13,7 @@ import {
   checkImage,
   contentTypeFor,
   filePart,
+  imageMimeType,
 } from './uploads.ts';
 
 test('S2 limits: images 5 MB, documents 10 MB, bodies 12 MB and 42 MB', () => {
@@ -53,6 +54,21 @@ test('S2 checkDocument: the web DocumentDropzone messages, 10 MB', () => {
     checkDocument('BIR Certificate of Registration', { size: 1, mimeType: undefined }),
     'BIR Certificate of Registration must be a PDF or an image (PNG/JPG/WEBP).',
   );
+});
+
+test('S6 imageMimeType: the picker type, else one from the file name', () => {
+  assert.equal(imageMimeType('file:///cache/IMG_1.png', 'image/png'), 'image/png');
+  assert.equal(imageMimeType('file:///cache/a.JPG', ' IMAGE/JPEG '), 'image/jpeg');
+  // The camera can leave the type out.
+  assert.equal(imageMimeType('file:///cache/IMG_0001.jpg', null), 'image/jpeg');
+  assert.equal(imageMimeType('content://media/external/images/media/42.webp'), 'image/webp');
+  assert.equal(imageMimeType('file:///cache/a.jpeg?x=1', undefined), 'image/jpeg');
+  // A generic type does not hide a real extension; an unknown file is left for checkImage.
+  assert.equal(imageMimeType('file:///cache/a.png', 'application/octet-stream'), 'image/png');
+  assert.equal(imageMimeType('file:///cache/a.gif', null), null);
+  assert.equal(imageMimeType('file:///cache/a.gif', 'image/gif'), 'image/gif');
+  // So a GIF still fails the S2 check, whatever the picker called it.
+  assert.match(checkImage({ size: 1, mimeType: imageMimeType('file:///cache/a.gif') })!, /PNG, JPG or WebP/);
 });
 
 test('S2 filePart: the React Native FormData file shape, with fallbacks', () => {

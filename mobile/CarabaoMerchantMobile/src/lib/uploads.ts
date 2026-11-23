@@ -32,6 +32,23 @@ export function checkImage({ size, mimeType }: FileInfo): string | null {
   return null;
 }
 
+/**
+ * The MIME type of a picked image (S6): the picker's own, or one read from the file
+ * name, because the camera can leave `mimeType` out or report a generic type. null
+ * when neither says PNG/JPEG/WebP, so checkImage can refuse it.
+ */
+export function imageMimeType(uri: string, mimeType?: string | null): string | null {
+  const given = (mimeType ?? '').trim().toLowerCase();
+  if (given.startsWith('image/')) return given;
+  const ext = /\.([A-Za-z0-9]+)(?:[?#]|$)/.exec(uri)?.[1]?.toLowerCase();
+  const byName =
+    ext === 'png' ? 'image/png'
+      : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+        : ext === 'webp' ? 'image/webp'
+          : null;
+  return byName ?? (given || null);
+}
+
 /** An error message for an onboarding document, or null. Same words as the web form. */
 export function checkDocument(label: string, { size, mimeType }: FileInfo): string | null {
   if (!mimeType || !DOCUMENT_TYPES.includes(mimeType)) {

@@ -2,11 +2,15 @@
 // Merchant's own produce (the Produce tab). Uses the same endpoints as the web
 // merchant dashboard: /users/me to find the merchant, then /merchants/me/produce
 // (which, unlike the public list, includes expired and admin-hidden listings).
+// S6 (plan §5.7): a photo is picked in the form and uploaded to
+// POST /produce/{id}/image right after the listing is saved, and a server message
+// for a field shows under that field (rule 8, listingSaveErrors in listingForm.ts).
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, FlatList, StyleSheet, SafeAreaView, Alert,
-  TouchableOpacity, RefreshControl,
+  TouchableOpacity, RefreshControl, ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, type ApiProduce, type ApiStockAlerts, type ProduceCreatePayload } from '../lib/api';
@@ -14,6 +18,10 @@ import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { ListingForm } from '../components/ListingForm';
+import { listingSaveErrors, type ListingFieldErrors, type PickedPhoto } from '../lib/listingForm';
+import { filePart } from '../lib/uploads';
+import { safeImageUri } from '../lib/imageUri';
+import { useMerchantData } from '../lib/MerchantDataContext';
 
 // F1: why a listing needs attention, from /merchants/me/stock-alerts.
 function alertFor(alerts: ApiStockAlerts | null, id: number): string | null {
@@ -29,10 +37,34 @@ function alertFor(alerts: ApiStockAlerts | null, id: number): string | null {
   return notes.length ? notes.join(' · ') : null;
 }
 
-function ListingRow({ item, alert, onPress }: { item: ApiProduce; alert: string | null; onPress: () => void }) {
+function ListingRow({
+  item, alert, uploading, onPress,
+}: {
+  item: ApiProduce;
+  alert: string | null;
+  /** S6: the photo is uploading; the row shows a placeholder until it is done. */
+  uploading: boolean;
+  onPress: () => void;
+}) {
   const outOfStock = item.stock_quantity <= 0;
+  // CF-0130: only a plain https image link is loaded; a local http one in a dev build.
+  const photo = safeImageUri(item.image_url, __DEV__);
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.8}>
+      {uploading ? (
+        <View style={[styles.thumb, styles.thumbEmpty]}>
+          <ActivityIndicator size="small" color={Colors.primary} />
+        </View>
+      ) : photo ? (
+        <Image
+          source={{ uri: photo }} style={styles.thumb} contentFit="cover"
+          accessibilityLabel={item.name ? `Photo of ${item.name}` : 'Produce photo'}
+        />
+      ) : (
+        <View style={[styles.thumb, styles.thumbEmpty]}>
+          <Ionicons name="image-outline" size={20} color={Colors.textLight} />
+        </View>
+      )}
       <View style={styles.rowInfo}>
         <Text style={styles.rowName}>{item.name ?? 'Untitled listing'}</Text>
         <Text style={styles.rowMeta}>
@@ -79,6 +111,9 @@ async function fetchListings(token: string): Promise<ListingsLoad> {
 
 export default function ProduceScreen() {
   const { token } = useAuth();
+  // The Produce tab's count badge comes from the shared context (S3, productCount), so
+  // every change here refreshes it as well as this screen's own list.
+  const { refreshProduce } = useMerchantData();
   const [items, setItems] = useState<ApiProduce[]>([]);
   const [alerts, setAlerts] = useState<ApiStockAlerts | null>(null);
   const [merchantName, setMerchantName] = useState<string | null>(null);
@@ -90,11 +125,15 @@ export default function ProduceScreen() {
   const [editing, setEditing] = useState<ApiProduce | 'new' | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveFieldErrors, setSaveFieldErrors] = useState<Record<string, string>>({});
+  const [saveFieldErrors, setSaveFieldErrors] = useState<ListingFieldErrors>({});
+  // S6: the id whose photo is uploading, and why the last upload failed.
+  const [uploadingId, setUploadingId] = useState<number | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const openEdit = (item: ApiProduce | 'new') => {
     setSaveError(null);
     setSaveFieldErrors({});
+    setPhotoError(null);
     setEditing(item);
   };
 
@@ -113,6 +152,7 @@ export default function ProduceScreen() {
             setItems((prev) => prev.filter((p) => p.id !== item.id));
             setEditing(null);
             api.merchants.stockAlerts(token).then(setAlerts).catch(() => {});
+            void refreshProduce();
           } catch (err) {
             setSaveError(err instanceof Error ? err.message : 'Could not delete this listing');
           } finally {
@@ -122,24 +162,54 @@ export default function ProduceScreen() {
       },
     ]);
 
-  const handleSave = async (payload: ProduceCreatePayload) => {
+  const handleSave = async (payload: ProduceCreatePayload, photo: PickedPhoto | null) => {
     if (!token || !editing) return;
     setSaving(true);
     setSaveError(null);
     setSaveFieldErrors({});
+    setPhotoError(null);
+    const creating = editing === 'new';
     try {
-      if (editing === 'new') {
-        const created = await api.produce.create(token, payload);
-        setItems((prev) => [...prev, created]);
-      } else {
-        const updated = await api.produce.update(token, editing.id, payload);
-        setItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-      }
-      setEditing(null);
+      let saved = creating
+        ? await api.produce.create(token, payload)
+        : await api.produce.update(token, editing.id, payload);
+      setItems((prev) => (creating ? [...prev, saved] : prev.map((p) => (p.id === saved.id ? saved : p))));
+      // The listing is saved: the stock alerts and the Produce tab's count follow, even
+      // when the photo below is refused.
       api.merchants.stockAlerts(token).then(setAlerts).catch(() => {});
+      void refreshProduce();
+
+      if (photo) {
+        // S6: the listing exists before its photo can be sent (backend
+        // POST /produce/{id}/image), so the upload follows the save. Until it lands the
+        // row shows a placeholder; a refusal shows under the photo, rule 8.
+        setUploadingId(saved.id);
+        try {
+          saved = await api.produce.uploadImage(
+            token, saved.id, filePart(photo.uri, photo.name, photo.mimeType),
+          );
+          setItems((prev) => prev.map((p) => (p.id === saved.id ? saved : p)));
+        } catch (err) {
+          // The listing itself is saved: keep the form open on it so the photo can be
+          // tried again, and put the reason under the photo.
+          setEditing(saved);
+          setPhotoError(err instanceof Error ? err.message : 'The photo could not be uploaded.');
+          return;
+        } finally {
+          setUploadingId(null);
+        }
+      }
+
+      setEditing(null);
     } catch (err) {
-      setSaveFieldErrors(err instanceof ApiError ? err.fieldErrors : {});
-      setSaveError(err instanceof Error ? err.message : 'Could not save this listing');
+      // Rule 8: a message for a field this form has goes under that field; anything else
+      // (network, 5xx, a 400 whose wording names no field) shows at the top.
+      const shown = listingSaveErrors(
+        err instanceof Error ? err.message : null,
+        err instanceof ApiError ? err.fieldErrors : {},
+      );
+      setSaveFieldErrors(shown.fields);
+      setSaveError(shown.top);
     } finally {
       setSaving(false);
     }
@@ -200,7 +270,12 @@ export default function ProduceScreen() {
         data={items}
         keyExtractor={(p) => String(p.id)}
         renderItem={({ item }) => (
-          <ListingRow item={item} alert={alertFor(alerts, item.id)} onPress={() => openEdit(item)} />
+          <ListingRow
+            item={item}
+            alert={alertFor(alerts, item.id)}
+            uploading={uploadingId === item.id}
+            onPress={() => openEdit(item)}
+          />
         )}
         ListHeaderComponent={
           alerts && (alerts.low_stock.length || alerts.expiring_soon.length || alerts.expired.length) ? (
@@ -247,8 +322,10 @@ export default function ProduceScreen() {
         visible={editing !== null}
         produce={editing === 'new' ? null : editing}
         saving={saving}
+        uploading={uploadingId !== null}
         error={saveError}
         fieldErrors={saveFieldErrors}
+        photoError={photoError}
         onCancel={() => setEditing(null)}
         onSave={handleSave}
         onDelete={editing && editing !== 'new' ? () => confirmDelete(editing) : undefined}
@@ -272,6 +349,12 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, ...Shadow.sm,
   },
   rowInfo: { flex: 1 },
+  // S6: the listing's photo (or its placeholder) in the row.
+  thumb: { width: 48, height: 48, borderRadius: Radius.md, backgroundColor: Colors.surfaceAlt },
+  thumbEmpty: {
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: Colors.border,
+  },
   rowName: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   rowMeta: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 2 },
   rowHidden: { fontSize: FontSize.xs, color: Colors.error, fontWeight: '600', marginTop: 4 },
