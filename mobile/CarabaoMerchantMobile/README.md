@@ -43,7 +43,20 @@ npm test          # node --test "src/lib/**/*.test.ts"
   the store listing before the first build - they must differ from the buyer app's.
 - TODO merchant icon and splash artwork: `assets/` currently reuses the buyer app's images.
 - Deep links: `carabaomerchant://` (the dashboard), plus `.../orders`, `.../chats`,
-  `.../produce`, `.../reviews`, `.../notifications`, `.../order-chat?orderId=<id>` and
-  `.../onboarding`. The buyer app hands a merchant notification over with the path its kind
-  maps to (`../CarabaoMobile/src/lib/merchantHandoff.ts`), and opens the web page
-  (`/merchantDashboard`, `/merchantOnboarding`) when this app is not installed.
+  `.../chats?order=<id>` (opens that order's chat on top of the list), `.../produce`,
+  `.../reviews`, `.../notifications`, `.../order-chat?orderId=<id>` and `.../onboarding`.
+  The buyer app hands a merchant notification over with the path its kind maps to
+  (`../CarabaoMobile/src/lib/merchantHandoff.ts`; a chat message about one order opens
+  `/order-chat?orderId=<id>`), and opens the web page (`/merchantDashboard`,
+  `/merchantOnboarding`) when this app is not installed.
+- Known limit: a deep link opened while signed out goes to sign-in, and after sign-in the
+  app opens Home, not the linked screen. Open the link again after sign-in.
+- The root gate reads `/users/me` once per account. An account that gets its farm approved
+  on the web while this app is open uses "Check again" on the "This app is for farm
+  accounts" screen; no restart is needed.
+- "Open buyer app" (More tab) uses `carabaomobile://`. iOS can see the buyer app because
+  `app.json` lists `ios.infoPlist.LSApplicationQueriesSchemes: ["carabaomobile"]`. Android 11+
+  cannot be told about the scheme from `app.json` (Expo's config has no `android.queries`),
+  so `canOpenURL` may answer false although the buyer app is installed; the website
+  (`EXPO_PUBLIC_WEB_URL`) then opens instead. Add a `<queries>` entry to the Android manifest
+  (config plugin or `expo prebuild`) when a native build must open the app.

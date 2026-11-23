@@ -8,7 +8,6 @@ import {
   TouchableOpacity, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, type ApiProduce, type ApiStockAlerts, type ProduceCreatePayload } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
@@ -79,7 +78,6 @@ async function fetchListings(token: string): Promise<ListingsLoad> {
 }
 
 export default function ProduceScreen() {
-  const router = useRouter();
   const { token } = useAuth();
   const [items, setItems] = useState<ApiProduce[]>([]);
   const [alerts, setAlerts] = useState<ApiStockAlerts | null>(null);
@@ -234,9 +232,7 @@ export default function ProduceScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
+        {/* A tab root has no screen behind it, so it has no Back button. */}
         <Text style={styles.navTitle}>{merchantName ? `My listings · ${merchantName}` : 'My listings'}</Text>
         {merchantName ? (
           <TouchableOpacity onPress={() => openEdit('new')} accessibilityLabel="New listing">
@@ -268,7 +264,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
     backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  backIcon: { fontSize: 22, color: Colors.text },
   navTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text, flexShrink: 1 },
   list: { padding: Spacing.lg, gap: Spacing.sm, flexGrow: 1 },
   row: {

@@ -1,16 +1,20 @@
 // app/not-merchant.tsx
 // Where the gate sends a signed-in account that has no farm (plan §4.3). "Apply to
 // sell" opens /onboarding; the words match the old buyer ProtectedScreen, which
-// this gate replaces.
+// this gate replaces. The gate checks once per account, so "Check again" asks the
+// server again after the farm is approved on the web (no restart or sign-out needed).
 import React, { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/lib/AuthContext';
+import { useMerchantGate } from '../src/lib/MerchantContext';
 import { Colors, FontSize, Radius, Spacing } from '../src/lib/theme';
 
 export default function NotMerchantScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
+  // retry shows the gate's spinner, then the tabs if the account has a farm now.
+  const { retry } = useMerchantGate();
   const [signingOut, setSigningOut] = useState(false);
 
   const onSignOut = async () => {
@@ -32,6 +36,9 @@ export default function NotMerchantScreen() {
         accessibilityRole="button"
       >
         <Text style={styles.btnText}>Apply to sell</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.link} onPress={retry} accessibilityRole="button">
+        <Text style={styles.linkText}>Already approved? Check again</Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={styles.link}

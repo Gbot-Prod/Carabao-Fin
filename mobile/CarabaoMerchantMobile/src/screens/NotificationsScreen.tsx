@@ -16,6 +16,10 @@ import { api, type ApiNotification } from '../lib/api';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { EmptyState } from '../components/UI';
 
+// The most server rows the list reads by itself to find the farm's rows (10 pages of
+// NOTES_PAGE); after that the reader asks for more with the footer button.
+const AUTO_FILL_ROWS = NOTES_PAGE * 10;
+
 // The root gate (app/_layout.tsx) already checked the farm.
 function NotificationsContent() {
   const router = useRouter();
@@ -34,6 +38,33 @@ function NotificationsContent() {
   const notes = useMemo(() => rows.filter((n) => isMerchantNotification(n.link)), [rows]);
   const unread = useMemo(() => notes.filter((n) => !n.read).length, [notes]);
 
+  // A server page can hold only buyer rows, which the filter hides, and a short list may
+  // never reach `onEndReached`. So after each read, read the next pages by itself while the
+  // farm's rows are short of a page. It stops at the server total or AUTO_FILL_ROWS; past
+  // that, the footer button reads on. `have` is every server row shown so far.
+  const fill = useCallback(async (have: ApiNotification[], serverTotal: number, mine: number) => {
+    let list = have;
+    let max = serverTotal;
+    const short = () => list.filter((n) => isMerchantNotification(n.link)).length < NOTES_PAGE;
+    if (!(list.length < max && list.length < AUTO_FILL_ROWS && short())) return;
+    setLoadingMore(true);
+    try {
+      while (mine === seq.current && list.length < max && list.length < AUTO_FILL_ROWS && short()) {
+        const page = await api.notifications.page(token, notesQuery(unreadOnly, list.length, NOTES_PAGE));
+        if (mine !== seq.current || page.items.length === 0) return;
+        const fresh = page.items.filter((x) => !list.some((p) => p.id === x.id));
+        list = [...list, ...fresh];
+        max = page.total;
+        setRows((prev) => [...prev, ...fresh.filter((x) => !prev.some((p) => p.id === x.id))]);
+        setTotal(page.total);
+      }
+    } catch {
+      // Keep what we have; the footer button or a pull to refresh reads again.
+    } finally {
+      if (mine === seq.current) setLoadingMore(false);
+    }
+  }, [token, unreadOnly]);
+
   const load = useCallback(() => {
     const mine = ++seq.current;
     return api.notifications
@@ -42,9 +73,10 @@ function NotificationsContent() {
         if (mine !== seq.current) return;
         setRows(page.items);
         setTotal(page.total);
+        return fill(page.items, page.total, mine);
       })
       .catch(() => { /* keep what we have */ });
-  }, [token, unreadOnly]);
+  }, [token, unreadOnly, fill]);
 
   useEffect(() => {
     void load();
@@ -61,12 +93,20 @@ function NotificationsContent() {
       .page(token, notesQuery(unreadOnly, rows.length, NOTES_PAGE))
       .then((page) => {
         if (mine !== seq.current) return;
-        setRows((prev) => [...prev, ...page.items.filter((x) => !prev.some((p) => p.id === x.id))]);
+        const fresh = page.items.filter((x) => !rows.some((p) => p.id === x.id));
+        setRows((prev) => [...prev, ...fresh.filter((x) => !prev.some((p) => p.id === x.id))]);
         setTotal(page.total);
+        setLoadingMore(false);
+        // Below AUTO_FILL_ROWS this reads on as after the first page; past it, each press of
+        // the footer button reads one page.
+        return fill([...rows, ...fresh], page.total, mine);
       })
       .catch(() => {})
-      .finally(() => setLoadingMore(false));
+      .finally(() => { if (mine === seq.current) setLoadingMore(false); });
   };
+
+  const more = rows.length < total;
+  const short = notes.length < NOTES_PAGE;
 
   // The change shows at once; on failure the list is read again from the server.
   const act = (action: NoteAction, call: () => Promise<unknown>) => {
@@ -125,7 +165,15 @@ function NotificationsContent() {
         contentContainerStyle={styles.list}
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={loadingMore ? <ActivityIndicator style={{ margin: Spacing.lg }} color={Colors.primary} /> : undefined}
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator style={{ margin: Spacing.lg }} color={Colors.primary} />
+          ) : more && short ? (
+            <TouchableOpacity style={styles.older} onPress={loadMore} accessibilityRole="button">
+              <Text style={styles.olderText}>Show older notifications</Text>
+            </TouchableOpacity>
+          ) : undefined
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -155,11 +203,14 @@ function NotificationsContent() {
           </TouchableOpacity>
         )}
         ListEmptyComponent={
-          <EmptyState
-            icon={<Ionicons name="notifications-outline" size={48} color={Colors.textLight} />}
-            title={unreadOnly ? 'No unread notifications' : 'No notifications yet'}
-            message="Orders, payouts and reviews appear here."
-          />
+          // While the server has more rows, the farm's rows may still come: no empty state yet.
+          more ? undefined : (
+            <EmptyState
+              icon={<Ionicons name="notifications-outline" size={48} color={Colors.textLight} />}
+              title={unreadOnly ? 'No unread notifications' : 'No notifications yet'}
+              message="Orders, payouts and reviews appear here."
+            />
+          )
         }
       />
     </SafeAreaView>
@@ -173,6 +224,8 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.offWhite },
+  older: { minHeight: 44, alignItems: 'center', justifyContent: 'center', margin: Spacing.md },
+  olderText: { color: Colors.primary, fontWeight: '700', fontSize: FontSize.sm },
   navBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,

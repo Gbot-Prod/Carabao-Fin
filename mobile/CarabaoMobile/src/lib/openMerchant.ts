@@ -16,8 +16,10 @@ import {
  * page opens instead. A failed open falls back the same way; the rejection reaches the
  * caller only when the web page fails too.
  */
-export async function openMerchant(kind: MerchantHandoffKind, notificationKind?: string): Promise<void> {
-  const url = `${MERCHANT_APP_URL}${merchantAppPath(kind, notificationKind)}`;
+export async function openMerchant(
+  kind: MerchantHandoffKind, notificationKind?: string, orderId?: number,
+): Promise<void> {
+  const url = `${MERCHANT_APP_URL}${merchantAppPath(kind, notificationKind, orderId)}`;
   try {
     if (await Linking.canOpenURL(url)) {
       await Linking.openURL(url);

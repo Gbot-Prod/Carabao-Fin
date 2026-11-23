@@ -22,17 +22,21 @@ export function merchantWebUrl(base: string, kind: MerchantHandoffKind): string 
 /**
  * The path inside the merchant app, the same one its notification links use: `/` for the
  * dashboard, `/onboarding` for the form. A dashboard hand-off that came from a merchant
- * notification opens the screen for its kind (plan §4.5); payouts have no screen yet, and
- * any other kind lands on the dashboard - the kind comes from the server, so it never
- * builds a path of its own.
+ * notification opens the screen for its kind (plan §4.5); a chat message about one order
+ * opens that chat (plan §3.5). Payouts have no screen yet, and any other kind lands on the
+ * dashboard - the kind comes from the server, so it never builds a path of its own.
+ * `orderId` must already be checked (notificationLinks parseOrderId); anything that is not a
+ * positive whole number is ignored here too.
  */
-export function merchantAppPath(kind: MerchantHandoffKind, notificationKind?: string): string {
+export function merchantAppPath(kind: MerchantHandoffKind, notificationKind?: string, orderId?: number): string {
   if (kind === 'onboarding') return '/onboarding';
   switch (notificationKind) {
     case 'new_order':
       return '/orders';
     case 'chat_message':
-      return '/chats';
+      return orderId !== undefined && Number.isSafeInteger(orderId) && orderId > 0
+        ? `/order-chat?orderId=${orderId}`
+        : '/chats';
     case 'review_received':
       return '/reviews';
     default:

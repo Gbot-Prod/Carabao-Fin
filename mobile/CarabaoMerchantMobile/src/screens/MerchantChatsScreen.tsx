@@ -1,13 +1,14 @@
 // src/screens/MerchantChatsScreen.tsx
 // CF-0127: the farm's order chats (web merchant shell "chats"): unread first,
 // refreshed every 30 s while in view; a row opens the existing order chat.
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { api } from '../lib/api';
 import { inboxChatTitle, preview, sinceLabel, sortInbox, type ChatSummary } from '../lib/chatInbox';
+import { parseOrderId } from '../lib/orderChat';
 import { orderStatusLabel } from '../lib/orderStatus';
 import { usePolling } from '../lib/usePolling';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
@@ -18,6 +19,16 @@ import { SkeletonList, LoadError } from '../components/Skeleton';
 export default function MerchantChatsScreen() {
   const router = useRouter();
   const { token } = useAuth();
+  // Plan §4.5: `carabaomerchant://chats?order=12` (and the buyer app's hand-off) opens that
+  // order's chat on top of this list. CF-0114: the id is checked before it is used, and the
+  // param is cleared first so a return to this tab does not open the chat again.
+  const { order } = useLocalSearchParams<{ order?: string }>();
+  useEffect(() => {
+    const orderId = parseOrderId(order);
+    if (orderId === null) return;
+    router.setParams({ order: undefined });
+    router.push({ pathname: '/order-chat', params: { orderId: String(orderId) } });
+  }, [order, router]);
   const [rows, setRows] = useState<ChatSummary[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,9 +47,7 @@ export default function MerchantChatsScreen() {
 
   const header = (
     <View style={styles.header}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.back} accessibilityRole="button" accessibilityLabel="Back">
-        <Ionicons name="chevron-back" size={24} color={Colors.text} />
-      </TouchableOpacity>
+      {/* A tab root has no screen behind it, so it has no Back button. */}
       <Text style={styles.headerTitle}>Chats</Text>
     </View>
   );
@@ -105,10 +114,9 @@ export default function MerchantChatsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.offWhite },
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border,
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
+    minHeight: 60, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  back: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.text },
   list: { padding: Spacing.lg, gap: Spacing.sm },
   row: {

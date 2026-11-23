@@ -40,9 +40,7 @@ export default function MerchantDashboardScreen() {
 
   const header = (
     <View style={styles.header}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.back} accessibilityRole="button" accessibilityLabel="Back">
-        <Ionicons name="chevron-back" size={24} color={Colors.text} />
-      </TouchableOpacity>
+      {/* A tab root has no screen behind it, so it has no Back button. */}
       <Text style={styles.headerTitle} numberOfLines={1}>{data?.perf.merchant_name ?? 'Dashboard'}</Text>
     </View>
   );
@@ -155,10 +153,9 @@ const styles = StyleSheet.create({
   },
   bannerText: { flex: 1, fontSize: FontSize.sm, color: Colors.text },
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border,
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm,
+    minHeight: 60, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  back: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, fontSize: FontSize.xl, fontWeight: '800', color: Colors.text },
   scroll: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 60 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },

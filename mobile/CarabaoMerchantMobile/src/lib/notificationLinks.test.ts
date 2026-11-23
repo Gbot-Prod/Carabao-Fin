@@ -19,6 +19,8 @@ test('a chat message opens that order chat, else the chat list', () => {
   const chat = { pathname: '/order-chat', params: { orderId: '12' } };
   assert.deepEqual(appRoute('/merchantDashboard?order=12', 'chat_message'), chat);
   assert.deepEqual(appRoute('/merchantDashboard?tab=chats&order=12', 'chat_message'), chat);
+  // A sub-path of the dashboard is still a merchant link, read the same way.
+  assert.deepEqual(appRoute('/merchantDashboard/chats?order=12', 'chat_message'), chat);
   // A farm question has no order to open.
   assert.deepEqual(appRoute('/merchantDashboard?inquiry=3', 'chat_message'), { pathname: '/(tabs)/chats' });
   assert.deepEqual(appRoute('/merchantDashboard', 'chat_message'), { pathname: '/(tabs)/chats' });

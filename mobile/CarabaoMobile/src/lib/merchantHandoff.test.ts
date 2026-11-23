@@ -22,6 +22,13 @@ test('the app opens on the dashboard or the onboarding form', () => {
 test('a merchant notification opens the screen for its kind (plan §4.5)', () => {
   assert.equal(merchantAppPath('dashboard', 'new_order'), '/orders');
   assert.equal(merchantAppPath('dashboard', 'chat_message'), '/chats');
+  // A chat about one order opens that chat (plan §3.5); a bad id falls back to the list.
+  assert.equal(merchantAppPath('dashboard', 'chat_message', 12), '/order-chat?orderId=12');
+  for (const bad of [0, -1, 1.5, Number.NaN, 2 ** 60]) {
+    assert.equal(merchantAppPath('dashboard', 'chat_message', bad), '/chats', String(bad));
+  }
+  // Only a chat message uses the order.
+  assert.equal(merchantAppPath('dashboard', 'new_order', 12), '/orders');
   assert.equal(merchantAppPath('dashboard', 'review_received'), '/reviews');
   // Payouts have no screen yet.
   assert.equal(merchantAppPath('dashboard', 'payout_released'), '/');

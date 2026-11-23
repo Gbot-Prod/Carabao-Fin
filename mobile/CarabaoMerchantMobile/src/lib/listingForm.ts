@@ -20,7 +20,6 @@ export function parseYmd(value: string): string | null {
   return d.toISOString().slice(0, 10) === v ? v : null;
 }
 
-/** YYYY-MM-DD plus n days (n may be negative). */
 /** Backend freshness_error, word for word. YYYY-MM-DD strings compare as dates. */
 export function freshnessError(harvest: string | null, bestBefore: string | null, today: string): string | null {
   if (harvest === null || bestBefore === null) return 'Harvest date and best-before date are required';

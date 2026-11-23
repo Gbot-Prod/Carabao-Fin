@@ -38,8 +38,12 @@ test('merchant notifications hand off to the merchant app (CF-0125)', () => {
   // The buyer app has no merchant screens left, so every kind goes over as it came.
   assert.deepEqual(appRoute('/merchantDashboard', 'chat_message'), { merchant: 'chat_message' });
   assert.deepEqual(appRoute('/merchantDashboard?inquiry=3', 'chat_message'), { merchant: 'chat_message' });
-  // The chat for one of the farm's orders is the merchant app's too.
-  assert.deepEqual(appRoute('/merchantDashboard?order=12', 'chat_message'), { merchant: 'chat_message' });
+  // The chat for one of the farm's orders is the merchant app's too; the checked order
+  // goes with it, so that app opens the chat itself (plan §3.5).
+  assert.deepEqual(appRoute('/merchantDashboard?order=12', 'chat_message'), { merchant: 'chat_message', orderId: 12 });
+  assert.deepEqual(appRoute('/merchantDashboard?order=1e3', 'chat_message'), { merchant: 'chat_message' });
+  assert.deepEqual(appRoute('/merchantDashboard?order=12#x', 'chat_message'), { merchant: 'chat_message', orderId: 12 });
+  // Only a chat message carries the order.
   assert.deepEqual(appRoute('/merchantDashboard?order=12', 'new_order'), { merchant: 'new_order' });
   assert.deepEqual(appRoute('/merchantDashboard', 'review_received'), { merchant: 'review_received' });
 });

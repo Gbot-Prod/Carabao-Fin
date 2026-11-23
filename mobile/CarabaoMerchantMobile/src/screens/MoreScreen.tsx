@@ -1,9 +1,9 @@
 // src/screens/MoreScreen.tsx
-// The More tab (plan §4.4). Small on purpose: the farm name at the top plus the rows
-// that do not need a tab. S8 adds the verification banner here (`verificationBanner`
-// from `dashboard.ts`); until then the name comes from the gate's /users/me profile,
-// which the root gate already loaded once the tabs are reachable.
-import React, { useState } from 'react';
+// The More tab (plan §4.4). Small on purpose: the farm name and its verification status
+// at the top, plus the rows that do not need a tab. The name comes from the gate's
+// /users/me profile (loaded before the tabs mount); the status comes from
+// /merchants/me/performance, read the same way as the Home tab (`verificationBanner`).
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, Linking, SafeAreaView, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
@@ -13,7 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../lib/AuthContext';
 import { useMerchantGate } from '../lib/MerchantContext';
-import { WEB_BASE } from '../lib/api';
+import { api, WEB_BASE } from '../lib/api';
+import { verificationBanner } from '../lib/dashboard';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '../lib/theme';
 
 // The buyer app's scheme (README). If it is not installed the website opens instead.
@@ -59,9 +60,21 @@ function SectionHeader({ title }: { title: string }) {
 
 export default function MoreScreen() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, token } = useAuth();
   const { profile } = useMerchantGate();
   const [signingOut, setSigningOut] = useState(false);
+  // undefined until read; a failed read shows no banner (the Home tab shows the error).
+  const [status, setStatus] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    let active = true;
+    api.merchants
+      .performance(token)
+      .then((p) => { if (active) setStatus(p.verification_status); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [token]);
+  const banner = verificationBanner(status);
 
   const farmName = profile?.merchant?.merchant_name ?? 'Your farm';
   const account = profile?.name || profile?.email || profile?.phone_number || '';
@@ -118,7 +131,12 @@ export default function MoreScreen() {
           </View>
         </View>
 
-        {/* S8 adds the verification banner here (verificationBanner from dashboard.ts). */}
+        {banner ? (
+          <View style={styles.banner} accessibilityRole="alert">
+            <Ionicons name="time-outline" size={18} color={Colors.text} />
+            <Text style={styles.bannerText}>{banner}</Text>
+          </View>
+        ) : null}
 
         <SectionHeader title="Farm" />
         <View style={styles.group}>
@@ -176,6 +194,13 @@ const styles = StyleSheet.create({
   heroText: { flex: 1 },
   farmName: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.white },
   account: { fontSize: FontSize.xs, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+
+  // Same look as the Home tab's banner.
+  banner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, padding: Spacing.md, marginTop: Spacing.md,
+    borderRadius: Radius.md, backgroundColor: Colors.warningBg, borderWidth: 1, borderColor: Colors.warning,
+  },
+  bannerText: { flex: 1, fontSize: FontSize.sm, color: Colors.text },
 
   sectionHeader: {
     fontSize: FontSize.xs, color: Colors.textMuted, fontWeight: '700',

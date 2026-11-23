@@ -13,7 +13,8 @@ export type AppRoute =
 /** The order a chat notification is about: "/merchantDashboard?order=12", else null. */
 function chatOrderId(link: string): number | null {
   const [path, rest = ''] = link.split('?');
-  if (path !== '/merchantDashboard') return null;
+  // The same test as isMerchantNotification, so every merchant link is read the same way.
+  if (!path.startsWith('/merchantDashboard')) return null;
   const query = rest.split('#')[0];
   const fromQuery = /(?:^|&)order=([^&]*)/.exec(query)?.[1];
   return fromQuery === undefined ? null : parseOrderId(fromQuery);

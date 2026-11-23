@@ -76,7 +76,7 @@ function NotificationsContent() {
     if (!route) return;
     // CF-0125: merchant notifications belong to the merchant app now.
     if ('merchant' in route) {
-      void openMerchant('dashboard', route.merchant).catch(() =>
+      void openMerchant('dashboard', route.merchant, route.orderId).catch(() =>
         Alert.alert('Could not open Carabao Merchant', 'Please try again.'),
       );
       return;

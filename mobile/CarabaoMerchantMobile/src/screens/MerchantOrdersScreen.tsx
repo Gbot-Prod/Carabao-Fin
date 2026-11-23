@@ -289,11 +289,8 @@ export default function MerchantOrdersScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()} accessibilityLabel="Back">
-          <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
+        {/* A tab root has no screen behind it, so it has no Back button. */}
         <Text style={styles.navTitle}>Incoming orders</Text>
-        <View style={{ width: 22 }} />
       </View>
       {body}
       <CancelOrderSheet orderId={cancelId} onClose={() => setCancelId(null)} onSubmit={cancelOrder} />
@@ -308,7 +305,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
     backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
-  backIcon: { fontSize: 22, color: Colors.text },
   navTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.text },
   list: { padding: Spacing.lg, gap: Spacing.sm, flexGrow: 1 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.sm },
