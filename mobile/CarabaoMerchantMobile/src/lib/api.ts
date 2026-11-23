@@ -6,6 +6,12 @@
 import type { MyMerchantReviews, MyReview } from './myReviews';
 import type { ChatSummary, InquirySummary } from './chatInbox';
 import type { DemandInsight, MerchantPerformance } from './dashboard';
+// S10: the day counts the sales summary and the CSV export accept (pure, so the tests can read
+// them without React Native); see src/lib/payout.ts.
+import type { ExportDays, SalesDays } from './payout';
+
+// S12: the road line GET /shipments/{id}/route answers, typed so the map helper can read it.
+import type { RouteGeoJSON } from './routeMap';
 
 import { getAccessToken } from './authClient';
 import { chatEndpoint } from './orderChat';
@@ -27,6 +33,10 @@ export class ApiError extends Error {
   }
 }
 
+// S10: a CSV export answers text/csv, everything else answers JSON. `as` picks the parser; the
+// JSON path and its error words are unchanged.
+export type ResponseMode = 'json' | 'text';
+
 // `token` says whether the call is signed in (screens pass the one from useAuth).
 // The header always carries a current token: they last 15 minutes, so an older
 // one is swapped for a fresh one, and a 401 gets one retry with a new token.
@@ -34,10 +44,11 @@ export async function request<T>(
   path: string,
   token: string | null,
   options?: RequestInit,
+  as: ResponseMode = 'json',
 ): Promise<T> {
-  if (!token) return send<T>(path, null, options);
+  if (!token) return send<T>(path, null, options, as);
   try {
-    return await send<T>(path, (await getAccessToken()) ?? token, options);
+    return await send<T>(path, (await getAccessToken()) ?? token, options, as);
   } catch (err) {
     if (!(err instanceof ApiError && err.status === 401)) throw err;
     const fresh = await getAccessToken({ forceRefresh: true });
@@ -48,7 +59,7 @@ export async function request<T>(
       throw err;
     }
     try {
-      return await send<T>(path, fresh, options);
+      return await send<T>(path, fresh, options, as);
     } catch (again) {
       if (again instanceof ApiError && sessionGone(again.status, true, true)) emitSessionExpired();
       throw again;
@@ -56,10 +67,19 @@ export async function request<T>(
   }
 }
 
+/** The one "wrong host" message, for a body that is not the JSON (or CSV) this app expects. */
+function unexpectedResponse(path: string, status: number): ApiError {
+  return new ApiError(
+    `Unexpected response from ${API_BASE}${path} (${status}). Is EXPO_PUBLIC_API_URL the FastAPI backend?`,
+    status,
+  );
+}
+
 async function send<T>(
   path: string,
   token: string | null,
   options?: RequestInit,
+  as: ResponseMode = 'json',
 ): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -72,7 +92,7 @@ async function send<T>(
       ...options,
       signal: controller.signal,
       headers: {
-        Accept: 'application/json',
+        Accept: as === 'text' ? 'text/csv' : 'application/json',
         ...(contentType ? { 'Content-Type': contentType } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...((options?.headers as Record<string, string>) ?? {}),
@@ -92,22 +112,24 @@ async function send<T>(
 
   const text = await res.text();
   let body: unknown = null;
+  let json = false;
   if (text) {
     try {
       body = JSON.parse(text);
+      json = true;
     } catch {
-      // Non-JSON (usually an HTML page) means API_BASE points at the wrong host.
-      throw new ApiError(
-        `Unexpected response from ${API_BASE}${path} (${res.status}). Is EXPO_PUBLIC_API_URL the FastAPI backend?`,
-        res.status,
-      );
+      // S10: the CSV export is the one endpoint that answers something other than JSON. An
+      // error still comes back as JSON, so a text-mode body that is not JSON is passed through.
+      if (as === 'json') throw unexpectedResponse(path, res.status);
     }
   }
   if (!res.ok) {
+    // Non-JSON (usually an HTML page) means API_BASE points at the wrong host.
+    if (text && !json) throw unexpectedResponse(path, res.status);
     const parsed = parseErrorBody(body);
     throw new ApiError(parsed.message ?? `Request failed (${res.status})`, res.status, parsed.fields);
   }
-  return body as T;
+  return (as === 'text' ? text : body) as T;
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -265,6 +287,89 @@ export type ApiMerchantOrder = {
   shipment_id: number | null;
 };
 
+// S11 (plan §5.4, part 1): one route made from ready orders. Copied from the web
+// util/api/merchants.ts (MerchantShipmentTracking and MerchantShipmentSummary); the route
+// screen (S12) reads the stops and waypoints, creating a route reads shipment_id, order_ids
+// and skipped_orders.
+export type MerchantShipmentWaypoint = {
+  lat: number;
+  lng: number;
+  label: string;
+  type: 'pickup' | 'delivery';
+  sequence: number;
+  order_id?: number | null;
+  status?: string | null;
+};
+
+export type MerchantShipmentStop = {
+  sequence: number;
+  order_id: number;
+  buyer_name: string | null;
+  delivery_address: string | null;
+  lat: number;
+  lng: number;
+  label: string;
+  status: string;
+};
+
+// Why a stop was left out: the delivery location could not be found on the map, or no road
+// route reaches it (the web's union and backend SkippedStop.reason).
+export type ShipmentSkipReason = 'no_location' | 'no_road';
+
+export type MerchantShipmentSkip = { order_id: number; reason: ShipmentSkipReason };
+
+export type MerchantShipmentTracking = {
+  shipment_id: number;
+  order_id: number;
+  merchant_name: string;
+  status: string;
+  order_ids: number[];
+  waypoints: MerchantShipmentWaypoint[];
+  stops: MerchantShipmentStop[];
+  origin: { lat: number; lng: number };
+  destination: { lat: number; lng: number };
+  progress: number;
+  eta_minutes: number | null;
+  active_stop_index: number;
+  /** On create: orders left out because they could not be routed; they stay ready to ship. */
+  skipped_orders?: MerchantShipmentSkip[];
+};
+
+// S12 (plan §5.4, part 2): one stop as the route screen reads it (web util/api/tracking.ts
+// ShipmentStop). The merchant-only fields sit on top of what S11's summary carries.
+export type ApiShipmentStop = MerchantShipmentStop & {
+  /** Planned arrival (ISO) from the route schedule. */
+  estimated_arrival_at?: string | null;
+  /** The rider reported that this stop's pin could not be reached. */
+  pin_unreachable?: boolean;
+  /** The buyer never placed this pin; it is where their address geocoded to. */
+  pin_approximate?: boolean;
+};
+
+// GET /shipments/{id}, the merchant's view of one route (web TrackingData). `origin` and
+// `destination` are null in 'waiting_for_shipment'; the route screen polls until every stop is
+// closed.
+export type ApiShipmentTracking = Omit<MerchantShipmentTracking, 'stops'> & {
+  stops: ApiShipmentStop[];
+  /** Planned drive time for the whole route. */
+  total_duration_seconds?: number | null;
+};
+
+// GET /shipments/{id}/route: the road line, or null when Mapbox had none (the map then shows the
+// stops without a line).
+export type RouteGeometryResponse = { route: RouteGeoJSON | null };
+
+// Backend GET /merchants/me/shipments (web MerchantShipmentSummary). completed_stop_count
+// counts the stops whose order is delivered or cancelled, so the two are equal once done.
+export type MerchantShipmentSummary = {
+  id: number;
+  status: string;
+  stop_count: number;
+  completed_stop_count: number;
+  created_at: string;
+  shipped_at: string | null;
+};
+
 // The owner's shop page (backend ShopPageOwnerResponse, app/schemas/shopPage.py): the
 // live page plus the unpublished draft. The endpoint is 404 until one is created.
 export type ApiShopPage = {
@@ -282,6 +387,116 @@ export type ApiShopPage = {
   published_at: string | null;
   is_published: boolean;
   has_unpublished_changes: boolean;
+};
+
+// S9 (plan §5.5, part 1): the payout destination, copied from the web util/api/merchants.ts.
+// A change is saved only with the SMS code sent for exactly that destination (CF-0004).
+export type PayoutType = 'bank' | 'gcash' | 'maya';
+
+// Backend PayoutInfoResponse (app/schemas/payout.py). `problem` says why a payout cannot be
+// sent here yet (null once the method is complete), so the screen can warn before cashing out.
+export type PayoutInfo = {
+  id: number;
+  merchant_id: number;
+  payout_type: PayoutType;
+  // The PayMongo institution code (BIC) and the name looked up for it, for a bank payout.
+  bank_code: string | null;
+  bank_name: string | null;
+  account_number: string | null;
+  account_name: string | null;
+  ewallet_number: string | null;
+  created_at: string;
+  updated_at: string;
+  problem: string | null;
+};
+
+// A bank on PayMongo's InstaPay list (backend ReceivingInstitution).
+export type PayoutInstitution = { code: string; name: string };
+
+// The destination a code is sent for and the save posts (backend PayoutInfoUpdate, the web
+// payload()). Blank fields go as null, exactly as the web payload() sends them.
+export type PayoutInfoPayload = {
+  payout_type: PayoutType;
+  bank_code?: string | null;
+  account_number?: string | null;
+  account_name?: string | null;
+  ewallet_number?: string | null;
+};
+
+// S10 (plan §5.5, part 2): the money side of Earnings - what a cash out would ask for now, the
+// batches already sent, and the transactions behind them. Copied from the web
+// util/api/merchants.ts, whose unions match backend app/models/statuses.py.
+export type PayoutStatus = 'pending' | 'approved' | 'processing' | 'released' | 'failed';
+export type PayoutProvider = 'instapay' | 'pesonet';
+export type TransactionStatus =
+  | 'pending'
+  | 'paid'
+  | 'failed'
+  | 'expired'
+  | 'refund_pending'
+  | 'refunded';
+
+// Backend AvailablePayout: the buyer-confirmed orders no payout has taken yet, and the PayMongo
+// transfer fee they would pay (the fee is the provider's, so the screen shows it before cashing).
+export type AvailablePayout = {
+  transaction_count: number;
+  gross_amount: number;
+  transfer_fee: number;
+  net_amount: number;
+};
+
+// Backend PayoutBatchResponse: one cash out as requested and, once released, as sent. The
+// destination fields are the snapshot taken at approval (rule 7: mask before printing).
+export type MerchantPayoutBatch = {
+  id: number;
+  merchant_id: number;
+  period_date: string;
+  transaction_count: number;
+  gross_amount: number;
+  status: PayoutStatus;
+  notes: string | null;
+  released_at: string | null;
+  created_at: string;
+  transfer_fee: number | null;
+  net_amount: number | null;
+  attempts: number;
+  failure_reason: string | null;
+  provider_reference: string | null;
+  paymongo_transfer_id: string | null;
+  sent_at: string | null;
+  destination_type: PayoutType | null;
+  destination_name: string | null;
+  destination_number: string | null;
+  transfer_provider: PayoutProvider | null;
+};
+
+// Backend TransactionSummary: one payment and the farm's share of it (merchant_amount, after the
+// platform fee). `order_status` is null when the order row is gone.
+export type MerchantTransaction = {
+  id: number;
+  order_id: number;
+  amount: number;
+  merchant_amount: number;
+  status: TransactionStatus;
+  description: string | null;
+  created_at: string;
+  paid_at: string | null;
+  order_status: MerchantOrderStatus | null;
+};
+
+// Backend MerchantSales: GET /merchants/me/sales?days=30|90, the numbers behind the sales card.
+export type MerchantSales = {
+  days: number;
+  total_revenue: number;
+  total_orders: number;
+  daily: { date: string; revenue: number; orders: number }[];
+  top_products: {
+    produce_id: number | null;
+    name: string;
+    quantity: number;
+    revenue: number;
+  }[];
+  skipped_rows: number;
 };
 
 // Stock alerts (F1), same as the web merchant dashboard.
@@ -361,6 +576,13 @@ export const api = {
     // CF-0125: dashboard numbers and province demand.
     performance: (token: string | null) => request<MerchantPerformance>('/merchants/me/performance', token),
     demand: (token: string | null) => request<DemandInsight>('/merchants/me/demand', token),
+    // S10: the sales summary the Earnings card shows (30 or 90 days, web fetchMySales) and the
+    // same rows as a CSV (7, 30 or 90 days). The export answers text/csv, not JSON, so request()
+    // runs in text mode; GET /merchants/me/sales/export?days=... on the web does the same.
+    sales: (token: string | null, days: SalesDays) =>
+      request<MerchantSales>(`/merchants/me/sales?days=${days}`, token),
+    salesCsv: (token: string | null, days: ExportDays) =>
+      request<string>(`/merchants/me/sales/export?days=${days}`, token, undefined, 'text'),
     // CF-0119: query from src/lib/myReviews.ts myReviewsQuery.
     myReviews: (token: string | null, query: string) =>
       request<MyMerchantReviews>(`/merchants/me/reviews?${query}`, token),
@@ -391,6 +613,74 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ status: 'cancelled', cancel_reason: reason, cancel_note: note.trim() || null }),
       }),
+    // S11: one route from ready orders (backend POST /merchants/me/shipments, the web
+    // createMerchantShipment). The server leaves out the stops it cannot route and names them
+    // in `skipped_orders`; a 400 names the orders it refused. A 429 is the `shipment_create`
+    // limit (30 an hour per farm) and its message is the one the screen shows.
+    createShipment: (token: string | null, orderIds: number[]) =>
+      request<MerchantShipmentTracking>('/merchants/me/shipments', token, {
+        method: 'POST',
+        body: JSON.stringify({ order_ids: orderIds }),
+      }),
+    // The farm's shipments, newest first (web fetchMyShipments).
+    shipments: (token: string | null) =>
+      request<MerchantShipmentSummary[]>('/merchants/me/shipments', token),
+  },
+  // S12: one created route, as the route screen reads it (web util/api/tracking.ts). The map's
+  // road line is its own call, because the server caches Mapbox's answer and the stops do not
+  // change when it fails.
+  shipments: {
+    tracking: (token: string | null, shipmentId: number) =>
+      request<ApiShipmentTracking>(`/shipments/${shipmentId}`, token),
+    route: (token: string | null, shipmentId: number) =>
+      request<RouteGeometryResponse>(`/shipments/${shipmentId}/route`, token),
+    // The rider could not get to this stop's pin (pin quality, control 6). 204 on success; an
+    // optional note (200 characters, backend PinUnreachableRequest) is kept for the buyer. 409
+    // means it was already reported, which the screen shows as done (the web does the same).
+    reportUnreachablePin: (token: string | null, orderId: number, note?: string) =>
+      request<null>(`/merchants/me/orders/${orderId}/pin-unreachable`, token, {
+        method: 'POST',
+        body: JSON.stringify({ note: note?.trim() || null }),
+      }),
+  },
+  // S9 (plan §5.5, part 1): the payout destination - the web's payoutInfo, payoutInstitutions,
+  // sendPayoutInfoCode and updateMyPayoutInfo. The server saves a change only with the SMS code
+  // sent for exactly that destination (CF-0004), so sendCode first, then update with the code.
+  // S10 adds the balance, cash out, history and sales to this group.
+  payout: {
+    // null until the farm sets a method up.
+    info: (token: string | null) => request<PayoutInfo | null>('/merchants/me/payout-info', token),
+    // PayMongo's InstaPay list; 502 when it cannot be reached.
+    institutions: (token: string | null) =>
+      request<PayoutInstitution[]>('/merchants/me/payout-institutions', token),
+    // Texts a code to the account's verified mobile number. The server answers with the last 4
+    // digits it went to (PayoutCodeSent.sent_to) and never the whole number.
+    sendCode: (token: string | null, payload: PayoutInfoPayload) =>
+      request<{ sent_to: string }>('/merchants/me/payout-info/code', token, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }).then((res) => res.sent_to),
+    // 400 (wrong or expired code, unverified number), 422 (incomplete details), 429 (too many
+    // codes): src/lib/payout.ts payoutSaveMessage says which words the screen shows for each.
+    update: (token: string | null, payload: PayoutInfoPayload & { code: string }) =>
+      request<PayoutInfo>('/merchants/me/payout-info', token, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }),
+    // S10: what a cash out would ask for now (web fetchMyAvailablePayout).
+    availablePayout: (token: string | null) =>
+      request<AvailablePayout>('/merchants/me/payouts/available', token),
+    // Asks for everything available. 400 carries the server's reason (a payout already open,
+    // nothing to cash out, under the transfer fee, over PayMongo's limit); 403 the farm is not
+    // verified. src/lib/payout.ts payoutRequestMessage picks the words for the screen.
+    requestPayout: (token: string | null) =>
+      request<MerchantPayoutBatch>('/merchants/me/payouts/request', token, { method: 'POST' }),
+    // The farm's cash outs, newest first (web fetchMyPayouts).
+    payouts: (token: string | null) =>
+      request<MerchantPayoutBatch[]>('/merchants/me/payouts', token),
+    // The payments behind those numbers, newest first (web fetchMyTransactions).
+    transactions: (token: string | null) =>
+      request<MerchantTransaction[]>('/merchants/me/transactions', token),
   },
   produce: {
     create: (token: string | null, payload: ProduceCreatePayload) =>

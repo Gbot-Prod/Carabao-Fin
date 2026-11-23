@@ -73,7 +73,8 @@ function RootGate() {
         <Stack.Screen name="reviews" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="order-chat" options={{ headerShown: false }} />
-        {/* Decision D2: placeholders until S7/S9/S11/S12/S14/S15/S16/S18. */}
+        {/* Decision D2: placeholders until S14/S15/S16/S18 (S10's earnings, S11's shipments and
+            S12's route are built). */}
         <Stack.Screen name="shipments" options={{ headerShown: false }} />
         <Stack.Screen name="route" options={{ headerShown: false }} />
         <Stack.Screen name="earnings" options={{ headerShown: false }} />

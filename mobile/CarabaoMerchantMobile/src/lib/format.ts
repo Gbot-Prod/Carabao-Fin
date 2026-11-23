@@ -32,3 +32,15 @@ export const formatRequestedDate = (ymd: string) => {
     ? ymd
     : date.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 };
+
+// Today in the Philippines as "YYYY-MM-DD", comparable with `requested_delivery_date` and
+// `shipment.created_at.slice(0, 10)` (the web's `todayInManila`, S11's ready groups).
+export const todayInManila = () =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
+
+// "YYYY-MM-DD" plus days, as "YYYY-MM-DD", read in UTC so no timezone shifts the day
+// (the web's `addDays`, used for the "Deliver tomorrow" group).
+export const addDays = (ymd: string, days: number) => {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+};

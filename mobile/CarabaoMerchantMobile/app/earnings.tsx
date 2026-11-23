@@ -1,4 +1,6 @@
 // app/earnings.tsx
-// S3 placeholder (decision D2): replaced by the real Earnings screen in S9-S10. Payout
-// notifications open it from S3 on (src/lib/notificationLinks.ts).
-export { default } from '../src/screens/ComingSoonScreen';
+// S9 (plan §5.5, part 1): the payout destination (masked card, institution picker, SMS code
+// step, save). S10 fills in the balance, cash out, history and sales.
+// Payout notifications open this screen (src/lib/notificationLinks.ts).
+export { default } from '../src/screens/EarningsScreen';
+

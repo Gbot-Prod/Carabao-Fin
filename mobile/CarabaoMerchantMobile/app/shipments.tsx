@@ -1,3 +1,4 @@
 // app/shipments.tsx
-// S3 placeholder (decision D2): replaced by the real Shipments screen in S11.
-export { default } from '../src/screens/ComingSoonScreen';
+// S11: the Shipments screen - ready orders, "Make route", and the farm's shipments.
+export { default } from '../src/screens/ShipmentsScreen';
+

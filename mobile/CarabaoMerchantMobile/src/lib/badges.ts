@@ -5,16 +5,18 @@
 // file in step with them. Pure (type-only imports), for `npm test`.
 import type { ApiMerchantOrder, MerchantOrderStatus } from './api.ts';
 import type { ChatSummary, InquirySummary } from './chatInbox.ts';
+import { readyToShipOrders, READY_TO_SHIP_STATUS } from './shipments.ts';
+
+// Ready to ship is the one rule the Shipments screen (S11) shares, so it lives in
+// src/lib/shipments.ts (same as SHIPPABLE_ORDER_STATUSES in
+// backend/app/api/routes/shipments.py and isReadyToShip in M/hooks/useMerchantOrders.ts)
+// and is re-exported here for the counts below.
+export { READY_TO_SHIP_STATUS };
 
 // Same statuses as ACTIVE_STATUSES in M/MerchantContext.tsx and ACTIVE_ORDER_STATUSES
 // in backend/app/services/order_status.py.
 export const ACTIVE_ORDER_STATUSES: ReadonlySet<MerchantOrderStatus> =
   new Set<MerchantOrderStatus>(['pending', 'processing', 'shipped', 'out_for_delivery']);
-
-// Ready to ship: paid and confirmed, and not already on a route. Same as
-// SHIPPABLE_ORDER_STATUSES in backend/app/api/routes/shipments.py and isReadyToShip in
-// M/hooks/useMerchantOrders.ts.
-export const READY_TO_SHIP_STATUS: MerchantOrderStatus = 'processing';
 
 /** Orders tab: the orders still being worked on (web MerchantShell "Orders" count). */
 export function activeOrderCount(orders: readonly Pick<ApiMerchantOrder, 'status'>[]): number {
@@ -25,9 +27,7 @@ export function activeOrderCount(orders: readonly Pick<ApiMerchantOrder, 'status
 export function readyToShipCount(
   orders: readonly Pick<ApiMerchantOrder, 'status' | 'shipped' | 'shipment_id'>[],
 ): number {
-  return orders.filter(
-    (o) => o.status === READY_TO_SHIP_STATUS && !o.shipped && o.shipment_id == null,
-  ).length;
+  return readyToShipOrders(orders).length;
 }
 
 /**

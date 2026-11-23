@@ -104,12 +104,14 @@ const es = StyleSheet.create({
 });
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
-type BadgeColor = 'green' | 'blue' | 'yellow' | 'gray';
+type BadgeColor = 'green' | 'blue' | 'yellow' | 'red' | 'gray';
 
 const BADGE_COLORS: Record<BadgeColor, { bg: string; text: string }> = {
   green: { bg: Colors.successBg, text: Colors.success },
   blue: { bg: '#eff6ff', text: '#3b82f6' },
   yellow: { bg: Colors.warningBg, text: Colors.warning },
+  // S10: a failed payout or payment is red on the web (.txBadge_failed).
+  red: { bg: Colors.errorBg, text: Colors.error },
   gray: { bg: Colors.borderLight, text: Colors.textMuted },
 };
 
