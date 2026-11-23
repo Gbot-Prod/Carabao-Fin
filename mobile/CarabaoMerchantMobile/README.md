@@ -1,7 +1,22 @@
 # Carabao Merchant (mobile)
 
-The farm-side app. Buyers use `../CarabaoMobile`; this app is for accounts with a farm
-(merchant) profile, and it shares the FastAPI backend and the Carabao website.
+The farm-side app. Buyers use [`../CarabaoMobile`](../CarabaoMobile/README.md); this app is
+for accounts with a farm (merchant) profile, and it shares the FastAPI backend and the
+Carabao website. The web Merchant Centre (`merchant.` host) stays as it is; this app is a
+second client of the same API.
+
+| App | Folder | Scheme | Who uses it |
+|---|---|---|---|
+| Carabao | `mobile/CarabaoMobile` | `carabaomobile://` | buyers (any account except admins) |
+| Carabao Merchant (this app) | `mobile/CarabaoMerchantMobile` | `carabaomerchant://` | accounts with a farm; others see "This app is for farm accounts" |
+
+Links between the apps, with their web fallbacks:
+
+- The buyer app opens this app from its Profile banner and from merchant notifications
+  (`carabaomerchant://<path>`), and opens `<web>/merchantDashboard` or
+  `<web>/merchantOnboarding` when this app is not installed.
+- This app's More tab, "Open buyer app", opens `carabaomobile://`, else the website
+  (`EXPO_PUBLIC_WEB_URL`). "Merchant Centre on the web" opens `<web>/merchantDashboard`.
 
 ## Run
 
@@ -16,7 +31,7 @@ npm start   # then press a / i, or scan the QR code
 ## Environment
 
 Create a `.env.local` in this folder (git-ignored, same as the buyer app) before `npm start`;
-the values are described in `documentation/manuals/SYSTEM_REFERENCE.md` §4.3:
+the values are described in [`SYSTEM_REFERENCE.md` §4.3](../../documentation/manuals/SYSTEM_REFERENCE.md):
 
 | Variable | Meaning |
 |---|---|
@@ -25,7 +40,7 @@ the values are described in `documentation/manuals/SYSTEM_REFERENCE.md` §4.3:
 | `EXPO_PUBLIC_IDLE_TIMEOUT_MINUTES` | minutes of inactivity before the app signs out |
 
 Signing in also needs the web change in
-`documentation/manuals/MOBILE_MERCHANT_SPLIT_PLAN.md` §6 (`carabaomerchant://` must be an
+[`MOBILE_MERCHANT_SPLIT_PLAN.md` §6](../../documentation/manuals/MOBILE_MERCHANT_SPLIT_PLAN.md) (`carabaomerchant://` must be an
 allowed mobile origin on the web app), so use a web app that has it before testing sign-in.
 
 ## Test and check
@@ -35,6 +50,10 @@ npx tsc --noEmit
 npm run lint
 npm test          # node --test "src/lib/**/*.test.ts"
 ```
+
+`npm test` also reads `../CarabaoMobile` (`sharedCopies.test.ts`: shared files must be the
+same in both apps) and the web and backend files (`inStep.test.ts`), so run it from a full
+checkout of the repository.
 
 ## Notes
 

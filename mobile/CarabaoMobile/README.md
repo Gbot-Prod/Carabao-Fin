@@ -1,29 +1,35 @@
-# Welcome to your Expo app 👋
+# Carabao (mobile buyer app)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The buyer app: browse farms, cart, checkout, order tracking and history, chat with a farm,
+notifications. Merchant (farm) screens are in the separate Carabao Merchant app,
+[`../CarabaoMerchantMobile`](../CarabaoMerchantMobile/README.md). Both apps use the same
+FastAPI backend and sign in through Better Auth on the Carabao website.
 
-## Get started
+| App | Folder | Scheme | Who uses it |
+|---|---|---|---|
+| Carabao (this app) | `mobile/CarabaoMobile` | `carabaomobile://` | buyers (any account except admins) |
+| Carabao Merchant | `mobile/CarabaoMerchantMobile` | `carabaomerchant://` | accounts with a farm |
 
-1. Install dependencies
+## Run
 
-   ```bash
-   npm install
-   ```
+```powershell
+cd mobile/CarabaoMobile
+npm install
+npx expo start   # then press a / i, or scan the QR code
+```
 
-2. Start the app
+Environment: `.env` in this folder with `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_WEB_URL` and
+`EXPO_PUBLIC_IDLE_TIMEOUT_MINUTES` (values:
+[`SYSTEM_REFERENCE.md` §4.3](../../documentation/manuals/SYSTEM_REFERENCE.md)). The merchant
+app uses the same names and values.
 
-   ```bash
-   npx expo start
-   ```
+## Test and check
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+```powershell
+npx tsc --noEmit
+npm run lint
+npm test          # node --test "src/lib/**/*.test.ts"
+```
 
 ## Merchant hand-off
 
@@ -33,10 +39,14 @@ buyer app opens them there - from the Profile banner and from merchant notificat
 
 - the app first, via `carabaomerchant://<path>`; `src/lib/merchantHandoff.ts` builds the
   path: `/` for the dashboard, `/orders`, `/chats` or `/reviews` for a notification's kind,
-  `/onboarding` for the farm form (the same mapping the merchant app uses for its links);
+  `/order-chat?orderId=<id>` for a chat message about one order, `/onboarding` for the farm
+  form (the same mapping the merchant app uses for its links);
 - the website when the app is not installed: `${EXPO_PUBLIC_WEB_URL}/merchantDashboard` or
   `/merchantOnboarding`, both of which redirect to the `merchant.` host
-  (`documentation/manuals/SUBDOMAINS.md` 1.1).
+  ([`SUBDOMAINS.md` 1.1](../../documentation/manuals/SUBDOMAINS.md)).
+
+The merchant app's "Open buyer app" row opens this app with `carabaomobile://`, and the
+website (`EXPO_PUBLIC_WEB_URL`) when this app is not installed.
 
 iOS needs `ios.infoPlist.LSApplicationQueriesSchemes: ["carabaomerchant"]` in `app.json`
 before `Linking.canOpenURL` can see the app; it is there. Android 11+ cannot be told about
@@ -45,15 +55,15 @@ answer false on a phone that does have the app - the hand-off then opens the web
 instead, the same fallback as an uninstalled app. Add the `<queries>` entry to the Android
 manifest (a config plugin or `expo prebuild`) if a native build needs the app to win.
 
-## Get a fresh project
+## Expo notes
 
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+This project was created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app)
+and uses [file-based routing](https://docs.expo.dev/router/introduction) in `app/`. You can open
+it in a
+[development build](https://docs.expo.dev/develop/development-builds/introduction/), an
+[Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/), an
+[iOS simulator](https://docs.expo.dev/workflow/ios-simulator/) or
+[Expo Go](https://expo.dev/go).
 
 ## Learn more
 

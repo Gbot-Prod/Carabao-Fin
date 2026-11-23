@@ -1,6 +1,6 @@
 # Plan 1: Move merchant features out of CarabaoMobile into CarabaoMerchantMobile
 
-Status: draft plan, 2026-11-22. Do this plan first. Plan 2 (`MERCHANT_MOBILE_APP_PLAN.md`) builds on its result.
+Status: done, 2026-11-23. Done in the sections of `MOBILE_MERCHANT_SPLIT_SECTIONS.md` (S1-S16, commit list there). Where this text and that file's §2 did not agree, the text below now says what was done. Plan 2 (`MERCHANT_MOBILE_APP_PLAN.md`) builds on its result.
 
 ## 0. Goal
 
@@ -37,7 +37,7 @@ Paths are relative to `mobile/CarabaoMobile/`.
 | `src/lib/listingForm.ts` + `.test.ts` | |
 | `src/lib/dashboard.ts` + `.test.ts` | |
 | `src/lib/chatInbox.ts` + `.test.ts` | |
-| `src/lib/access.ts` + `.test.ts` | merchant role decision |
+| `src/lib/access.ts` + `.test.ts` | merchant role decision. Moved in S4 (with the root gate), not with the screens: the gate needs `decideAccess` first. |
 
 ### 2.2 NOT merchant activity: KEEP in the buyer app only
 
@@ -73,6 +73,7 @@ Copy these unchanged unless the "Change" column says otherwise. Put this first l
 | `src/lib/webPages.ts` + test | none |
 | `src/lib/logGuard.test.ts` | none (it scans its own app's `src` and `app`) |
 | `src/components/UI.tsx`, `src/components/Skeleton.tsx` | none |
+| `src/lib/dates.ts` (new in S9) | none. `phToday`/`addDays` split out of `listingForm.ts`, because the buyer checkout uses them; the merchant `listingForm.ts` re-exports them. |
 | `src/components/PasswordResetSheet.tsx`, `src/components/PhoneVerifySheet.tsx`, `src/components/AddEmailSheet.tsx` | none |
 | `src/lib/authClient.ts` | **different**: `APP_SCHEME = 'carabaomerchant'`, `storagePrefix: 'carabao-merchant'`. Not in the same-file check. |
 | `src/lib/AuthContext.tsx` | copy, then remove anything cart- or buyer-only if present. Not in the same-file check. |
@@ -85,11 +86,11 @@ Copy these unchanged unless the "Change" column says otherwise. Put this first l
 
 | File | Buyer keeps | Merchant app gets |
 |---|---|---|
-| `src/lib/api.ts` | `request`, `ApiError`, buyer types, `api.merchants.list/byId/produce` (public), public reviews, follows, cart, orders/me, produce search, saved, chat (`/orders/{id}/messages`), notifications, users, addresses | its own `src/lib/api.ts`: copy `request`/`ApiError` and the types it needs; methods: `users.me`, `merchants.myProduce/orders/chats/performance/demand/myReviews/reply/deleteReply/stockAlerts/updateOrderStatus/cancelOrder`, `produce.create/update/delete`, chat messages, notifications |
+| `src/lib/api.ts` | `request`, `ApiError`, buyer types, `api.merchants.list/byId/produce` (public), public reviews, follows, cart, orders/me, produce search, saved, chat (`/orders/{id}/messages`), notifications, users, addresses | its own `src/lib/api.ts`: copy `request`/`ApiError` and the types it needs; methods: `users.me`, `merchants.myProduce/orders/chats/performance/demand/myReviews/reply/deleteReply/stockAlerts/updateOrderStatus/cancelOrder`, `produce.create/update/remove`, chat messages, notifications, and `support.thread/send` (the copied order chat keeps its support branch) |
 | `src/lib/reviews.ts` + test | public farm reviews (`MerchantReviews`, `PublicReview`, `shownReply`) | "my reviews" + reply (`MyMerchantReviews`, `MyReview`, `myReviewsQuery`, `REPLY_MAX_LENGTH`, reply checks) in `src/lib/myReviews.ts` + test |
 | `src/lib/farms.ts` | everything | `ratingLabel` only, put in merchant `src/lib/format.ts` (+ test) |
 | `src/lib/notificationLinks.ts` + test | buyer links; merchant links change (3.3) | merchant links only (all `/merchantDashboard...` links) |
-| `src/components/ProtectedScreen.tsx` | sign-in gate only (3.2) | not copied; the merchant app gates in its root layout (4.3) |
+| `src/components/ProtectedScreen.tsx` | sign-in gate only (3.2; S4 removed the role check, S14 removed the `requiredRole` prop) | not copied; the merchant app gates in its root layout (4.3) |
 
 ## 3. Changes in the buyer app (`mobile/CarabaoMobile`)
 
@@ -98,6 +99,7 @@ Copy these unchanged unless the "Change" column says otherwise. Put this first l
 - Remove their `<Stack.Screen>` lines from `app/_layout.tsx`. Keep `merchant` (buyer farm page).
 
 ### 3.2 `ProtectedScreen`
+Done in two steps. S4 (with the `access.ts` move) removed the `/users/me` merchant check and kept `requiredRole` accepted but not used, so the buyer screens that still passed it compiled. S14 removed the prop when those screens had left.
 - Remove `requiredRole` and the `/users/me` merchant check. It only sends signed-out users to `/auth`.
 - Delete every `requiredRole="merchant"` use (should be none left after 3.1; grep to confirm).
 - `access.ts` moves to the merchant app (2.1). If the buyer still needs `decideAccess` for the sign-in case, inline the 3-line check in `ProtectedScreen`.
@@ -106,7 +108,8 @@ Copy these unchanged unless the "Change" column says otherwise. Put this first l
 Add `src/lib/merchantHandoff.ts` (pure) + test:
 - `MERCHANT_APP_URL = 'carabaomerchant://'`
 - `merchantWebUrl(webBase, kind: 'dashboard' | 'onboarding')` → `${webBase}/merchantDashboard` or `${webBase}/merchantOnboarding` (both redirect to the `merchant.` host, see `SUBDOMAINS.md` 1.1).
-- `merchantAppPath(kind, notificationKind?)` → the path inside the merchant app (`/`, `/orders`, `/reviews`, `/chats`, `/onboarding`). Use the same kind mapping the merchant app uses (4.5).
+- `merchantAppPath(kind, notificationKind?, orderId?)` → the path inside the merchant app (`/`, `/orders`, `/reviews`, `/chats`, `/onboarding`, and `/order-chat?orderId=<id>` for a chat message about one order). Use the same kind mapping the merchant app uses (4.5).
+- These helpers, the profile banner (3.4) and the notification hand-off (3.5) were done in S8, in the same commit that deleted the first buyer merchant routes, because typed routes fail while a screen pushes a deleted route.
 
 Add a small helper (not pure) `openMerchant(kind, notificationKind?)` in `src/lib/openMerchant.ts`:
 1. `Linking.canOpenURL(MERCHANT_APP_URL + path)` → open it.
@@ -117,6 +120,7 @@ Add a small helper (not pure) `openMerchant(kind, notificationKind?)` in `src/li
 - Android: `"android": { "intentFilters"` is not needed; add the query with the config plugin approach Expo SDK 58 documents for `<queries>` (if not available, `canOpenURL` may return false on Android 11+; then the web fallback runs, which is acceptable for the draft).
 
 ### 3.4 Profile screen (`src/screens/ProfileScreen.tsx`)
+Done in S8 (see 3.3), not in phase 4.
 - Replace the merchant block (banner + Dashboard / Incoming orders / My listings / Chats / Reviews rows, lines ~130-185) with one banner:
   - merchant (`profile.merchant` set): title = farm name, subtitle "Manage your farm in Carabao Merchant", press → `openMerchant('dashboard')`.
   - not a merchant: title "Sell on Carabao", subtitle "Set up your farm in the Carabao Merchant app", press → `openMerchant('onboarding')`.
@@ -125,10 +129,10 @@ Add a small helper (not pure) `openMerchant(kind, notificationKind?)` in `src/li
 ### 3.5 Notifications
 - In the buyer `notificationLinks.ts`, a `/merchantDashboard...` link now returns `{ merchant: <notification kind> }` instead of a `/merchant-*` pathname. Update the union type and tests.
 - In `NotificationsScreen.tsx`, a `{ merchant }` result calls `openMerchant('dashboard', kind)`. Merchant notifications still show in the buyer list (same account, same endpoint); they just hand off.
-- The buyer chat-notification case for `/merchantDashboard?order=12` also hands off (the merchant app opens that chat).
+- The buyer chat-notification case for `/merchantDashboard?order=12` also hands off (the merchant app opens that chat): `appRoute` returns `{ merchant: 'chat_message', orderId: 12 }` (the id is checked), and the merchant app opens `/order-chat?orderId=12`.
 
 ### 3.6 `api.ts`
-- Delete the merchant-owner methods listed in 2.4 and the types only they use (`ApiMerchantOrder`, `MerchantOrderStatus`, `ApiStockAlerts`, `ApiStockAlertItem`, `ProduceCreatePayload`, `ProduceUpdatePayload`, the `dashboard`/`chatInbox` imports) once nothing in the buyer app imports them. Let `tsc` find leftovers.
+- Delete the merchant-owner methods listed in 2.4, **and `api.produce.create/update/remove`** (2.4 gives them to the merchant app; done in S14), and the types only they use (`ApiMerchantOrder`, `MerchantOrderStatus`, `ApiStockAlerts`, `ApiStockAlertItem`, `ProduceCreatePayload`, `ProduceUpdatePayload`, the `dashboard`/`chatInbox` imports) once nothing in the buyer app imports them. Let `tsc` find leftovers.
 
 ### 3.7 Acceptance (buyer app)
 - `grep -rnE "merchant-(orders|dashboard|chats|reviews)|/listings'|/onboarding'|merchants/me|requiredRole" src app` → no results.
@@ -202,10 +206,15 @@ Add `src/lib/sharedCopies.test.ts` in the merchant app: for each file in the 2.3
 ## 5. Phases (do them in order, commit after each)
 
 1. **Scaffold** the merchant app (4.1, 4.2 empty screens), copy shared files (2.3) + `sharedCopies.test.ts`. App boots to a sign-in screen.
+   Status: done in S1 (`bde9b1f`) and S2 (`d2889d6`).
 2. **Auth + gate**: authClient with the new scheme, AuthScreen, root gate, not-merchant screen. Needs section 6 on the local web server.
+   Status: done in S3 (`e0d34d0`, with section 6) and S4 (`4b65518`).
 3. **Move screens**: `git mv` the 2.1 files into the merchant app, split `api.ts`, `reviews.ts`, `farms.ts` (2.4). Fix routes. Merchant app feature-complete for today's scope.
+   Status: done in S5-S13 (`4b65518`). Each screen left the buyer app together with its buyer route file, so the buyer app stayed green (sections §2.1). Review fixes: `835a80b`.
 4. **Strip the buyer app**: section 3 (routes, ProtectedScreen, Profile banner, handoff, notifications, api cleanup).
-5. **Docs**: update `SYSTEM_REFERENCE.md` 4.3 (two mobile apps, same env vars), 7.2 "Mobile" line (both schemes), and the components list in section 1; add the `carabaomerchant` scheme to `SUBDOMAINS.md` 1.2 trusted origins row.
+   Status: done in S14-S15 (`4b65518`). The routes, the profile banner, the hand-off and the notifications were already done in S8-S10 (3.2-3.5).
+5. **Docs**: update `SYSTEM_REFERENCE.md` 4.3 (two mobile apps, same env vars), 7.3 "Mobile" line (both schemes), and the components list in section 1; add the `carabaomerchant` scheme to `SUBDOMAINS.md` 1.3 trusted origins row.
+   Status: done in S16 (`docs: merchant app split`).
 
 ## 6. Web changes required (small, outside `mobile/`)
 

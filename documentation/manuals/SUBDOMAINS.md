@@ -99,7 +99,9 @@ Use `lib/urls.ts`. Do not write a host in code.
 
 A link from a merchant page to a buyer page goes to another origin. Use a full page load (`window.location.assign(appUrl(...))`) or a `<Link>` with the absolute URL. Do not use `router.push("/profile")` on `merchant.`.
 
-The backend stores notification links as paths, and the mobile app reads them. **Do not change the stored values.** The web maps them when it shows them (`NotificationBell.tsx`).
+The backend stores notification links as paths, and the mobile apps read them. **Do not change the stored values.** The web maps them when it shows them (`NotificationBell.tsx`).
+
+Mobile: the merchant screens are in a separate app, `mobile/CarabaoMerchantMobile` (Carabao Merchant, `carabaomerchant://`). The buyer app (`mobile/CarabaoMobile`, `carabaomobile://`) has no merchant screens. It opens the merchant app, or, when that app is not installed, `/merchantDashboard` or `/merchantOnboarding` on the website, which redirect to the `merchant.` host (1.1). The web merchant shell (1.5) does not change: the mobile app and the web shell are two clients of the same API.
 
 ### 1.3 Sign-in and cookies (`lib/auth.ts`)
 
@@ -107,8 +109,8 @@ The backend stores notification links as paths, and the mobile app reads them. *
 |---|---|---|
 | Cookie prefix | `carabao` | `carabao-admin` |
 | Cookie domain | `ROOT_DOMAIN` (shared by apex and `merchant.`), only in subdomain mode | admin host only |
-| Trusted origins | apex, `merchant.`, `BETTER_AUTH_TRUSTED_ORIGINS`, `RAILWAY_PUBLIC_DOMAIN`, mobile app | admin origin only |
-| Sign-in methods | phone + password, email + password, Google, Facebook, mobile app | email + password only, then TOTP |
+| Trusted origins | apex, `merchant.`, `BETTER_AUTH_TRUSTED_ORIGINS`, `RAILWAY_PUBLIC_DOMAIN`, both mobile apps (`carabaomobile://`, `carabaomerchant://`; `exp://` in dev) | admin origin only |
+| Sign-in methods | phone + password, email + password, Google, Facebook, mobile apps | email + password only, then TOTP |
 | Better Auth endpoints | all (except the admin plugin's) | allow-list: `/sign-in/email`, `/sign-out`, `/get-session`, `/token`, `/jwks`, `/two-factor/*`, `/request-password-reset`, `/reset-password*`, `/change-password`, session list/revoke, `/ok`, `/error`. All others: 404 |
 | Who gets a session | everyone except admins (403 `ADMIN_ACCOUNT`; a Google or Facebook sign-in goes to `/auth?error=admin_account`) | admins only (403 `NOT_AN_ADMIN`) |
 | JWT key table | `jwks` | `jwks_admin` |
@@ -172,7 +174,9 @@ The merchant pages do not use the buyer layout. `(merchant)/merchant/(shell)/lay
 
 A new merchant page must not have the name of a buyer path (1.1).
 
-Notification links: the backend stores `/merchantDashboard` for all merchant notifications, and the mobile app reads it. Do not change it. The web bell opens a page by the notification kind: `new_order` and `chat_message` open `/sales`, `review_received` opens `/reviews`, `payout_released` and `payout_destination_changed` open `/earnings`. Other kinds open `/`.
+Notification links: the backend stores `/merchantDashboard` for all merchant notifications, and the mobile apps read it. Do not change it. The web bell opens a page by the notification kind: `new_order` and `chat_message` open `/sales`, `review_received` opens `/reviews`, `payout_released` and `payout_destination_changed` open `/earnings`. Other kinds open `/`.
+
+The merchant mobile app (`mobile/CarabaoMerchantMobile/src/lib/notificationLinks.ts`) uses the same kinds: `new_order` opens the Orders tab, `chat_message` opens the chat for `?order=<id>` (else the Chats tab), `review_received` opens Reviews, payouts and other kinds open Home (the app has no Earnings screen yet). It lists only notifications whose link starts with `/merchantDashboard`. This web shell stays as it is; the mobile app does not replace it.
 ---
 
 ## 2. Environment variables

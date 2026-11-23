@@ -15,7 +15,18 @@ When you change a fact below in the code, update this file in the same change.
 | Web app | `frontend/carabao-app` | Next.js 16, React 19, Better Auth 1.6, Node 20+ (24 in use) | Website. Better Auth is the only identity source. Issues 15-min EdDSA JWTs. Sends security headers and the CSP. |
 | API | `backend` | FastAPI, Python 3.13, SQLAlchemy, Alembic, uv | Business rules: shops, produce, carts, orders, payments, payouts, chat, admin. Checks JWTs with JWKS. Holds no signing key. |
 | Database | (one Postgres DB) | PostgreSQL | Better Auth tables (`user`, `session`, `account`, `verification`, `jwks`) and all API tables. Both apps use the same DB. |
-| Mobile app | `mobile/CarabaoMobile` | Expo / React Native | Buyer and merchant app. Signs in through Better Auth on the web app. Calls the API. |
+| Mobile buyer app | `mobile/CarabaoMobile` | Expo SDK 58 / React Native | Carabao. Buyer app. Signs in through Better Auth on the web app. Calls the API. Hands merchant work to the merchant app. |
+| Mobile merchant app | `mobile/CarabaoMerchantMobile` | Expo SDK 58 / React Native | Carabao Merchant. Farm app (dashboard, orders, chats, produce, reviews, notifications). Same sign-in and API as the buyer app. |
+
+Mobile apps (split from one app in `MOBILE_MERCHANT_SPLIT_PLAN.md`):
+
+| | Buyer app | Merchant app |
+|---|---|---|
+| Folder | `mobile/CarabaoMobile` | `mobile/CarabaoMerchantMobile` |
+| Name / scheme | Carabao, `carabaomobile://` | Carabao Merchant, `carabaomerchant://` |
+| Who may sign in | every account except admins | every account except admins; the root gate (`/users/me` `merchant`) opens the app only for an account with a farm, others see "This app is for farm accounts" |
+| Merchant entry points | Profile banner and merchant notifications open the merchant app, else `<web>/merchantDashboard` or `/merchantOnboarding` (`src/lib/openMerchant.ts`) | all merchant screens; "Open buyer app" opens `carabaomobile://`, else the website |
+| Shared code | | copies of the buyer files, kept the same by `src/lib/sharedCopies.test.ts` |
 
 External services:
 
@@ -90,7 +101,9 @@ The web app never sends SMS or email itself. It asks the API.
 | Checkout reservations | `backend/app/services/order_reservations.py` |
 | PayMongo webhook | `backend/app/api/webhooks/paymongo.py` |
 | First admin / recovery script | `backend/scripts/make_admin.py` |
-| Mobile config | `mobile/CarabaoMobile/src/lib/config.ts` |
+| Mobile config | `mobile/CarabaoMobile/src/lib/config.ts`, `mobile/CarabaoMerchantMobile/src/lib/config.ts` (shared copy) |
+| Merchant app root gate | `mobile/CarabaoMerchantMobile/app/_layout.tsx`, `src/lib/MerchantContext.tsx` |
+| Buyer to merchant hand-off | `mobile/CarabaoMobile/src/lib/merchantHandoff.ts`, `src/lib/openMerchant.ts` |
 
 ---
 
@@ -109,7 +122,7 @@ The web app never sends SMS or email itself. It asks the API.
 | Phone code length 6, TTL 600 s, 5 attempts | `lib/auth.ts` phoneNumber() | `backend/app/services/otp.py` |
 | Phone format `+639XXXXXXXXX` | `lib/phone.ts` `normalizePhMobile` | `phone_verification.normalize_ph_mobile` (returns without `+`) |
 | Status values | `backend/app/models/statuses.py` | `frontend/.../util/api/statuses.ts` |
-| Review reply max length 1000 (CF-0043) | `REPLY_MAX_LENGTH` in `backend/app/schemas/review.py` | `REPLY_MAX_LENGTH` in `frontend/.../lib/review-reply.ts`; mobile `src/lib/reviews.ts` (CF-0133, `inStep.test.ts`) |
+| Review reply max length 1000 (CF-0043) | `REPLY_MAX_LENGTH` in `backend/app/schemas/review.py` | `REPLY_MAX_LENGTH` in `frontend/.../lib/review-reply.ts`; merchant app `mobile/CarabaoMerchantMobile/src/lib/myReviews.ts` (CF-0133, `inStep.test.ts`) |
 | Cart line `issue` values (CF-0042) | `CartIssue` in `backend/app/api/routes/_order_helpers.py` and `schemas/cart.py` | `frontend/.../lib/cart-issues.ts`, `mobile/CarabaoMobile/src/lib/cartIssues.ts` (CF-0129; unknown values show no message but still block checkout) |
 | Public farm fields (CF-0048): no `address`, `barangay`, `lat`/`lng`, `legal_business_name`, `user_id` on `GET /merchants` and `/merchants/{id}`; the owner reads them from `GET /merchants/me` | `PublicMerchantResponse` in `backend/app/schemas/merchant.py` | owner-only fields in `Merchant` (`frontend/.../util/api/merchants.ts`), merchant site `MerchantContext` (`fetchMyMerchant`), `lib/structured-data.ts` (also leaves them out) |
 | Payment states with a receipt (CF-0049): `paid`, `refund_pending`, `refunded` | `MONEY_RECEIVED_STATUSES` in `backend/app/services/order_status.py` (used by `GET /orders/me/{id}/receipt`) | `hasReceipt()` in `frontend/.../lib/receipt.ts` (shows "View receipt"); mobile copy `mobile/CarabaoMobile/src/lib/receipt.ts` (CF-0135, checked by `receipt.test.ts`) |
@@ -117,15 +130,15 @@ The web app never sends SMS or email itself. It asks the API.
 | Search price filter cap (CF-0094): whole pesos, 0 to 1 000 000 (`min_price`/`max_price` above it are a 422) | `backend/app/schemas/produce.py` `MAX_PRICE` (also the listing price cap) | `frontend/.../lib/price-filter.ts` `PRICE_FILTER_MAX` (clamps the typed value) |
 | Request bodies refuse unknown fields (CF-0051, CF-0063): every input model has `extra="forbid"`, so a client may send only the fields the API knows. Payout fields: bank code ≤ 20, account number ≤ 40, account name ≤ 100, e-wallet number ≤ 20, codes ≤ 12. Email links from Better Auth must start with `http://` or `https://` (≤ 2000) | `backend/app/schemas/*`, input models in `backend/app/api/routes/*` | Web `util/api/*` and mobile `src/lib/api.ts` bodies; `lib/auth.ts` email hooks |
 | Postgres TLS rules | `lib/db-ssl.mjs` | `app/core/database_url.py` |
-| Mobile app scheme `carabaomobile://` | `lib/auth.ts`, `lib/admin-two-factor.ts` | mobile `app.json` |
+| Mobile app schemes `carabaomobile://` (buyer), `carabaomerchant://` (merchant) | `lib/auth.ts` `MOBILE_APP_SCHEMES`, `lib/admin-two-factor.ts` `MOBILE_ORIGIN_PREFIXES` | `app.json` `scheme` of each app; each app lists the other in `ios.infoPlist.LSApplicationQueriesSchemes` |
 
-The mobile app has copies of the status values and labels, the phone pattern, the password policy and the order-history limits (`mobile/CarabaoMobile/src/lib/`). `npm test` in `mobile/CarabaoMobile` (`src/lib/inStep.test.ts`) reads the web and backend files above and fails when a copy differs.
+The mobile apps have copies of the status values and labels, the phone pattern, the password policy and the order-history limits (`src/lib/` of each app). `npm test` in each app (`src/lib/inStep.test.ts`) reads the web and backend files above and fails when a copy differs. The merchant copy checks only what the merchant app has (status, password, phone, review reply). The merchant app also copies buyer files (API errors, config, polling, theme, UI, sheets, `dates.ts` ...); `npm test` in `mobile/CarabaoMerchantMobile` (`src/lib/sharedCopies.test.ts`) fails when a copy is not the same as the buyer file.
 
 ---
 
 ## 4. Environment variables
 
-Files: API `backend/.env` (start from `backend/.env.example`). Web `frontend/carabao-app/.env.local`. Mobile `mobile/CarabaoMobile/.env`. On a host, the same names go in the service settings.
+Files: API `backend/.env` (start from `backend/.env.example`). Web `frontend/carabao-app/.env.local`. Mobile buyer `mobile/CarabaoMobile/.env`, mobile merchant `mobile/CarabaoMerchantMobile/.env.local` (Expo reads `.env` and `.env.local` in each app folder). On a host, the same names go in the service settings.
 
 Hard start-up failures:
 - API: `DATABASE_URL` missing, or `FIELD_ENCRYPTION_KEY` / `FIELD_HMAC_KEY` missing, malformed, equal, or unable to decrypt a stored TIN.
@@ -202,7 +215,7 @@ Perf-only (`backend/scripts/perf`): `PERF_DATABASE_URL`, `PERF_CLIENT_CSV`, `PER
 | `NEXT_PUBLIC_MAPBOX_API_KEY` | Maps | | limit to domain |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Opt | dev client; works only in one-host mode (`SUBDOMAINS.md` 5.4) | redirect `<web>/api/auth/callback/google` |
 | `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET` | Opt | dev client; works only in one-host mode (`SUBDOMAINS.md` 5.4) | redirect `<web>/api/auth/callback/facebook` |
-| `BETTER_AUTH_TRUSTED_ORIGINS` | No | | extra trusted origins (comma list). Trusted list also includes `NEXT_PUBLIC_APP_URL`, `RAILWAY_PUBLIC_DOMAIN`, `carabaomobile://`, and `exp://` in dev |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | No | | extra trusted origins (comma list). Trusted list also includes `NEXT_PUBLIC_APP_URL`, `RAILWAY_PUBLIC_DOMAIN`, `carabaomobile://`, `carabaomerchant://`, and `exp://` in dev |
 | `CSP_ENFORCE` | No | empty | empty = Report-Only; `true` = enforced + `upgrade-insecure-requests` |
 | `BETTER_AUTH_RATE_LIMIT` | No | empty | on in production; `true` enables locally |
 | `BETTER_AUTH_RATE_LIMIT_STORAGE` | No | `memory` | `database` keeps Better Auth's per-IP counts in its `rateLimit` table, so they survive deploys and are shared by replicas (CF-0080). Set it only after `npm run auth:migrate:apply` has created that table. Rules: `lib/auth-rate-limit.ts` |
@@ -213,13 +226,15 @@ Perf-only (`backend/scripts/perf`): `PERF_DATABASE_URL`, `PERF_CLIENT_CSV`, `PER
 
 ### 4.3 Mobile
 
+Both mobile apps use the same three names, each in its own folder (see the file names above). Use the same values in both apps.
+
 | Name | Local | Notes |
 |---|---|---|
 | `EXPO_PUBLIC_API_URL` | `http://<PC-LAN-IP>:8000` | on a device, localhost is the phone (default `http://localhost:8000`) |
 | `EXPO_PUBLIC_WEB_URL` | `http://<PC-LAN-IP>:3000` | Better Auth host |
 | `EXPO_PUBLIC_IDLE_TIMEOUT_MINUTES` | empty | optional |
 
-Both URLs are checked at app start (`src/lib/baseUrl.ts`): `scheme://host[:port][/path]` only (no `user@`, query or fragment). A production build (`__DEV__` false) must use `https` for both, or the app stops at launch with an error that names the setting.
+Both URLs are checked at app start (`src/lib/baseUrl.ts`, same file in both apps): `scheme://host[:port][/path]` only (no `user@`, query or fragment). A production build (`__DEV__` false) must use `https` for both, or the app stops at launch with an error that names the setting.
 
 ### 4.4 Postgres TLS
 
@@ -264,7 +279,8 @@ Local Postgres in Docker, step by step, with the known setup problems: [LOCAL_DA
 # dependencies
 cd backend && uv sync
 cd frontend/carabao-app && npm install
-cd mobile/CarabaoMobile && npm install        # optional
+cd mobile/CarabaoMobile && npm install        # optional, buyer app
+cd mobile/CarabaoMerchantMobile && npm install    # optional, merchant app
 
 # database: Better Auth tables FIRST (API migration d3f7b1e9a5c2 adds FKs to "user")
 cd frontend/carabao-app
@@ -281,7 +297,8 @@ uv run alembic upgrade head
 # run
 cd backend && uv run uvicorn main:app --reload --port 8000   # log: "Field encryption keys OK"
 cd frontend/carabao-app && npm run dev                       # http://localhost:3000
-cd mobile/CarabaoMobile && npx expo start                    # optional
+cd mobile/CarabaoMobile && npx expo start                    # optional, buyer app
+cd mobile/CarabaoMerchantMobile && npx expo start            # optional, merchant app (sign in with a farm account)
 ```
 
 `/docs` at `http://localhost:8000/docs` only with `APP_ENV=development`.
@@ -299,7 +316,7 @@ The DB was wiped before this branch; migrations carry no legacy data.
 
 If `NEXT_PUBLIC_API_URL` or `AUTH_SYNC_SHARED_SECRET` is unset in dev, the web terminal logs the code: `[sms] SMS not configured. verify code for ...`.
 
-Admins cannot sign in on mobile (`ADMIN_WEB_ONLY`).
+Admins cannot sign in on mobile (`ADMIN_WEB_ONLY`), in either app.
 
 ### Payments locally
 
@@ -315,7 +332,11 @@ Without a webhook, `GET /transactions/order/{id}` reconciles from PayMongo, and 
 ```
 cd backend && uv run pytest && uv run ruff check . && uv run mypy .
 cd frontend/carabao-app && npm test && npm run lint && npm run build
+cd mobile/CarabaoMobile && npx tsc --noEmit && npm run lint && npm test
+cd mobile/CarabaoMerchantMobile && npx tsc --noEmit && npm run lint && npm test
 ```
+
+The merchant app's `npm test` reads `../CarabaoMobile` (`sharedCopies.test.ts`) and the web and backend files (`inStep.test.ts`), so run it from a full checkout.
 
 `npm test` runs node --test on the files listed in the `test` script of `package.json`. Add new pure-logic test files there.
 
@@ -455,7 +476,7 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
   - true via a password sign-in that survives because of a trusted device;
   - copied when a session is replaced.
 - **Secret endpoints:** `/two-factor/get-totp-uri` and `generate-backup-codes` need `mfaVerified`.
-- **Mobile:** admin sign-in from mobile (`expo-origin` header, or `carabaomobile://` / `exp://` origin) is refused with `ADMIN_WEB_ONLY`.
+- **Mobile:** admin sign-in from mobile (`expo-origin` header, or `carabaomobile://` / `carabaomerchant://` / `exp://` origin) is refused with `ADMIN_WEB_ONLY`.
 
 ### 7.4 Merchant applications
 
@@ -590,7 +611,7 @@ Code comments and test names use `CF-00NN` tags. Some numbers have two meanings,
 - **Ranges from now on**, so the two loops can run at the same time:
   - web (and `main`): CF-0085 to CF-0100, then CF-0200 to CF-0299, then CF-0400 and up.
   - mobile loop: CF-0101 to CF-0199 (last used CF-0131), then CF-0300 to CF-0399.
-  - Find the highest used number with `grep -rhoE "CF-0[0-9]{3}" backend frontend mobile/CarabaoMobile/src mobile/CarabaoMobile/app | sort -u`.
+  - Find the highest used number with `grep -rhoE "CF-0[0-9]{3}" backend frontend mobile/CarabaoMobile/src mobile/CarabaoMobile/app mobile/CarabaoMerchantMobile/src mobile/CarabaoMerchantMobile/app | sort -u`.
 
 ### Admin recovery
 

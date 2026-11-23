@@ -1,6 +1,6 @@
 # Merchant split: runnable sections (companion to MOBILE_MERCHANT_SPLIT_PLAN.md)
 
-Status: working checklist, 2026-11-22. `MOBILE_MERCHANT_SPLIT_PLAN.md` stays the source of
+Status: done, 2026-11-23 (S1-S16 ticked in §7). Was a working checklist from 2026-11-22. `MOBILE_MERCHANT_SPLIT_PLAN.md` stays the source of
 truth for *what* changes; this file only splits it into sections that can be executed and
 verified one at a time, in this order. Do not reorder sections without rereading §5 (the
 dependency line of each section) and §6 (traceability).
@@ -80,6 +80,11 @@ dependency line of each section) and §6 (traceability).
 - **D3 merchant `api.ts` size** — [default: drop buyer-only types/methods (cart, addresses,
   orders/history, payments, tracking, saved, follows, search, reorder, support) and keep only
   what merchant screens and the gate call].
+  Done with one change: `api.support` (`thread`, `send`) stays, because the copied order
+  chat (S11 step 3) keeps its support branch (`support=1`).
+
+Decisions taken: D1 default (`Tabs` + `Ionicons`), D2 default (`myReviews.ts`), D3 default
+with the `support` change above.
 
 ## 4. Section map (plan section -> section id)
 
@@ -580,17 +585,17 @@ is left in it.
 
 ---
 
-### S16 - Docs and reference updates (plan §5 phase 5, §8)
+### S16 - Docs and reference updates (plan §5 phase 5)
 
 **Depends on:** S15.
 **Do**
-1. `documentation/SYSTEM_REFERENCE.md`: §4.3 env vars for both apps; §5 commands
+1. `documentation/manuals/SYSTEM_REFERENCE.md`: §4.3 env vars for both apps; §5 commands
    (`cd mobile/CarabaoMerchantMobile; npm test`); the app table (buyer vs merchant, scheme,
    who may sign in).
 2. `documentation/manuals/MOBILE_MERCHANT_SPLIT_PLAN.md`: add a "Status" line per phase
    pointing at the sections that implemented it, and correct the plan text where §2 of this
    doc disagreed (ProtectedScreen in S4/S14, profile banner in S8, `api.produce.*` out in S14).
-3. `documentation/SUBDOMAINS.md` 1.2 / the merchant-centre doc: note that merchant screens now
+3. `documentation/manuals/SUBDOMAINS.md` 1.2 / the merchant-centre doc: note that merchant screens now
    live in `mobile/CarabaoMerchantMobile` and the web merchant shell stays as-is
    (plan §5 phase 5).
 4. This file: tick S1-S16 with the commit hashes
@@ -606,38 +611,71 @@ is left in it.
 
 ## 6. Traceability
 
-| Plan item | Section |
-| --- | --- |
-| §2.1 screens: dashboard/orders/chats | S8 |
-| §2.1 screens: listings/onboarding | S9 |
-| §2.1 screens: reviews | S10 |
-| §2.1 screens: order chat | S11 |
-| §2.1 screens: notifications | S12 |
-| §2.2 components: CancelOrderSheet, ListingForm | S8, S9 |
-| §2.2 components: sheets, UI, Skeleton | S2 |
-| §2.3 api.ts split | S3, S7, S14 |
-| §2.3 access.ts | S4 |
-| §2.3 inStep.test.ts | S6, S14 |
-| §2.3 orderDetail.ts | S6, S11 |
-| §2.3 notificationLinks.ts | S8, S12 |
-| §2.3 OrderChatScreen copy | S11 |
-| §2.4 reviews.ts split | S6, S10, S14 |
-| §2.4 dashboard.ts / chatInbox.ts / listingForm.ts | S8, S9 |
-| §2.4 shared date helpers (`dates.ts`, split out of `listingForm.ts`) | S9 |
-| §2.4 farms.ts ratingLabel | S6 |
-| §3.1 merchant routes removed from the buyer | S8-S10 |
-| §3.2 ProtectedScreen sign-in only | S4, S14 |
-| §3.3 handoff helpers (`merchantHandoff.ts`, `openMerchant.ts`, app.json queries) | S8 |
-| §3.4 profile banner | S8 |
-| §3.5 buyer notification hand-off | S8 |
-| §3.6 merchant api/types out of the buyer | S14 |
-| §3.7 buyer acceptance | S15 |
-| §4.1 scaffold + config | S1, S3 |
-| §4.2 tabs + More | S5, S8-S12 |
-| §4.3 role gate | S4 |
-| §4.4 More rows | S5 |
-| §4.5 notifications + deep links | S12 |
-| §4.6 shared-copy guard | S2, S15 |
-| §4.7 merchant acceptance | S13 |
-| §5 phases 1-5 | S1-S16 |
-| §6 web origins | S3 |
+Every plan item, the section that did it, and the commit. Plan section numbers are the ones in
+`MOBILE_MERCHANT_SPLIT_PLAN.md`.
+
+| Plan item | Section | Commit |
+| --- | --- | --- |
+| §0 goal: buyer-only app, merchant app with today's merchant screens | S1-S15 | all below |
+| §1 rules 1-7 (no backend change, pure libs + tests, CF comments, `git mv`, checks in both apps, no logged secrets) | every section; `logGuard.test.ts` in both apps (S2) | |
+| §2.1 dashboard, orders, chats screens + `CancelOrderSheet` + `dashboard.ts`, `chatInbox.ts` | S8 | `4b65518` |
+| §2.1 listings (now `ProduceScreen`) + onboarding screens + `ListingForm` + `listingForm.ts` | S9 (rename in S13) | `4b65518` |
+| §2.1 reviews screen | S10 | `4b65518` |
+| §2.1 `access.ts` | S4 (§2 item 3) | `4b65518` |
+| §2.2 buyer-only files stay (farm page, `FarmCard`, `farms.ts`, cart, checkout ...) | S14, S15 (checked) | `4b65518` |
+| §2.3 shared copies (libs, `UI`, `Skeleton`, sheets, `hooks/`) | S2 | `d2889d6` |
+| §2.3 `dates.ts` shared copy (split out of `listingForm.ts`) | S9 (§2 item 10) | `4b65518` |
+| §2.3 `authClient.ts`, `AuthContext.tsx`, `AuthScreen.tsx` | S3 | `e0d34d0` |
+| §2.3 `OrderChatScreen` copy + `orderChat.ts` (from `orderDetail.ts`) | S6, S11 | `4b65518` |
+| §2.3 `inStep.test.ts` split | S6, S14 | `4b65518` |
+| §2.4 `api.ts` split | S3 (core), S7, S8 (chats/performance/demand), S14 (buyer side) | `e0d34d0`, `4b65518` |
+| §2.4 `reviews.ts` split (`myReviews.ts`) | S6, S10, S14 | `4b65518` |
+| §2.4 `farms.ts` `ratingLabel` (`format.ts`) | S6 | `4b65518` |
+| §2.4 `notificationLinks.ts` split | S8 (buyer), S12 (merchant); order id in the hand-off: review fixes | `4b65518`, `835a80b` |
+| §2.4 `ProtectedScreen` (buyer sign-in only, not copied) | S4, S14 | `4b65518` |
+| §3.1 merchant routes removed from the buyer | S8-S10 | `4b65518` |
+| §3.2 `ProtectedScreen` sign-in only | S4, S14 | `4b65518` |
+| §3.3 hand-off helpers (`merchantHandoff.ts`, `openMerchant.ts`, `app.json` queries in both apps) | S8 (buyer `app.json`); merchant `app.json` queries: in the S4-S15 work | `4b65518` |
+| §3.4 profile banner | S8 | `4b65518` |
+| §3.5 buyer notification hand-off | S8; chat order kept: review fixes | `4b65518`, `835a80b` |
+| §3.6 merchant api/types out of the buyer (incl. `api.produce.*`) | S14 | `4b65518` |
+| §3.7 buyer acceptance | S15 | `4b65518` |
+| §4.1 scaffold + config | S1, S3 | `bde9b1f`, `e0d34d0` |
+| §4.2 folder layout, tabs, routes | S5, S8-S12 | `4b65518` |
+| §4.3 root gate (`MerchantContext.tsx`, `not-merchant`) | S4; "Check again": review fixes | `4b65518`, `835a80b` |
+| §4.4 More tab rows | S5; verification banner: review fixes | `4b65518`, `835a80b` |
+| §4.5 merchant notifications, filter, deep links (`chats?order=<id>`) | S12; `chats?order` and filter paging: review fixes | `4b65518`, `835a80b` |
+| §4.6 shared-copy guard | S2, S9 (`dates.ts`), S15 | `d2889d6`, `4b65518` |
+| §4.7 merchant acceptance | S13 | `4b65518` |
+| §5 phases 1-5 | S1-S16 (status per phase in the plan §5) | |
+| §6 web origins (`lib/auth.ts`, `lib/admin-two-factor.ts` + test) | S3 | `e0d34d0` |
+| §7 out of scope | not done here (Plan 2) | |
+
+## 7. Progress
+
+Commits from `git log --oneline -- mobile/CarabaoMerchantMobile` plus the docs commit. The
+sections from S4 to S15 were done without a commit each and went in as one commit.
+
+| Section | Done | Commit |
+| --- | --- | --- |
+| S0 Baseline | [x] | none (no code) |
+| S1 Scaffold | [x] | `bde9b1f` |
+| S2 Shared copies + guard | [x] | `d2889d6` |
+| S3 Auth, API core, web origins | [x] | `e0d34d0` |
+| S4 Root gate | [x] | `4b65518` |
+| S5 Tabs + More | [x] | `4b65518` |
+| S6 Pure modules | [x] | `4b65518` |
+| S7 Merchant API | [x] | `4b65518` |
+| S8 Dashboard, orders, chats + buyer hand-off | [x] | `4b65518` |
+| S9 Listings, onboarding | [x] | `4b65518` |
+| S10 Reviews | [x] | `4b65518` |
+| S11 Order chat | [x] | `4b65518` |
+| S12 Notifications | [x] | `4b65518` |
+| S13 Merchant acceptance | [x] | `4b65518` |
+| S14 Strip the buyer app | [x] | `4b65518` |
+| S15 Buyer acceptance | [x] | `4b65518` |
+| Review pass (after S15) | [x] | `835a80b` |
+| S16 Docs | [x] | `docs: merchant app split` (the commit that holds this table) |
+
+Known limit, recorded in the merchant README: a deep link opened while signed out lands on
+Home after sign-in, not on the linked screen.
