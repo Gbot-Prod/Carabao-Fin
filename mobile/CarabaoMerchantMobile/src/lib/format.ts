@@ -44,3 +44,15 @@ export const addDays = (ymd: string, days: number) => {
   const [y, m, d] = ymd.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 };
+
+// S19: the web dashboard's dates (M/(shell)/page.tsx `shortDate`, `orderDate`).
+/** "Nov 24" for "YYYY-MM-DD", read as a calendar date so no timezone shifts the day. */
+export const shortDate = (d: unknown) => {
+  const [y, m, day] = String(d).split('-').map(Number);
+  if (!y || !m || !day) return String(d);
+  return new Date(y, m - 1, day).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+};
+
+/** "Nov 24" for an order timestamp, on the Manila calendar. */
+export const orderDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });

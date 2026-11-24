@@ -16,7 +16,7 @@ import { useMerchantGate } from '../lib/MerchantContext';
 import { useMerchantData } from '../lib/MerchantDataContext';
 import { WEB_BASE } from '../lib/api';
 import { readyToShipCount } from '../lib/badges';
-import { verificationBanner } from '../lib/dashboard';
+import { bannerLine, verificationBanner } from '../lib/dashboard';
 import { Colors, FontSize, Radius, Shadow, Spacing } from '../lib/theme';
 
 // The buyer app's scheme (README). If it is not installed the website opens instead.
@@ -67,7 +67,8 @@ export default function MoreScreen() {
   const { performance, orders } = useMerchantData();
   const [signingOut, setSigningOut] = useState(false);
   // undefined until the shared load finishes; no banner then (the Home tab shows the error).
-  const banner = verificationBanner(performance?.verification_status);
+  const status = verificationBanner(performance?.verification_status);
+  const banner = status ? bannerLine(status) : null;
   // The web's Shipments row count (MerchantShell.tsx): the orders waiting for a route.
   const ready = orders ? readyToShipCount(orders) : 0;
 

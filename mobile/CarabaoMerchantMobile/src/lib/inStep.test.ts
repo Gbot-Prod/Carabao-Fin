@@ -647,3 +647,46 @@ test('S18 /onboarding and /application are open to a signed-in account with or w
   assert.equal(layout.match(/name="onboarding"/g)?.length, 1);
   assert.equal(layout.match(/name="application"/g)?.length, 1);
 });
+
+test('S19 Home = web SetupChecklist, dashboard page, VerificationBanner, MerchantWelcome', async () => {
+  const c = await import('./setupChecklist.ts');
+  const d = await import('./dashboard.ts');
+  const M = 'frontend/carabao-app/app/(site)/(merchant)/merchant/';
+  const checklist = read(`${M}components/SetupChecklist.tsx`);
+  const { title, sub, ...words } = c.CHECKLIST_WORDS;
+  assert.ok(checklist.includes(`${title}\n`), 'the checklist title differs');
+  assert.ok(checklist.includes(`"${sub}"`), 'the checklist sub differs');
+  for (const [k, w] of Object.entries(words)) assert.ok(checklist.includes(`"${w}"`), `checklist word ${k} differs`);
+  // Same items in the same order.
+  const webKeys = [...checklist.matchAll(/key: "(\w+)"/g)].map((m) => m[1]);
+  const mobile = c.setupChecklist({ status: 'setup', shopPage: null, productCount: 0, hasPayout: false })!.items.map((i) => i.key);
+  // The approval item is built first on the web and placed after the documents item.
+  assert.deepEqual(webKeys.filter((k) => k !== 'approved'), mobile.filter((k) => k !== 'approved'));
+  assert.match(checklist, /key: "documents"[\s\S]*?\n {4}approval,\n[\s\S]*?key: "publish"/);
+  assert.equal(mobile.indexOf('approved'), mobile.indexOf('documents') + 1);
+  assert.ok(checklist.includes('if (shopPage?.is_published) return null;'));
+
+  const page = read(`${M}(shell)/page.tsx`);
+  const rows = d.attentionRows({ orders: [], produce: [], alerts: null, payouts: [], shopPage: null, merchant: null });
+  assert.deepEqual(rows.map((r) => r.key), [...page.matchAll(/\{ key: "(\w+)", icon:/g)].map((m) => m[1]));
+  for (const r of rows) assert.ok(page.includes(`label: "${r.label}"`), `attention label ${r.key} differs`);
+  for (const a of ['Paid orders to put on a route', 'Set your farm pickup pin', 'Publish your shop page', 'Create your public shop page'])
+    assert.ok(page.includes(`"${a}"`), `attention action "${a}" differs`);
+  const w = d.DASHBOARD_WORDS;
+  for (const k of ['attentionTitle', 'viewOrders', 'addProduce', 'recentTitle', 'allOrders', 'ordersTitle', 'eyebrow'] as const)
+    assert.ok(page.includes(`>${w[k]}<`) || page.includes(` ${w[k]}\n`) || page.includes(`${w[k]} <`), `${k} differs`);
+  assert.ok(page.includes('"Nothing waiting"') && page.includes('You&apos;re all caught up.'));
+  assert.ok(page.includes('This is how your shop is doing.') && page.includes(String.raw`Welcome back, ${'$'}{userName.split(/\s+/)[0]}. `));
+  for (const label of ['Revenue, last 30 days', 'Orders, last 30 days', 'Active orders', 'Ready to cash out', 'Produce listed'])
+    assert.ok(page.includes(`label="${label}"`), `stat ${label} differs`);
+  assert.ok(page.includes('.slice(0, 6)'), 'recent orders count differs');
+
+  // JSX text wraps over lines: compare with single spaces.
+  const welcome = read(`${M}MerchantWelcome.tsx`).replace(/\s+/g, ' ');
+  for (const status of [null, 'submitted', 'pending_documents', 'clarification', 'rejected', 'suspended']) {
+    const v = d.merchantWelcome(status);
+    assert.ok(welcome.includes(v.title), `welcome title ${status} differs`);
+    assert.ok(welcome.includes(v.body), `welcome text ${status} differs`);
+    if (v.action) assert.ok(welcome.includes(v.action.label), `welcome action ${status} differs`);
+  }
+});

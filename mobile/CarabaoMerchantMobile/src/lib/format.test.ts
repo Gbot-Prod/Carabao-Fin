@@ -27,3 +27,13 @@ test('money and dates read as on the web merchant dashboard', () => {
   assert.equal(formatRequestedDate('2026-11-24'), 'Tue, Nov 24, 2026');
   assert.equal(formatRequestedDate('garbage'), 'garbage');
 });
+
+test('dashboard dates read as on the web home (S19)', async () => {
+  const { orderDate, shortDate } = await import('./format.ts');
+  assert.match(shortDate('2026-11-03'), /Nov/);
+  assert.match(shortDate('2026-11-03'), /\b3\b/);
+  // Not a calendar day: the raw text, as the web.
+  assert.equal(shortDate('soon'), 'soon');
+  // 2026-11-23T17:30Z is Nov 24 in Manila (UTC+8).
+  assert.match(orderDate('2026-11-23T17:30:00Z'), /Nov 24|24 Nov/);
+});
