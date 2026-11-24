@@ -708,6 +708,21 @@ the right screen; a verified live merchant sees stats and bars.
 4. Plan §5.13: idle logout returns to `/auth`; sign out; "Open buyer app"; "Merchant Centre
    on the web". The app deletes only the merchant profile, never the account.
 5. Test counts: merchant ≥ S0 count + new tests; buyer = S0 count; web `npm test` green.
+**Automatic part recorded (2026-11-24, HEAD `af7dff9`):**
+
+- Grep 2: no "Coming in a later section" in `MM/app`. The pass found
+  `MM/src/screens/ComingSoonScreen.tsx` with no route that uses it (S11-S18 replaced every
+  route) and deleted it.
+- Grep 3: no `console.*` call in `MM/src` or `MM/app`; `logGuard.test.ts` passes.
+- §5.13 (code read): idle logout (`AuthContext.tsx`, `idle.ts`) and Sign out call `signOut()`;
+  the gate then gives `signin` and only `/auth` mounts. More has "Open buyer app"
+  (`carabaomobile://`, else the website) and "Merchant Centre on the web"
+  (`/merchantDashboard`). The only delete is `DELETE /merchants/me` (Store settings); then the
+  gate checks again and opens `/not-merchant`. No call deletes the account.
+- Suites: merchant tsc/lint exit 0, `npm test` 286/286 (S0: 90); buyer tsc/lint exit 0,
+  146/146 (S0: 146); web 158/158.
+- Open: the §7 table needs the manual device or simulator check. No row is "yes" yet.
+
 **Verify:** the table is all "yes", the greps are clean, all suites pass.
 **Done when:** a farm can run its shop without the web.
 **Commit:** none.
