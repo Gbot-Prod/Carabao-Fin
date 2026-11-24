@@ -13,6 +13,9 @@ import type { ExportDays, SalesDays } from './payout';
 // S12: the road line GET /shipments/{id}/route answers, typed so the map helper can read it.
 import type { RouteGeoJSON } from './routeMap';
 
+// S16: the days the store's schedule uses (pure, so the tests read them without React Native).
+import type { MerchantDay } from './storeSettings';
+
 import { getAccessToken } from './authClient';
 import { chatEndpoint } from './orderChat';
 import { emitSessionExpired, sessionGone } from './sessionEvents';
@@ -27,10 +30,25 @@ const REQUEST_TIMEOUT_MS = 20000;
 
 export class ApiError extends Error {
   // CF-0123: message per form field from the server (src/lib/apiErrors.ts), {} when none.
-  constructor(message: string, public status: number, public fieldErrors: Record<string, string> = {}) {
+  // S16: `detail` is the object body some routes send (the delete 409 names what is still
+  // open); null when the server's words are a plain string or absent.
+  constructor(
+    message: string,
+    public status: number,
+    public fieldErrors: Record<string, string> = {},
+    public detail: Record<string, unknown> | null = null,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+/** The object `detail` a route sends (e.g. { message, blockers }), else null. */
+function objectDetail(body: unknown): Record<string, unknown> | null {
+  const detail = (body as { detail?: unknown } | null)?.detail;
+  return detail && typeof detail === 'object' && !Array.isArray(detail)
+    ? (detail as Record<string, unknown>)
+    : null;
 }
 
 // S10: a CSV export answers text/csv, everything else answers JSON. `as` picks the parser; the
@@ -127,7 +145,12 @@ async function send<T>(
     // Non-JSON (usually an HTML page) means API_BASE points at the wrong host.
     if (text && !json) throw unexpectedResponse(path, res.status);
     const parsed = parseErrorBody(body);
-    throw new ApiError(parsed.message ?? `Request failed (${res.status})`, res.status, parsed.fields);
+    throw new ApiError(
+      parsed.message ?? `Request failed (${res.status})`,
+      res.status,
+      parsed.fields,
+      objectDetail(body),
+    );
   }
   return (as === 'text' ? text : body) as T;
 }
@@ -193,6 +216,67 @@ export type ApiMerchant = {
     logo_url?: string | null;
     description: string | null;
   } | null;
+};
+
+/**
+ * S16 (plan §5.11): GET /merchants/me, the owner's own farm (backend MerchantResponse).
+ * The public ApiMerchant above leaves out the street address; this one has every field the
+ * settings form edits, plus the pause (CF-0066) the web shop page shows.
+ */
+export type ApiMyMerchant = {
+  id: number;
+  user_id: number;
+  merchant_name: string;
+  legal_business_name: string | null;
+  contact_email: string | null;
+  contact_number: string | null;
+  region: string;
+  province: string;
+  city: string | null;
+  barangay: string | null;
+  address: string;
+  postal_code: string;
+  lat: number | null;
+  lng: number | null;
+  pin_confirmed: boolean;
+  available_days: MerchantDay[];
+  operating_hours: unknown;
+  delivery_price: number | null;
+  delivery_time: number | null;
+  rating: number | null;
+  rating_count: number;
+  updated_at: string | null;
+  paused_until: string | null;
+  pause_message: string | null;
+  verification_status: string | null;
+  shop_page: {
+    id: number;
+    title: string;
+    slug: string;
+    banner_image_url: string | null;
+    logo_url: string | null;
+    description: string | null;
+  } | null;
+};
+
+/**
+ * PATCH /merchants/me (backend MerchantUpdate). A new contact number needs the
+ * `phone_verification_token` from POST /sms/otp/verify for that number.
+ */
+export type MerchantSettingsPayload = {
+  region?: string;
+  province?: string;
+  city?: string | null;
+  barangay?: string | null;
+  address?: string;
+  postal_code?: string;
+  lat?: number | null;
+  lng?: number | null;
+  pin_confirmed?: boolean;
+  available_days?: MerchantDay[];
+  delivery_price?: number | null;
+  contact_number?: string;
+  phone_verification_token?: string | null;
 };
 
 export type ApiProduce = {
@@ -389,6 +473,69 @@ export type ApiShopPage = {
   has_unpublished_changes: boolean;
 };
 
+// S14: a new page's fields (backend ShopPageCreate). The slug is built from the title by
+// src/lib/shopSlug.ts, as the web Shop tab does; a description may be left out.
+export type ShopPageCreatePayload = {
+  title: string;
+  slug: string;
+  description: string | null;
+};
+
+// S14: a change to the draft (backend ShopPageUpdate). Only the fields sent change. The slug
+// names the page and is not part of the draft: a new one applies at once and the old one
+// still redirects to the farm.
+export type ShopPageUpdatePayload = {
+  title?: string;
+  slug?: string;
+  description?: string | null;
+};
+
+// S15 (plan §5.10): the farm's voucher codes (CF-0061, backend schemas/voucher.py, the web
+// util/api/vouchers.ts). `uses` counts the orders that were not cancelled, which is what the
+// caps count. `expires_at` is the first moment the code stops working, so the list shows the
+// day before (src/lib/vouchers.ts lastDay).
+export type VoucherKind = 'percent' | 'fixed';
+
+export type ApiVoucher = {
+  id: number;
+  code: string;
+  kind: VoucherKind;
+  /** Percent (1-90) for a percent voucher, pesos for a fixed one. */
+  value: number;
+  /** The least a basket must hold for the code to work; 0 for none. */
+  min_subtotal: number;
+  /** The most a percent voucher takes off; null for none. */
+  max_discount: number | null;
+  /** null for no cap. */
+  usage_limit: number | null;
+  per_user_limit: number;
+  starts_at: string | null;
+  expires_at: string | null;
+  active: boolean;
+  created_at: string | null;
+  uses: number;
+};
+
+// A new voucher (backend VoucherCreate). The form builds it (src/lib/vouchers.ts
+// buildVoucherInput): the code upper-cased, whole pesos, and a last day that works through the
+// whole day in Manila.
+export type VoucherCreatePayload = {
+  code: string;
+  kind: VoucherKind;
+  value: number;
+  min_subtotal: number;
+  max_discount: number | null;
+  usage_limit: number | null;
+  per_user_limit: number;
+  starts_at: string | null;
+  expires_at: string | null;
+  active: boolean;
+};
+
+// A change to a voucher (backend VoucherUpdate). `code` cannot change: buyers may already have
+// it, and the server refuses the field (extra="forbid").
+export type VoucherUpdatePayload = Partial<Omit<VoucherCreatePayload, 'code'>>;
+
 // S9 (plan §5.5, part 1): the payout destination, copied from the web util/api/merchants.ts.
 // A change is saved only with the SMS code sent for exactly that destination (CF-0004).
 export type PayoutType = 'bank' | 'gcash' | 'maya';
@@ -556,10 +703,69 @@ export type ApiInquiryThread = {
   messages: ApiChatMessage[];
 };
 
+// S13 (plan §5.8): the address form's map pin (web util/api/locations.ts). A Mapbox place,
+// trimmed by the API to what the pin reads; both geocoding calls go through the API so the
+// Mapbox token stays on the server, and `center` is [lng, lat] like Mapbox's own.
+export type PlaceFeature = {
+  id?: string | null;
+  place_type?: string[];
+  text?: string | null;
+  place_name?: string | null;
+  center?: [number, number];
+  context?: { id: string; text: string }[];
+};
+
+/** Pin quality before a save (control 5); the save routes check again. */
+export type PinCheckResult = {
+  lat: number;
+  lng: number;
+  /** The point on the nearest road, where the rider stops. Null: not checked. */
+  road_lat: number | null;
+  road_lng: number | null;
+  road_distance_m: number | null;
+  /** Rider reports near this pin on earlier orders (control 6). */
+  unreachable_reports: number;
+  /** Checkout refuses this pin until it is moved. */
+  blocked: boolean;
+};
+
 // ── API ────────────────────────────────────────────────────────────────────────
 
 export const api = {
   merchants: {
+    // S16 (plan §5.11): the owner's full farm (backend GET /merchants/me, the web
+    // fetchMyMerchant). 404 when the account has no farm.
+    myMerchant: (token: string | null) => request<ApiMyMerchant>('/merchants/me', token),
+    // PATCH /merchants/me. A new contact number is stored only with the token from
+    // api.sms.verify for that number (backend _set_contact_number, CF-0030).
+    updateMyMerchant: (token: string | null, payload: MerchantSettingsPayload) =>
+      request<ApiMyMerchant>('/merchants/me', token, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    // CF-0066: holiday mode. PUT takes no orders through `paused_until` (Manila, today to
+    // today+90); DELETE takes them again now. Both answer the whole farm.
+    pauseStore: (token: string | null, pausedUntil: string, message: string | null) =>
+      request<ApiMyMerchant>('/merchants/me/pause', token, {
+        method: 'PUT',
+        body: JSON.stringify({ paused_until: pausedUntil, message }),
+      }),
+    resumeStore: (token: string | null) =>
+      request<ApiMyMerchant>('/merchants/me/pause', token, { method: 'DELETE' }),
+    // Closing the farm needs its own code, as deleting the account does: a session alone
+    // cannot do it. The account's password comes with the request when it has one; the route
+    // answers the number's last four digits. A 409 names what is still open (blockers).
+    sendDeleteCode: (token: string | null, password?: string) =>
+      request<{ sent_to: string }>('/merchants/me/delete-code', token, {
+        method: 'POST',
+        body: JSON.stringify(password ? { password } : {}),
+      }),
+    // DELETE /merchants/me, 204. The code is the one /merchants/me/delete-code texted.
+    deleteMerchant: (token: string | null, code: string) =>
+      request<null>('/merchants/me', token, {
+        method: 'DELETE',
+        body: JSON.stringify({ code }),
+      }),
     // The merchant's own listings, including expired and admin-hidden ones.
     myProduce: (token: string | null) =>
       request<ApiProduce[]>('/merchants/me/produce', token),
@@ -568,6 +774,55 @@ export const api = {
     // S14: the owner's shop page, draft included. 404 until the farm creates one.
     shopPage: (token: string | null) =>
       request<ApiShopPage>('/merchants/me/shoppage', token),
+    // S14 (plan §5.9): the editor's calls (backend api/routes/merchant_shop.py). Create makes
+    // a draft only; update changes the draft — except the slug, which applies at once; publish
+    // copies the draft to the live page and needs a verified farm (403 otherwise); unpublish
+    // hides the farm again (open orders continue); discard copies the live page back.
+    createShopPage: (token: string | null, payload: ShopPageCreatePayload) =>
+      request<ApiShopPage>('/merchants/me/shoppage', token, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    updateShopPage: (token: string | null, payload: ShopPageUpdatePayload) =>
+      request<ApiShopPage>('/merchants/me/shoppage', token, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    publishShopPage: (token: string | null) =>
+      request<ApiShopPage>('/merchants/me/shoppage/publish', token, { method: 'POST' }),
+    unpublishShopPage: (token: string | null) =>
+      request<ApiShopPage>('/merchants/me/shoppage/unpublish', token, { method: 'POST' }),
+    discardShopPageDraft: (token: string | null) =>
+      request<ApiShopPage>('/merchants/me/shoppage/discard', token, { method: 'POST' }),
+    // The two draft images. The multipart part names are the route parameters (`logo`,
+    // `banner`), and each upload gets a new R2 key, so the live image does not change.
+    uploadShopLogo: (token: string | null, file: FilePart) => {
+      const form = new FormData();
+      form.append('logo', file as unknown as Blob);
+      return request<ApiShopPage>('/merchants/me/shoppage/logo', token, { method: 'POST', body: form });
+    },
+    uploadShopBanner: (token: string | null, file: FilePart) => {
+      const form = new FormData();
+      form.append('banner', file as unknown as Blob);
+      return request<ApiShopPage>('/merchants/me/shoppage/banner', token, { method: 'POST', body: form });
+    },
+    // S15 (plan §5.10): the farm's voucher codes (backend api/routes/merchant_vouchers.py).
+    // Deleting works only on a code no order used (409 with the server's words otherwise): a
+    // redemption is the record of the discount each order got, so turn the code off instead.
+    // A voucher's code cannot change; PATCH sends the fields that do.
+    vouchers: (token: string | null) => request<ApiVoucher[]>('/merchants/me/vouchers', token),
+    createVoucher: (token: string | null, payload: VoucherCreatePayload) =>
+      request<ApiVoucher>('/merchants/me/vouchers', token, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    updateVoucher: (token: string | null, voucherId: number, payload: VoucherUpdatePayload) =>
+      request<ApiVoucher>(`/merchants/me/vouchers/${voucherId}`, token, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    deleteVoucher: (token: string | null, voucherId: number) =>
+      request<null>(`/merchants/me/vouchers/${voucherId}`, token, { method: 'DELETE' }),
     // CF-0127: the farm's order chats, newest message first.
     chats: (token: string | null) => request<ChatSummary[]>('/merchants/me/chats', token),
     // S5: buyers' pre-order questions (backend GET /merchants/me/inquiries, web
@@ -641,6 +896,27 @@ export const api = {
       request<null>(`/merchants/me/orders/${orderId}/pin-unreachable`, token, {
         method: 'POST',
         body: JSON.stringify({ note: note?.trim() || null }),
+      }),
+  },
+  // S13 (plan §5.8): the address form's pin (web util/api/locations.ts). Geocoding goes through
+  // the API, so the Mapbox token stays server-side; a null feature means Mapbox found nothing.
+  // pinCheck answers the nearest road and the rider reports near the pin.
+  locations: {
+    geocode: (token: string | null, query: string) =>
+      request<{ feature: PlaceFeature | null }>('/locations/geocode', token, {
+        method: 'POST',
+        // The backend's own limit (web geocodePlace): a long address is cut, not refused.
+        body: JSON.stringify({ query: query.slice(0, 256) }),
+      }).then((res) => res.feature),
+    reverseGeocode: (token: string | null, pin: { lat: number; lng: number }) =>
+      request<{ feature: PlaceFeature | null }>('/locations/reverse-geocode', token, {
+        method: 'POST',
+        body: JSON.stringify(pin),
+      }).then((res) => res.feature),
+    pinCheck: (token: string | null, pin: { lat: number; lng: number }) =>
+      request<PinCheckResult>('/locations/pin-check', token, {
+        method: 'POST',
+        body: JSON.stringify(pin),
       }),
   },
   // S9 (plan §5.5, part 1): the payout destination - the web's payoutInfo, payoutInstitutions,
@@ -760,6 +1036,22 @@ export const api = {
       request<null>(`/users/me/notifications/${id}`, token, { method: 'DELETE' }),
     removeRead: (token: string | null) =>
       request<null>('/users/me/notifications/read', token, { method: 'DELETE' }),
+  },
+  // S16: a new store contact number is verified like the onboarding one (backend
+  // api/routes/sms.py). The verify token lasts CONTACT_VERIFICATION_TTL and says which number
+  // it is for; PATCH /merchants/me stores that number only with it.
+  sms: {
+    send: (token: string | null, number: string) =>
+      request<{ ok: boolean }>('/sms/otp/send', token, {
+        method: 'POST',
+        body: JSON.stringify({ number }),
+      }),
+    verify: (token: string | null, number: string, otp: string) =>
+      request<{ ok: boolean; verification_token: string }>('/sms/otp/verify', token, {
+        method: 'POST',
+        body: JSON.stringify({ number, otp }),
+      })
+        .then((r) => r.verification_token),
   },
   users: {
     me: (token: string | null) =>

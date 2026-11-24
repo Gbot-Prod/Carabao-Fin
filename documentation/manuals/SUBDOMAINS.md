@@ -176,7 +176,7 @@ A new merchant page must not have the name of a buyer path (1.1).
 
 Notification links: the backend stores `/merchantDashboard` for all merchant notifications, and the mobile apps read it. Do not change it. The web bell opens a page by the notification kind: `new_order` and `chat_message` open `/sales`, `review_received` opens `/reviews`, `payout_released` and `payout_destination_changed` open `/earnings`. Other kinds open `/`.
 
-The merchant mobile app (`mobile/CarabaoMerchantMobile/src/lib/notificationLinks.ts`) uses the same kinds: `new_order` opens the Orders tab, `chat_message` opens the chat for `?order=<id>` (else the Chats tab), `review_received` opens Reviews, payouts and other kinds open Home (the app has no Earnings screen yet). It lists only notifications whose link starts with `/merchantDashboard`. This web shell stays as it is; the mobile app does not replace it.
+The merchant mobile app (`mobile/CarabaoMerchantMobile/src/lib/notificationLinks.ts`) uses the same kinds: `new_order` opens the Orders tab (that order's sheet when the link carries `?order=<id>`), `chat_message` opens the chat for `?order=<id>` (else the Chats tab), `review_received` opens Reviews, `payout_released` and `payout_destination_changed` open Earnings (the app has an `/earnings` screen from S3), and other kinds open Home. It lists only notifications whose link starts with `/merchantDashboard`. This web shell stays as it is; the mobile app does not replace it.
 ---
 
 ## 2. Environment variables

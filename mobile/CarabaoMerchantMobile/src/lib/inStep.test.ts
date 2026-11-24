@@ -1,6 +1,7 @@
 // Merchant copy of mobile/CarabaoMobile/src/lib/inStep.test.ts. The checks for files this app
 // does not have are left out: orderHistory and orderDetail (CF-0128 x2), checkoutOptions and
-// vouchers (CF-0131). The CF-0133 reply check imports ./myReviews.ts.
+// vouchers (CF-0131). The CF-0133 reply check imports ./myReviews.ts. S15's voucher rules are
+// here (the app now has the screen the CF-0131 check was left out for).
 /// <reference types="node" />
 // Run with `npm test`. CF-0106: values that must stay in step (SYSTEM_REFERENCE §3).
 // Reads the web and backend source files in this repo, so a change made on one side only
@@ -275,4 +276,129 @@ test('S5 Chats count = web useMerchantChats: chats + inquiries, one per unread r
     'the question count differs',
   );
 });
+
+test('S13 PSGC source and NCR label = web util/psgc.ts and util/serviceArea.ts', async () => {
+  const { PSGC_BASE, NCR_CODE, provinceForRegion } = await import('./psgc.ts');
+  const web = read('frontend/carabao-app/util/psgc.ts');
+  // The same API, asked the same way, so both apps show the same names.
+  const base = /const BASE = '([^']+)';/.exec(web)?.[1] ?? '';
+  assert.ok(base.length > 0, 'BASE not found in frontend/carabao-app/util/psgc.ts');
+  assert.equal(PSGC_BASE, base);
+
+  // NCR has no provinces, so its province shows and saves as "Metro Manila" (plan §2.2).
+  const webArea = read('frontend/carabao-app/util/serviceArea.ts');
+  const webLabel = /export const NCR_PROVINCE = '([^']+)';/.exec(webArea)?.[1] ?? '';
+  assert.ok(webLabel.length > 0, 'NCR_PROVINCE not found in frontend/carabao-app/util/serviceArea.ts');
+  const { NCR_PROVINCE } = await import('./serviceArea.ts');
+  assert.equal(NCR_PROVINCE, webLabel);
+  assert.equal(provinceForRegion(NCR_CODE, 'National Capital Region'), webLabel);
+  // The web's own NCR code, and its city source for NCR (the region has no provinces).
+  const webSelects = read('frontend/carabao-app/components/LocationSelects/LocationSelects.tsx');
+  assert.ok(webSelects.includes("const NCR_CODE = '1300000000';"), 'the web NCR code differs');
+  assert.equal(NCR_CODE, '1300000000');
+  assert.ok(webSelects.includes('fetchCitiesByRegion'), 'the web NCR city source differs');
+});
+
+test('S14 shop page limits, slug rules and image parts = backend shopPage.py = web input-limits.ts', async () => {
+  const {
+    SHOP_DESCRIPTION_MAX, SHOP_SLUG_MAX, SHOP_SLUG_MIN, SHOP_SLUG_PATTERN, SHOP_TITLE_MAX, slugProblem,
+  } = await import('./shopPage.ts');
+
+  // The screen and its tests take the field rules from the backend schema.
+  const schema = read('backend/app/schemas/shopPage.py');
+  assert.match(schema, new RegExp(`^MAX_TITLE = ${SHOP_TITLE_MAX}$`, 'm'));
+  assert.match(schema, new RegExp(`^MAX_DESCRIPTION = ${SHOP_DESCRIPTION_MAX}$`, 'm'));
+  assert.ok(
+    schema.includes(`MIN_SLUG, MAX_SLUG = ${SHOP_SLUG_MIN}, ${SHOP_SLUG_MAX}`),
+    'the backend slug lengths differ',
+  );
+  // The same expression, in Python's raw-string syntax.
+  const pattern = /^SLUG_PATTERN = r"(.+)"$/m.exec(schema)?.[1] ?? '';
+  assert.ok(pattern.length > 0, 'SLUG_PATTERN not found in backend/app/schemas/shopPage.py');
+  assert.equal(pattern, SHOP_SLUG_PATTERN.source);
+
+  // /farms/<number> is a farm id, so a slug of only digits is refused: the screen says the
+  // backend's words.
+  const digitText = /raise ValueError\("([^"]+)"\)/.exec(schema)?.[1] ?? '';
+  assert.ok(digitText.length > 0, 'the digits validator is missing from shopPage.py');
+  assert.equal(slugProblem('12345'), digitText);
+
+  // The web Shop tab's maxLength, so both apps stop at the same count.
+  const webLimits = read('frontend/carabao-app/lib/input-limits.ts');
+  assert.ok(
+    webLimits.includes(`export const SHOP_TITLE_MAX = ${SHOP_TITLE_MAX};`),
+    'the web title limit differs',
+  );
+  assert.ok(
+    webLimits.includes(`export const SHOP_DESCRIPTION_MAX = ${SHOP_DESCRIPTION_MAX};`),
+    'the web description limit differs',
+  );
+
+  // Each image goes up as its route's part: POST .../shoppage/logo and .../shoppage/banner.
+  const routes = read('backend/app/api/routes/merchant_shop.py');
+  for (const part of ['logo', 'banner']) {
+    assert.ok(
+      routes.includes(`${part}: UploadFile = File(...)`),
+      `the backend's ${part} part differs`,
+    );
+  }
+  const client = read('mobile/CarabaoMerchantMobile/src/lib/api.ts');
+  assert.ok(client.includes("form.append('logo', file"), 'the logo part name differs');
+  assert.ok(client.includes("form.append('banner', file"), 'the banner part name differs');
+  // The draft-only updates and the three state calls, all under /merchants/me/shoppage.
+  for (const path of [
+    "'/merchants/me/shoppage'",
+    "'/merchants/me/shoppage/publish'",
+    "'/merchants/me/shoppage/unpublish'",
+    "'/merchants/me/shoppage/discard'",
+  ]) {
+    assert.ok(client.includes(path), `api.ts is missing ${path}`);
+  }
+});
+
+test('S15 voucher code and percent cap = backend vouchers.py = web lib/vouchers.ts', async () => {
+  const { CODE_MESSAGE, CODE_PATTERN, MAX_PERCENT, deleteConfirmText } = await import('./vouchers.ts');
+
+  // The service's expression, which runs on the code after normalize_code upper-cases it.
+  const service = read('backend/app/services/vouchers.py');
+  const servicePattern = /^CODE_PATTERN = re\.compile\(r"(.+)"\)$/m.exec(service)?.[1] ?? '';
+  assert.ok(servicePattern.length > 0, 'CODE_PATTERN not found in backend/app/services/vouchers.py');
+  assert.equal(CODE_PATTERN.source, servicePattern);
+  assert.match(service, new RegExp(`^MAX_PERCENT = ${MAX_PERCENT}$`, 'm'));
+  // The schema takes either case and spaces around it, at the same 3-32 length.
+  assert.match(
+    read('backend/app/schemas/voucher.py'),
+    /^CODE_FIELD_PATTERN = r"\^\\s\*\[A-Za-z0-9\]\[A-Za-z0-9-\]\{2,31\}\\s\*\$"$/m,
+  );
+
+  // The web merchant form's own copies, in step with this app's.
+  const web = read('frontend/carabao-app/lib/vouchers.ts');
+  assert.ok(web.includes(`export const CODE_PATTERN = ${CODE_PATTERN.toString()};`), 'the web code pattern differs');
+  assert.ok(web.includes(`export const MAX_PERCENT = ${MAX_PERCENT};`), 'the web percent cap differs');
+  assert.ok(web.includes(CODE_MESSAGE), 'the web code message differs');
+
+  // The confirm is the web's merchantConfirm.deleteVoucher.
+  assert.match(read('frontend/carabao-app/lib/i18n/strings/en.ts'), /deleteVoucher: 'Delete voucher \{code\}\?'/);
+  assert.equal(deleteConfirmText('SAVE10'), 'Delete voucher SAVE10?');
+});
+
+test('S15 voucher calls and screen are wired like the web Vouchers tab', () => {
+  const client = read('mobile/CarabaoMerchantMobile/src/lib/api.ts');
+  // The list, create, edit (on/off) and delete the web page calls.
+  for (const call of [
+    "'/merchants/me/vouchers'",
+    '`/merchants/me/vouchers/${voucherId}`',
+    'createVoucher',
+    'updateVoucher',
+    'deleteVoucher',
+  ]) {
+    assert.ok(client.includes(call), `api.ts is missing ${call}`);
+  }
+  // app/vouchers.tsx renders the screen rather than the S3 placeholder.
+  assert.match(
+    read('mobile/CarabaoMerchantMobile/app/vouchers.tsx'),
+    /export \{ default \} from '\.\.\/src\/screens\/VouchersScreen';/,
+  );
+});
+
 

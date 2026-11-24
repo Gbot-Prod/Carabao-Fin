@@ -67,3 +67,16 @@ export function getAccessToken({ forceRefresh = false } = {}): Promise<string | 
 export function clearAccessToken() {
   cached = null;
 }
+
+// ── Sign-in methods (web lib/auth-client.ts) ──────────────────────────
+
+/**
+ * True when the account can sign in with a password; false for a Google/Facebook-only
+ * account. S16: the danger zone asks before texting the code that closes the farm, as the
+ * web does (better-auth listAccounts, `credential` is the password provider).
+ */
+export async function hasPassword(): Promise<boolean> {
+  const { data, error } = await authClient.listAccounts();
+  if (error || !data) throw new Error("We couldn't load your sign-in methods.");
+  return data.some((account) => account.providerId === 'credential');
+}

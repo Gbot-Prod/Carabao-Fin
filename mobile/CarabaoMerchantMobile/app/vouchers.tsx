@@ -1,3 +1,3 @@
 // app/vouchers.tsx
-// S3 placeholder (decision D2): replaced by the real Vouchers screen in S15.
-export { default } from '../src/screens/ComingSoonScreen';
+// S15 (plan §5.10): the farm's voucher codes — the web merchant shell's Vouchers tab.
+export { default } from '../src/screens/VouchersScreen';
