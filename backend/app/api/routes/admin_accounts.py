@@ -1,4 +1,4 @@
-"""Admin accounts: invite, accept, resend, deactivate, reactivate
+"""Admin accounts: invite, accept, resend, reset, deactivate, reactivate
 (app/services/admin_accounts.py, DB_ROLE_SPLIT_PLAN.md section 2).
 
 Every admin-account write goes through these endpoints, so web-admin's own
@@ -114,27 +114,31 @@ def deactivate_admin(
     return admin_accounts.deactivate(db, actor=current_admin, user=_target(db, user_id))
 
 
-class ReactivateResponse(BaseModel):
-    user: UserResponse
-    sent_to: list[str]
-    # Set when the account never accepted its invite: a fresh invite was made.
-    invite_code: str | None = None
-
-
-@router.post("/admin/admins/{user_id}/reactivate", response_model=ReactivateResponse)
+@router.post("/admin/admins/{user_id}/reactivate", response_model=InviteResponse)
 def reactivate_admin(
     user_id: int,
     db: Session = Depends(get_db),
     current_admin: User = Depends(_require_admin),
 ):
-    done = admin_accounts.reactivate(db, actor=current_admin, user=_target(db, user_id))
-    return ReactivateResponse(
-        user=UserResponse.model_validate(done.user).model_copy(
-            update={"admin_invite_pending": done.invite_code is not None}
-        ),
-        sent_to=done.sent_to,
-        invite_code=done.invite_code,
+    """Always a new invite: any old password and 2FA are removed."""
+    issued = admin_accounts.reactivate(
+        db, actor=current_admin, user=_target(db, user_id)
     )
+    return _invite_response(issued)
+
+
+@router.post("/admin/admins/{user_id}/reset", response_model=InviteResponse)
+def reset_admin_account(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(_require_admin),
+):
+    """Lost authenticator or forgotten password: the password, 2FA and
+    sessions go, and a new invite is sent. The code is in the response."""
+    issued = admin_accounts.reset_account(
+        db, actor=current_admin, user=_target(db, user_id)
+    )
+    return _invite_response(issued)
 
 
 class EnrolledPayload(BaseModel):

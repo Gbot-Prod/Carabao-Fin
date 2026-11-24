@@ -1,8 +1,8 @@
 """E8c: admins need two-step verification for the admin API.
 
 CF-0017: the session must also have passed the TOTP step (the mfa claim).
-CF-0018: 2FA setup needs a one-time link that only an admin action makes.
-Invites, deactivation and reactivation: tests/test_admin_accounts.py.
+Invites, account reset, deactivation and reactivation (which make the
+setup links): tests/test_admin_accounts.py.
 """
 
 import pytest
@@ -13,9 +13,7 @@ from sqlalchemy import text
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import admin
 from app.models.user import User
-from app.services import admin_enrolment
-from app.services.better_auth_store import enrolment_identifier
-from tests.better_auth import add_password, get_identity, make_user
+from tests.better_auth import make_user
 from tests.tokens import ADMIN_KEY, bearer, make_token, trust_test_key
 
 
@@ -170,154 +168,3 @@ def test_admin_key_with_the_admin_claim_gets_in(db, monkeypatch):  # noqa: F811
     token = make_token(sub="ba_admin", mfa=True, surface="admin", key=ADMIN_KEY)
     res = _token_client(db, monkeypatch).get("/admin/stats", headers=bearer(token))
     assert res.status_code == 200, res.text
-
-
-# ── CF-0018: setup links ─────────────────────────────────────────────────────
-
-
-@pytest.fixture
-def sent(monkeypatch):
-    """Setup links are captured, not sent."""
-    out: list[tuple[str, str, str]] = []
-    monkeypatch.setenv("BETTER_AUTH_URL", "https://web.test")
-    # The enrol page is on the admin site.
-    monkeypatch.setenv("ADMIN_URL", "https://admin.web.test")
-    monkeypatch.setattr(
-        admin_enrolment,
-        "send_sms",
-        lambda *, number, message: out.append(("sms", number, message)),
-    )
-    monkeypatch.setattr(
-        admin_enrolment,
-        "send_admin_enrolment_email",
-        lambda to, url: out.append(("email", to, url)),
-    )
-    return out
-
-
-def _enrolment_row(db, user):  # noqa: F811
-    return (
-        db.execute(
-            text('SELECT value FROM "verification" WHERE identifier = :i'),
-            {"i": enrolment_identifier(user.external_auth_id)},
-        )
-        .mappings()
-        .first()
-    )
-
-
-def _token_from(message: str) -> str:
-    return message.split("token=")[1].split()[0]
-
-
-def _with_two_factor(db, user):  # noqa: F811
-    params = {"u": user.external_auth_id}
-    db.execute(
-        text(
-            'INSERT INTO "twoFactor" (id, secret, "backupCodes", "userId") '
-            "VALUES ('tf1', 's', 'c', :u)"
-        ),
-        params,
-    )
-    db.execute(
-        text(
-            'INSERT INTO "verification" (id, identifier, value, "expiresAt") '
-            "VALUES ('v1', 'trust-device-abc', :u, '2999-01-01')"
-        ),
-        params,
-    )
-    db.execute(text('INSERT INTO "session" (id, "userId") VALUES (\'s1\', :u)'), params)
-    db.commit()
-
-
-def _count(db, sql, user) -> int:  # noqa: F811
-    return db.execute(text(sql), {"u": user.external_auth_id}).scalar()
-
-
-def _assert_two_factor_cleared(db, user):  # noqa: F811
-    assert not get_identity(db, user.external_auth_id)["twoFactorEnabled"]
-    assert _count(db, 'SELECT COUNT(*) FROM "twoFactor" WHERE "userId" = :u', user) == 0
-    assert _count(db, 'SELECT COUNT(*) FROM "session" WHERE "userId" = :u', user) == 0
-    # Trusted devices go too, so the next sign-in asks for a code.
-    assert _count(db, 'SELECT COUNT(*) FROM "verification" WHERE value = :u', user) == 0
-
-
-def test_reset_sends_a_new_link_and_clears_the_old_setup(db, sent):  # noqa: F811
-    boss = _admin(db, two_factor=True)
-    other = make_user(db, "other@example.com", is_admin=True)
-    db.commit()
-    add_password(db, other, "Admin password 1!")
-    _with_two_factor(db, other)
-    client = _admin_client(db, boss)
-
-    res = client.post(f"/admin/users/{other.id}/two-factor/reset")
-
-    assert res.status_code == 200, res.text
-    assert res.json() == {"sent_to": ["sms", "email"]}
-    _assert_two_factor_cleared(db, other)
-    first = _token_from(sent[-1][2])
-    assert _enrolment_row(db, other)["value"] == admin_enrolment.hash_token(first)
-
-    # A second reset replaces the link: the old token no longer matches.
-    assert client.post(f"/admin/users/{other.id}/two-factor/reset").status_code == 200
-    second = _token_from(sent[-1][2])
-    assert second != first
-    assert _enrolment_row(db, other)["value"] == admin_enrolment.hash_token(second)
-
-
-def test_new_link_before_setup_keeps_the_admin_signed_in(db, sent):  # noqa: F811
-    boss = _admin(db, two_factor=True)
-    other = make_user(db, "other@example.com", is_admin=True, two_factor=False)
-    db.commit()
-    add_password(db, other, "Admin password 1!")
-    db.execute(
-        text('INSERT INTO "session" (id, "userId") VALUES (\'s2\', :u)'),
-        {"u": other.external_auth_id},
-    )
-    db.commit()
-
-    res = _admin_client(db, boss).post(f"/admin/users/{other.id}/two-factor/reset")
-
-    assert res.status_code == 200, res.text
-    assert _count(db, 'SELECT COUNT(*) FROM "session" WHERE "userId" = :u', other) == 1
-    token = _token_from(sent[-1][2])
-    assert _enrolment_row(db, other)["value"] == admin_enrolment.hash_token(token)
-
-
-def test_reset_rules(db, sent):  # noqa: F811
-    boss = _admin(db, two_factor=True)
-    buyer = make_user(db, "b@example.com")
-    db.commit()
-    client = _admin_client(db, boss)
-
-    assert client.post(f"/admin/users/{boss.id}/two-factor/reset").status_code == 400
-    assert client.post(f"/admin/users/{buyer.id}/two-factor/reset").status_code == 400
-    assert client.post("/admin/users/999999/two-factor/reset").status_code == 404
-    assert sent == []
-
-
-def test_reset_refused_before_the_invite_is_accepted(db, sent):  # noqa: F811
-    # No password yet: the reset link could not be used, and the invite's
-    # own link and code are the way in. "Resend invite" replaces them.
-    boss = _admin(db, two_factor=True)
-    invitee = make_user(db, "new@example.com", is_admin=True, two_factor=False)
-    db.commit()
-
-    res = _admin_client(db, boss).post(f"/admin/users/{invitee.id}/two-factor/reset")
-
-    assert res.status_code == 409
-    assert res.json()["detail"] == admin.INVITE_PENDING_RESET_DETAIL
-    assert _enrolment_row(db, invitee) is None
-    assert sent == []
-
-
-def test_reset_refused_for_a_deactivated_admin(db, sent):  # noqa: F811
-    boss = _admin(db, two_factor=True)
-    gone = make_user(db, "gone@example.com", is_admin=True, banned=True)
-    db.commit()
-    add_password(db, gone, "Admin password 1!")
-
-    res = _admin_client(db, boss).post(f"/admin/users/{gone.id}/two-factor/reset")
-
-    assert res.status_code == 409
-    assert sent == []

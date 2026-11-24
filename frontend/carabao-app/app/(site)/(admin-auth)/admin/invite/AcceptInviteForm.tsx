@@ -29,7 +29,7 @@ export default function AcceptInviteForm({ invite, token }: { invite: string; to
     e.preventDefault();
     setFormError("");
     const next: FieldErrors<Field> = {};
-    if (code.replace(/[\s-]/g, "").length !== 8) next.code = "Enter the 8-character code the admin who invited you gave you.";
+    if (code.replace(/[\s-]/g, "").length !== 8) next.code = "Enter the 8-character code that an admin gave you.";
     if (!adminPasswordOk(password)) next.password = ADMIN_PASSWORD_RULE;
     if (confirm !== password) next.confirm = "The passwords are not the same.";
     setErrors(next);
@@ -61,8 +61,8 @@ export default function AcceptInviteForm({ invite, token }: { invite: string; to
   return (
     <form className="auth-form" onSubmit={submit} noValidate>
       <p className="auth-help">
-        Enter the invite code that the admin who invited you gave you. It is not in the email. Then choose a password for
-        your admin account.
+        Enter the code that an admin gave you. The code is not in the email. Then choose a password for your admin
+        account. After this, you sign in and set up your authenticator app.
       </p>
       <div className="auth-fields">
         {formError && (
@@ -128,7 +128,7 @@ export default function AcceptInviteForm({ invite, token }: { invite: string; to
         </div>
       </div>
       <button type="submit" className="auth-submit" disabled={busy}>
-        {busy ? "Please wait…" : "Accept invite"}
+        {busy ? "Please wait…" : "Continue"}
       </button>
     </form>
   );

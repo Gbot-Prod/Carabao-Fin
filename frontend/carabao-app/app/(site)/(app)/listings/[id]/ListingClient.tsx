@@ -13,6 +13,7 @@ import { activePause, shortDay } from "@/lib/store-pause";
 import { farmPath } from "@/lib/farm-path";
 import { getApiErrorStatus } from "@/util/errorHelper";
 import { fetchListing, type ListingDetail } from "@/util/api/produceSearch";
+import ReportListing from "./ReportListing";
 import styles from "./page.module.css";
 
 type Props = {
@@ -131,6 +132,7 @@ export default function ListingClient({ initialData = null }: Props) {
           <Link href={farmPath(farm.id, farm.slug)} className={styles.primary}>
             {s.orderHere}
           </Link>
+          <ReportListing produceId={listing.id} />
         </div>
       </section>
 

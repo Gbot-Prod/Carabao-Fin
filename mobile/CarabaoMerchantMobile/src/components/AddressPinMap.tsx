@@ -287,6 +287,14 @@ export default function AddressPinMap({
         {shownCheck.state === 'checking' ? <ActivityIndicator size="small" color={Colors.textMuted} /> : null}
       </View>
 
+      <View style={styles.notice} accessibilityRole="text">
+        <Text style={styles.noticeIcon} importantForAccessibility="no">!</Text>
+        <View style={styles.noticeText}>
+          <Text style={styles.noticeTitle}>{PIN_WORDS.noticeTitle}</Text>
+          <Text style={styles.noticeBody}>{PIN_WORDS.noticeBody}</Text>
+        </View>
+      </View>
+
       <View style={[styles.mapWrap, error ? styles.mapInvalid : null]}>
         <MapView
           ref={mapRef}
@@ -344,6 +352,19 @@ const styles = StyleSheet.create({
   wrap: { marginTop: Spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   label: { fontSize: FontSize.sm, color: Colors.textMuted, fontWeight: '600' },
+  notice: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
+    padding: Spacing.sm, marginBottom: Spacing.sm,
+    borderRadius: Radius.md, borderWidth: 1, borderColor: '#f3d9a4', backgroundColor: Colors.warningBg,
+  },
+  noticeIcon: {
+    width: 20, height: 20, borderRadius: 10, overflow: 'hidden',
+    backgroundColor: '#c2410c', color: Colors.white,
+    textAlign: 'center', fontSize: FontSize.xs, fontWeight: '800', lineHeight: 20,
+  },
+  noticeText: { flex: 1 },
+  noticeTitle: { fontSize: FontSize.sm, fontWeight: '700', color: '#b45309' },
+  noticeBody: { fontSize: FontSize.xs, color: '#6b4a1a', lineHeight: 17, marginTop: 2 },
   mapWrap: {
     borderRadius: Radius.lg, overflow: 'hidden',
     borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surfaceAlt,

@@ -5,12 +5,14 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.schemas.merchant_application import MERCHANT_NAME_MAX, Weekday
 from app.schemas.produce import ProduceResponse
+from app.schemas.psgc import AreaCodes
+from app.schemas.text import one_line
 
 # Columns that must keep a value once the shop exists.
 _REQUIRED = ("merchant_name", "region", "province", "address", "postal_code")
 
 
-class MerchantUpdate(BaseModel):
+class MerchantUpdate(AreaCodes):
     """PATCH /merchants/me. Same limits as onboarding (CF-0030)."""
 
     merchant_name: str | None = Field(
@@ -38,6 +40,17 @@ class MerchantUpdate(BaseModel):
     delivery_price: int | None = Field(default=None, ge=0, le=100_000)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    # Item 6: no control, zero-width or bidi characters; one space between words.
+    _one_line = field_validator(
+        "region",
+        "province",
+        "city",
+        "barangay",
+        "address",
+        "postal_code",
+        mode="before",
+    )(one_line)
 
     @field_validator(*_REQUIRED, "available_days")
     @classmethod
@@ -78,12 +91,18 @@ class MerchantResponse(BaseModel):
     province: str
     city: str | None = None
     barangay: str | None = None
+    region_code: str | None = None
+    province_code: str | None = None
+    city_code: str | None = None
+    barangay_code: str | None = None
     address: str
     postal_code: str
     # Map pin (U1).
     lat: float | None = None
     lng: float | None = None
     pin_confirmed: bool = False
+    # True: the pin is outside the chosen city/barangay (services/pin_area.py).
+    pin_area_mismatch: bool | None = None
 
     available_days: list[str]
     operating_hours: Any

@@ -5,6 +5,7 @@ import { todayInManila } from "../lib/format";
 import ReferencePriceHint from "@/components/ReferencePrice/ReferencePriceHint";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt } from "@/lib/i18n/format";
+import type { FieldNotes } from "@/lib/listing-checks";
 
 export type ProduceFormState = {
   name: string;
@@ -88,7 +89,46 @@ function TickGroup<T extends string>({
   );
 }
 
-function PriceTierFields({ form, onChange }: { form: ProduceFormState; onChange: (f: ProduceFormState) => void }) {
+/** The fields this form shows a checker message under (the rest go on top). */
+export const CHECKED_FIELDS = [
+  "name", "description", "category", "price", "unit", "unit_quantity", "stock_quantity",
+  "harvest_date", "best_before", "min_order_qty", "price_tiers",
+] as const;
+
+/**
+ * Guardrails Phase 1: the checker's messages for one field. A block (red)
+ * stops the save; a flag (amber) sends the listing to an admin. A flag with a
+ * suggestion gets a button that applies it.
+ */
+function FieldMessages({
+  notes, field, onApply,
+}: {
+  notes?: FieldNotes;
+  field: string;
+  onApply?: (field: string, value: string) => void;
+}) {
+  const note = notes?.[field];
+  if (!note || (note.blocks.length === 0 && note.flags.length === 0)) return null;
+  return (
+    <div className={styles.fieldNotes}>
+      {note.blocks.map((m) => (
+        <p key={`b-${m}`} role="alert" className={styles.fieldBlock}>{m}</p>
+      ))}
+      {note.flags.map((f) => (
+        <p key={`f-${f.code}-${f.message}`} className={styles.fieldFlag}>
+          {f.message}
+          {f.suggestion && onApply && (
+            <button type="button" className={styles.suggestBtn} onClick={() => onApply(field, f.suggestion!)}>
+              Use {f.suggestion}
+            </button>
+          )}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function PriceTierFields({ form, onChange, notes }: { form: ProduceFormState; onChange: (f: ProduceFormState) => void; notes?: FieldNotes }) {
   const { t } = useLanguage();
   const setTier = (index: number, tier: PriceTier) =>
     onChange({ ...form, price_tiers: form.price_tiers.map((t, i) => (i === index ? tier : t)) });
@@ -115,6 +155,7 @@ function PriceTierFields({ form, onChange }: { form: ProduceFormState; onChange:
           onChange={(e) => onChange({ ...form, min_order_qty: Math.max(1, Math.floor(Number(e.target.value)) || 1) })}
         />
       </label>
+      <FieldMessages notes={notes} field="min_order_qty" />
 
       <div className={styles.formTickLabel}>{t.listing.bulkPrices}</div>
       <p className={styles.tierHint}>{t.listing.tierHint}</p>
@@ -148,6 +189,7 @@ function PriceTierFields({ form, onChange }: { form: ProduceFormState; onChange:
           </button>
         </div>
       ))}
+      <FieldMessages notes={notes} field="price_tiers" />
       {form.price_tiers.length < MAX_PRICE_TIERS && (
         <button type="button" className={styles.secondaryBtn} onClick={addTier}>
           {t.listing.addTier}
@@ -157,18 +199,30 @@ function PriceTierFields({ form, onChange }: { form: ProduceFormState; onChange:
   );
 }
 
-export default function ProduceFormFields({ form, onChange }: { form: ProduceFormState; onChange: (f: ProduceFormState) => void }) {
+export default function ProduceFormFields({
+  form, onChange, notes,
+}: {
+  form: ProduceFormState;
+  onChange: (f: ProduceFormState) => void;
+  /** Guardrails: the checker's messages per field (lib/listing-checks.ts). */
+  notes?: FieldNotes;
+}) {
   const { t } = useLanguage();
+  const apply = (field: string, value: string) => {
+    if (field === "category" && (value === "Vegetables" || value === "Fruits")) onChange({ ...form, category: value });
+  };
   return (
     <>
       <div className={styles.formGrid}>
         <label className={styles.formLabel}>
           {t.listing.name}
           <input className={styles.formInput} required maxLength={PRODUCE_NAME_MAX} value={form.name} onChange={(e) => onChange({ ...form, name: e.target.value })} />
+          <FieldMessages notes={notes} field="name" />
         </label>
         <label className={styles.formLabel}>
           {t.listing.stock}
           <input className={styles.formInput} type="number" min="0" value={form.stock_quantity} onChange={(e) => onChange({ ...form, stock_quantity: Number(e.target.value) })} />
+          <FieldMessages notes={notes} field="stock_quantity" />
         </label>
       </div>
 
@@ -183,6 +237,7 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
             value={form.harvest_date}
             onChange={(e) => onChange({ ...form, harvest_date: e.target.value })}
           />
+          <FieldMessages notes={notes} field="harvest_date" />
         </label>
         <label className={styles.formLabel}>
           {t.listing.bestBefore}
@@ -194,6 +249,7 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
             value={form.best_before}
             onChange={(e) => onChange({ ...form, best_before: e.target.value })}
           />
+          <FieldMessages notes={notes} field="best_before" />
         </label>
       </div>
 
@@ -212,6 +268,8 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
           onChange={(v) => onChange({ ...form, unit: v })}
         />
       </div>
+      <FieldMessages notes={notes} field="category" onApply={apply} />
+      <FieldMessages notes={notes} field="unit" />
 
       <div className={styles.priceRow}>
         <label className={`${styles.formLabel} ${styles.grow1}`}>
@@ -225,6 +283,8 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
         </label>
         <div className={styles.priceUnitLabel}>{form.unit}</div>
       </div>
+      <FieldMessages notes={notes} field="price" />
+      <FieldMessages notes={notes} field="unit_quantity" />
 
       {form.price > 0 && form.unit_quantity > 0 && (
         <div className={styles.pricePreview}>
@@ -239,11 +299,12 @@ export default function ProduceFormFields({ form, onChange }: { form: ProduceFor
         price={form.unit_quantity > 0 ? form.price / form.unit_quantity : undefined}
       />
 
-      <PriceTierFields form={form} onChange={onChange} />
+      <PriceTierFields form={form} onChange={onChange} notes={notes} />
 
       <label className={styles.formLabelFull}>
         {t.listing.description}
         <textarea className={styles.formInput} rows={2} maxLength={PRODUCE_DESCRIPTION_MAX} value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} />
+        <FieldMessages notes={notes} field="description" />
       </label>
     </>
   );

@@ -1,4 +1,8 @@
-"""Admin accounts: invite, accept, resend, deactivate, reactivate.
+"""Admin accounts: invite, accept, resend, reset, deactivate, reactivate.
+
+A reset (lost authenticator or forgotten password) and a reactivation remove
+the password and 2FA and send a new invite, so every way into an admin account
+is the same: link + code + new password + TOTP setup.
 
 documentation/manuals/DB_ROLE_SPLIT_PLAN.md section 2. An admin account is
 only ever made as an admin account; nobody is promoted. Becoming an admin needs
@@ -61,7 +65,7 @@ EMAIL_TAKEN_DETAIL = (
 )
 INVALID_EMAIL_DETAIL = "Enter a valid email address."
 INVITE_INVALID_DETAIL = (
-    "This invite link or code is not valid. Ask the admin who invited you to resend it."
+    "This invite link or code is not valid. Ask an admin to send a new invite."
 )
 PASSWORD_RULE_DETAIL = (
     f"Use {MIN_ADMIN_PASSWORD} to {MAX_PASSWORD} characters, with an uppercase "
@@ -73,8 +77,12 @@ INVITE_NOT_SENT_DETAIL = (
 )
 NOT_ADMIN_DETAIL = "This is not an admin account."
 ALREADY_ACCEPTED_DETAIL = (
-    'This admin already accepted the invite. Use "Reset 2-step" instead.'
+    'This admin already accepted the invite. Use "Reset account" instead.'
 )
+INVITE_PENDING_RESET_DETAIL = (
+    'This admin has not accepted the invite yet. Use "Resend invite" instead.'
+)
+SELF_RESET_DETAIL = "Ask another admin to reset your account."
 DEACTIVATED_DETAIL = "This admin account is deactivated. Reactivate it first."
 SELF_DEACTIVATE_DETAIL = "You cannot deactivate your own account."
 LAST_ADMIN_DETAIL = (
@@ -166,14 +174,16 @@ def _dev_without_email() -> bool:
     }
 
 
-def _send_invite(email: str, url: str, invited_by: str) -> None:
+def _send_invite(email: str, url: str, invited_by: str, *, reset: bool = False) -> None:
     """Email the link. Raises 502 when it could not be sent (the invite is
     already saved; "Resend invite" makes a new link and code)."""
     if _dev_without_email():
         logger.info("[admin-invite] Email not configured. Invite link: %s", url)
         return
     try:
-        send_admin_invite_email(email, invite_url=url, invited_by=invited_by)
+        send_admin_invite_email(
+            email, invite_url=url, invited_by=invited_by, reset=reset
+        )
     except Exception as exc:  # noqa: BLE001 - any send failure
         logger.warning("Admin invite email failed: %s", describe_error(exc))
         raise HTTPException(status_code=502, detail=INVITE_NOT_SENT_DETAIL) from exc
@@ -237,6 +247,48 @@ def resend(db: Session, *, actor: User, user: User) -> IssuedInvite:
     return IssuedInvite(user=user, code=format_code(code), expires_at=expires_at)
 
 
+def _wipe_credentials(db: Session, identity_id: str) -> None:
+    """Password, TOTP, backup codes, trusted devices, open setup token and
+    invite code, and sessions all go. The account is an open invite again."""
+    better_auth_store.clear_two_factor(db, identity_id)
+    better_auth_store.delete_admin_password(db, identity_id)
+
+
+def reset_account(db: Session, *, actor: User, user: User) -> IssuedInvite:
+    """Lost authenticator, forgotten password or unfinished setup: remove the
+    password and 2FA and send a new invite (link by email, code shown to the
+    resetting admin). The admin then accepts it like a new invite."""
+    if actor.id == user.id:
+        raise HTTPException(status_code=400, detail=SELF_RESET_DETAIL)
+    identity = _require_admin_target(db, user)
+    if identity.banned:
+        raise HTTPException(status_code=409, detail=DEACTIVATED_DETAIL)
+    if not better_auth_store.has_credential_account(db, identity.id):
+        raise HTTPException(status_code=409, detail=INVITE_PENDING_RESET_DETAIL)
+    before = {"two_factor_enabled": identity.two_factor_enabled, "password": True}
+    _wipe_credentials(db, identity.id)
+    token, code, expires_at = _issue_invite(db, identity.id)
+    audit_log.record_admin_action(
+        db,
+        admin=actor,
+        action=audit_log.ADMIN_ACCOUNT_RESET,
+        target_type="user",
+        target_id=user.id,
+        before=before,
+        after={
+            "two_factor_enabled": False,
+            "password": False,
+            "expires_at": expires_at,
+        },
+    )
+    db.commit()
+    db.refresh(user)
+    _send_invite(
+        identity.email, invite_url(identity.id, token), _actor_name(actor), reset=True
+    )
+    return IssuedInvite(user=user, code=format_code(code), expires_at=expires_at)
+
+
 # ── Accept ──────────────────────────────────────────────────────────────────
 
 
@@ -267,8 +319,8 @@ def accept(
         identity is None
         or identity.role != "admin"
         or identity.banned
-        # Invite-only: an account with a password (so a 2FA-reset link) never
-        # sets one here.
+        # Invite-only: an account that has a password never sets one here. A
+        # reset removes the password first (reset_account).
         or better_auth_store.has_credential_account(db, invite_id)
     ):
         raise _invalid()
@@ -333,6 +385,7 @@ _SETUP_STARTERS = (
     audit_log.ADMIN_INVITE,
     audit_log.ADMIN_INVITE_RESENT,
     audit_log.TWO_FACTOR_RESET,
+    audit_log.ADMIN_ACCOUNT_RESET,
     audit_log.ADMIN_REACTIVATE,
     audit_log.ADMIN_CREATE,
     audit_log.ADMIN_RECOVER,
@@ -412,46 +465,34 @@ def deactivate(db: Session, *, actor: User, user: User) -> User:
     return user
 
 
-@dataclass(frozen=True)
-class Reactivated:
-    user: User
-    # With a password: where the 2FA setup link went. Without one: a fresh
-    # invite, whose code is shown to the reactivating admin.
-    sent_to: list[str]
-    invite_code: str | None = None
-
-
-def reactivate(db: Session, *, actor: User, user: User) -> Reactivated:
+def reactivate(db: Session, *, actor: User, user: User) -> IssuedInvite:
+    """Access back, always through a new invite: any old password and 2FA are
+    removed (like reset_account), so the admin sets both again."""
     if actor.id == user.id:
         raise HTTPException(status_code=400, detail="You cannot reactivate yourself.")
     identity = _require_admin_target(db, user)
     if not identity.banned:
         raise HTTPException(status_code=409, detail=NOT_DEACTIVATED_DETAIL)
-    has_password = better_auth_store.has_credential_account(db, identity.id)
-    if has_password:
-        admin_enrolment.require_contact(user)
+    had_password = better_auth_store.has_credential_account(db, identity.id)
 
     better_auth_store.set_banned(db, identity.id, banned=False, reason=None)
-    if has_password:
-        token = admin_enrolment.issue(db, user)
-        code = None
-    else:
-        token, code, _ = _issue_invite(db, identity.id)
+    _wipe_credentials(db, identity.id)
+    token, code, expires_at = _issue_invite(db, identity.id)
     audit_log.record_admin_action(
         db,
         admin=actor,
         action=audit_log.ADMIN_REACTIVATE,
         target_type="user",
         target_id=user.id,
-        before={"is_deactivated": True},
-        after={
-            "is_deactivated": False,
-            "next_step": "two_factor_setup" if has_password else "invite",
-        },
+        before={"is_deactivated": True, "password": had_password},
+        after={"is_deactivated": False, "password": False, "next_step": "invite"},
     )
     db.commit()
     db.refresh(user)
-    if has_password:
-        return Reactivated(user=user, sent_to=admin_enrolment.deliver(user, token))
-    _send_invite(identity.email, invite_url(identity.id, token), _actor_name(actor))
-    return Reactivated(user=user, sent_to=["email"], invite_code=format_code(code))
+    _send_invite(
+        identity.email,
+        invite_url(identity.id, token),
+        _actor_name(actor),
+        reset=had_password,
+    )
+    return IssuedInvite(user=user, code=format_code(code), expires_at=expires_at)

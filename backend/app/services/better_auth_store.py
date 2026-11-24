@@ -279,6 +279,24 @@ def accept_admin_invite(db: Session, identity_id: str, *, password: str) -> None
     )
 
 
+def delete_admin_password(db: Session, identity_id: str) -> None:
+    """Remove an admin's password ("credential" row), so the account is an
+    open invite again (admin account reset). The database lets the API delete
+    only an admin's credential row (guards.sql api_delete_admin_password)."""
+    _run(
+        db,
+        "remove the password",
+        identity_id,
+        [
+            (
+                'DELETE FROM "account" WHERE "userId" = :id '
+                "AND \"providerId\" = 'credential'",
+                {"id": identity_id},
+            )
+        ],
+    )
+
+
 def set_password(db: Session, identity_id: str, *, password: str) -> None:
     """A password for an account that has none (scripts/make_admin.py
     --recover, for an admin who never accepted the invite)."""

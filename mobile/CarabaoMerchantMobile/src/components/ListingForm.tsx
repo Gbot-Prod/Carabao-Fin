@@ -7,7 +7,7 @@
 // S6 (plan §5.7): the photo is picked here (camera or library) and uploaded by the
 // screen after the listing is saved, so a new listing has an id first. Server
 // messages for a field show under that field (rule 8), the photo's included.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal, View, Text, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator,
@@ -21,10 +21,16 @@ import {
   type ListingFieldErrors, type PickedPhoto, type TierFields,
 } from '../lib/listingForm';
 import { checkImage, imageMimeType } from '../lib/uploads';
+import {
+  CHECK_DELAY_MS, checkNotes, checkPayload, hasBlocks, type ProduceCheckResult,
+} from '../lib/listingChecks';
 import { safeImageUri } from '../lib/imageUri';
 import type {
   ApiProduce, ProduceCategory, ProduceCreatePayload, ProduceUnit,
 } from '../lib/api';
+
+// A soft flag's text: a darker amber than Colors.warning, readable on white.
+const FLAG_TEXT = '#b45309';
 
 const UNITS: ProduceUnit[] = ['kg', 'lbs'];
 const CATEGORIES: ProduceCategory[] = ['Vegetables', 'Fruits'];
@@ -55,16 +61,25 @@ type Props = {
   fieldErrors?: ListingFieldErrors;
   /** S6: why the last photo upload failed; shown under the photo. */
   photoError?: string | null;
+  /** Guardrails Phase 1: POST /produce/check. Without it the form does not check live. */
+  onCheck?: (payload: ReturnType<typeof checkPayload>) => Promise<ProduceCheckResult>;
 };
 
 export function ListingForm({
   visible, produce, saving, uploading = false, error, onCancel, onSave, onDelete,
-  fieldErrors = {}, photoError = null,
+  fieldErrors = {}, photoError = null, onCheck,
 }: Props) {
   // The form's own checks and the server's messages both land under their field (rule 8).
+  // Guardrails: then the live checker's block (red) and flag (amber).
   const fieldNote = (key: keyof ListingFieldErrors) => {
-    const message = fieldErrors[key] ?? localFields[key];
-    return message ? <Text style={styles.fieldError}>{message}</Text> : null;
+    const message = fieldErrors[key] ?? localFields[key] ?? notes.blocks[key];
+    const flag = notes.flags[key];
+    return (
+      <>
+        {message ? <Text style={styles.fieldError}>{message}</Text> : null}
+        {flag ? <Text style={styles.fieldFlag}>{flag}</Text> : null}
+      </>
+    );
   };
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
@@ -80,6 +95,33 @@ export function ListingForm({
   // S6: the photo picked here, and why the last pick failed.
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [photoProblem, setPhotoProblem] = useState<string | null>(null);
+  // Guardrails Phase 1: the live check, CHECK_DELAY_MS after the last change.
+  const [checked, setChecked] = useState<ProduceCheckResult | null>(null);
+  const payloadKey = JSON.stringify(
+    visible
+      ? checkPayload({ name, price, stock, harvestDate, bestBefore, minOrderQty, tiers, unit, category }, produce?.id ?? null)
+      : null,
+  );
+  useEffect(() => {
+    if (!onCheck || payloadKey === 'null') return;
+    // An answer for a form that changed since is dropped (stale).
+    let stale = false;
+    const timer = setTimeout(() => {
+      onCheck(JSON.parse(payloadKey))
+        .then((r) => {
+          if (!stale) setChecked(r);
+        })
+        .catch(() => {
+          // A failed check shows nothing: the save checks again.
+          if (!stale) setChecked(null);
+        });
+    }, CHECK_DELAY_MS);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [onCheck, payloadKey]);
+  const notes = checkNotes(visible ? checked : null);
 
   // CF-0101: reset the fields when the sheet opens or the listing changes. Done during
   // render (React's "adjust state on prop change"), not in an effect.
@@ -103,6 +145,7 @@ export function ListingForm({
       setLocalFields({});
       setPhoto(null);
       setPhotoProblem(null);
+      setChecked(null);
     }
   }
 
@@ -339,6 +382,17 @@ export function ListingForm({
                 </TouchableOpacity>
               ))}
             </View>
+            {notes.categorySuggestion && notes.categorySuggestion !== category ? (
+              <TouchableOpacity
+                style={styles.suggest}
+                onPress={() => setCategory(notes.categorySuggestion)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.suggestText}>Use {notes.categorySuggestion}</Text>
+              </TouchableOpacity>
+            ) : null}
+            {notes.topBlocks.map((m) => <Text key={`b-${m}`} style={styles.error}>{m}</Text>)}
+            {notes.topFlags.map((m) => <Text key={`f-${m}`} style={styles.flag}>{m}</Text>)}
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
             {produce && onDelete ? (
@@ -351,7 +405,10 @@ export function ListingForm({
               <TouchableOpacity style={styles.cancelBtn} onPress={onCancel} disabled={saving}>
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Button label={produce ? 'Save' : 'Create'} onPress={handleSave} loading={saving} style={styles.saveBtn} />
+              <Button
+                label={produce ? 'Save' : 'Create'} onPress={handleSave} loading={saving}
+                disabled={hasBlocks(notes)} style={styles.saveBtn}
+              />
             </View>
           </ScrollView>
         </View>
@@ -412,6 +469,11 @@ const styles = StyleSheet.create({
   pillTextActive: { color: Colors.white, fontWeight: '700' },
   error: { color: Colors.error, fontSize: FontSize.sm, marginTop: Spacing.md },
   fieldError: { color: Colors.error, fontSize: FontSize.xs, marginTop: 4 },
+  // Guardrails: a soft flag (the listing goes to an admin), not an error.
+  fieldFlag: { color: FLAG_TEXT, fontSize: FontSize.xs, marginTop: 4 },
+  flag: { color: FLAG_TEXT, fontSize: FontSize.sm, marginTop: Spacing.sm },
+  suggest: { minHeight: 44, justifyContent: 'center' },
+  suggestText: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.primary },
   actions: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.xl, alignItems: 'center' },
   cancelBtn: {
     flex: 1, paddingVertical: 13, alignItems: 'center', borderRadius: Radius.md,

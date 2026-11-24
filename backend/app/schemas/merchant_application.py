@@ -14,6 +14,8 @@ from pydantic import (
 )
 
 from app.core.field_crypto import mask
+from app.schemas.psgc import AreaCodes
+from app.schemas.text import one_line
 
 # Who is selling (merchant/onboarding/page.tsx). It decides the name fields,
 # the registration agency and the tax fields.
@@ -116,7 +118,7 @@ class ApplicationReviewPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
-class MerchantOnboardingPayload(BaseModel):
+class MerchantOnboardingPayload(AreaCodes):
     # Section 1: operations and contact
     region: str = Field(min_length=1, max_length=100)
     province: str = Field(min_length=1, max_length=100)
@@ -170,6 +172,17 @@ class MerchantOnboardingPayload(BaseModel):
     terms_version: str | None = Field(default=None, max_length=TERMS_VERSION_MAX)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    # Item 6: no control, zero-width or bidi characters; one space between words.
+    _one_line = field_validator(
+        "region",
+        "province",
+        "city",
+        "barangay",
+        "address",
+        "postal_code",
+        mode="before",
+    )(one_line)
 
     @field_validator(
         "merchant_name",
@@ -349,7 +362,11 @@ class MerchantApplicationResponse(BaseModel):
     region: str
     province: str
     city: str
-    barangay: str
+    barangay: str | None = None
+    region_code: str | None = None
+    province_code: str | None = None
+    city_code: str | None = None
+    barangay_code: str | None = None
     address: str
     postal_code: str
     available_days: list[str]
@@ -357,6 +374,8 @@ class MerchantApplicationResponse(BaseModel):
     lat: float | None = None
     lng: float | None = None
     pin_confirmed: bool = False
+    # True: the pin is outside the chosen city/barangay (services/pin_area.py).
+    pin_area_mismatch: bool | None = None
 
     rsbsa_number: str | None = None
     rsbsa_document_original_name: str | None = None

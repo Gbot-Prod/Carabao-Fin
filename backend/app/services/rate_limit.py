@@ -79,6 +79,8 @@ ACTION_LIMITS: dict[str, Limit] = {
     "support_chat_send": Limit(20, 60),
     # Every search also writes a search_log row (demand insight).
     "produce_search": Limit(120, 60),
+    # Guardrails: the listing form checks as the merchant types (400 ms pause).
+    "produce_check": Limit(120, 60),
     # CF-0094 (B101): public, per client IP; each call reads and scores the
     # whole reference_prices table. No client calls it in a loop (the web and
     # mobile forms read GET /reference-prices once and match locally).
@@ -108,6 +110,12 @@ ACTION_LIMITS: dict[str, Limit] = {
     "pin_check": Limit(120, 3600),
     # A rider reports a pin that could not be reached (control 6).
     "pin_report": Limit(60, 3600),
+    # Pin quality item 3: saved address create + edit + delete, and shop
+    # location edits, per user. Each write may ask the road service and run
+    # the pin-area check; a person edits a few addresses at a time.
+    "address_write": Limit(30, 3600),
+    # Guardrails Phase 3: buyer reports on listings (per user).
+    "listing_report": Limit(10, 3600),
     # Map pin picker: forward (typed address) and reverse (pin's area) Mapbox
     # geocoding together, billed per request. Each pin move asks once, each
     # address edit up to three times; repeats are answered from a cache.

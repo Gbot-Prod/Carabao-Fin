@@ -18,7 +18,7 @@ from app.services.order_status import (
     auto_confirm_at,
     payment_status,
 )
-from app.services.produce_freshness import is_expired
+from app.services.produce_freshness import is_expired, is_withdrawn
 from app.services.review_service import can_review, review_deadline
 
 
@@ -75,7 +75,7 @@ def cart_line_issue(
     produce: Produce | None, quantity: int, buyer_id: int | None, today: date
 ) -> CartIssue | None:
     """The first reason checkout would refuse this line, or None."""
-    if produce is None or produce.hidden_at is not None:
+    if produce is None or is_withdrawn(produce):
         return "unavailable"
     if is_expired(produce, today):
         return "expired"

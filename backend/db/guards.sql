@@ -61,6 +61,8 @@ REVOKE ALL ON FUNCTION public.is_admin_phone(text) FROM PUBLIC;
 -- Policies run their expressions as the caller, so the caller needs EXECUTE.
 GRANT EXECUTE ON FUNCTION public.is_admin(text) TO carabao_web_public;
 GRANT EXECUTE ON FUNCTION public.is_admin_phone(text) TO carabao_web_public;
+-- The API's "account" delete policy (admin account reset).
+GRANT EXECUTE ON FUNCTION public.is_admin(text) TO carabao_api;
 
 -- Whether a verification row is one the public login may see or write (G3).
 -- SECURITY INVOKER (the default): it only calls the two helpers above.
@@ -175,7 +177,13 @@ ALTER TABLE public."verification" ENABLE ROW LEVEL SECURITY;
 -- later); their table grants (roles.sql) still limit what they can do.
 
 CREATE POLICY api_all ON public."user"         FOR ALL TO carabao_api USING (true) WITH CHECK (true);
-CREATE POLICY api_all ON public."account"      FOR ALL TO carabao_api USING (true) WITH CHECK (true);
+-- "account": the API reads and adds rows, and deletes only an admin's password
+-- row (admin account reset, app/services/admin_accounts.py reset_account). It
+-- never deletes a buyer's or merchant's password, and it has no UPDATE grant.
+CREATE POLICY api_read ON public."account" FOR SELECT TO carabao_api USING (true);
+CREATE POLICY api_insert ON public."account" FOR INSERT TO carabao_api WITH CHECK (true);
+CREATE POLICY api_delete_admin_password ON public."account" FOR DELETE TO carabao_api
+  USING ("providerId" = 'credential' AND public.is_admin("userId"));
 CREATE POLICY api_all ON public."session"      FOR ALL TO carabao_api USING (true) WITH CHECK (true);
 CREATE POLICY api_all ON public."twoFactor"    FOR ALL TO carabao_api USING (true) WITH CHECK (true);
 CREATE POLICY api_all ON public."verification" FOR ALL TO carabao_api USING (true) WITH CHECK (true);

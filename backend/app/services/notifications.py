@@ -33,6 +33,14 @@ REFUND = "refund"
 PAYMENT_MISMATCH = "payment_mismatch"  # to admins (CF-0005)
 PAYOUT_DESTINATION_CHANGED = "payout_destination_changed"  # CF-0004
 PIN_UNREACHABLE = "pin_unreachable"  # to the buyer (pin quality, control 6)
+LISTING_APPROVED = "listing_approved"  # to the merchant (guardrails Phase 1)
+LISTING_REJECTED = "listing_rejected"
+# Guardrails Phase 2 (services/listing_trust.py).
+LISTING_BLOCKED = "listing_blocked"  # to the merchant: no new listings for now
+LISTING_PENALTY_REVOKED = "listing_penalty_revoked"
+MERCHANT_ACCOUNT_REVIEW = "merchant_account_review"  # to admins
+# Guardrails Phase 3 (services/listing_reports.py).
+LISTING_REPORTED = "listing_reported"  # to admins: first open report
 
 
 # Who a notification is for, on an account that is both buyer and farm owner.

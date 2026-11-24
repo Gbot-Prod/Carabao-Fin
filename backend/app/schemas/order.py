@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.statuses import OrderStatus, PaymentStatus
 from app.schemas.review import ReviewResponse
+from app.schemas.text import one_line
 
 
 class OrderItemResponse(BaseModel):
@@ -86,9 +87,14 @@ class PlaceOrderRequest(BaseModel):
     delivery_date: date | None = None
     # A time window such as "08:00 – 10:00"; stored as Order.delivery_window.
     delivery_time: str | None = Field(default=None, max_length=50)
+    # One of the buyer's saved addresses. The server then takes the address
+    # text, the PSGC area and the pin from that row, and the five fields below
+    # (delivery_address ... delivery_pin_confirmed) must be left out.
+    delivery_address_id: int | None = Field(default=None, ge=1)
     delivery_address: str | None = Field(default=None, max_length=500)
-    # The region picked at checkout (web). When absent, delivery_address is checked
-    # for a Luzon province or Metro Manila city instead (B2).
+    # Without delivery_address_id: the region picked at checkout (web). When
+    # absent, delivery_address is checked for a Luzon province or Metro Manila
+    # city instead (B2).
     delivery_region: str | None = Field(default=None, max_length=100)
     # Map pin for the delivery address (U1), optional.
     delivery_lat: float | None = None
@@ -104,6 +110,11 @@ class PlaceOrderRequest(BaseModel):
     produce_ids: list[int] | None = Field(default=None, min_length=1, max_length=200)
 
     model_config = ConfigDict(extra="forbid")
+
+    # Item 6: no control, zero-width or bidi characters; one space between words.
+    _one_line = field_validator(
+        "delivery_address", "delivery_region", mode="before"
+    )(one_line)
 
 
 class VoucherPreviewRequest(BaseModel):

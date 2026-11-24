@@ -1,9 +1,11 @@
-import { useState, type ChangeEvent, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import styles from "../page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
-import { createProduce, deleteProduce, fetchMyProduce, updateProduce, uploadProduceImage, type Produce } from "@/util/api";
-import getApiErrorMessage, { getApiErrorStatus } from "@/util/errorHelper";
-import ProduceFormFields, { emptyProduceForm, formToPayload, produceToForm, type ProduceFormState } from "./ProduceFormFields";
+import { createProduce, deleteProduce, fetchListingStanding, fetchMyProduce, updateProduce, uploadProduceImage, type ListingStanding, type Produce } from "@/util/api";
+import getApiErrorMessage, { getApiErrorStatus, getApiFieldErrors } from "@/util/errorHelper";
+import ProduceFormFields, { CHECKED_FIELDS, emptyProduceForm, formToPayload, produceToForm, type ProduceFormState } from "./ProduceFormFields";
+import useListingCheck from "./useListingCheck";
+import { hasBlocks, notesByField, savedMessage, standingNote, statusNote, unplacedMessages } from "@/lib/listing-checks";
 import { formatRequestedDate, todayInManila } from "../lib/format";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
@@ -23,10 +25,44 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
   const [saving, setSaving] = useState(false);
   // CF-0053: API refusals (422 limits, 400 image rules, failed upload) are shown.
   const [actionError, setActionError] = useState<string | null>(null);
+  // Guardrails Phase 1: the save's per-field refusal, and the note after a save.
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState<string | null>(null);
+  // Guardrails Phase 2: penalty points and the new-farm review.
+  const [standing, setStanding] = useState<ListingStanding | null>(null);
+  const loadStanding = useCallback(() => {
+    fetchListingStanding().then(setStanding).catch(() => { /* the banner is optional */ });
+  }, []);
+  useEffect(() => { loadStanding(); }, [loadStanding]);
+  const canCreate = standing?.can_create_listings ?? true;
+  const addCheck = useListingCheck(addForm, null, showAddForm);
+  const editCheck = useListingCheck(editForm, editingId, editingId !== null);
+  const addNotes = notesByField(addCheck, showAddForm ? saveErrors : {});
+  const editNotes = notesByField(editCheck, editingId !== null ? saveErrors : {});
+
+  /** The refusal per field when the server sent one, else the message on top. */
+  const showSaveError = (err: unknown, fallback: string) => {
+    const fields = getApiFieldErrors(err);
+    setSaveErrors(fields);
+    const unplaced = unplacedMessages(notesByField(null, fields), CHECKED_FIELDS);
+    setActionError(
+      Object.keys(fields).length === 0
+        ? getApiErrorMessage(err, fallback)
+        : unplaced.length > 0
+          ? unplaced.join(" ")
+          : "Correct the problems shown under the fields.",
+    );
+  };
+  const resetMessages = () => {
+    setActionError(null);
+    setSaveErrors({});
+    setNotice(null);
+  };
 
   const replace = (updated: Produce) => setProduces((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
 
   const startEdit = (p: Produce) => {
+    resetMessages();
     setEditingId(p.id);
     setEditForm(produceToForm(p));
   };
@@ -39,6 +75,10 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
     try {
       const updated = await uploadProduceImage(produceId, file);
       replace(updated);
+      // Guardrails Phase 2: a new photo is checked again.
+      if (produces.find((p) => p.id === produceId)?.status === "live" && updated.status === "under_review") {
+        setNotice(savedMessage(updated.status));
+      }
       if (editingId === produceId) setEditForm((prev) => ({ ...prev, image_url: updated.image_url ?? "" }));
     } catch (err) { setActionError(getApiErrorMessage(err, "The photo could not be uploaded.")); }
     finally {
@@ -50,13 +90,18 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setActionError(null);
+    resetMessages();
     try {
       const created = await createProduce(formToPayload(addForm));
       setProduces((prev) => [...prev, created]);
       setShowAddForm(false);
       setAddForm(emptyProduceForm);
-    } catch (err) { setActionError(getApiErrorMessage(err, "The produce could not be added.")); }
+      setNotice(savedMessage(created.status));
+      loadStanding();
+    } catch (err) {
+      showSaveError(err, "The produce could not be added.");
+      if (getApiErrorStatus(err) === 403) loadStanding();
+    }
     finally { setSaving(false); }
   };
 
@@ -64,18 +109,18 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
     e.preventDefault();
     if (editingId === null) return;
     setSaving(true);
-    setActionError(null);
+    resetMessages();
     const loaded = produces.find((p) => p.id === editingId);
     try {
-      replace(
-        await updateProduce(editingId, {
-          ...formToPayload(editForm),
-          expected_stock_quantity: loaded?.stock_quantity ?? null,
-        }),
-      );
+      const updated = await updateProduce(editingId, {
+        ...formToPayload(editForm),
+        expected_stock_quantity: loaded?.stock_quantity ?? null,
+      });
+      replace(updated);
       setEditingId(null);
+      if (loaded?.status !== "under_review") setNotice(savedMessage(updated.status));
     } catch (err) {
-      setActionError(getApiErrorMessage(err, "The changes could not be saved."));
+      showSaveError(err, "The changes could not be saved.");
       // CF-0049: orders changed the stock while the form was open. Load the
       // new stock into the form; the message above says what happened.
       if (getApiErrorStatus(err) === 409) {
@@ -103,20 +148,27 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
         <div className={styles.produceSectionHeader}>
           <h2 className={`${styles.sectionTitle} ${styles.flush}`} id="produce-title">Your Produce</h2>
           {actionError && <p role="alert" className={styles.errorText}>{actionError}</p>}
+          {notice && <p role="status" className={styles.formNotice}>{notice}</p>}
           {!showAddForm && (
-            <button className={styles.primaryBtn} onClick={() => { setShowAddForm(true); setEditingId(null); }}>
+            <button
+              className={styles.primaryBtn}
+              disabled={!canCreate}
+              title={canCreate ? undefined : "Too many penalty points: you cannot make new listings for now."}
+              onClick={() => { resetMessages(); setShowAddForm(true); setEditingId(null); }}
+            >
               + Add Produce
             </button>
           )}
         </div>
+        <StandingBanner standing={standing} />
 
         {showAddForm && (
           <form onSubmit={(e) => void handleAdd(e)} className={styles.produceForm}>
             <p className={styles.formTitle}>{t.listing.newProduce}</p>
-            <ProduceFormFields form={addForm} onChange={setAddForm} />
+            <ProduceFormFields form={addForm} onChange={setAddForm} notes={addNotes} />
             <div className={styles.formActions}>
-              <button type="submit" className={styles.primaryBtn} disabled={saving}>{saving ? t.listing.saving : t.listing.save}</button>
-              <button type="button" className={styles.secondaryBtn} onClick={() => { setShowAddForm(false); setAddForm(emptyProduceForm); }}>{t.listing.cancel}</button>
+              <button type="submit" className={styles.primaryBtn} disabled={saving || hasBlocks(addNotes)}>{saving ? t.listing.saving : t.listing.save}</button>
+              <button type="button" className={styles.secondaryBtn} onClick={() => { resetMessages(); setShowAddForm(false); setAddForm(emptyProduceForm); }}>{t.listing.cancel}</button>
             </div>
           </form>
         )}
@@ -131,10 +183,10 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
             editingId === produce.id ? (
               <form key={produce.id} onSubmit={(e) => void handleUpdate(e)} className={styles.produceForm}>
                 <p className={styles.formTitle}>Edit: {produce.name}</p>
-                <ProduceFormFields form={editForm} onChange={setEditForm} />
+                <ProduceFormFields form={editForm} onChange={setEditForm} notes={editNotes} />
                 <div className={styles.formActions}>
-                  <button type="submit" className={styles.primaryBtn} disabled={saving}>{saving ? t.listing.saving : t.listing.saveChanges}</button>
-                  <button type="button" className={styles.secondaryBtn} onClick={() => setEditingId(null)}>{t.listing.cancel}</button>
+                  <button type="submit" className={styles.primaryBtn} disabled={saving || hasBlocks(editNotes)}>{saving ? t.listing.saving : t.listing.saveChanges}</button>
+                  <button type="button" className={styles.secondaryBtn} onClick={() => { resetMessages(); setEditingId(null); }}>{t.listing.cancel}</button>
                 </div>
               </form>
             ) : (
@@ -178,6 +230,7 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
                       {produce.hidden_reason && <> Reason: {produce.hidden_reason}</>} Contact support once it&apos;s fixed.
                     </p>
                   )}
+                  {!produce.hidden_at && <ReviewState produce={produce} />}
                   {produce.description && <p className={styles.produceDesc}>{produce.description}</p>}
                 </div>
                 <div className={styles.produceRowActions}>
@@ -189,6 +242,28 @@ export default function ProduceTab({ produces, setProduces, loading }: Props) {
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+/** Guardrails Phase 1: under review or rejected, on the merchant's own row. */
+function ReviewState({ produce }: { produce: Produce }) {
+  const note = statusNote(produce);
+  if (!note) return null;
+  return (
+    <p className={note.tone === "rejected" ? styles.produceRejected : styles.produceReview} role="status">
+      {note.text}
+    </p>
+  );
+}
+
+/** Guardrails Phase 2: penalty points, the new-listing block, new-farm review. */
+function StandingBanner({ standing }: { standing: ListingStanding | null }) {
+  const note = standingNote(standing);
+  if (!note) return null;
+  return (
+    <div className={note.tone === "blocked" ? styles.produceRejected : styles.produceReview} role="status">
+      {note.lines.map((line) => <p key={line} className={styles.standingLine}>{line}</p>)}
     </div>
   );
 }

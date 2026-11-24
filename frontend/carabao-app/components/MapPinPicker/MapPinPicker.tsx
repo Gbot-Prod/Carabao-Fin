@@ -53,6 +53,23 @@ type Props = {
   address: TypedAddress;
 };
 
+/** The "place an accurate pin" notice above the map: riders go to the pin, not the text. */
+function PinNotice({ title, body }: { title: string; body: string }) {
+  return (
+    <div className={styles.notice} role="note">
+      <svg className={styles.noticeIcon} viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Z" fill="currentColor" />
+        <rect x="11" y="5.5" width="2" height="5" rx="1" fill="#fff" />
+        <circle cx="12" cy="12.75" r="1.15" fill="#fff" />
+      </svg>
+      <div>
+        <p className={styles.noticeTitle}>{title}</p>
+        <p className={styles.noticeBody}>{body}</p>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Drop or drag a pin for the delivery or farm location (U1). The address
  * typed above places the pin; clicking the map or dragging fine-tunes it.
@@ -311,6 +328,7 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
           {status === "locating" ? t.mapPin.locating : t.mapPin.useMyLocation}
         </button>
       </div>
+      <PinNotice title={t.mapPin.noticeTitle} body={t.mapPin.noticeBody} />
       <div ref={container} className={styles.map} role="application" aria-label={t.mapPin.mapLabel} />
       <p className={styles.note}>
         {status === "unavailable"

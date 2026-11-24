@@ -16,6 +16,7 @@ from app.models.produce import Produce
 from app.models.review import Review
 from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.user import User
+from app.models.user_address import UserAddress
 from app.models.voucher import Voucher
 from app.schemas.order import (
     CurrentOrderResponse,
@@ -48,11 +49,13 @@ from app.services.order_status import (
 )
 from app.services.pinned_location import (
     enforce_not_flagged,
+    needs_road_check,
     saved_pin_confirmed,
     validate_pin,
 )
-from app.services.produce_freshness import is_expired, ph_today
+from app.services.produce_freshness import is_expired, is_withdrawn, ph_today
 from app.services.produce_pricing import unit_price_for
+from app.services.psgc import LUZON_REGION_CODES
 from app.services.receipts import build_receipt, receipt_payment
 from app.services.review_service import (
     can_review,
@@ -130,6 +133,60 @@ def release_superseded_orders(db: Session, user_id: int, produce_ids: set[int]) 
             )
 
 
+# The fields a saved address (delivery_address_id) gives in their place.
+_SAVED_ADDRESS_FIELDS = (
+    "delivery_address",
+    "delivery_region",
+    "delivery_lat",
+    "delivery_lng",
+    "delivery_pin_confirmed",
+)
+
+
+def saved_address_line(address: UserAddress) -> str:
+    """The delivery text an order keeps: street, barangay, city, province and
+    postal code."""
+    parts = [
+        address.address,
+        address.barangay,
+        address.city,
+        address.province,
+        address.postal_code,
+    ]
+    return ", ".join(str(p).strip() for p in parts if p and str(p).strip())
+
+
+def _saved_delivery_address(
+    db: Session, user: User, payload: PlaceOrderRequest
+) -> UserAddress | None:
+    if payload.delivery_address_id is None:
+        return None
+    sent = sorted(f for f in _SAVED_ADDRESS_FIELDS if f in payload.model_fields_set)
+    if sent:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Leave out {', '.join(sent)} when delivery_address_id is sent",
+        )
+    address = (
+        db.query(UserAddress)
+        .filter(
+            UserAddress.id == payload.delivery_address_id,
+            UserAddress.user_id == user.id,
+        )
+        .first()
+    )
+    if address is None:
+        raise HTTPException(status_code=404, detail="Address not found")
+    if address.region_code is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Add the region, province, city and barangay to this address first",
+        )
+    if address.region_code not in LUZON_REGION_CODES:
+        raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
+    return address
+
+
 @router.post("/orders/me/place", response_model=PlaceOrderResponse)
 def place_order_from_cart(
     payload: PlaceOrderRequest,
@@ -137,15 +194,27 @@ def place_order_from_cart(
     current_user: User = Depends(require_verified_phone),
 ):
     rate_limit.enforce_action(db, "order_place", str(current_user.id))
+    saved = _saved_delivery_address(db, current_user, payload)
+    delivery_address = (payload.delivery_address or "").strip() or None
     # Carabao delivers within Luzon only (B2).
-    if payload.delivery_region is not None:
-        if not is_luzon_region(payload.delivery_region):
-            raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
-    elif payload.delivery_address and not address_in_luzon(payload.delivery_address):
-        raise HTTPException(status_code=400, detail=DELIVERY_OUTSIDE_LUZON_DETAIL)
-    delivery_pin = validate_pin(payload.delivery_lat, payload.delivery_lng)
+    if saved is not None:
+        # The saved row's area was checked against the PSGC when it was saved.
+        delivery_address = saved_address_line(saved)
+        delivery_pin = validate_pin(saved.lat, saved.lng)
+    else:
+        if payload.delivery_region is not None:
+            if not is_luzon_region(payload.delivery_region):
+                raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
+        elif delivery_address and not address_in_luzon(delivery_address):
+            raise HTTPException(status_code=400, detail=DELIVERY_OUTSIDE_LUZON_DETAIL)
+        delivery_pin = validate_pin(payload.delivery_lat, payload.delivery_lng)
     road = delivery_pin.road if delivery_pin else None
-    if payload.delivery_pin_confirmed is not None:
+    if saved is not None and road is not None and needs_road_check(saved):
+        # Saved while the road service was down: keep the road found now.
+        saved.road_lat, saved.road_lng = road
+    if saved is not None:
+        pin_confirmed = bool(delivery_pin and saved.pin_confirmed)
+    elif payload.delivery_pin_confirmed is not None:
         pin_confirmed = bool(delivery_pin and payload.delivery_pin_confirmed)
     else:
         pin_confirmed = any(
@@ -249,7 +318,7 @@ def place_order_from_cart(
                 detail=f"'{produce.name}' is from your own farm. Remove it from "
                 "your cart to continue.",
             )
-        if produce.hidden_at is not None:
+        if is_withdrawn(produce):
             raise HTTPException(
                 status_code=400,
                 detail=f"'{produce.name}' is no longer available",
@@ -340,7 +409,7 @@ def place_order_from_cart(
             discount=discount,
             voucher_code=voucher.code if discount and voucher is not None else None,
             items=items_by_merchant[merchant_id],
-            delivery_address=(payload.delivery_address or "").strip() or None,
+            delivery_address=delivery_address,
             delivery_lat=delivery_pin.pin[0] if delivery_pin else None,
             delivery_lng=delivery_pin.pin[1] if delivery_pin else None,
             delivery_road_lat=road[0] if road else None,
@@ -435,7 +504,7 @@ def preview_voucher(
         for produce in preview_rows:
             merchant_id = cast(int, produce.merchant_id)
             if (
-                produce.hidden_at is not None
+                is_withdrawn(produce)
                 or is_expired(produce, today)
                 or merchant_id == own_merchant_id
                 # CF-0072 (B83): checkout refuses a paused farm's lines; and

@@ -541,9 +541,9 @@ Automatic checks: `npm test`, `npm run lint` and `npm run build` in `frontend/ca
 | 19 | Sign in with the new password | setup page with the link's token; set up TOTP, keep the backup codes |
 | 20 | Sign out, sign in with password + code | dashboard; audit log shows invite, accepted, two-step set up |
 | 21 | Another invite: 5 wrong codes, then the right one | refused; audit log shows "invite locked"; **Resend invite** gives a new link and code that work |
-| 22 | **Reset 2-step** on an admin, then sign in as them with email + password | sent to `/two-factor/enrol`, "Use the setup link we sent you." without a token; the SMS/email link sets it up again |
+| 22 | **Reset account** on an admin, then sign in as them with the old password; then open the new invite link, enter the code and a new password | old password refused; state **Invite pending**; after the invite, sign-in goes straight to TOTP setup; audit log shows "Admin account reset" |
 | 23 | **Deactivate** an admin, then try to sign in as them | sign-in refused; their sessions end |
-| 24 | **Reactivate** them | new setup link by SMS/email (or a new invite and code if they never accepted) |
+| 24 | **Reactivate** them | a new invite link by email and a new code; the old password does not work |
 | 25 | Deactivate yourself; suspend an admin from the Users page | refused; admins show Deactivate, not Suspend |
 | 26 | Admin site: open `/admin/profile`; change the name; change the password (wrong current password once, an 11-character password once, then a valid one); open `admin.<root>/forgot-password` and `POST /api/auth/request-password-reset` | name shows in the sidebar; refused twice, then "Your password is changed…", other sessions end, sign-in needs the new password + TOTP; reset page and endpoint give 404 |
 | 27 | Public site: buyer phone sign-up, sign-in, SMS reset, Google sign-in | all work; sign-in with the new password works |

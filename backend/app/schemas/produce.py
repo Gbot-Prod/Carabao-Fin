@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.statuses import ProduceStatus
+
 MAX_PRICE_TIERS = 5
 # Whole pesos per sale unit (CF-0014): a listing price is never 0 or negative.
 MAX_PRICE = 1_000_000
@@ -89,8 +91,109 @@ class ProduceResponse(ProduceBase):
     # Admin moderation (A6); buyers never receive hidden listings.
     hidden_at: datetime | None = None
     hidden_reason: str | None = None
+    # Guardrails Phase 1: buyers see live and under_review listings.
+    status: ProduceStatus = ProduceStatus.LIVE
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def unsaved_status(cls, v: object) -> object:
+        # A row that is not flushed yet has no column default applied.
+        return ProduceStatus.LIVE if v is None else v
+
+
+class ListingIssue(BaseModel):
+    """One result of the listing checker (services/listing_checks.py)."""
+
+    field: str
+    code: str
+    message: str
+    suggestion: str | None = None
+
+
+class MerchantProduceResponse(ProduceResponse):
+    """A listing as its own farm (and admins) see it: with the review state."""
+
+    review_flags: list[ListingIssue] = Field(default_factory=list)
+    submitted_for_review_at: datetime | None = None
+    reviewed_at: datetime | None = None
+    rejection_code: str | None = None
+    rejection_reason: str | None = None
+
+    @field_validator("review_flags", mode="before")
+    @classmethod
+    def none_to_list(cls, v: object) -> object:
+        return v or []
+
+
+class ProduceCheckRequest(BaseModel):
+    """POST /produce/check: the form as it is now; every field may be missing.
+
+    ``produce_id`` is the listing being edited (left out of the duplicate check).
+    The limits are the same as ProduceCreate, so a value the save would refuse
+    is a 422 here too.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    produce_id: int | None = Field(default=None, ge=1)
+    name: str | None = Field(default=None, max_length=MAX_NAME)
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION)
+    category: Literal["Vegetables", "Fruits"] | None = None
+    price: int | None = Field(default=None, ge=1, le=MAX_PRICE)
+    unit: Literal["kg", "lbs"] | None = None
+    unit_quantity: float | None = Field(default=None, gt=0, le=MAX_UNIT_QUANTITY)
+    stock_quantity: int | None = Field(default=None, ge=0, le=MAX_STOCK)
+    harvest_date: date | None = None
+    best_before: date | None = None
+    min_order_qty: int | None = Field(default=None, ge=1)
+    price_tiers: list[PriceTier] = Field(
+        default_factory=list, max_length=MAX_PRICE_TIERS
+    )
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def coerce_empty_category(cls, v: object) -> object:
+        return None if v == "" else v
+
+
+class ProduceCheckResponse(BaseModel):
+    valid: bool
+    has_hard_blocks: bool
+    has_soft_flags: bool
+    recommended_status: ProduceStatus
+    hard_blocks: list[ListingIssue]
+    soft_flags: list[ListingIssue]
+
+
+class ListingPenaltyView(BaseModel):
+    """One penalty row (guardrails Phase 2, services/listing_trust.py)."""
+
+    id: int
+    produce_id: int | None = None
+    produce_name: str
+    code: str
+    label: str
+    points: int
+    created_at: datetime
+    expires_at: datetime
+    revoked_at: datetime | None = None
+    revoke_reason: str | None = None
+
+
+class ListingStandingResponse(BaseModel):
+    """GET /merchants/me/listing-standing: points and the limits they hit."""
+
+    points: int
+    window_days: int
+    listing_block_points: int
+    account_review_points: int
+    can_create_listings: bool
+    blocked_until: datetime | None = None
+    # Listings an admin must still approve before new ones go live at once.
+    new_merchant_reviews_left: int
+    penalties: list[ListingPenaltyView]
 
 
 class SavedProduceResponse(ProduceResponse):

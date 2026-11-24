@@ -11,6 +11,7 @@ from datetime import UTC, date, datetime, time, timedelta, timezone
 from sqlalchemy import ColumnElement, and_, or_
 
 from app.models.produce import Produce
+from app.models.statuses import BUYER_VISIBLE_PRODUCE_STATUSES
 
 PH_TZ = timezone(timedelta(hours=8))
 
@@ -32,11 +33,22 @@ def ph_day_start(day: date) -> datetime:
 def is_listed(today: date) -> ColumnElement[bool]:
     """SQL filter for produce buyers may see and order on ``today``.
 
-    Leaves out expired listings and listings an admin has hidden (A6).
+    Leaves out expired listings, listings an admin has hidden (A6) and
+    rejected listings. ``under_review`` listings stay listed (guardrails:
+    publish now, check always).
     """
     return and_(
+        Produce.status.in_([s.value for s in BUYER_VISIBLE_PRODUCE_STATUSES]),
         Produce.hidden_at.is_(None),
         or_(Produce.best_before.is_(None), Produce.best_before >= today),
+    )
+
+
+def is_withdrawn(produce: Produce) -> bool:
+    """An admin hid or rejected the listing: buyers can't see or order it."""
+    return (
+        produce.hidden_at is not None
+        or produce.status not in BUYER_VISIBLE_PRODUCE_STATUSES
     )
 
 

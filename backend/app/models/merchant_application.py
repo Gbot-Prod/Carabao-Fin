@@ -130,6 +130,12 @@ class MerchantApplication(Base):
     province = Column(String, nullable=False)
     city = Column(String, nullable=False)
     barangay = Column(String, nullable=True)
+    # PSGC codes of the four levels above (services/psgc.py). province_code is
+    # empty for NCR (Metro Manila has no province in the PSGC).
+    region_code = Column(String(10), nullable=True)
+    province_code = Column(String(10), nullable=True)
+    city_code = Column(String(10), nullable=True, index=True)
+    barangay_code = Column(String(10), nullable=True)
     address = Column(String, nullable=False)
     postal_code = Column(String, nullable=False)
     # Map pin (U1).
@@ -143,6 +149,9 @@ class MerchantApplication(Base):
     pin_confirmed = Column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # services/pin_area.py: true when the pin is outside the chosen city or
+    # barangay (but near it); NULL when not checked (no pin, no area, no shape).
+    pin_area_mismatch = Column(Boolean, nullable=True)
     available_days = Column(JSON, nullable=False, default=list)
 
     # Admin review

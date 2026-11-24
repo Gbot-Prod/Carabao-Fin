@@ -27,13 +27,16 @@ from app.schemas.shipment import (
     TrackingPosition,
     Waypoint,
 )
-from app.services import mapbox_routing, notifications, rate_limit
+from app.services import mapbox_routing, notifications, rate_limit, road_snap
 from app.services.merchant_service import get_active_merchant, get_editable_merchant
 from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
 from app.services.pinned_location import (
     delivery_pin_confirmed,
+    delivery_pin_owner,
+    delivery_pin_verified,
     delivery_point,
     merchant_point,
+    recheck_roads,
 )
 from app.utils.geocoding import _geocode
 
@@ -95,6 +98,8 @@ def _shipment_response(
             pin_unreachable=int(point["order_id"]) in flagged,
             # Routes made before the flag existed only had hand-placed pins.
             pin_approximate=not point.get("pin_confirmed", True),
+            pin_verified=bool(point.get("pin_verified")),
+            pin_no_road=bool(point.get("pin_no_road")),
         )
         for index, point in enumerate(stop_points)
     ]
@@ -209,6 +214,9 @@ def create_merchant_shipment(
     if not merchant_address and merchant.lat is None:
         raise HTTPException(status_code=422, detail="Merchant has no location set")
 
+    # A pin saved while the road service was down has no road point: check
+    # it again now, so routing starts from a road.
+    recheck_roads([(merchant, "")])
     # Saved map pins first (U1); geocode the address text only without one.
     origin_coords = merchant_point(merchant, merchant_address, _geocode)
     if not origin_coords:
@@ -234,6 +242,18 @@ def create_merchant_shipment(
                 "delivery_address": delivery_address,
             }
         )
+
+    # Delivery pins saved while the road service was down: check them again
+    # before routing. A pin with no road near it is still routed, but the
+    # rider sees a warning on that stop.
+    rechecked = recheck_roads(
+        [
+            delivery_pin_owner(ctx["order"], ctx["saved_address"])
+            for ctx in order_contexts
+        ]
+    )
+    for ctx, result in zip(order_contexts, rechecked, strict=True):
+        ctx["no_road"] = result is road_snap.NO_ROAD
 
     # A batch can hold dozens of addresses, so look them up in parallel.
     with ThreadPoolExecutor(max_workers=GEOCODE_WORKERS) as pool:
@@ -373,6 +393,11 @@ def create_merchant_shipment(
                 "pin_confirmed": delivery_pin_confirmed(
                     ctx["order"], ctx["saved_address"]
                 ),
+                # Set by the server: a rider delivered to this pin before.
+                "pin_verified": delivery_pin_verified(
+                    db, ctx["order"], ctx["saved_address"]
+                ),
+                "pin_no_road": bool(ctx.get("no_road")),
                 "type": "delivery",
                 "status": "in_transit",
             }

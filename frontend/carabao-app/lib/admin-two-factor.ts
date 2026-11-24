@@ -5,7 +5,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 // ── Enrolment links (CF-0018) ─────────────────────────────────────────────
 // The backend makes a one-time token with an admin invite, and when an admin's
-// 2FA is reset or the admin is reactivated (backend/app/services/
+// account is reset or reactivated (backend/app/services/
 // admin_enrolment.py). It keeps only the SHA-256 in BetterAuth's
 // "verification" table under this identifier. The identifier is stored in
 // plain text (no verification.storeIdentifier, no secondaryStorage): the

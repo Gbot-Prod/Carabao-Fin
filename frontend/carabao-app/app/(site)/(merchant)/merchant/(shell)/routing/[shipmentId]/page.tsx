@@ -233,6 +233,18 @@ export default function RoutingPage() {
                     </p>
                   )}
 
+                  {stop.pin_no_road && !stop.pin_unreachable && (
+                    <p className={styles.reportedNote}>
+                      <strong>{t.routing.noRoad}.</strong> {t.routing.noRoadNote}
+                    </p>
+                  )}
+
+                  {stop.pin_verified && !stop.pin_unreachable && !stop.pin_no_road && (
+                    <p className={styles.verifiedNote}>
+                      <strong>{t.routing.verified}.</strong> {t.routing.verifiedNote}
+                    </p>
+                  )}
+
                   {stop.pin_unreachable && (
                     <p className={styles.reportedNote}>
                       <strong>{t.routing.reported}.</strong> {t.routing.reportedNote}

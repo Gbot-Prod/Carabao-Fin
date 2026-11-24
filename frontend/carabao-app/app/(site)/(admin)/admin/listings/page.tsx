@@ -5,10 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ADMIN_PAGE_SIZE,
+  approveProduce,
   fetchAdminProduce,
+  fetchRejectionCodes,
   hideProduce,
+  rejectProduce,
   unhideProduce,
   type AdminProduce,
+  type RejectionCode,
 } from "@/util/api/admin";
 import getApiErrorMessage from "@/util/errorHelper";
 import Pagination from "@/components/Pagination/Pagination";
@@ -19,7 +23,17 @@ import PageHeader from "../../PageHeader";
 import ExpandToggle, { formatDate, formatDateTime } from "../../ExpandToggle";
 import details from "../../details.module.css";
 
-type Visibility = "" | "visible" | "hidden";
+type Visibility = "" | "visible" | "hidden" | "under_review" | "rejected";
+
+// Guardrails Phase 1: the status a listing is in (backend ProduceStatus).
+const STATUS_LABELS: Record<string, string> = {
+  live: "Live",
+  under_review: "Under review",
+  rejected: "Rejected",
+  hidden: "Hidden",
+};
+// "Other" needs a note of at least this length (backend REJECTION_NOTE_MIN).
+const OTHER_NOTE_MIN = 10;
 
 export default function AdminListingsPage() {
   return (
@@ -48,6 +62,12 @@ function ListingsContent() {
   const [busy, setBusy] = useState<number | null>(null);
   const [rowError, setRowError] = useState<{ id: number; message: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
+  const [codes, setCodes] = useState<RejectionCode[]>([]);
+  const [rejecting, setRejecting] = useState<{ id: number; code: string; note: string } | null>(null);
+
+  useEffect(() => {
+    fetchRejectionCodes().then(setCodes).catch(() => setCodes([]));
+  }, []);
 
   const toggle = (id: number) =>
     setExpanded((prev) => {
@@ -59,7 +79,8 @@ function ListingsContent() {
 
   useEffect(() => {
     const hidden = visibility === "hidden" ? true : visibility === "visible" ? false : undefined;
-    fetchAdminProduce({ hidden, q: q || undefined, merchant_id: merchantId }, page)
+    const status = visibility === "under_review" || visibility === "rejected" ? visibility : undefined;
+    fetchAdminProduce({ hidden, status, q: q || undefined, merchant_id: merchantId }, page)
       .then((res) => {
         setRows(res.items);
         setTotal(res.total);
@@ -125,18 +146,52 @@ function ListingsContent() {
     }
   };
 
+  const approve = async (row: AdminProduce) => {
+    setBusy(row.id);
+    setRowError(null);
+    try {
+      replace(await approveProduce(row.id));
+    } catch (err) {
+      setRowError({ id: row.id, message: getApiErrorMessage(err) ?? "Could not approve the listing." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const reject = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!rejecting) return;
+    const { id, code, note } = rejecting;
+    if (code === "OTHER" && note.trim().length < OTHER_NOTE_MIN) {
+      setRowError({ id, message: `Write a note of at least ${OTHER_NOTE_MIN} characters for "Other".` });
+      return;
+    }
+    setBusy(id);
+    setRowError(null);
+    try {
+      replace(await rejectProduce(id, code, note));
+      setRejecting(null);
+    } catch (err) {
+      setRowError({ id, message: getApiErrorMessage(err) ?? "Could not reject the listing." });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   if (loading && rows.length === 0 && !error) return <PageLoader label="Loading listings…" />;
 
   return (
     <div className={styles.page}>
-      <PageHeader eyebrow="People" title="Listings" count={total} description="Products merchants have posted. Hide anything that shouldn't be shown to buyers." />
+      <PageHeader eyebrow="People" title="Listings" count={total} description="Products merchants have posted. Check the listings under review (target: 24 hours), and hide anything that buyers must not see." />
 
       <div className={styles.filters}>
         <label className={styles.field}>
           <span>Show</span>
           <select value={visibility} onChange={(e) => go({ show: e.target.value as Visibility, page: 1 })}>
             <option value="">All listings</option>
-            <option value="visible">Visible to buyers</option>
+            <option value="under_review">Under review (queue, oldest first)</option>
+            <option value="rejected">Rejected</option>
+            <option value="visible">Not hidden</option>
             <option value="hidden">Hidden by admin</option>
           </select>
         </label>
@@ -191,6 +246,54 @@ function ListingsContent() {
                   <td className={styles.mono}>{row.best_before ?? "—"}</td>
                   <td>
                     <div className={suspend.wrap}>
+                      {!row.hidden_at && row.status && row.status !== "live" && (
+                        <span className={row.status === "rejected" ? suspend.suspended : suspend.review}>
+                          {STATUS_LABELS[row.status] ?? row.status}
+                        </span>
+                      )}
+                      {!row.hidden_at && row.status === "under_review" && (
+                        <button type="button" className={suspend.action} disabled={busy === row.id} onClick={() => void approve(row)}>
+                          Approve
+                        </button>
+                      )}
+                      {!row.hidden_at && (row.status === "under_review" || row.status === "live") && rejecting?.id !== row.id && (
+                        <button
+                          type="button"
+                          className={`${suspend.action} ${suspend.danger}`}
+                          disabled={busy === row.id || codes.length === 0}
+                          onClick={() => setRejecting({ id: row.id, code: codes[0]?.code ?? "", note: "" })}
+                        >
+                          Reject
+                        </button>
+                      )}
+                      {rejecting?.id === row.id && (
+                        <form className={suspend.rejectForm} onSubmit={(e) => void reject(e)}>
+                          <select
+                            aria-label="Reason"
+                            value={rejecting.code}
+                            onChange={(e) => setRejecting({ ...rejecting, code: e.target.value })}
+                          >
+                            {codes.map((c) => (
+                              <option key={c.code} value={c.code}>
+                                {c.label}{c.points ? ` (${c.points} penalty point${c.points === 1 ? "" : "s"})` : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            aria-label="Note for the merchant"
+                            placeholder={rejecting.code === "OTHER" ? "Note (required)" : "Note (optional)"}
+                            maxLength={500}
+                            value={rejecting.note}
+                            onChange={(e) => setRejecting({ ...rejecting, note: e.target.value })}
+                          />
+                          <button type="submit" className={`${suspend.action} ${suspend.danger}`} disabled={busy === row.id}>
+                            Reject
+                          </button>
+                          <button type="button" className={suspend.action} onClick={() => setRejecting(null)}>
+                            Cancel
+                          </button>
+                        </form>
+                      )}
                       {row.hidden_at ? (
                         <>
                           <span className={suspend.suspended}>Hidden</span>
@@ -201,7 +304,7 @@ function ListingsContent() {
                         </>
                       ) : (
                         <>
-                          <span className={suspend.active}>Visible</span>
+                          {(!row.status || row.status === "live") && <span className={suspend.active}>Visible</span>}
                           <button
                             type="button"
                             className={`${suspend.action} ${suspend.danger}`}
@@ -242,6 +345,9 @@ function ListingDetails({ row }: { row: AdminProduce }) {
   const hiddenAt = formatDateTime(row.hidden_at);
   const tiers = [...(row.price_tiers ?? [])].sort((a, b) => a.min_qty - b.min_qty);
   const dash = <span className={details.muted}>—</span>;
+  const flags = row.review_flags ?? [];
+  const reports = row.open_reports ?? [];
+  const ref = row.reference_price;
 
   return (
     <div className={details.panel}>
@@ -261,6 +367,43 @@ function ListingDetails({ row }: { row: AdminProduce }) {
         )}
       </div>
 
+      {reports.length > 0 && (
+        <div className={details.section}>
+          <h3 className={details.sectionTitle}>Buyer reports ({reports.length})</h3>
+          <ul className={details.tiers}>
+            {reports.map((r) => (
+              <li key={r.id}>
+                <strong>{r.label}</strong>
+                {r.note ? <>: {r.note}</> : null}{" "}
+                <span className={details.muted}>
+                  (user #{r.reporter_id}, {formatDateTime(r.created_at)})
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(flags.length > 0 || row.rejection_reason) && (
+        <div className={details.section}>
+          <h3 className={details.sectionTitle}>Checker flags</h3>
+          {flags.length > 0 && (
+            <ul className={details.tiers}>
+              {flags.map((f) => (
+                <li key={`${f.field}-${f.code}`}>
+                  <strong>{f.field.replace(/_/g, " ")}</strong>: {f.message} <span className={details.muted}>({f.code})</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {row.rejection_reason && (
+            <p className={details.text}>
+              Rejected ({row.rejection_code}): {row.rejection_reason}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className={details.section}>
         <h3 className={details.sectionTitle}>Listing details</h3>
         <dl className={details.grid}>
@@ -278,6 +421,19 @@ function ListingDetails({ row }: { row: AdminProduce }) {
             <dt>Base price</dt>
             <dd>
               ₱{row.price} / {row.unit}
+            </dd>
+          </div>
+          <div>
+            <dt>Market price</dt>
+            <dd>
+              {ref ? (
+                <>
+                  {ref.commodity}: ₱{ref.low}–₱{ref.high} / {ref.unit}
+                  {ref.sample && <span className={details.muted}> (sample data)</span>}
+                </>
+              ) : (
+                dash
+              )}
             </dd>
           </div>
           <div>
@@ -304,6 +460,9 @@ function ListingDetails({ row }: { row: AdminProduce }) {
               {row.merchant_name ?? `#${row.merchant_id}`}{" "}
               <Link href={`/admin/listings?merchant=${row.merchant_id}`} className={details.link}>
                 All listings
+              </Link>{" "}
+              <Link href={`/admin/penalties?merchant_id=${row.merchant_id}`} className={details.link}>
+                Penalty points
               </Link>
             </dd>
           </div>

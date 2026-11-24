@@ -25,6 +25,7 @@ from app.core.errors import (
 )
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.models import (  # noqa: F401
+    address_change_log,
     cart,
     merchant,
     merchant_application,
@@ -41,8 +42,8 @@ from app.models import (  # noqa: F401
     user_address,
     voucher,
 )
+from app.services import address_log, rate_limit, retention, setup_reminders
 from app.services import otp as otp_service
-from app.services import rate_limit, retention, setup_reminders
 from app.services.chat import send_unread_merchant_sms
 from app.services.order_reservations import (
     expire_stale_reservations,
@@ -162,15 +163,18 @@ async def lifespan(_: FastAPI):
             hits = rate_limit.purge_expired(db)
             # CF-0056: old searches and old read notifications.
             searches, notes = retention.purge_old_rows(db)
+            # Pin quality item 3: address change rows past address_log.KEEP_DAYS.
+            changes = address_log.purge_old(db)
             db.commit()
-            if codes or hits or searches or notes:
+            if codes or hits or searches or notes or changes:
                 logger.info(
                     "Purged %s OTP code(s), %s rate-limit hit(s), %s search row(s), "
-                    "%s read notification(s)",
+                    "%s read notification(s), %s address change(s)",
                     codes,
                     hits,
                     searches,
                     notes,
+                    changes,
                 )
         except Exception:
             db.rollback()

@@ -35,7 +35,9 @@ def mail(monkeypatch):
     monkeypatch.setattr(
         service,
         "send_admin_invite_email",
-        lambda to, *, invite_url, invited_by: out["invites"].append((to, invite_url)),
+        lambda to, *, invite_url, invited_by, reset=False: out["invites"].append(
+            (to, invite_url)
+        ),
     )
     monkeypatch.setattr(
         admin_enrolment,
@@ -271,16 +273,15 @@ def test_fifth_wrong_code_ends_the_invite(db, invited):
     assert "admin.invite_locked" in _actions(db)
 
 
-def test_a_reset_link_cannot_set_a_password(db, mail):
-    # An admin who already has a password gets a 2FA reset link. Its token,
-    # even with a planted code, cannot replace the password.
+def test_accept_cannot_replace_an_existing_password(db, mail):
+    # A valid token and a planted code still cannot replace a password that
+    # exists: only a reset (which deletes it first) opens the invite again.
     boss = _boss(db)
     other = make_user(db, "other@example.com", is_admin=True)
     db.commit()
     add_password(db, other, PASSWORD)
     client = _client(db, boss)
-    assert client.post(f"/admin/users/{other.id}/two-factor/reset").status_code == 200
-    token = mail["setup"][-1][1].split("token=")[1]
+    token = admin_enrolment.issue_token(db, other.external_auth_id)
     better_auth_store.set_invite_code(
         db,
         other.external_auth_id,
@@ -339,6 +340,63 @@ def test_resend_refused_for_a_non_admin(db, mail):
     assert (
         _client(db, boss).post(f"/admin/invites/{buyer.id}/resend").status_code == 400
     )
+
+
+# ── Account reset ────────────────────────────────────────────────────────────
+
+
+def test_reset_removes_password_and_two_factor_and_sends_an_invite(db, mail):
+    boss = _boss(db)
+    other = make_user(db, "other@example.com", is_admin=True)
+    db.commit()
+    add_password(db, other, PASSWORD)
+    _with_sessions_and_two_factor(db, other)
+    client = _client(db, boss)
+
+    res = client.post(f"/admin/admins/{other.id}/reset")
+
+    assert res.status_code == 200, res.text
+    assert res.json()["user"]["admin_invite_pending"] is True
+    uid = other.external_auth_id
+    assert not better_auth_store.has_credential_account(db, uid)
+    assert not get_identity(db, uid)["twoFactorEnabled"]
+    assert _count(db, "twoFactor", other) == 0 and _count(db, "session", other) == 0
+
+    # The new invite works like a first invite: code + new password.
+    invite_id, token = _link(mail)
+    assert invite_id == uid
+    new_password = "Another admin pass 2!"
+    res = _accept(client, invite_id, token, res.json()["code"], new_password)
+    assert res.status_code == 200, res.text
+    stored = better_auth_store.stored_password(db, uid)
+    assert better_auth_store.password_matches(stored, new_password)
+    assert _actions(db, other.id) == ["admin.account_reset", "admin.invite_accepted"]
+
+
+def test_reset_rules(db, mail):
+    boss = _boss(db)
+    client = _client(db, boss)
+    _invite(client)
+    pending_id, _ = _link(mail)
+    pending = db.query(User).filter_by(external_auth_id=pending_id).one()
+    buyer = make_user(db, "b@example.com")
+    gone = make_user(db, "gone@example.com", is_admin=True, banned=True)
+    db.commit()
+    add_password(db, gone, PASSWORD)
+    sent_before = len(mail["invites"])
+
+    res = client.post(f"/admin/admins/{boss.id}/reset")
+    assert res.status_code == 400
+    assert res.json()["detail"] == service.SELF_RESET_DETAIL
+    res = client.post(f"/admin/admins/{pending.id}/reset")
+    assert res.status_code == 409
+    assert res.json()["detail"] == service.INVITE_PENDING_RESET_DETAIL
+    assert client.post(f"/admin/admins/{buyer.id}/reset").status_code == 400
+    assert client.post(f"/admin/admins/{gone.id}/reset").status_code == 409
+    assert client.post("/admin/admins/999999/reset").status_code == 404
+    assert len(mail["invites"]) == sent_before
+    assert better_auth_store.has_credential_account(db, boss.external_auth_id)
+    assert better_auth_store.has_credential_account(db, gone.external_auth_id)
 
 
 # ── Deactivate, reactivate ───────────────────────────────────────────────────
@@ -417,7 +475,7 @@ def test_deactivate_refused_for_the_last_active_admin(db, mail):
     assert not get_identity(db, other.external_auth_id)["banned"]
 
 
-def test_reactivate_with_a_password_sends_a_setup_link(db, mail):
+def test_reactivate_with_a_password_resets_the_account(db, mail):
     boss = _boss(db)
     other = make_user(db, "other@example.com", is_admin=True)
     db.commit()
@@ -428,14 +486,21 @@ def test_reactivate_with_a_password_sends_a_setup_link(db, mail):
     res = client.post(f"/admin/admins/{other.id}/reactivate")
 
     assert res.status_code == 200, res.text
-    assert res.json()["sent_to"] == ["sms", "email"]
-    assert res.json()["invite_code"] is None
+    assert res.json()["user"]["admin_invite_pending"] is True
     row = get_identity(db, other.external_auth_id)
     assert not row["banned"] and row["banReason"] is None
-    assert _verification(
-        db, better_auth_store.enrolment_identifier(other.external_auth_id)
-    )
-    assert _actions(db, other.id) == ["admin.deactivate", "admin.reactivate"]
+    assert not better_auth_store.has_credential_account(db, other.external_auth_id)
+    invite_id, token = _link(mail)
+    new_password = "Another admin pass 2!"
+    res = _accept(client, invite_id, token, res.json()["code"], new_password)
+    assert res.status_code == 200, res.text
+    stored = better_auth_store.stored_password(db, invite_id)
+    assert better_auth_store.password_matches(stored, new_password)
+    assert _actions(db, other.id) == [
+        "admin.deactivate",
+        "admin.reactivate",
+        "admin.invite_accepted",
+    ]
 
 
 def test_reactivate_without_a_password_makes_a_fresh_invite(db, invited, mail):
@@ -446,7 +511,7 @@ def test_reactivate_without_a_password_makes_a_fresh_invite(db, invited, mail):
     res = client.post(f"/admin/admins/{user.id}/reactivate")
 
     assert res.status_code == 200, res.text
-    code = res.json()["invite_code"]
+    code = res.json()["code"]
     _, token = _link(mail)
     assert token != old_token
     assert _accept(client, invite_id, token, code).status_code == 200

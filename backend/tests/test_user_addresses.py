@@ -8,6 +8,7 @@ from app.api.routes import user_addresses, users
 from app.api.routes.user_addresses import MAX_ADDRESSES
 from app.models.user_address import UserAddress
 from tests.better_auth import make_user
+from tests.psgc_rows import MALOLOS
 
 
 def _client(db, user):  # noqa: F811
@@ -27,8 +28,11 @@ def _defaults(db, user):  # noqa: F811
 
 def test_first_address_is_default_and_others_are_not(db, buyer):  # noqa: F811
     me = _client(db, buyer[0])
-    home = me.post("/users/me/addresses", json={"label": "Home", "city": "Malolos"})
-    work = me.post("/users/me/addresses", json={"label": "Work", "city": "Hagonoy"})
+    home = me.post("/users/me/addresses", json={"label": "Home", **MALOLOS})
+    work = me.post(
+        "/users/me/addresses",
+        json={**MALOLOS, "label": "Work", "city": "Hagonoy", "barangay": "San Isidro"},
+    )
     assert home.status_code == work.status_code == 201
     assert home.json()["is_default"] is True
     assert work.json()["is_default"] is False

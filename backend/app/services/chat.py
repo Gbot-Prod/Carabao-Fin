@@ -21,7 +21,7 @@ from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.user import User
-from app.services import notifications
+from app.services import listing_checks, notifications
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,18 @@ def _clean_body(body: str) -> str:
     return text
 
 
+def _refuse_contact_details(role: str, text: str) -> None:
+    """Guardrails Phase 3: buyers and farms keep contact and payment in Carabao.
+
+    Admin messages are not checked: support may need to send a link.
+    """
+    if role not in ("buyer", "merchant"):
+        return
+    problem = listing_checks.chat_message_problem(text)
+    if problem:
+        raise HTTPException(status_code=422, detail=problem)
+
+
 def _preview(text: str) -> str:
     return text if len(text) <= 120 else text[:117] + "…"
 
@@ -159,6 +171,7 @@ def post_inquiry_message(
     db: Session, conv: Conversation, user: User, role: str, body: str
 ) -> ChatMessage:
     text = _clean_body(body)
+    _refuse_contact_details(role, text)
     merchant = conv.merchant
     if inquiry_is_closed(merchant):
         raise HTTPException(
@@ -217,6 +230,7 @@ def post_message(
     db: Session, order: Order, user: User, role: str, body: str
 ) -> ChatMessage:
     text = _clean_body(body)
+    _refuse_contact_details(role, text)
     if is_closed(order):
         raise HTTPException(
             status_code=403, detail="This chat closed 7 days after the order closed"

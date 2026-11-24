@@ -800,6 +800,10 @@ def test_api_must_fail(cluster: Cluster) -> None:
             'UPDATE "account" SET password = %s WHERE "userId" = %s',
             ("salt:x", cluster.admin_id),
         )
+        # DELETE only reaches an admin's password row (account reset).
+        affects_nothing(
+            conn, 'DELETE FROM "account" WHERE "userId" = %s', (cluster.buyer_id,)
+        )
         refused(conn, 'ALTER TABLE "user" DISABLE TRIGGER guard_user_write')
         refused(conn, "CREATE TABLE sneaky (id int)")
 
@@ -851,13 +855,14 @@ def test_api_admin_account_flows(cluster: Cluster, api_services, monkeypatch) ->
 
     from app.models.auth_identity import AuthIdentity
     from app.models.user import User
-    from app.services import admin_accounts, admin_enrolment, better_auth_store
+    from app.services import admin_accounts, better_auth_store
 
     sent: list[str] = []
     monkeypatch.setattr(
-        admin_accounts, "_send_invite", lambda email, url, invited_by: sent.append(url)
+        admin_accounts,
+        "_send_invite",
+        lambda email, url, invited_by, reset=False: sent.append(url),
     )
-    monkeypatch.setattr(admin_enrolment, "deliver", lambda user, token: ["email"])
 
     def token_of(url: str) -> str:
         return url.split("token=", 1)[1]
@@ -934,14 +939,34 @@ def test_api_admin_account_flows(cluster: Cluster, api_services, monkeypatch) ->
         identity = db.get(AuthIdentity, invite_id)
         db.refresh(identity)
         assert identity.banned is True and identity.two_factor_enabled is False
-        admin_accounts.reactivate(db, actor=actor, user=invitee)
+        # Reactivate removes the password (API DELETE on "account") and sends
+        # a new invite.
+        back = admin_accounts.reactivate(db, actor=actor, user=invitee)
         db.refresh(identity)
         assert identity.banned is False
+        assert not better_auth_store.has_credential_account(db, invite_id)
+        admin_accounts.accept(
+            db,
+            _request(),
+            invite_id=invite_id,
+            token=token_of(sent[-1]),
+            code=back.code,
+            password=password,
+        )
 
-        # 2FA reset (the route's two store calls).
-        better_auth_store.clear_two_factor(db, invite_id)
-        admin_enrolment.issue(db, invitee)
-        db.commit()
+        # Account reset: the password row goes, and a new invite is accepted.
+        db.refresh(invitee)
+        reset = admin_accounts.reset_account(db, actor=actor, user=invitee)
+        assert not better_auth_store.has_credential_account(db, invite_id)
+        admin_accounts.accept(
+            db,
+            _request(),
+            invite_id=invite_id,
+            token=token_of(sent[-1]),
+            code=reset.code,
+            password=password,
+        )
+        assert better_auth_store.has_credential_account(db, invite_id)
 
         # A second invite locked by five wrong codes: both rows go.
         locked = admin_accounts.invite(
@@ -1006,6 +1031,7 @@ def test_api_admin_account_flows(cluster: Cluster, api_services, monkeypatch) ->
             "admin.two_factor_enrolled",
             "admin.deactivate",
             "admin.reactivate",
+            "admin.account_reset",
             "admin.invite_locked",
         ):
             assert action in actions

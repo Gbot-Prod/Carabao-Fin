@@ -31,6 +31,11 @@ export const REPORTED_NOTE = 'You reported this pin. We told the buyer to move i
 export const APPROXIMATE = 'Approximate pin';
 export const APPROXIMATE_NOTE =
   'The buyer did not place this pin; it is where their typed address points. Check the address, or message the buyer if you cannot find the place.';
+export const VERIFIED = 'Verified pin';
+export const VERIFIED_NOTE = 'A rider delivered to this pin before.';
+export const NO_ROAD = 'No road near pin';
+export const NO_ROAD_NOTE =
+  'We found no road near this pin. Message the buyer before you go, or go to the nearest road and call them.';
 export const REPORT_ERROR = 'We could not send the report. Try again.';
 /** Google Maps or Waze is not installed and no browser would take the link. */
 export const LINK_ERROR = 'Could not open the map app. Try again.';

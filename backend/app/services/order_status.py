@@ -19,6 +19,7 @@ from app.models.statuses import OrderStatus, PaymentStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.services import notifications
 from app.services.order_reservations import cancel_order
+from app.services.pinned_location import mark_pin_verified
 
 IN_TRANSIT_STATUSES = frozenset({OrderStatus.SHIPPED, OrderStatus.OUT_FOR_DELIVERY})
 # Statuses the order has left the merchant in; drives the "shipped" flag.
@@ -318,6 +319,8 @@ def mark_delivered(order: Order, confirmed_by: str) -> None:
     order.closed_at = order.delivered_at
     order.delivery_confirmed_by = confirmed_by
     close_shipment_if_done(order)
+    # The rider got to the pin: the buyer's saved address there is verified.
+    mark_pin_verified(order)
     notifications.notify(
         order,
         notifications.buyer_id(order),

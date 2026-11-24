@@ -101,6 +101,7 @@ def build_export(db: Session, user: User) -> dict[str, Any]:
                 "road_lat",
                 "road_lng",
                 "pin_confirmed",
+                "pin_verified_at",
                 "is_default",
                 "created_at",
             ),

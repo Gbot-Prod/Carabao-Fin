@@ -10,7 +10,7 @@ import {
   inviteAdmin,
   reactivateAdmin,
   resendAdminInvite,
-  resetAdminTwoFactor,
+  resetAdminAccount,
   type UserProfile,
 } from "@/util/api/admin";
 import { getApiErrorDetail, getApiErrorStatus } from "@/util/errorHelper";
@@ -69,8 +69,6 @@ function AdminUsersContent() {
   const [busy, setBusy] = useState<number | null>(null);
   const [issued, setIssued] = useState<IssuedCode | null>(null);
 
-  const channels = (sent: string[]) => sent.map((c) => (c === "sms" ? "SMS" : "email")).join(" and ");
-
   const replaceUser = (updated: UserProfile) =>
     setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)));
 
@@ -102,20 +100,16 @@ function AdminUsersContent() {
 
   const who = (user: UserProfile) => user.name || user.email || "this admin";
 
-  const handleTwoFactorReset = (user: UserProfile) =>
+  const handleAccountReset = (user: UserProfile) =>
     run(
       user,
-      user.two_factor_enabled
-        ? `Reset two-step verification for ${who(user)}? Their authenticator stops working, they are signed out, and a new setup link goes to their verified number and email.`
-        : `Send a new setup link to ${who(user)}? Links sent before this one stop working.`,
+      `Reset the account of ${who(user)}? Their password and authenticator stop working and they are signed out. A new invite link goes to their email, and you get a new code to give them.`,
       async () => {
-        const { sent_to } = await resetAdminTwoFactor(user.id);
-        replaceUser({ ...user, two_factor_enabled: false });
-        setNotice({
-          text: `${user.two_factor_enabled ? "Two-step verification reset. " : ""}New setup link sent by ${channels(sent_to)}. Only this newest link works.`,
-        });
+        const res = await resetAdminAccount(user.id);
+        replaceUser(res.user);
+        setIssued({ email: user.email ?? "", code: res.code, why: "Account reset. New invite sent." });
       },
-      "Could not reset two-step verification.",
+      "Could not reset the account.",
     );
 
   const handleResend = (user: UserProfile) =>
@@ -144,17 +138,11 @@ function AdminUsersContent() {
   const handleReactivate = (user: UserProfile) =>
     run(
       user,
-      user.admin_invite_pending
-        ? `Reactivate ${who(user)}? They never accepted their invite, so a new invite link is emailed and you get a new code to hand over.`
-        : `Reactivate ${who(user)}? They get a new two-step setup link by SMS and email.`,
+      `Reactivate ${who(user)}? A new invite link goes to their email, and you get a new code to give them. They choose a new password and set up their authenticator again.`,
       async () => {
         const res = await reactivateAdmin(user.id);
         replaceUser(res.user);
-        if (res.invite_code) {
-          setIssued({ email: user.email ?? "", code: res.invite_code, why: "Reactivated with a new invite." });
-        } else {
-          setNotice({ text: `${who(user)} was reactivated. Setup link sent by ${channels(res.sent_to)}.` });
-        }
+        setIssued({ email: user.email ?? "", code: res.code, why: "Reactivated with a new invite." });
       },
       "Could not reactivate.",
     );
@@ -228,8 +216,8 @@ function AdminUsersContent() {
                         </button>
                       )}
                       {!u.is_suspended && !u.admin_invite_pending && (
-                        <button type="button" className={styles.linkButton} disabled={busy === u.id} onClick={() => void handleTwoFactorReset(u)}>
-                          {u.two_factor_enabled ? "Reset 2-step" : "Send new setup link"}
+                        <button type="button" className={styles.linkButton} disabled={busy === u.id} onClick={() => void handleAccountReset(u)}>
+                          Reset account
                         </button>
                       )}
                       {u.is_suspended ? (
@@ -390,7 +378,7 @@ function CodePanel({ issued, onDone }: { issued: IssuedCode; onDone: () => void 
       </p>
       <p className={styles.code}>{issued.code}</p>
       <p className={styles.codeHelp}>
-        Give this code to the new admin yourself. Don&apos;t send it in the same email or chat as the link. It is shown
+        Give this code to the admin yourself. Don&apos;t send it in the same email or chat as the link. It is shown
         only now, and the link and code work for 24 hours. If it is lost, use Resend invite.
       </p>
       <button type="button" className={styles.primaryButton} onClick={onDone}>

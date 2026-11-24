@@ -22,6 +22,10 @@ import { listingSaveErrors, type ListingFieldErrors, type PickedPhoto } from '..
 import { filePart } from '../lib/uploads';
 import { safeImageUri } from '../lib/imageUri';
 import { useMerchantData } from '../lib/MerchantDataContext';
+import { reviewNote, standingNote, type ListingStanding, type ProduceCheckResult } from '../lib/listingChecks';
+
+// A soft flag's text: a darker amber than Colors.warning, readable on white.
+const FLAG_TEXT = '#b45309';
 
 // F1: why a listing needs attention, from /merchants/me/stock-alerts.
 function alertFor(alerts: ApiStockAlerts | null, id: number): string | null {
@@ -77,6 +81,8 @@ function ListingRow({
             Hidden by Carabao admin: buyers can’t see or order it.
             {item.hidden_reason ? ` Reason: ${item.hidden_reason}` : ''}
           </Text>
+        ) : reviewNote(item) ? (
+          <Text style={item.status === 'rejected' ? styles.rowHidden : styles.rowReview}>{reviewNote(item)}</Text>
         ) : null}
       </View>
       <Badge
@@ -129,6 +135,19 @@ export default function ProduceScreen() {
   // S6: the id whose photo is uploading, and why the last upload failed.
   const [uploadingId, setUploadingId] = useState<number | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  // Guardrails Phase 2: penalty points and the new-farm review (optional: no banner on error).
+  const [standing, setStanding] = useState<ListingStanding | null>(null);
+  const loadStanding = useCallback(() => {
+    if (token) api.merchants.listingStanding(token).then(setStanding).catch(() => {});
+  }, [token]);
+  const canCreate = standing?.can_create_listings ?? true;
+
+  // Guardrails Phase 1: the form's live check (stable, so the form's effect does not rerun).
+  const checkListing = useCallback(
+    (payload: Parameters<typeof api.produce.check>[1]): Promise<ProduceCheckResult> =>
+      api.produce.check(token, payload),
+    [token],
+  );
 
   const openEdit = (item: ApiProduce | 'new') => {
     setSaveError(null);
@@ -178,6 +197,7 @@ export default function ProduceScreen() {
       // when the photo below is refused.
       api.merchants.stockAlerts(token).then(setAlerts).catch(() => {});
       void refreshProduce();
+      loadStanding();
 
       if (photo) {
         // S6: the listing exists before its photo can be sent (backend
@@ -228,10 +248,10 @@ export default function ProduceScreen() {
     }
   }, []);
 
-  const load = useCallback(
-    () => (token ? fetchListings(token).then(apply) : Promise.resolve()),
-    [token, apply],
-  );
+  const load = useCallback(() => {
+    loadStanding();
+    return token ? fetchListings(token).then(apply) : Promise.resolve();
+  }, [token, apply, loadStanding]);
 
   useEffect(() => {
     void load().finally(() => setLoading(false));
@@ -278,7 +298,9 @@ export default function ProduceScreen() {
           />
         )}
         ListHeaderComponent={
-          alerts && (alerts.low_stock.length || alerts.expiring_soon.length || alerts.expired.length) ? (
+          <>
+            <StandingBanner standing={standing} />
+            {alerts && (alerts.low_stock.length || alerts.expiring_soon.length || alerts.expired.length) ? (
             <View style={styles.alertBanner}>
               <Ionicons name="warning-outline" size={18} color={Colors.warning} />
               <Text style={styles.alertBannerText}>
@@ -289,7 +311,8 @@ export default function ProduceScreen() {
                 ].filter(Boolean).join(' · ')}
               </Text>
             </View>
-          ) : undefined
+            ) : null}
+          </>
         }
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -310,8 +333,15 @@ export default function ProduceScreen() {
         {/* A tab root has no screen behind it, so it has no Back button. */}
         <Text style={styles.navTitle}>{merchantName ? `My listings · ${merchantName}` : 'My listings'}</Text>
         {merchantName ? (
-          <TouchableOpacity onPress={() => openEdit('new')} accessibilityLabel="New listing">
-            <Ionicons name="add-circle" size={28} color={Colors.primary} />
+          <TouchableOpacity
+            onPress={() =>
+              canCreate
+                ? openEdit('new')
+                : Alert.alert('New listings blocked', standingNote(standing)?.lines.join('\n\n') ?? '')
+            }
+            accessibilityLabel={canCreate ? 'New listing' : 'New listings blocked: penalty points'}
+          >
+            <Ionicons name="add-circle" size={28} color={canCreate ? Colors.primary : Colors.textLight} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 28 }} />
@@ -326,11 +356,25 @@ export default function ProduceScreen() {
         error={saveError}
         fieldErrors={saveFieldErrors}
         photoError={photoError}
+        onCheck={checkListing}
         onCancel={() => setEditing(null)}
         onSave={handleSave}
         onDelete={editing && editing !== 'new' ? () => confirmDelete(editing) : undefined}
       />
     </SafeAreaView>
+  );
+}
+
+/** Guardrails Phase 2: penalty points, the new-listing block, the new-farm review. */
+function StandingBanner({ standing }: { standing: ListingStanding | null }) {
+  const note = standingNote(standing);
+  if (!note) return null;
+  return (
+    <View style={[styles.standing, note.tone === 'blocked' && styles.standingBlocked]} accessibilityRole="summary">
+      {note.lines.map((line) => (
+        <Text key={line} style={note.tone === 'blocked' ? styles.standingTextBlocked : styles.standingText}>{line}</Text>
+      ))}
+    </View>
   );
 }
 
@@ -358,11 +402,19 @@ const styles = StyleSheet.create({
   rowName: { fontSize: FontSize.md, fontWeight: '700', color: Colors.text },
   rowMeta: { fontSize: FontSize.sm, color: Colors.textMuted, marginTop: 2 },
   rowHidden: { fontSize: FontSize.xs, color: Colors.error, fontWeight: '600', marginTop: 4 },
+  rowReview: { fontSize: FontSize.xs, color: FLAG_TEXT, fontWeight: '600', marginTop: 4 },
   rowAlert: { fontSize: FontSize.xs, color: Colors.warning, fontWeight: '700', marginTop: 4 },
   alertBanner: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     backgroundColor: Colors.warningBg, borderRadius: Radius.md, padding: Spacing.md,
     borderWidth: 1, borderColor: Colors.warning,
   },
+  standing: {
+    gap: 4, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.sm,
+    borderWidth: 1, borderColor: Colors.warning, backgroundColor: Colors.warningBg,
+  },
+  standingBlocked: { borderColor: Colors.error, backgroundColor: Colors.white },
+  standingText: { fontSize: FontSize.sm, color: Colors.text },
+  standingTextBlocked: { fontSize: FontSize.sm, color: Colors.error, fontWeight: '600' },
   alertBannerText: { flex: 1, fontSize: FontSize.sm, color: Colors.text, fontWeight: '600' },
 });

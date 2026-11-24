@@ -379,6 +379,8 @@ const en = {
   },
   mapPin: {
     label: 'Pin your location on the map',
+    noticeTitle: 'Place an accurate pin',
+    noticeBody: 'Riders go to your map pin, not to the address text. Make sure that the pin is at your gate or door. If it is not, click the map or drag the pin to move it.',
     useMyLocation: 'Use my location',
     locating: 'Finding you…',
     mapLabel: 'Map: click or drag the pin to your location',
@@ -429,6 +431,28 @@ const en = {
     noOtherFarms: 'No other farm sells this right now.',
     view: 'View',
     reviews: '{rating} ★ ({count})',
+    report: {
+      open: 'Report this listing',
+      title: 'Report this listing',
+      reason: 'Reason',
+      choose: 'Choose a reason',
+      note: 'More details (optional)',
+      noteRequired: 'More details (at least 10 characters)',
+      send: 'Send report',
+      sending: 'Sending…',
+      cancel: 'Cancel',
+      sent: 'Thank you. An admin will check this listing.',
+      error: 'Could not send the report. Try again.',
+      reasons: {
+        NOT_AS_DESCRIBED: 'Not as described',
+        MISLEADING_PHOTO: 'The photo does not show this produce',
+        PROHIBITED_ITEM: 'This item is not allowed',
+        CONTACT_OR_PAYMENT: 'Asks to contact or pay outside Carabao',
+        MISLEADING_PRICE: 'Wrong or misleading price',
+        SPAM: 'Spam or duplicate listing',
+        OTHER: 'Other',
+      },
+    },
   },
   produceSearch: {
     title: 'Produce',
@@ -596,6 +620,10 @@ const en = {
     approximate: 'Approximate pin',
     approximateNote: 'The buyer did not place this pin; it is where their typed address points. Check the address, or message the buyer if you cannot find the place.',
     reportError: 'We could not send the report. Try again.',
+    verified: 'Verified pin',
+    verifiedNote: 'A rider delivered to this pin before.',
+    noRoad: 'No road near pin',
+    noRoadNote: 'We found no road near this pin. Message the buyer before you go, or go to the nearest road and call them.',
   },
   // CF-0086: merchant "are you sure?" texts (window.confirm).
   merchantConfirm: {

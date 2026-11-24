@@ -31,8 +31,6 @@ from app.schemas.payout import (
 )
 from app.schemas.user import UserResponse
 from app.services import (
-    admin_accounts,
-    admin_enrolment,
     audit_log,
     better_auth_store,
     document_checks,
@@ -59,8 +57,8 @@ MAX_PAYOUT_NOTES = 500
 
 
 ADMIN_2FA_DETAIL = (
-    "Two-step verification is required for admin accounts. Open the setup link "
-    "we sent you by SMS or email, or ask another admin for a new one."
+    "Two-step verification is required for admin accounts. Open the link from "
+    "your invite email, or ask another admin to reset your account."
 )
 ADMIN_MFA_SESSION_DETAIL = (
     "Sign in again and enter the code from your authenticator app to use the "
@@ -89,62 +87,8 @@ def _require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 
 # There is no role endpoint: admins are invited (routes/admin_accounts.py),
-# never promoted, and an admin's access is removed by deactivation.
-
-INVITE_PENDING_RESET_DETAIL = (
-    'This admin has not accepted the invite yet. Use "Resend invite" instead.'
-)
-
-
-class TwoFactorResetResponse(BaseModel):
-    sent_to: list[str]
-
-
-@router.post(
-    "/admin/users/{user_id}/two-factor/reset", response_model=TwoFactorResetResponse
-)
-def reset_admin_two_factor(
-    user_id: int,
-    db: Session = Depends(get_db),
-    current_admin: User = Depends(_require_admin),
-):
-    """Another admin's lost authenticator, or a setup link that expired or was
-    not received. Sends a new setup link; the older link stops working. If 2FA
-    is on, it is turned off and the admin's sessions end first. If it is not
-    set up yet, nothing else changes (the admin stays signed in)."""
-    if current_admin.id == user_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Ask another admin to reset your two-step verification",
-        )
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    if not user.is_admin:
-        raise HTTPException(
-            status_code=400, detail="Only admin accounts use two-step verification"
-        )
-    if user.is_suspended:
-        raise HTTPException(status_code=409, detail=admin_accounts.DEACTIVATED_DETAIL)
-    # A reset link only sets up TOTP; the password comes from the invite.
-    if not better_auth_store.has_credential_account(db, user.external_auth_id):
-        raise HTTPException(status_code=409, detail=INVITE_PENDING_RESET_DETAIL)
-    admin_enrolment.require_contact(user)
-    before = {"two_factor_enabled": user.two_factor_enabled}
-    if user.two_factor_enabled:
-        better_auth_store.clear_two_factor(db, user.external_auth_id)
-    token = admin_enrolment.issue(db, user)
-    audit_log.record_admin_action(
-        db,
-        admin=current_admin,
-        action=audit_log.TWO_FACTOR_RESET,
-        target_type="user",
-        target_id=user.id,
-        before=before,
-        after={"two_factor_enabled": False, "setup_link_sent": True},
-    )
-    db.commit()
-    return {"sent_to": admin_enrolment.deliver(user, token)}
+# never promoted, and an admin's access is removed by deactivation. A lost
+# authenticator or password is an account reset (POST /admin/admins/{id}/reset).
 
 
 @router.get("/admin/users", response_model=Page[UserResponse])

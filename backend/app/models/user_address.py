@@ -37,6 +37,12 @@ class UserAddress(Base):
     province = Column(String, nullable=True)
     city = Column(String, nullable=True)
     barangay = Column(String, nullable=True)
+    # PSGC codes of the four levels above (services/psgc.py). province_code is
+    # empty for NCR (Metro Manila has no province in the PSGC).
+    region_code = Column(String(10), nullable=True)
+    province_code = Column(String(10), nullable=True)
+    city_code = Column(String(10), nullable=True, index=True)
+    barangay_code = Column(String(10), nullable=True)
     address = Column(String, nullable=True)
     postal_code = Column(String, nullable=True)
     # Map pin for the address (U1); routing prefers it over geocoding.
@@ -50,6 +56,13 @@ class UserAddress(Base):
     pin_confirmed = Column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # services/pin_area.py: true when the pin is outside the chosen city or
+    # barangay (but near it); NULL when not checked (no pin, no area, no shape).
+    pin_area_mismatch = Column(Boolean, nullable=True)
+    # Set by the server only, when a delivery to this pin finished and no
+    # rider reported it (services/pinned_location.py mark_pin_verified).
+    # Moving the pin clears it.
+    pin_verified_at = Column(DateTime(timezone=True), nullable=True)
     is_default = Column(Boolean, nullable=False, default=False)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

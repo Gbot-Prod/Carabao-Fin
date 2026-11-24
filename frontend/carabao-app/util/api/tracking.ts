@@ -28,6 +28,10 @@ export type ShipmentStop = {
   pin_unreachable?: boolean;
   /** The buyer never placed this pin; it is where their address geocoded to. */
   pin_approximate?: boolean;
+  /** Set by the server: a rider delivered to this pin before and did not report it. */
+  pin_verified?: boolean;
+  /** Saved during a road-service outage; the check before this route found no road near it. */
+  pin_no_road?: boolean;
 };
 
 // 'estimated': progress and ETA come from the planned route schedule (no live GPS).

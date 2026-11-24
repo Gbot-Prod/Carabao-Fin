@@ -4,6 +4,7 @@ from typing import Any, cast
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Body,
     Depends,
     File,
@@ -19,13 +20,14 @@ from sqlalchemy.orm import Session, raiseload, selectinload
 
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import merchant_payouts, merchant_shop
-from app.core.errors import upstream_error
+from app.core.errors import FieldErrors, upstream_error
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.order import Order
 from app.models.produce import Produce
 from app.models.statuses import (
     OrderStatus,
+    ProduceStatus,
 )
 from app.models.user import User
 from app.routing.service import compute_route
@@ -42,7 +44,15 @@ from app.schemas.pagination import MAX_OFFSET
 from app.schemas.payout import (
     MerchantOrderResponse,
 )
-from app.schemas.produce import ProduceCreate, ProduceResponse, ProduceUpdate
+from app.schemas.produce import (
+    ListingStandingResponse,
+    MerchantProduceResponse,
+    ProduceCheckRequest,
+    ProduceCheckResponse,
+    ProduceCreate,
+    ProduceResponse,
+    ProduceUpdate,
+)
 from app.schemas.user import (
     AccountDeleteCodeRequest,
     AccountDeleteCodeSent,
@@ -50,8 +60,16 @@ from app.schemas.user import (
 )
 from app.services import (
     account_deletion_otp,
+    address_log,
+    listing_checks,
+    listing_reports,
+    listing_trust,
+    listing_vision,
     mapbox_routing,
     notifications,
+    photo_checks,
+    pin_area,
+    psgc,
     r2_service,
     rate_limit,
     store_pause,
@@ -88,9 +106,8 @@ from app.services.pinned_location import (
     merchant_point,
     pin_update,
 )
-from app.services.produce_freshness import freshness_error, is_listed, ph_today
-from app.services.produce_pricing import parse_tiers, pricing_error, serialize_tiers
-from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
+from app.services.produce_freshness import is_listed, ph_today
+from app.services.produce_pricing import parse_tiers, serialize_tiers
 from app.services.sms_service import notify_order_cancelled, notify_order_shipped
 from app.utils.geocoding import _geocode
 
@@ -386,20 +403,58 @@ def update_my_merchant(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    location_keys = {
+        *psgc.AREA_FIELDS,
+        *psgc.CODE_FIELDS,
+        "address",
+        "postal_code",
+        "lat",
+        "lng",
+        "pin_confirmed",
+    }
+    if location_keys & merchant_update.model_fields_set:
+        # Pin quality item 3; first, because it commits the session.
+        rate_limit.enforce_action(db, "address_write", str(current_user.id))
     merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
+    before = address_log.snapshot(merchant)
     updates = merchant_update.model_dump(exclude_unset=True)
     token = updates.pop("phone_verification_token", None)
-    if "region" in updates and not is_luzon_region(updates["region"]):
-        raise HTTPException(status_code=400, detail=OUTSIDE_LUZON_DETAIL)
-    pin_update(merchant, updates)
+    # Region to barangay must be one PSGC chain in Luzon (services/psgc.py).
+    area_keys = (*psgc.AREA_FIELDS, *psgc.CODE_FIELDS)
+    area_changed = any(key in updates for key in (*area_keys, "postal_code"))
+    if area_changed:
+        values = psgc.merged_area_values(merchant, updates)
+        try:
+            area = psgc.resolve_area(db, values)
+            postal = psgc.check_postal_code(
+                updates.get("postal_code", merchant.postal_code), area
+            )
+        except (psgc.AreaError, psgc.AreaListMissing) as exc:
+            raise psgc.http_error(exc) from exc
+        for key in area_keys:
+            updates.pop(key, None)
+        updates.update(area.columns(), postal_code=postal)
+    pin_changed = pin_update(merchant, updates)
     if "contact_number" in updates:
         number = updates.pop("contact_number")
         _set_contact_number(merchant, current_user, number, token)
     for field, value in updates.items():
         setattr(merchant, field, value)
+    if area_changed or pin_changed:
+        # The pin against the city/barangay polygons (services/pin_area.py).
+        pin_area.apply(db, merchant, kind="merchant")
+    address_log.record(
+        db,
+        user_id=current_user.id,
+        target_type="merchant",
+        target_id=merchant.id,
+        action="update",
+        before=before,
+        after=address_log.snapshot(merchant),
+    )
 
     try:
         db.commit()
@@ -539,7 +594,7 @@ def get_my_merchant_performance(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/merchants/me/produce", response_model=list[ProduceResponse])
+@router.get("/merchants/me/produce", response_model=list[MerchantProduceResponse])
 def list_my_produce(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -554,6 +609,18 @@ def list_my_produce(
         .order_by(Produce.id)
         .all()
     )
+
+
+@router.get("/merchants/me/listing-standing", response_model=ListingStandingResponse)
+def get_my_listing_standing(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Guardrails Phase 2: penalty points, the new-listing block, new-farm review."""
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    return listing_trust.standing_view(listing_trust.standing(db, merchant.id))
 
 
 @router.get("/merchants/{merchant_id}/produce", response_model=list[ProduceResponse])
@@ -574,7 +641,112 @@ def list_merchant_produce(merchant_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.post("/produce/", response_model=ProduceResponse)
+def _check_response(result: listing_checks.CheckResult) -> ProduceCheckResponse:
+    return ProduceCheckResponse.model_validate(
+        {
+            "valid": result.valid,
+            "has_hard_blocks": bool(result.hard_blocks),
+            "has_soft_flags": bool(result.soft_flags),
+            "recommended_status": result.recommended_status,
+            "hard_blocks": [i.as_dict() for i in result.hard_blocks],
+            "soft_flags": [i.as_dict() for i in result.soft_flags],
+        }
+    )
+
+
+@router.post("/produce/check", response_model=ProduceCheckResponse)
+def check_produce(
+    payload: ProduceCheckRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Guardrails Phase 1: the listing checker, for the form while the merchant types.
+
+    Saves nothing. The save (POST /produce/, PATCH /produce/{id}) runs the same
+    checks again.
+    """
+    rate_limit.enforce_action(db, "produce_check", str(current_user.id))
+    merchant = get_editable_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    listing = listing_checks.ListingInput(
+        **payload.model_dump(exclude={"produce_id", "price_tiers"}),
+        price_tiers=tuple(payload.price_tiers),
+    )
+    result = listing_checks.check_listing(
+        db,
+        listing,
+        merchant_id=merchant.id,
+        exclude_produce_id=payload.produce_id,
+    )
+    return _check_response(result)
+
+
+def _refuse_hard_blocks(db: Session, result: listing_checks.CheckResult) -> None:
+    if result.hard_blocks:
+        db.rollback()
+        raise FieldErrors(result.field_errors())
+
+
+def _send_for_review(produce: Produce, flags: list[dict]) -> None:
+    produce.status = ProduceStatus.UNDER_REVIEW
+    produce.review_flags = flags
+    produce.submitted_for_review_at = datetime.now(UTC)
+
+
+def _apply_check(
+    db: Session,
+    produce: Produce,
+    result: listing_checks.CheckResult,
+    *,
+    material: bool = True,
+) -> None:
+    """Set the listing's status from a check with no hard blocks.
+
+    New listing: soft flags -> under_review, else live. A rejected listing
+    that is saved again goes to under_review. An under_review listing goes
+    live when the edit cleared every flag. Phase 2 (services/listing_trust.py):
+    a live listing with a material edit goes back to under_review when the
+    check has a soft flag; a new merchant's listings always get a flag until
+    an admin approved enough of them. Phase 3: an open buyer report keeps its
+    flag, so an edit does not take the listing out of the queue. A hidden
+    listing stays hidden: only an admin unhides it.
+    """
+    status = produce.status
+    if status == ProduceStatus.HIDDEN:
+        return
+    if status == ProduceStatus.LIVE and not material:
+        return  # stock or dates only: no new review
+    flags = result.flags_json()
+    if listing_trust.new_merchant_reviews_left(db, produce.merchant_id) > 0:
+        flags.append(listing_trust.new_merchant_issue().as_dict())
+    # Phase 3: an open buyer report keeps the listing in the queue.
+    if produce.id is not None:
+        flags = listing_reports.with_report_flag(db, produce.id, flags)
+    # Phase 4: a vision result for this photo, name and category stays.
+    flags = listing_vision.with_vision_flags(produce, flags)
+    if status == ProduceStatus.REJECTED:
+        _send_for_review(produce, flags)
+        produce.rejection_code = None
+        produce.rejection_reason = None
+        return
+    if status == ProduceStatus.UNDER_REVIEW:
+        if flags:
+            produce.review_flags = flags
+        else:
+            produce.status = ProduceStatus.LIVE
+            produce.review_flags = []
+            produce.submitted_for_review_at = None
+        return
+    # A new listing, or a live one with a material edit.
+    if flags:
+        _send_for_review(produce, flags)
+    else:
+        produce.status = ProduceStatus.LIVE
+        produce.review_flags = []
+
+
+@router.post("/produce/", response_model=MerchantProduceResponse)
 def create_produce(
     produce_in: ProduceCreate,
     db: Session = Depends(get_db),
@@ -583,13 +755,23 @@ def create_produce(
     merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
+    # Guardrails Phase 2: too many penalty points block new listings.
+    trust = listing_trust.standing(db, merchant.id)
+    if not trust.can_create_listings:
+        raise HTTPException(status_code=403, detail=listing_trust.blocked_detail(trust))
 
-    error = freshness_error(produce_in.harvest_date, produce_in.best_before)
-    error = error or pricing_error(
-        produce_in.price, produce_in.min_order_qty, produce_in.price_tiers
+    # Guardrails Phase 1: hard blocks refuse the save (400 FieldErrors, one
+    # message per field); soft flags send the listing to the admin queue.
+    result = listing_checks.check_listing(
+        db,
+        listing_checks.ListingInput(
+            **produce_in.model_dump(exclude={"price_tiers", "image_url"}),
+            price_tiers=tuple(produce_in.price_tiers),
+        ),
+        merchant_id=merchant.id,
+        require_dates=True,
     )
-    if error:
-        raise HTTPException(status_code=400, detail=error)
+    _refuse_hard_blocks(db, result)
     # CF-0034: a new listing gets its photo from POST /produce/{id}/image.
     upload_validation.check_image_url_fields(
         {"image_url": produce_in.image_url}, {"image_url": None}
@@ -600,16 +782,18 @@ def create_produce(
         **produce_in.model_dump(exclude={"price_tiers", "image_url"}),
         price_tiers=serialize_tiers(produce_in.price_tiers),
     )
+    _apply_check(db, produce, result)
     db.add(produce)
     db.commit()
     db.refresh(produce)
     return produce
 
 
-@router.patch("/produce/{produce_id}", response_model=ProduceResponse)
+@router.patch("/produce/{produce_id}", response_model=MerchantProduceResponse)
 def update_produce(
     produce_id: int,
     produce_update: ProduceUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -644,12 +828,17 @@ def update_produce(
             ),
         )
 
+    before = listing_trust.snapshot(produce)
     changes = produce_update.model_dump(
         exclude_unset=True, exclude={"price_tiers", "expected_stock_quantity"}
     )
     upload_validation.check_image_url_fields(changes, {"image_url": produce.image_url})
     if "image_url" in changes:
         changes["image_url"] = upload_validation.blank_to_none(changes["image_url"])
+        if changes["image_url"] is None:
+            # Phase 4: the photo is removed, and its hash and check with it.
+            produce.image_phash = None
+            produce.photo_check = None
     for field, value in changes.items():
         setattr(produce, field, value)
     tiers = (
@@ -660,15 +849,24 @@ def update_produce(
     produce.price_tiers = serialize_tiers(tiers)
 
     # An edited listing must carry valid dates, including one created before
-    # they were collected, and tiers that still fit its price.
-    error = freshness_error(produce.harvest_date, produce.best_before)
-    error = error or pricing_error(produce.price, produce.min_order_qty, tiers)
-    if error:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=error)
+    # they were collected, and tiers that still fit its price. Guardrails
+    # Phase 1: every edit goes through the full checker.
+    result = listing_checks.check_listing(
+        db,
+        listing_checks.listing_input_from(produce, tiers),
+        merchant_id=merchant.id,
+        exclude_produce_id=produce.id,
+        require_dates=True,
+    )
+    _refuse_hard_blocks(db, result)
+    _apply_check(
+        db, produce, result, material=listing_trust.is_material_edit(before, produce)
+    )
 
     db.commit()
     db.refresh(produce)
+    # Phase 4: a new name or category in the queue gets a new vision check.
+    listing_vision.schedule(background_tasks, produce)
     return produce
 
 
@@ -704,9 +902,10 @@ def delete_produce(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/produce/{produce_id}/image", response_model=ProduceResponse)
+@router.post("/produce/{produce_id}/image", response_model=MerchantProduceResponse)
 def upload_produce_image(
     produce_id: int,
+    background_tasks: BackgroundTasks,
     image: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -725,6 +924,10 @@ def upload_produce_image(
         raise HTTPException(status_code=404, detail="Produce item not found")
 
     checked = upload_validation.check_image_upload(image, "Image")
+    # Guardrails Phase 4: a QR code is a hard block, before the photo is
+    # stored; the pHash goes on the listing for the stolen-photo flag.
+    facts = photo_checks.inspect(checked.data)
+    photo_checks.refuse_qr_code(facts)
     try:
         url = r2_service.upload_produce_image(merchant.id, produce_id, checked)
     except Exception as exc:
@@ -732,9 +935,29 @@ def upload_produce_image(
             502, "Image upload failed", log="R2 image upload failed", exc=exc
         ) from exc
 
+    before = listing_trust.snapshot(produce)
     produce.image_url = url
+    produce.image_phash = facts.phash
+    # Guardrails Phase 2: a new photo is a material edit, so check again. A
+    # listing with hard blocks (made before a rule existed) keeps its status;
+    # its next form save shows the blocks.
+    result = listing_checks.check_listing(
+        db,
+        listing_checks.listing_input_from(produce, parse_tiers(produce.price_tiers)),
+        merchant_id=merchant.id,
+        exclude_produce_id=produce.id,
+    )
+    if not result.hard_blocks:
+        _apply_check(
+            db,
+            produce,
+            result,
+            material=listing_trust.is_material_edit(before, produce),
+        )
     db.commit()
     db.refresh(produce)
+    # Phase 4: a listing in the queue gets a vision check of the new photo.
+    listing_vision.schedule(background_tasks, produce)
     return produce
 
 

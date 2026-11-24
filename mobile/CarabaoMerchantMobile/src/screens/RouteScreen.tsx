@@ -64,6 +64,10 @@ import {
   LOADING_ROUTE,
   LOAD_ERROR,
   MAP_LEGEND_LABEL,
+  NO_ROAD,
+  NO_ROAD_NOTE,
+  VERIFIED,
+  VERIFIED_NOTE,
   NAVIGATE,
   NEXT_STOP,
   NOT_FOUND_BODY,
@@ -465,6 +469,20 @@ export default function RouteScreen() {
                 <Badge label={statusLabel(stop.status)} color={chipColor(stop.status)} />
               </View>
 
+              {stop.pin_no_road && !stop.pin_unreachable && (
+                <Text style={styles.approximateNote}>
+                  <Text style={styles.noteStrong}>{NO_ROAD}. </Text>
+                  {NO_ROAD_NOTE}
+                </Text>
+              )}
+
+              {stop.pin_verified && !stop.pin_unreachable && !stop.pin_no_road && (
+                <Text style={styles.verifiedNote}>
+                  <Text style={styles.noteStrong}>{VERIFIED}. </Text>
+                  {VERIFIED_NOTE}
+                </Text>
+              )}
+
               {stop.pin_approximate && (
                 <Text style={styles.approximateNote}>
                   <Text style={styles.noteStrong}>{APPROXIMATE}. </Text>
@@ -587,6 +605,7 @@ const styles = StyleSheet.create({
   arrival: { fontSize: FontSize.xs, color: Colors.textLight },
   approximateNote: { fontSize: FontSize.xs, color: Colors.textMuted, lineHeight: 17 },
   reportedNote: { fontSize: FontSize.xs, color: Colors.textMuted, lineHeight: 17 },
+  verifiedNote: { fontSize: FontSize.xs, color: Colors.primaryDark, lineHeight: 17 },
   noteStrong: { fontWeight: '700', color: Colors.text },
   navRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   navPrimary: {

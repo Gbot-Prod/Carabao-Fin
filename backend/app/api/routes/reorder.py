@@ -12,7 +12,7 @@ from app.models.produce import Produce
 from app.models.user import User
 from app.schemas.cart import MAX_CART_ITEMS, MAX_ITEM_QUANTITY, CartResponse
 from app.services import store_pause
-from app.services.produce_freshness import is_expired, ph_today
+from app.services.produce_freshness import is_expired, is_withdrawn, ph_today
 from app.services.produce_pricing import unit_price_for
 
 from ._order_helpers import (
@@ -79,7 +79,7 @@ def reorder(
         produce = db.get(Produce, produce_id) if produce_id else None
         if (
             produce is None
-            or produce.hidden_at is not None
+            or is_withdrawn(produce)
             or is_expired(produce, today)
         ):
             skipped.append(ReorderSkip(name=name, reason="no longer available"))

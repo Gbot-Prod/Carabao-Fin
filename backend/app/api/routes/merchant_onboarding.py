@@ -26,7 +26,14 @@ from app.schemas.merchant_application import (
     MerchantOnboardingPayload,
     full_name,
 )
-from app.services import document_checks, r2_service, rate_limit, upload_validation
+from app.services import (
+    document_checks,
+    pin_area,
+    psgc,
+    r2_service,
+    rate_limit,
+    upload_validation,
+)
 from app.services.application_review import (
     PENDING_DOCUMENTS,
     SUBMITTED,
@@ -40,7 +47,6 @@ from app.services.merchant_verification import (
 from app.services.phone_verification import normalize_ph_mobile, read_token
 from app.services.pinned_location import PinCheck, apply_pin, validate_pin
 from app.services.rate_limit import lock_keys
-from app.services.service_area import OUTSIDE_LUZON_DETAIL, is_luzon_region
 from app.services.upload_validation import CheckedFile
 
 router = APIRouter(tags=["merchant-onboarding"])
@@ -266,9 +272,17 @@ def submit_my_merchant_onboarding_route(
     files = {field: f for field, f in sent.items() if f is not None and f.filename}
     _check_files_for_mode(data, files)
 
-    if not is_luzon_region(data.region):
-        raise FieldErrors({"region": OUTSIDE_LUZON_DETAIL})
+    data = _checked_area(db, data)
     pin = _with_field("pin", validate_pin, data.lat, data.lng)
+    # Before any upload: a pin far from the chosen city is refused here.
+    area_mismatch = _with_field(
+        "pin",
+        pin_area.check,
+        db,
+        pin.pin if pin else None,
+        data.city_code,
+        data.barangay_code,
+    )
 
     # The shop's contact number is proven either by being the account's own
     # verified number or by a code sent to it (/sms/otp/verify).
@@ -325,6 +339,7 @@ def submit_my_merchant_onboarding_route(
             application = MerchantApplication(user_id=current_user.id)
             db.add(application)
         _apply_operations(application, data, contact_email, f"+{contact}", pin)
+        application.pin_area_mismatch = area_mismatch
         application.seller_type = data.seller_type
         application.status = PENDING_DOCUMENTS
         application.submitted_at = None
@@ -376,6 +391,7 @@ def submit_my_merchant_onboarding_route(
     ]
 
     _apply_operations(application, data, contact_email, f"+{contact}", pin)
+    application.pin_area_mismatch = area_mismatch
     application.seller_type = data.seller_type
     _apply_business_details(application, data.seller_type, details)
     for prefix in _DOCUMENT_COLUMNS.values():
@@ -510,9 +526,7 @@ def _check_files_for_mode(
     if data.submit_mode == "later":
         if files:
             message = "Remove this document, or choose Submit now."
-            raise FieldErrors(
-                {field: message for field in files}, status_code=422
-            )
+            raise FieldErrors({field: message for field in files}, status_code=422)
         return
     needed = ["rsbsa_file", "gov_id_file"]
     if data.seller_type in REGISTERED_SELLERS:
@@ -528,6 +542,21 @@ def _check_files_for_mode(
     if errors:
         # 422, as when the files were required form fields.
         raise FieldErrors(errors, status_code=422)
+
+
+def _checked_area(
+    db: Session, data: MerchantOnboardingPayload
+) -> MerchantOnboardingPayload:
+    """Region to barangay as one PSGC chain in Luzon, with the PSGC names and
+    codes in place of the sent ones (services/psgc.py)."""
+    try:
+        area = psgc.resolve_area(db, data.model_dump())
+        postal = psgc.check_postal_code(data.postal_code, area)
+    except psgc.AreaListMissing as exc:
+        raise psgc.http_error(exc) from exc
+    except psgc.AreaError as exc:
+        raise FieldErrors({exc.field: exc.message}) from exc
+    return data.model_copy(update={**area.columns(), "postal_code": postal})
 
 
 def _apply_operations(
@@ -546,6 +575,10 @@ def _apply_operations(
     application.province = data.province
     application.city = data.city
     application.barangay = data.barangay
+    application.region_code = data.region_code
+    application.province_code = data.province_code
+    application.city_code = data.city_code
+    application.barangay_code = data.barangay_code
     application.address = data.address
     application.postal_code = data.postal_code
     apply_pin(application, pin, confirmed=data.pin_confirmed)

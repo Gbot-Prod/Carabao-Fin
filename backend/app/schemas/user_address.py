@@ -1,11 +1,13 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
+from app.schemas.psgc import AreaCodes
+from app.schemas.text import one_line
 from app.services.phone_verification import normalize_ph_mobile
 
 
-class UserAddressBase(BaseModel):
+class UserAddressBase(AreaCodes):
     label: str | None = Field(default=None, max_length=50)
     # Who receives deliveries here, and a PH mobile number the rider can call.
     recipient_name: str | None = Field(default=None, max_length=100)
@@ -21,6 +23,19 @@ class UserAddressBase(BaseModel):
     lng: float | None = None
     # The person placed or moved the pin themselves (not only geocoded).
     pin_confirmed: bool = False
+
+    # Item 6: no control, zero-width or bidi characters; one space between words.
+    _one_line = field_validator(
+        "label",
+        "recipient_name",
+        "region",
+        "province",
+        "city",
+        "barangay",
+        "address",
+        "postal_code",
+        mode="before",
+    )(one_line)
 
     @field_validator("recipient_name")
     @classmethod
@@ -56,6 +71,12 @@ class UserAddressUpdate(UserAddressBase):
 class UserAddressResponse(UserAddressBase):
     id: int
     is_default: bool
+    # True: the pin is outside the chosen city/barangay (services/pin_area.py);
+    # None: not checked.
+    pin_area_mismatch: bool | None = None
+    # Set by the server only: a rider delivered to this pin and did not
+    # report it. Moving the pin clears it.
+    pin_verified_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

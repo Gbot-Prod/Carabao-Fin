@@ -35,6 +35,12 @@ class ShipmentStop(BaseModel):
     pin_unreachable: bool = False
     # The buyer never placed this pin: it is where the address geocoded to.
     pin_approximate: bool = False
+    # Set by the server: a rider delivered to this pin before and did not
+    # report it (services/pinned_location.py delivery_pin_verified).
+    pin_verified: bool = False
+    # The pin was saved while the road service was down, and the check before
+    # this route found no road near it.
+    pin_no_road: bool = False
 
 
 class SkippedStop(BaseModel):

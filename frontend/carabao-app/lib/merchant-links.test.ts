@@ -10,6 +10,8 @@ test('the plain dashboard link opens the page for its kind', () => {
   assert.equal(merchantPageForNotification('/merchantDashboard', 'review_received'), '/reviews');
   assert.equal(merchantPageForNotification('/merchantDashboard', 'payout_released'), '/earnings');
   assert.equal(merchantPageForNotification('/merchantDashboard/', 'payout_destination_changed'), '/earnings');
+  assert.equal(merchantPageForNotification('/merchantDashboard', 'listing_approved'), '/produce');
+  assert.equal(merchantPageForNotification('/merchantDashboard', 'listing_rejected'), '/produce');
 });
 
 test('a chat message opens its thread', () => {

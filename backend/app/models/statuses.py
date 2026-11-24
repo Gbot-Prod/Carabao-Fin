@@ -74,6 +74,28 @@ class MerchantVerificationStatus(StrEnum):
     SUSPENDED = "suspended"  # suspended by an admin
 
 
+class ProduceStatus(StrEnum):
+    """Where a listing is in moderation (``produces.status``, guardrails Phase 1).
+
+    "Publish now, check always": a listing with no flags is ``live`` at once.
+    A listing the checker flags is ``under_review``: buyers still see it and
+    can order it, and an admin approves or rejects it. A ``rejected`` listing
+    is not shown; the merchant sees the reason, edits it and sends it again.
+    ``hidden`` follows ``hidden_at`` (an admin removed a listing).
+    """
+
+    LIVE = "live"
+    UNDER_REVIEW = "under_review"
+    REJECTED = "rejected"
+    HIDDEN = "hidden"
+
+
+# Listings buyers see and can order (with hidden_at NULL and not expired).
+BUYER_VISIBLE_PRODUCE_STATUSES = frozenset(
+    {ProduceStatus.LIVE, ProduceStatus.UNDER_REVIEW}
+)
+
+
 # merchant_applications.status -> merchants.verification_status.
 APPLICATION_TO_VERIFICATION: dict[str, MerchantVerificationStatus] = {
     "pending_documents": MerchantVerificationStatus.SETUP,

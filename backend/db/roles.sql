@@ -235,7 +235,8 @@ DECLARE
     -- of these tables). "user" UPDATE is per column, below.
     ['user',          'carabao_api',        'SELECT, INSERT, DELETE'],
     ['session',       'carabao_api',        'SELECT, DELETE'],
-    ['account',       'carabao_api',        'SELECT, INSERT'],
+    -- DELETE: only an admin's password row (guards.sql api_delete_admin_password).
+    ['account',       'carabao_api',        'SELECT, INSERT, DELETE'],
     ['verification',  'carabao_api',        'SELECT, INSERT, UPDATE, DELETE'],
     ['twoFactor',     'carabao_api',        'SELECT, DELETE']
   ];

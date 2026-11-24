@@ -22,6 +22,7 @@ from app.models.merchant import Merchant
 from app.models.shopPage import ShopPage
 from app.models.user import User
 from tests.better_auth import make_user
+from tests.psgc_rows import seed_psgc
 
 
 @compiles(JSONB, "sqlite")
@@ -44,6 +45,8 @@ def db() -> Iterator[Session]:
 
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
+    # The address checks (services/psgc.py) need PSGC rows.
+    seed_psgc(session)
     yield session
     session.close()
     engine.dispose()
@@ -59,8 +62,14 @@ def merchant(db: Session) -> Merchant:
         user_id=owner.id,
         merchant_name="Dela Cruz Farm",
         contact_number="639171234567",
-        region="Region III",
+        region="Region III (Central Luzon)",
         province="Bulacan",
+        city="City of Malolos",
+        barangay="Poblacion",
+        region_code="0300000000",
+        province_code="0301400000",
+        city_code="0301410000",
+        barangay_code="0301410001",
         address="Purok 1",
         postal_code="3000",
         available_days=["mon"],

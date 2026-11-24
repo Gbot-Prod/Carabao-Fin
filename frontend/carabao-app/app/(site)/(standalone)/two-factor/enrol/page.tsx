@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { enrolmentLinkState, hashEnrolmentToken } from "@/lib/admin-two-factor";
 import SignInAgainButton from "@/app/(site)/(admin)/SignInAgainButton";
@@ -34,22 +35,14 @@ export default async function TwoFactorEnrolPage({
     body = (
       <>
         <div className="auth-error" role="alert">
-          Use the setup link we sent you. If it expired, ask another admin to send a new one.
+          Use the link from your invite email. If it expired, ask another admin to reset your account.
         </div>
         {user && <SignInAgainButton className="auth-link auth-link--button" label="Sign out" />}
       </>
     );
   } else if (!user) {
-    body = (
-      <>
-        <p className="auth-help">
-          Sign in with the account that got this link. After you sign in, you come back to this page.
-        </p>
-        <Link href={signInPath(linkPath)} className="auth-link">
-          Sign in
-        </Link>
-      </>
-    );
+    // Sign-in brings the admin back here with the token.
+    redirect(signInPath(linkPath));
   } else {
     const ctx = await auth.$context;
     const row = await ctx.adapter.findOne<{ identifier: string; expiresAt: Date }>({
@@ -76,14 +69,14 @@ export default async function TwoFactorEnrolPage({
         </>
       ) : (
         <div className="auth-error" role="alert">
-          A newer setup link replaced this one. Open the newest link from your SMS or email. If you do not have it, ask
-          another admin to send a new one.
+          A newer link replaced this one. Open the newest link from your email. If you do not have it, ask another admin
+          to reset your account.
         </div>
       );
     } else if (state === "expired") {
       body = (
         <div className="auth-error" role="alert">
-          This link expired. Links work for 24 hours. Ask another admin to send a new one.
+          This link expired. Links work for 24 hours. Ask another admin to reset your account.
         </div>
       );
     } else if (user.role !== "admin") {

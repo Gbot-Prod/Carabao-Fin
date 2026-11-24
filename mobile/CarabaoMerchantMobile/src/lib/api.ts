@@ -3,6 +3,7 @@
 // (api.users.me). Buyer-only groups are left out (decision D3), except `support`: the
 // order-chat screen keeps the buyer's `support=1` branch (S11) and the endpoint is shared.
 // This file is not in sharedCopies.test.ts.
+import type { checkPayload, ListingIssue, ListingStanding, ProduceCheckResult, ProduceStatus } from './listingChecks';
 import type { MyMerchantReviews, MyReview } from './myReviews';
 import type { ChatSummary, InquirySummary } from './chatInbox';
 import type { DemandInsight, MerchantPerformance } from './dashboard';
@@ -372,6 +373,11 @@ export type ApiProduce = {
   // Set when an admin hides the listing; only the merchant's own list has it.
   hidden_at?: string | null;
   hidden_reason?: string | null;
+  // Guardrails Phase 1 (backend ProduceStatus, MerchantProduceResponse).
+  status?: ProduceStatus;
+  review_flags?: ListingIssue[];
+  rejection_code?: string | null;
+  rejection_reason?: string | null;
 };
 
 // Mirrors backend ProduceCreate / ProduceUpdate (app/schemas/produce.py).
@@ -501,6 +507,10 @@ export type ApiShipmentStop = MerchantShipmentStop & {
   pin_unreachable?: boolean;
   /** The buyer never placed this pin; it is where their address geocoded to. */
   pin_approximate?: boolean;
+  /** Set by the server: a rider delivered to this pin before and did not report it. */
+  pin_verified?: boolean;
+  /** Saved during a road-service outage; the check before this route found no road near it. */
+  pin_no_road?: boolean;
 };
 
 // GET /shipments/{id}, the merchant's view of one route (web TrackingData). `origin` and
@@ -842,6 +852,9 @@ export const api = {
     // The merchant's own listings, including expired and admin-hidden ones.
     myProduce: (token: string | null) =>
       request<ApiProduce[]>('/merchants/me/produce', token),
+    // Guardrails Phase 2: penalty points, the new-listing block, the new-farm review.
+    listingStanding: (token: string | null) =>
+      request<ListingStanding>('/merchants/me/listing-standing', token),
     myOrders: (token: string | null) =>
       request<ApiMerchantOrder[]>('/merchants/me/orders', token),
     // S14: the owner's shop page, draft included. 404 until the farm creates one.
@@ -1040,6 +1053,13 @@ export const api = {
     update: (token: string | null, produceId: number, payload: ProduceUpdatePayload) =>
       request<ApiProduce>(`/produce/${produceId}`, token, {
         method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    // Guardrails Phase 1: the listing checker while the merchant types (saves nothing).
+    // send() uses its own timeout signal, so the form drops an answer that came too late.
+    check: (token: string | null, payload: ReturnType<typeof checkPayload>) =>
+      request<ProduceCheckResult>('/produce/check', token, {
+        method: 'POST',
         body: JSON.stringify(payload),
       }),
     // CF-0116: the owner deletes a listing (backend DELETE /produce/{id}).

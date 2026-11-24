@@ -42,8 +42,9 @@ export default async function AdminProfilePage() {
           <dd>{formatDate(session.session.createdAt)}</dd>
         </dl>
         <p className={styles.note}>
-          You cannot turn off two-step verification or change your email. If you lose your authenticator, another
-          admin uses <strong>Reset 2-step</strong> on the Users page. If no admin can sign in, the operator recovers
+          You cannot turn off two-step verification or change your email. If you lose your authenticator or forget
+          your password, another admin uses <strong>Reset account</strong> on the Users page. You then get a new
+          invite. If no admin can sign in, the operator recovers
           the account with <code>make_admin.py --recover</code>.
         </p>
       </section>

@@ -6,8 +6,10 @@ from .admin import router as admin_router
 from .admin_accounts import router as admin_accounts_router
 from .admin_audit import router as admin_audit_router
 from .admin_orders import router as admin_orders_router
+from .admin_penalties import router as admin_penalties_router
 from .admin_produce import router as admin_produce_router
 from .admin_reviews import router as admin_reviews_router
+from .admin_terms import router as admin_terms_router
 from .admin_transactions import router as admin_transactions_router
 from .auth import router as auth_router
 from .carts import router as carts_router
@@ -16,6 +18,7 @@ from .demand_insight import router as demand_insight_router
 from .email import router as email_router
 from .email_otp import router as email_otp_router
 from .follows import router as follows_router
+from .listing_reports import router as listing_reports_router
 from .locations import router as locations_router
 from .merchant_onboarding import router as merchant_onboarding_router
 from .merchant_sales import router as merchant_sales_router
@@ -40,6 +43,8 @@ from .users import router as users_router
 router = APIRouter()
 
 # Keep paths exactly the same by not using prefixes here.
+# Before produce_search: /produce/report-reasons must not match /produce/{id}.
+router.include_router(listing_reports_router)
 router.include_router(produce_search_router)
 router.include_router(reorder_router)
 router.include_router(follows_router)
@@ -57,6 +62,8 @@ router.include_router(admin_orders_router)
 router.include_router(admin_transactions_router)
 router.include_router(admin_audit_router)
 router.include_router(admin_produce_router)
+router.include_router(admin_penalties_router)
+router.include_router(admin_terms_router)
 router.include_router(admin_reviews_router)
 router.include_router(email_router)
 router.include_router(email_otp_router)

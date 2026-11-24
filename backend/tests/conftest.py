@@ -31,6 +31,7 @@ _DOTENV_LEAKS = (
     "R2_ACCESS_KEY_ID",
     "R2_SECRET_ACCESS_KEY",
     "MAPBOX_ACCESS_TOKEN",
+    "ANTHROPIC_API_KEY",  # guardrails Phase 4 vision check
     "OSRM_URL",
     "ROAD_SNAP_MAX_METERS",
 )

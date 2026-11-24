@@ -19,6 +19,8 @@ test('a new order opens the Orders tab, or that order’s sheet when it has an i
 test('a review opens the farm’s reviews', () => {
   assert.deepEqual(appRoute('/merchantDashboard', 'review_received'), { pathname: '/reviews' });
   assert.deepEqual(appRoute('/merchantDashboard?tab=reviews', 'review_received'), { pathname: '/reviews' });
+  assert.deepEqual(appRoute('/merchantDashboard', 'listing_approved'), { pathname: '/(tabs)/produce' });
+  assert.deepEqual(appRoute('/merchantDashboard', 'listing_rejected'), { pathname: '/(tabs)/produce' });
 });
 
 test('a chat message opens that order chat, else the chat list', () => {

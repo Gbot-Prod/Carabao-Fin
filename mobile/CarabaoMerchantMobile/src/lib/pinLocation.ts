@@ -381,6 +381,8 @@ export const LOCATION_WORDS = {
 /** The map pin's words (web lib/i18n/strings/en.ts mapPin). */
 export const PIN_WORDS = {
   label: 'Pin your location on the map',
+  noticeTitle: 'Place an accurate pin',
+  noticeBody: 'Riders go to your map pin, not to the address text. Make sure that the pin is at your gate or door. If it is not, tap the map or drag the pin to move it.',
   useMyLocation: 'Use my location',
   locating: 'Finding you…',
   mapLabel: 'Map: click or drag the pin to your location',

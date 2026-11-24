@@ -7,7 +7,7 @@ import { parseOrderId } from './orderChat.ts';
 // The merchant app has no `/track` and no order-detail screen (plan §4.2): a farm reads an
 // order in the Orders tab and chats in `/order-chat`.
 export type AppRoute =
-  | { pathname: '/(tabs)' | '/(tabs)/chats' | '/reviews' | '/earnings' }
+  | { pathname: '/(tabs)' | '/(tabs)/chats' | '/(tabs)/produce' | '/reviews' | '/earnings' }
   // S4 (plan §5.2): the Orders tab opens this order's detail sheet.
   | { pathname: '/(tabs)/orders'; params?: { order: string } }
   | { pathname: '/order-chat'; params: { orderId: string } }
@@ -62,6 +62,9 @@ export function appRoute(link: string | null, kind?: string): AppRoute | null {
       : { pathname: '/(tabs)/orders', params: { order: String(orderId) } };
   }
   if (kind === 'review_received') return { pathname: '/reviews' };
+  // Guardrails Phase 1: an admin approved or rejected a listing (web: /produce).
+  // Phase 2: penalty points (listing_blocked, listing_penalty_revoked) open the same tab.
+  if (kind?.startsWith('listing_')) return { pathname: '/(tabs)/produce' };
   // S3 (plan §4): the web bell opens /earnings for both payout kinds, so this app does too.
   if (kind === 'payout_released' || kind === 'payout_destination_changed') {
     return { pathname: '/earnings' };

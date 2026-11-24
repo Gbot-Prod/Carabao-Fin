@@ -13,7 +13,7 @@
   3. Runs roles.sql, then guards.sql (each is one transaction, so a failure
      changes nothing), with ON_ERROR_STOP.
   4. Checks the end state (ownership, login attributes, memberships, CREATE on
-     public, RLS, the 18 policies, the trigger, the guard functions, which
+     public, RLS, the 20 policies, the trigger, the guard functions, which
      tables each web login can reach) and that every row count is unchanged.
   5. With -SetPasswords: opens psql's \password prompt for carabao_api,
      carabao_web_public and carabao_web_admin, then checks that each now has a
@@ -163,9 +163,9 @@ checks(name, ok, detail) AS (
           WHERE s.nspname = 'public' AND c.relname IN (SELECT t FROM guarded) AND c.relrowsecurity) = 5,
          ''
   UNION ALL
-  SELECT '18 policies on the guarded tables',
+  SELECT '20 policies on the guarded tables',
          (SELECT count(*) FROM pg_policies WHERE schemaname = 'public'
-          AND tablename IN (SELECT t FROM guarded)) = 18,
+          AND tablename IN (SELECT t FROM guarded)) = 20,
          (SELECT count(*)::text FROM pg_policies WHERE schemaname = 'public'
           AND tablename IN (SELECT t FROM guarded)) || ' found'
   UNION ALL

@@ -304,8 +304,8 @@ const noAdminsOnPublicSurface = (): BetterAuthPlugin => ({
 //
 // Only admins use 2FA, and the admin area and API require it.
 //   - Setup (/two-factor/enable) needs the one-time token from the link that
-//     the backend sends with an admin invite, or when an admin's 2FA is reset
-//     or the admin is reactivated. Nobody is promoted to admin.
+//     the backend sends with an admin invite (also the new invite after an
+//     account reset or reactivation). Nobody is promoted to admin.
 //     A password or a session alone is not enough, so a person who has only
 //     those cannot enrol their own authenticator. allowPasswordless lets an
 //     admin with no password (Google only) enrol. An account that has a

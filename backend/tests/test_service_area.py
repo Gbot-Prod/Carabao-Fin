@@ -166,8 +166,17 @@ def test_merchant_cannot_move_store_outside_luzon(db, merchant):  # noqa: F811
     resp = client.patch("/merchants/me", json={"region": "Region XI (Davao Region)"})
     assert resp.status_code == 400
     assert "Luzon" in resp.json()["detail"]
-    ok = client.patch("/merchants/me", json={"region": "Region IV-A (CALABARZON)"})
+    ok = client.patch(
+        "/merchants/me",
+        json={
+            "region": "Region IV-A (CALABARZON)",
+            "province": "Laguna",
+            "city": "City of Calamba",
+            "barangay": "Real",
+        },
+    )
     assert ok.status_code == 200, ok.text
+    assert ok.json()["city_code"] == "0403405000"
 
 
 def _cart(db, buyer, merchant):  # noqa: F811

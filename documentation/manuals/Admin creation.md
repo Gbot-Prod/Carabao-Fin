@@ -1,6 +1,6 @@
 # Admin accounts
 
-This manual tells you how to make, monitor, reset and remove Carabao admin accounts. Updated 2026-11-22, after the database login split ([DB_ROLE_SPLIT_PLAN.md](DB_ROLE_SPLIT_PLAN.md), steps 5–8).
+This manual tells you how to make, monitor, reset and remove Carabao admin accounts. Updated 2026-11-25: **Reset account** replaces **Reset 2-step** and **Send new setup link**. It also resets the password.
 
 Contents:
 
@@ -8,8 +8,8 @@ Contents:
 2. Monitor admin accounts
 3. Make the first admin (`make_admin.py --create`)
 4. Invite an admin
-5. Admin profile and password change (no password reset)
-6. Admin 2FA reset
+5. Admin profile and password change
+6. Admin account reset (lost authenticator or forgotten password)
 7. Deactivate and reactivate
 8. Recovery (`make_admin.py --recover`)
 9. Start again from an empty database
@@ -21,7 +21,8 @@ Contents:
 - The public site (`carabao.`, `merchant.`) refuses admin accounts. The admin site (`admin.`) refuses all other accounts.
 - On the admin site, an admin signs in with email + password, then a TOTP code. Only a session that passed the TOTP step can open the admin pages and call the admin API.
 - Every admin-account change goes through the API. The API writes an audit row for each change.
-- An admin cannot deactivate themselves or reset their own 2FA. An admin cannot turn off their own 2FA.
+- An admin cannot deactivate or reset their own account. An admin cannot turn off their own 2FA.
+- There is only one way into an admin account: the invite (link + code + new password + TOTP). A reset and a reactivation send a new invite.
 - Admin accounts are not deleted and not suspended. To remove access, use **Deactivate**.
 - The admin site is behind Cloudflare Access. Each admin's email must be on the Access allow list, or the admin cannot open the site or the invite link.
 
@@ -33,9 +34,9 @@ The **Role** column shows **Admin** and one of these states for each admin accou
 
 | State | Meaning | Actions on the page |
 |---|---|---|
-| Invite pending | Invited. The invitee has not set a password yet. | Resend invite, Deactivate |
-| 2-step: not set up | Has a password. TOTP is not set up (new admin, or after a 2FA reset). | Send new setup link, Deactivate |
-| 2-step: on | Can sign in with password + TOTP. | Reset 2-step, Deactivate |
+| Invite pending | Invited, reset or reactivated. The admin has not set a password yet. | Resend invite, Deactivate |
+| 2-step: not set up | Has a password. TOTP is not set up (the admin did not complete setup). | Reset account, Deactivate |
+| 2-step: on | Can sign in with password + TOTP. | Reset account, Deactivate |
 | Deactivated | Cannot sign in. History is kept. | Reactivate |
 
 Only an admin in the **2-step: on** state counts as an active admin. The API refuses to deactivate the last active admin.
@@ -52,7 +53,8 @@ Use the **Action** filter to see one type of event. Rows cannot be changed or de
 | `admin.invite_locked` (Admin invite locked) | The 5th wrong invite code. The link and code stop working. |
 | `admin.invite_accepted` (Admin invite accepted) | The invitee set a password. |
 | `admin.two_factor_enrolled` (Admin two-step set up) | TOTP setup is complete. Written only if the database shows 2FA on. |
-| `user.two_factor_reset` (Two-step reset) | An admin pressed **Reset 2-step** or **Send new setup link**. |
+| `admin.account_reset` (Admin account reset) | An admin pushed **Reset account**. |
+| `user.two_factor_reset` (Two-step reset) | Not written any more. Old rows only. |
 | `admin.deactivate` (Admin deactivated) | An admin was deactivated. |
 | `admin.reactivate` (Admin reactivated) | An admin was reactivated. |
 | `admin.recover` (Admin recovered (script)) | `make_admin.py --recover` ran. Actor `system`. |
@@ -63,7 +65,7 @@ Use the **Action** filter to see one type of event. Rows cannot be changed or de
 ### 2.3 Check often
 
 - An **Invite pending** account that is older than 24 hours has an expired invite. Resend it, or deactivate the account.
-- An account in **2-step: not set up** for a long time did not complete setup. Send a new setup link, or deactivate it.
+- An account in **2-step: not set up** for a long time did not complete setup. Reset the account, or deactivate it.
 - An `admin.invite_locked` row means that someone typed 5 wrong codes. Speak to the invitee before you resend.
 - Every admin account must belong to a person that you know. Deactivate an account that nobody claims.
 
@@ -110,16 +112,16 @@ The link and the code are both valid for 24 hours.
 4. The site opens the TOTP setup page (the link's token comes with it). Type the password again, scan the QR code, enter the code and keep the backup codes.
 5. Sign out. Sign in again with password + TOTP.
 
-If the link, the token or the code is wrong or expired, the page always shows the same message: "This invite link or code is not valid. Ask the admin who invited you to resend it." The message does not tell which part is wrong.
+If the link, the token or the code is wrong or expired, the page always shows the same message: "This invite link or code is not valid. Ask an admin to send a new invite." The message does not tell which part is wrong.
 
 ### 4.3 Resend, expiry and lock
 
 - **Resend invite** (Users page, only while the state is **Invite pending**): sends a new link and shows a new code. The old link and code stop working immediately.
 - **Expiry:** after 24 hours the link and code stop working. Use **Resend invite**.
 - **Lock:** the 5th wrong code deletes the code and the setup token, and writes `admin.invite_locked`. Use **Resend invite**. A guess with a wrong link token does not count, so a person who knows only the invite id cannot lock the invite.
-- After the invitee sets a password, **Resend invite** is refused. Use **Send new setup link** if TOTP setup is not complete.
+- After the invitee sets a password, **Resend invite** is refused. Use **Reset account** if TOTP setup is not complete.
 
-## 5. Admin profile and password change (no password reset)
+## 5. Admin profile and password change
 
 ### 5.1 Profile page (`admin.<root>/admin/profile`)
 
@@ -128,7 +130,7 @@ Open **Profile** in the **Account** group of the sidebar. The page shows your na
 - **Display name** (1 to 100 characters). Other admins see it on the Users page and in the audit log.
 - **Password** (section 5.2).
 
-You cannot change your email, turn off 2FA or see your TOTP secret on this page. For a lost authenticator, see section 6.
+You cannot change your email, turn off 2FA or see your TOTP secret on this page. For a lost authenticator or a forgotten password, see section 6.
 
 Both changes need a session that passed the TOTP step. The server refuses all other fields on the name change (only `name`). The database (guard G1) also refuses role, ban and 2FA-off changes from the admin site.
 
@@ -141,26 +143,27 @@ Both changes need a session that passed the TOTP step. The server refuses all ot
 
 ### 5.3 Forgotten password
 
-There is **no password reset** on the admin site. The **Forgot password?** link, the `/forgot-password` and `/reset-password` pages, and the Better Auth reset endpoints are closed on the admin host. An admin who forgot the password asks the operator to recover the account (section 8.1).
+The admin site has no **Forgot password?** link. The `/forgot-password` and `/reset-password` pages and the Better Auth reset endpoints are closed on the admin host. An admin who forgot the password asks another admin for an account reset (section 6).
 
 On the public site, a reset request for an admin email or number gives the usual answer ("If this email exists…") and sends nothing. This keeps the public site from telling that an address belongs to an admin.
 
-Only one endpoint can set a first password: invite acceptance (`POST /admin/invites/accept`). It refuses an account that already has a password, so a 2FA setup link can never set or replace a password.
+Only one endpoint can set a password: invite acceptance (`POST /admin/invites/accept`). It refuses an account that has a password. A reset first deletes the password, then sends a new invite.
 
-## 6. Admin 2FA reset
+## 6. Admin account reset (lost authenticator or forgotten password)
 
-Use this when an admin lost their authenticator. Another admin does it. You cannot reset your own 2FA.
+Use this when an admin lost their authenticator, forgot their password, or did not complete TOTP setup. Another admin does it. You cannot reset your own account.
 
-1. On **Users**, find the admin (state **2-step: on**). Push **Reset 2-step** and confirm.
-2. The API removes the admin's TOTP, trusted devices, any open setup link and all sessions. It sends a new 24-hour setup link by SMS (if the account has a verified number) and email. It writes `user.two_factor_reset`.
-3. The admin signs in with email + password. The site opens the setup page.
-4. The admin opens the new link from the SMS or email, then sets up TOTP again. Without the link, the setup page shows only "Use the setup link we sent you."
-5. The admin signs out and signs in with password + TOTP. The audit log shows `admin.two_factor_enrolled`.
+1. Before you start, confirm the identity of the person outside the system (in person or by a known phone number).
+2. On **Users**, find the admin (state **2-step: on** or **2-step: not set up**). Push **Reset account** and confirm.
+3. The API deletes the admin's password, TOTP, backup codes, trusted devices, any open link or code, and all sessions. It emails a new invite link (24 hours) and shows you a new 8-character code **one time only**. It writes `admin.account_reset`. The state changes to **Invite pending**.
+4. Give the code to the admin as in section 4.1, step 5.
+5. The admin does section 4.2: open the link, enter the code and a new password, sign in, and set up TOTP again.
 
 Rules:
 
-- For an admin in **2-step: not set up**, the button is **Send new setup link**. It does the same, and the old links stop working.
-- Reset is refused for yourself, for an admin with **Invite pending** (use **Resend invite**), and for a **Deactivated** admin (reactivate first).
+- Reset is refused for yourself, for an admin with **Invite pending** (use **Resend invite**), and for a **Deactivated** admin (use **Reactivate**, which also resets the account).
+- If the code is lost or the link expires, use **Resend invite**.
+- The database lets the API delete only the password row of an admin account (`guards.sql`, policy `api_delete_admin_password`). The API cannot delete or change a buyer or merchant password.
 - If no admin can sign in to do the reset, use `make_admin.py --recover` (section 8).
 
 ## 7. Deactivate and reactivate
@@ -175,8 +178,7 @@ Deactivate is refused for yourself and for the last active admin (section 2.1).
 
 **Reactivate** gives access again:
 
-- An admin with a password gets a new 2FA setup link by SMS and email. Then they do the steps in section 6, from step 3.
-- An admin who never accepted the invite gets a new invite: a new link by email and a new code, which the page shows to you one time. Give the code as in section 4.1.
+- The API deletes any old password and 2FA, and sends a new invite: a new link by email and a new code, which the page shows to you one time. Give the code as in section 4.1, step 5. The admin then does section 4.2.
 - The API writes `admin.reactivate`.
 
 ## 8. Recovery (`make_admin.py --recover`)
@@ -192,7 +194,9 @@ Run it in the API shell (`railway ssh`, Carabao Backend). It removes 2FA, any de
 
 ### 8.1 Forgotten admin password
 
-The operator does this, after confirming the person's identity outside the system (in person or by a known phone number). `carabao_api` cannot change a password that exists, so the old password row is first deleted as the superuser.
+If another admin can sign in, use **Reset account** (section 6). You do not need the database.
+
+Use the procedure below only when no admin can sign in and the admin also forgot the password. The operator does it, after confirming the identity of the person outside the system. `make_admin.py --recover` does not delete a password, so the old password row is first deleted as the superuser.
 
 1. Open psql as the superuser (the Postgres service's `DATABASE_PUBLIC_URL`). Delete the admin's password row only:
 
@@ -272,9 +276,9 @@ Do the tests in this order. Write the result of each one in [SUBDOMAINS.md](SUBD
 2. Admin site: sign-in with a buyer account is refused (row 10). Dashboard and API calls work (row 12).
 3. Invite: email that has an account is refused; wrong code 4 times, then the right code; setup; sign-in (rows 16–20).
 4. Invite lock and resend (row 21).
-5. 2FA reset (row 22).
+5. Account reset (row 22).
 6. Deactivate, sign-in refused, reactivate (rows 23–24). Refusals for yourself and for suspension (row 25).
-7. Admin profile: change the name and the password; the admin site has no password reset (row 26). Forgotten password recovery (section 8.1).
+7. Admin profile: change the name and the password; the admin site has no **Forgot password?** link (row 26).
 8. Public site: buyer sign-up by phone, sign-in, SMS password reset, Google sign-in. An admin email is refused, and a reset for an admin email sends nothing (rows 27–28).
 9. `make_admin.py --recover` on an admin, and on a buyer (refused).
 10. Look at the Backend, Admin Web, Web Application and Postgres logs. There must be no `permission denied`, `InsufficientPrivilege` or 500 errors.

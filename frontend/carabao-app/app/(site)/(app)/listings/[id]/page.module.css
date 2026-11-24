@@ -162,3 +162,82 @@
   color: #057a2d;
   font-weight: 600;
 }
+
+/* Guardrails Phase 3: Report this listing */
+.reportLink {
+  justify-self: start;
+  margin-top: 0.25rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.reportForm {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+
+.reportTitle {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.reportField {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.reportField select,
+.reportField textarea {
+  font: inherit;
+  padding: 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
+
+.reportActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.reportActions button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.reportActions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reportActions .secondary {
+  background: transparent;
+}
+
+.reportActions .primary {
+  border: none;
+}
+
+.reportError {
+  margin: 0;
+  color: #b42318;
+  font-size: 0.9rem;
+}
+
+.reportDone {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}

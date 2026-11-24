@@ -121,6 +121,10 @@ _ACCESS_FIELDS = (
     "province",
     "city",
     "barangay",
+    "region_code",
+    "province_code",
+    "city_code",
+    "barangay_code",
     "address",
     "postal_code",
     "lat",
@@ -128,6 +132,7 @@ _ACCESS_FIELDS = (
     "road_lat",
     "road_lng",
     "pin_confirmed",
+    "pin_area_mismatch",
     "available_days",
 )
 

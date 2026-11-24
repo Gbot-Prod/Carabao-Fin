@@ -122,24 +122,39 @@ def send_admin_enrolment_email(to: str, setup_url: str) -> None:
     )
 
 
-def send_admin_invite_email(to: str, *, invite_url: str, invited_by: str) -> None:
-    """An admin invite (DB_ROLE_SPLIT_PLAN.md section 2). The code that goes
-    with the link is never in this email: the inviting admin hands it over."""
+def send_admin_invite_email(
+    to: str, *, invite_url: str, invited_by: str, reset: bool = False
+) -> None:
+    """An admin invite (DB_ROLE_SPLIT_PLAN.md section 2), or the new invite
+    after an account reset (``reset``). The code that goes with the link is
+    never in this email: the inviting admin hands it over."""
+    who = escape(invited_by)
+    if reset:
+        subject = "Your Carabao admin account was reset"
+        title = "Set up your admin account again"
+        lead = (
+            f"{who} reset your Carabao admin account. Your old password and "
+            "authenticator no longer work."
+        )
+        button = "Set up the account"
+    else:
+        subject = "You're invited to be a Carabao admin"
+        title = "Your Carabao admin invite"
+        lead = f"{who} invited you to be an admin on Carabao."
+        button = "Accept the invite"
     resend.Emails.send(
         {
             "from": FROM_ADDRESS,
             "to": [to],
-            "subject": "You're invited to be a Carabao admin",
+            "subject": subject,
             "html": f"""
                 <div style="{BOX}">
-                  <h2 style="{TITLE}">Your Carabao admin invite</h2>
-                  <p style="{TEXT_24}">{escape(invited_by)} invited you to be an admin
-                    on Carabao. Open the link below and enter the invite code. The code
-                    is not in this email: {escape(invited_by)} gives it to you
+                  <h2 style="{TITLE}">{title}</h2>
+                  <p style="{TEXT_24}">{lead} Open the link below and enter the
+                    code. The code is not in this email: {who} gives it to you
                     directly. Then choose a password and set up an authenticator
                     app.</p>
-                  <a href="{escape(invite_url)}" style="{BUTTON}">Accept the
-                    invite</a>
+                  <a href="{escape(invite_url)}" style="{BUTTON}">{button}</a>
                   <p style="{NOTE_SPACED}">The link and the code work for 24 hours. Do
                     not share them. If you did not expect this email, ignore it and
                     tell Carabao support.</p>

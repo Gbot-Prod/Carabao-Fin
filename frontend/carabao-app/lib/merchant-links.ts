@@ -9,6 +9,12 @@ const PAGE_BY_KIND: Record<string, string> = {
   review_received: "/reviews",
   payout_released: "/earnings",
   payout_destination_changed: "/earnings",
+  // Guardrails Phase 1: an admin approved or rejected a listing.
+  listing_approved: "/produce",
+  listing_rejected: "/produce",
+  // Guardrails Phase 2: penalty points (services/listing_trust.py).
+  listing_blocked: "/produce",
+  listing_penalty_revoked: "/produce",
   // Submit later: "finish your business information" (backend setup_reminders.py).
   setup_reminder: "/onboarding?step=business",
 };

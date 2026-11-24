@@ -2,7 +2,7 @@ import { apiClient } from './client';
 import type { UserProfile } from './users';
 import type { Merchant, MerchantPayoutBatch, PayoutProvider, PayoutType, SellerType, VatStatus } from './merchants';
 import type { OrderStatus, PayoutStatus, TransactionStatus } from './statuses';
-import type { Produce } from './produce';
+import type { ListingPenalty, Produce, ProduceStatus } from './produce';
 
 export type MerchantApplication = {
   id: number;
@@ -271,19 +271,16 @@ export const deactivateAdmin = async (userId: number): Promise<UserProfile> => {
   return res.data;
 };
 
-export type AdminReactivated = { user: UserProfile; sent_to: string[]; invite_code: string | null };
-
-/** With a password: a 2FA setup link goes out. Without one: a fresh invite,
- * whose code is in `invite_code`. */
-export const reactivateAdmin = async (userId: number): Promise<AdminReactivated> => {
-  const res = await apiClient.post<AdminReactivated>(`/admin/admins/${userId}/reactivate`);
+/** Always a new invite (any old password and 2FA are removed). */
+export const reactivateAdmin = async (userId: number): Promise<AdminInvite> => {
+  const res = await apiClient.post<AdminInvite>(`/admin/admins/${userId}/reactivate`);
   return res.data;
 };
 
-/** CF-0018: turn off an admin's 2FA, end their sessions, and send a new setup
- * link by SMS and email. Returns the channels that worked. */
-export const resetAdminTwoFactor = async (userId: number): Promise<{ sent_to: string[] }> => {
-  const res = await apiClient.post<{ sent_to: string[] }>(`/admin/users/${userId}/two-factor/reset`);
+/** Lost authenticator or forgotten password: the admin's password, 2FA and
+ * sessions are removed, and a new invite is emailed. The code is returned once. */
+export const resetAdminAccount = async (userId: number): Promise<AdminInvite> => {
+  const res = await apiClient.post<AdminInvite>(`/admin/admins/${userId}/reset`);
   return res.data;
 };
 
@@ -601,10 +598,26 @@ export const fetchAuditActions = async (): Promise<string[]> => {
 
 // ── Listing moderation (A6) ──────────────────────────────────────────────────
 
-export type AdminProduce = Produce & { merchant_name: string | null };
+export type AdminProduce = Produce & {
+  merchant_name: string | null;
+  // Guardrails Phase 1: the market range the name matches (sample data says so).
+  reference_price?: { commodity: string; unit: string; low: number; high: number; sample: boolean } | null;
+  // Guardrails Phase 3: open buyer reports, oldest first. An approve, reject
+  // or hide closes them.
+  open_reports?: AdminListingReport[];
+};
+
+export type AdminListingReport = {
+  id: number;
+  reporter_id: number;
+  reason: string;
+  label: string;
+  note: string | null;
+  created_at: string;
+};
 
 export const fetchAdminProduce = async (
-  filters: { hidden?: boolean; q?: string; merchant_id?: number },
+  filters: { hidden?: boolean; status?: ProduceStatus; q?: string; merchant_id?: number },
   page = 1,
   pageSize = ADMIN_PAGE_SIZE,
 ): Promise<Paginated<AdminProduce>> => {
@@ -621,6 +634,114 @@ export const hideProduce = async (produceId: number, reason: string): Promise<Ad
 
 export const unhideProduce = async (produceId: number): Promise<AdminProduce> => {
   const res = await apiClient.post<AdminProduce>(`/admin/produce/${produceId}/unhide`);
+  return res.data;
+};
+
+// ── Listing review queue (guardrails Phase 1) ───────────────────────────────
+
+/** `points`: penalty points a rejection with this reason gives (guardrails Phase 2). */
+export type RejectionCode = { code: string; label: string; points: number };
+
+export const fetchRejectionCodes = async (): Promise<RejectionCode[]> => {
+  const res = await apiClient.get<RejectionCode[]>('/admin/produce/rejection-codes');
+  return res.data;
+};
+
+export const approveProduce = async (produceId: number): Promise<AdminProduce> => {
+  const res = await apiClient.post<AdminProduce>(`/admin/produce/${produceId}/approve`);
+  return res.data;
+};
+
+export const rejectProduce = async (produceId: number, code: string, note: string): Promise<AdminProduce> => {
+  const res = await apiClient.post<AdminProduce>(`/admin/produce/${produceId}/reject`, {
+    code,
+    note: note.trim() || null,
+  });
+  return res.data;
+};
+
+// ── Penalty points (guardrails Phase 2) ─────────────────────────────────────
+
+export type AdminPenalty = ListingPenalty & {
+  merchant_id: number;
+  merchant_name: string | null;
+  active: boolean;
+};
+
+export type PenaltyAccount = {
+  merchant_id: number;
+  merchant_name: string | null;
+  points: number;
+  blocked_until: string | null;
+  can_create_listings: boolean;
+  needs_account_review: boolean;
+  shop_suspended: boolean;
+  owner_suspended: boolean;
+};
+
+export const fetchPenaltyAccounts = async (minPoints = 1): Promise<PenaltyAccount[]> => {
+  const res = await apiClient.get<PenaltyAccount[]>('/admin/penalties/accounts', {
+    params: { min_points: minPoints },
+  });
+  return res.data;
+};
+
+export const fetchPenalties = async (
+  filters: { merchant_id?: number; active?: boolean },
+  page = 1,
+  pageSize = ADMIN_PAGE_SIZE,
+): Promise<Paginated<AdminPenalty>> => {
+  const res = await apiClient.get<Paginated<AdminPenalty>>('/admin/penalties', {
+    params: { ...filters, page, page_size: pageSize },
+  });
+  return res.data;
+};
+
+export const revokePenalty = async (penaltyId: number, reason: string): Promise<AdminPenalty> => {
+  const res = await apiClient.post<AdminPenalty>(`/admin/penalties/${penaltyId}/revoke`, {
+    reason: reason.trim(),
+  });
+  return res.data;
+};
+
+export type TermCategory = 'contact' | 'prohibited_commodity' | 'profanity' | 'spam';
+export type TermSeverity = 'hard_block' | 'soft_flag';
+export type TermLanguage = 'en' | 'tl' | 'ceb' | 'all';
+export type ProhibitedTerm = {
+  id: number;
+  term: string;
+  category: TermCategory;
+  severity: TermSeverity;
+  language: TermLanguage;
+  is_active: boolean;
+};
+
+export const fetchProhibitedTerms = async (
+  filters: { category?: TermCategory; severity?: TermSeverity; active?: boolean; q?: string },
+  page = 1,
+  pageSize = 50,
+): Promise<Paginated<ProhibitedTerm>> => {
+  const res = await apiClient.get<Paginated<ProhibitedTerm>>('/admin/prohibited-terms', {
+    params: { ...filters, page, page_size: pageSize },
+  });
+  return res.data;
+};
+
+export const createProhibitedTerm = async (payload: {
+  term: string;
+  category: TermCategory;
+  severity: TermSeverity;
+  language: TermLanguage;
+}): Promise<ProhibitedTerm> => {
+  const res = await apiClient.post<ProhibitedTerm>('/admin/prohibited-terms', payload);
+  return res.data;
+};
+
+export const updateProhibitedTerm = async (
+  id: number,
+  changes: Partial<Pick<ProhibitedTerm, 'category' | 'severity' | 'language' | 'is_active'>>,
+): Promise<ProhibitedTerm> => {
+  const res = await apiClient.patch<ProhibitedTerm>(`/admin/prohibited-terms/${id}`, changes);
   return res.data;
 };
 

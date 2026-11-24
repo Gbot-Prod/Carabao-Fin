@@ -81,7 +81,7 @@ def test_buyer_gets_the_receipt_of_a_paid_order(
     assert (body["subtotal"], body["delivery_fee"], body["total"]) == (310, 40, 350)
     assert body["farm_name"] == "Dela Cruz Farm"
     # Town level only: the farm's street address is not on the receipt.
-    assert body["farm_town"] == "Bulacan"
+    assert body["farm_town"] == "City of Malolos, Bulacan"
     assert "Purok" not in str(body)
     assert body["delivery_address"] == "12 Rizal St, Malolos, Bulacan"
 

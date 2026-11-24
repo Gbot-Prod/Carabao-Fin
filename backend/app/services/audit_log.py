@@ -25,6 +25,9 @@ ADMIN_INVITE_RESENT = "admin.invite_resent"
 ADMIN_INVITE_LOCKED = "admin.invite_locked"
 ADMIN_INVITE_ACCEPTED = "admin.invite_accepted"
 ADMIN_TWO_FACTOR_ENROLLED = "admin.two_factor_enrolled"
+# Password, 2FA and sessions removed; a new invite sent. Replaces
+# TWO_FACTOR_RESET for admins (older rows keep that action).
+ADMIN_ACCOUNT_RESET = "admin.account_reset"
 ADMIN_DEACTIVATE = "admin.deactivate"
 ADMIN_REACTIVATE = "admin.reactivate"
 ADMIN_CREATE = "admin.create"  # scripts/make_admin.py --create
@@ -37,9 +40,15 @@ PAYOUT_REFRESH = "payout.refresh"  # only when the status changed (CF-0054)
 REFUND = "transaction.refund"
 PRODUCE_HIDE = "produce.hide"
 PRODUCE_UNHIDE = "produce.unhide"
+PRODUCE_APPROVE = "produce.approve"  # guardrails Phase 1
+PRODUCE_REJECT = "produce.reject"
+PENALTY_REVOKE = "listing_penalty.revoke"  # guardrails Phase 2
+TERM_CREATE = "prohibited_term.create"
+TERM_UPDATE = "prohibited_term.update"
 REVIEW_HIDE = "review.hide"  # CF-0075
 REVIEW_UNHIDE = "review.unhide"
 ORDER_CANCEL = "order.cancel"  # CF-0045
+REFERENCE_PRICES_IMPORT = "reference_prices.import"  # guardrails Phase 4
 
 ACTIONS = (
     ROLE_CHANGE,
@@ -49,6 +58,7 @@ ACTIONS = (
     ADMIN_INVITE_LOCKED,
     ADMIN_INVITE_ACCEPTED,
     ADMIN_TWO_FACTOR_ENROLLED,
+    ADMIN_ACCOUNT_RESET,
     ADMIN_DEACTIVATE,
     ADMIN_REACTIVATE,
     ADMIN_CREATE,
@@ -60,9 +70,15 @@ ACTIONS = (
     REFUND,
     PRODUCE_HIDE,
     PRODUCE_UNHIDE,
+    PRODUCE_APPROVE,
+    PRODUCE_REJECT,
+    PENALTY_REVOKE,
+    TERM_CREATE,
+    TERM_UPDATE,
     REVIEW_HIDE,
     REVIEW_UNHIDE,
     ORDER_CANCEL,
+    REFERENCE_PRICES_IMPORT,
 )
 
 

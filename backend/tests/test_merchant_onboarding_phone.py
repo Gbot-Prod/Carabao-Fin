@@ -29,7 +29,7 @@ PAYLOAD = {
     "contact_number": "09171234567",
     "region": "Region III (Central Luzon)",
     "province": "Bulacan",
-    "city": "Malolos",
+    "city": "City of Malolos",
     "barangay": "Poblacion",
     "address": "12 Rizal St",
     "postal_code": "3000",
