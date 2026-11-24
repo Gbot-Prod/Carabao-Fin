@@ -1,4 +1,4 @@
 // app/application.tsx
-// S3 placeholder (decision D2): replaced by the onboarding-status screen in S18. S18
-// links to it from the verification banner; S3 adds it so the route exists.
-export { default } from '../src/screens/ComingSoonScreen';
+// S18 (plan §5.12): the merchant application status (decision D2). Reachable with or without a
+// farm, as /onboarding (app/_layout.tsx).
+export { default } from '../src/screens/ApplicationScreen';

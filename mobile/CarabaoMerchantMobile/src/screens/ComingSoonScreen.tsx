@@ -18,7 +18,6 @@ const SCREENS: Record<string, { title: string; icon: IoniconName }> = {
   '/shop': { title: 'Shop page', icon: 'storefront-outline' },
   '/vouchers': { title: 'Vouchers', icon: 'pricetag-outline' },
   '/settings': { title: 'Store settings', icon: 'settings-outline' },
-  '/application': { title: 'Application', icon: 'document-text-outline' },
 };
 
 const FALLBACK = { title: 'Coming soon', icon: 'construct-outline' as IoniconName };

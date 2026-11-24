@@ -401,4 +401,249 @@ test('S15 voucher calls and screen are wired like the web Vouchers tab', () => {
   );
 });
 
+// ── S17: onboarding (plan §5.12) ──────────────────────────────────────────────
 
+const ONBOARDING_PAGE = 'frontend/carabao-app/app/(site)/(merchant)/merchant/onboarding/page.tsx';
+const CONTACT_FIELD = 'frontend/carabao-app/app/(site)/(merchant)/merchant/onboarding/ContactCodeField.tsx';
+/** The web writes strings in double quotes and splits long ones with `" +` lines: join them. */
+const webText = (path: string) => read(path).replace(/"\s*\+\s*\n\s*"/g, '');
+/** The members of a web `new Set<string>([...])` or a backend Literal[...]. */
+const quoted = (body: string) => [...body.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+const webSet = (web: string, name: string) =>
+  quoted(new RegExp(`const ${name} = new Set(?:<string>)?\\(\\[([\\s\\S]*?)\\]\\);`).exec(web)?.[1] ?? '');
+const pyLiteral = (py: string, name: string) =>
+  quoted(new RegExp(`^${name} = Literal\\[([\\s\\S]*?)\\]`, 'm').exec(py)?.[1] ?? '');
+const escapeRe = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+test('S17 steps, seller types and choices = web onboarding page = backend schema', async () => {
+  const o = await import('./onboarding.ts');
+  const web = webText(ONBOARDING_PAGE);
+  assert.ok(web.includes('type StepId = "ops" | "legal";'), 'the web step ids differ');
+  for (const s of o.STEPS) {
+    assert.ok(
+      web.includes(`{ id: "${s.id}", title: "${s.title}", subtitle: "${s.subtitle}" }`),
+      `step ${s.id} differs from the web`,
+    );
+  }
+  assert.ok(web.includes('`${stepIndex + 1} / ${STEPS.length}`'), 'the progress pill differs');
+  for (const opt of o.SELLER_OPTIONS) {
+    assert.ok(web.includes(`{ value: "${opt.value}", label: "${opt.label}" }`), `seller label ${opt.value} differs`);
+  }
+  for (const opt of o.SUBMIT_MODE_OPTIONS) {
+    assert.ok(web.includes(`{ value: "${opt.value}", label: "${opt.label}" }`), `submit mode ${opt.value} differs`);
+  }
+  for (const [type, r] of Object.entries(o.REGISTRATION)) {
+    assert.ok(
+      web.includes(`agency: "${r!.agency}"`) && web.includes(`placeholder: "${r!.placeholder}"`)
+        && web.includes(`hint: "${r!.hint}"`),
+      `registration of ${type} differs`,
+    );
+  }
+  assert.ok(web.includes(JSON.stringify(o.SMALL_PRODUCER_HELP)), 'SMALL_PRODUCER_HELP differs');
+  assert.ok(web.includes(JSON.stringify(o.SUBMIT_LATER_HELP)), 'SUBMIT_LATER_HELP differs');
+  assert.ok(web.includes(`<h1 className={styles.title}>${o.FORM_TITLE}</h1>`), 'the title differs');
+  assert.ok(web.includes(o.FORM_SUBTITLE), 'the subtitle differs');
+
+  const api = read('frontend/carabao-app/util/api/merchants.ts');
+  const list = (name: string) =>
+    quoted(new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const;`).exec(api)?.[1] ?? '');
+  assert.deepEqual([...o.SELLER_TYPES], list('SELLER_TYPES'));
+  assert.deepEqual([...o.NAME_SUFFIXES], list('NAME_SUFFIXES'));
+  assert.deepEqual([...o.GOV_ID_TYPES], list('GOV_ID_TYPES'));
+
+  const py = read('backend/app/schemas/merchant_application.py');
+  assert.deepEqual([...o.SELLER_TYPES], pyLiteral(py, 'SellerType'));
+  assert.deepEqual([...o.NAME_SUFFIXES], pyLiteral(py, 'NameSuffix'));
+  assert.deepEqual([...o.GOV_ID_TYPES], pyLiteral(py, 'GovIdType'));
+  assert.deepEqual(o.SUBMIT_MODE_OPTIONS.map((m) => m.value), pyLiteral(py, 'SubmitMode'));
+
+  // The Terms version the web sends with a submit.
+  const terms = read('frontend/carabao-app/components/TermsModal/TermsOfServiceContent.tsx');
+  assert.ok(terms.includes(`export const TERMS_EFFECTIVE_DATE = "${o.TERMS_VERSION}";`), 'TERMS_VERSION differs');
+});
+
+test('S17 field limits = web onboarding page = backend schema', async () => {
+  const o = await import('./onboarding.ts');
+  const web = webText(ONBOARDING_PAGE);
+  assert.ok(web.includes(`const NAME_MAX = ${o.NAME_MAX};`));
+  assert.ok(web.includes(`const PERSON_MAX = ${o.PERSON_MAX};`));
+  assert.ok(web.includes(`const COMPANY_MAX = ${o.COMPANY_MAX};`));
+  assert.ok(web.includes(`merchantName.length < ${o.NAME_MIN}`));
+  assert.ok(web.includes(`.slice(0, ${o.REGISTRATION_MAX})`) && web.includes(`max={${o.REGISTRATION_MAX}}`));
+  assert.ok(web.includes(`max={${o.TIN_MAX}}`), 'TIN max differs');
+  assert.ok(web.includes(`maxLength={${o.RSBSA_MAX}}`), 'RSBSA max differs');
+  assert.ok(web.includes(`maxLength={${o.LOCAL_PHONE_MAX}}`), 'phone max differs');
+  assert.ok(web.includes(`const TIN_DIGITS = ${o.TIN_DIGITS.toString()};`), 'TIN pattern differs');
+  assert.ok(web.includes(`const EMAIL_PATTERN = ${o.EMAIL_PATTERN.toString()};`), 'email pattern differs');
+  assert.ok(web.includes('available_days: ["Mon", "Tue", "Wed", "Thu", "Fri"],'), 'the default days differ');
+  assert.deepEqual(o.INITIAL_FORM.available_days, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+  assert.ok(web.includes(`gov_id_type: "${o.INITIAL_FORM.gov_id_type}",`), 'the default ID differs');
+
+  const py = read('backend/app/schemas/merchant_application.py');
+  assert.match(py, new RegExp(`^MERCHANT_NAME_MAX = ${o.NAME_MAX}$`, 'm'));
+  assert.match(py, new RegExp(`^PERSON_NAME_MAX = ${o.PERSON_MAX}$`, 'm'));
+  assert.match(py, new RegExp(`^COMPANY_NAME_MAX = ${o.COMPANY_MAX}$`, 'm'));
+  assert.match(py, new RegExp(`min_length=${o.NAME_MIN}, max_length=MERCHANT_NAME_MAX`));
+});
+
+test('S17 messages and words = web onboarding page and ContactCodeField', async () => {
+  const o = await import('./onboarding.ts');
+  const web = webText(ONBOARDING_PAGE);
+  for (const [key, message] of Object.entries(o.MESSAGES)) {
+    if (typeof message !== 'string') continue;
+    assert.ok(web.includes(JSON.stringify(message)), `message ${key} differs from the web`);
+  }
+  assert.ok(web.includes('`${registration?.agency ?? "Registration"} number is required.`'));
+  assert.equal(o.MESSAGES.registration('DTI'), 'DTI number is required.');
+  for (const label of Object.values(o.DOCUMENT_LABELS)) {
+    assert.ok(web.includes(`, "${label}")`), `document label ${label} differs`);
+  }
+  assert.ok(web.includes(JSON.stringify(o.EMAIL_SEND_PROBLEM)));
+  assert.ok(web.includes(JSON.stringify(o.PHONE_SEND_PROBLEM)));
+  assert.ok(web.includes(JSON.stringify(o.CONTACT_WORDS.accountEmail)));
+  assert.ok(web.includes(JSON.stringify(o.CONTACT_WORDS.accountPhone)));
+  for (const [key, word] of Object.entries(o.OPS_WORDS)) {
+    assert.ok(
+      web.includes(`"${word}"`) || new RegExp(`>\\s*${escapeRe(word)}\\s*<`).test(web),
+      `step 1 word ${key} differs from the web`,
+    );
+  }
+  // The address words are the web onboarding's (src/lib/pinLocation.ts ADDRESS_MESSAGES).
+  const { ADDRESS_MESSAGES } = await import('./pinLocation.ts');
+  for (const message of Object.values(ADDRESS_MESSAGES)) {
+    assert.ok(web.includes(JSON.stringify(message)), `address message ${message} differs`);
+  }
+
+  const field = read(CONTACT_FIELD);
+  const w = o.CONTACT_WORDS;
+  for (const word of [w.sendCode, w.sending, w.verify, w.verifying, w.sendError, w.verifyError, w.resend]) {
+    assert.ok(field.includes(`"${word}"`), `ContactCodeField word ${word} differs`);
+  }
+  assert.ok(field.includes('`Resend in ${formatCountdown(cooldown)}`'));
+  assert.equal(w.resendIn('0:45'), 'Resend in 0:45');
+  assert.ok(field.includes('Enter the 6-digit code sent to your {channel}.'));
+  assert.equal(w.hint('email'), 'Enter the 6-digit code sent to your email.');
+  assert.ok(field.includes('`6-digit code sent to your ${channel}`'));
+  assert.ok(field.includes('`Your ${channel} is verified.`'));
+  assert.ok(field.includes('maxLength={6}'));
+});
+
+test('S17 server error routing = web OPS_FIELDS, SERVER_FIELD_ALIASES, SHOWN_FIELDS', async () => {
+  const o = await import('./onboarding.ts');
+  const web = webText(ONBOARDING_PAGE);
+  assert.deepEqual([...o.OPS_FIELDS].sort(), webSet(web, 'OPS_FIELDS').sort());
+  assert.deepEqual([...o.SHOWN_FIELDS].sort(), webSet(web, 'SHOWN_FIELDS').sort());
+  assert.deepEqual([...o.PREFILL_STATUSES].sort(), webSet(web, 'PREFILL_STATUSES').sort());
+  const aliases = /const SERVER_FIELD_ALIASES: Record<string, FieldKey> = \{([\s\S]*?)\};/.exec(web)?.[1] ?? '';
+  const webAliases = Object.fromEntries([...aliases.matchAll(/(\w+): "(\w+)"/g)].map((m) => [m[1], m[2]]));
+  assert.deepEqual({ ...o.SERVER_FIELD_ALIASES }, webAliases);
+});
+
+test('S17 resend cooldown = web lib/otp-cooldown.ts and hooks/useResendCooldown.ts = backend otp.py', async () => {
+  const { OTP_RESEND_SECONDS, ANY_TARGET } = await import('./resendCooldown.ts');
+  const shared = read('frontend/carabao-app/lib/otp-cooldown.ts');
+  assert.ok(shared.includes(`export const OTP_RESEND_SECONDS = ${OTP_RESEND_SECONDS};`));
+  assert.match(read('backend/app/services/otp.py'), new RegExp(`^OTP_RESEND_COOLDOWN_SECONDS = ${OTP_RESEND_SECONDS}$`, 'm'));
+  const hook = read('frontend/carabao-app/hooks/useResendCooldown.ts');
+  assert.ok(hook.includes('const ANY = "\\u0000any";'), 'the any-target key differs');
+  assert.equal(ANY_TARGET, '\u0000any');
+  assert.ok(hook.includes('start(wait > OTP_RESEND_SECONDS ? ANY : target, wait);'), 'the hourly rule differs');
+  // The words the wait is read from (backend reserve_send) still fit the pattern.
+  assert.ok(read('backend/app/services/otp.py').includes('f"Please wait {wait} seconds before requesting another code."'));
+});
+
+test('S17 serviceArea.ts is the web util/serviceArea.ts; api.ts has the onboarding calls', () => {
+  const web = read('frontend/carabao-app/util/serviceArea.ts');
+  const copy = read('mobile/CarabaoMerchantMobile/src/lib/serviceArea.ts');
+  const body = copy.slice(copy.indexOf('// Carabao serves'));
+  assert.equal(body.trimEnd(), web.trimEnd());
+  const client = read('mobile/CarabaoMerchantMobile/src/lib/api.ts');
+  for (const call of [
+    "'/merchant-applications/me'", "'/sms/otp/send'", "'/sms/otp/verify'", "'/email/otp/send'", "'/email/otp/verify'",
+  ]) {
+    assert.ok(client.includes(call), `api.ts is missing ${call}`);
+  }
+  // The web sends the same bodies (util/api/sms.ts).
+  const sms = read('frontend/carabao-app/util/api/sms.ts');
+  assert.ok(sms.includes("'/email/otp/send', { email }") && sms.includes('{ email, otp }'));
+  assert.ok(sms.includes("'/sms/otp/send', { number }") && sms.includes('{ number, otp }'));
+});
+
+// ── S18: documents, submit, status (plan §5.12) ───────────────────────────────
+
+test('S18 step 2 words = web onboarding page', async () => {
+  const o = await import('./onboarding.ts');
+  const web = webText(ONBOARDING_PAGE);
+  for (const [key, word] of Object.entries(o.LEGAL_WORDS)) {
+    assert.ok(
+      web.includes(`"${word}"`) || new RegExp(`>\\s*${escapeRe(word)}\\s*<`).test(web),
+      `step 2 word ${key} differs from the web`,
+    );
+  }
+  for (const opt of [...o.VAT_OPTIONS, ...o.YES_NO_OPTIONS]) {
+    assert.ok(web.includes(`{ value: ${JSON.stringify(opt.value)}, label: "${opt.label}" }`), `option ${opt.label} differs`);
+  }
+  assert.ok(web.includes('Upload a clear photo or a PDF scan of your Philippine RSBSA document and of one valid government ID'));
+  assert.ok(web.includes('" of your authorized representative"'));
+  assert.ok(web.includes('isSubmitting ? "Saving…" : later ? "Save and finish later" : "Submit"'), 'the submit button differs');
+  assert.ok(web.includes('.get("step") === "business"'), 'the business-step link differs');
+});
+
+test('S18 submit = web submitMyMerchantOnboarding; body limit = backend body_limit.py', () => {
+  const web = read('frontend/carabao-app/util/api/merchants.ts');
+  const client = read('mobile/CarabaoMerchantMobile/src/lib/api.ts');
+  assert.ok(web.includes("apiClient.post<MerchantApplication>('/merchant-onboarding/me', formData)"));
+  assert.ok(client.includes("'/merchant-onboarding/me'"));
+  assert.ok(web.includes("formData.append('payload', JSON.stringify(payload));"));
+  assert.ok(client.includes("form.append('payload', JSON.stringify(payload));"));
+  for (const part of ['rsbsa_file', 'gov_id_file', 'bir_cert_file']) {
+    assert.ok(web.includes(`formData.append('${part}'`), `the web has no ${part}`);
+    assert.ok(client.includes(`['${part}', documents.`), `api.ts has no ${part}`);
+  }
+  const limit = read('backend/app/core/body_limit.py');
+  assert.ok(limit.includes('return f"Request body must be under {limit // MB} MB"'), 'the 413 words differ');
+  // The 429 the screen shows comes from the backend's limiter.
+  assert.match(read('backend/app/services/rate_limit.py'), /onboarding_submit/);
+});
+
+test('S18 status words = web verification.ts, success card, SetupChecklist; status map = backend', async () => {
+  const a = await import('./application.ts');
+  const verification = read('frontend/carabao-app/app/(site)/(merchant)/merchant/lib/verification.ts');
+  for (const status of ['setup', 'under_review', 'needs_changes', 'suspended', 'verified'] as const) {
+    const step = a.currentStep(status);
+    assert.ok(verification.includes(`"${step.text}"`) || step.text === a.APPROVED_PUBLISH, `step text ${status} differs`);
+    if (step.action) assert.ok(verification.includes(`label: "${step.action.label}"`), `action ${status} differs`);
+  }
+  assert.ok(verification.includes(`export const APPROVED_PUBLISH = "${a.APPROVED_PUBLISH}";`));
+  assert.ok(verification.includes('export const BUSINESS_STEP_PATH = `${P.onboarding}?step=business`;'));
+
+  const web = webText(ONBOARDING_PAGE);
+  const w = a.APPLICATION_WORDS;
+  assert.ok(web.includes(`"${w.savedTitle}" : "${w.submittedTitle}"`), 'the success titles differ');
+  assert.ok(web.includes(`"${w.savedText}"`), 'the saved text differs');
+  assert.ok(web.includes(`"${w.submittedText}"`), 'the submitted text differs');
+  assert.ok(web.includes('>Go to Merchant Centre</button>'));
+
+  const checklist = read('frontend/carabao-app/app/(site)/(merchant)/merchant/components/SetupChecklist.tsx');
+  assert.ok(checklist.includes(`"${w.changesRequested}"`) && checklist.includes(`"${w.approved}"`));
+  assert.ok(checklist.includes(`"${a.SUSPENDED_TITLE}"`));
+  assert.ok(checklist.includes('Carabao: {item.note}') && w.notePrefix === 'Carabao: ');
+  assert.ok(checklist.includes('note: status === "needs_changes" ? application?.admin_note : null,'));
+  const banner = read('frontend/carabao-app/app/(site)/(merchant)/merchant/components/VerificationBanner.tsx');
+  assert.ok(banner.includes('Your shop isn&apos;t live yet.') && w.notLive === "Your shop isn't live yet.");
+
+  const py = read('backend/app/models/statuses.py');
+  const map = /APPLICATION_TO_VERIFICATION[^{]*\{([\s\S]*?)\}/.exec(py)?.[1] ?? '';
+  const pairs = Object.fromEntries(
+    [...map.matchAll(/"(\w+)":\s*MerchantVerificationStatus\.(\w+)/g)].map((m) => [m[1], m[2]!.toLowerCase()]),
+  );
+  assert.deepEqual(pairs, a.APPLICATION_TO_VERIFICATION);
+});
+
+test('S18 /onboarding and /application are open to a signed-in account with or without a farm', () => {
+  const layout = read('mobile/CarabaoMerchantMobile/app/_layout.tsx');
+  const group = /guard=\{status === 'allowed' \|\| status === 'forbidden'\}[\s\S]*?<\/Stack\.Protected>/.exec(layout)?.[0] ?? '';
+  assert.ok(group.includes('name="onboarding"') && group.includes('name="application"'), 'the onboarding group is missing');
+  assert.equal(layout.match(/name="onboarding"/g)?.length, 1);
+  assert.equal(layout.match(/name="application"/g)?.length, 1);
+});

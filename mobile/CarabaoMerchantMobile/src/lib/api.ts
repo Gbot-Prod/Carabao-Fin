@@ -16,17 +16,30 @@ import type { RouteGeoJSON } from './routeMap';
 // S16: the days the store's schedule uses (pure, so the tests read them without React Native).
 import type { MerchantDay } from './storeSettings';
 
+// S17: the seller and VAT choices the application answers with (pure, see src/lib/onboarding.ts).
+// S18: the submit body, its file parts and the body-limit check.
+import {
+  bodyLimitProblem,
+  type OnboardingDocuments,
+  type OnboardingPayload,
+  type SellerType,
+  type VatStatus,
+} from './onboarding';
+
 import { getAccessToken } from './authClient';
 import { chatEndpoint } from './orderChat';
 import { emitSessionExpired, sessionGone } from './sessionEvents';
 import { parseErrorBody } from './apiErrors';
-import { contentTypeFor, type FilePart } from './uploads';
+import { contentTypeFor, filePart, ONBOARDING_BODY_LIMIT_BYTES, type FilePart } from './uploads';
 import { API_BASE } from './config';
 import { UNREAD_COUNT_QUERY } from './polling';
 
 export { API_BASE, WEB_BASE } from './config';
 
 const REQUEST_TIMEOUT_MS = 20000;
+// S18: the onboarding upload carries up to three 10 MB documents; on a slow mobile link that
+// takes longer than a JSON call, so it gets its own wait.
+const UPLOAD_TIMEOUT_MS = 120000;
 
 export class ApiError extends Error {
   // CF-0123: message per form field from the server (src/lib/apiErrors.ts), {} when none.
@@ -63,10 +76,11 @@ export async function request<T>(
   token: string | null,
   options?: RequestInit,
   as: ResponseMode = 'json',
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
-  if (!token) return send<T>(path, null, options, as);
+  if (!token) return send<T>(path, null, options, as, timeoutMs);
   try {
-    return await send<T>(path, (await getAccessToken()) ?? token, options, as);
+    return await send<T>(path, (await getAccessToken()) ?? token, options, as, timeoutMs);
   } catch (err) {
     if (!(err instanceof ApiError && err.status === 401)) throw err;
     const fresh = await getAccessToken({ forceRefresh: true });
@@ -77,7 +91,7 @@ export async function request<T>(
       throw err;
     }
     try {
-      return await send<T>(path, fresh, options, as);
+      return await send<T>(path, fresh, options, as, timeoutMs);
     } catch (again) {
       if (again instanceof ApiError && sessionGone(again.status, true, true)) emitSessionExpired();
       throw again;
@@ -98,9 +112,10 @@ async function send<T>(
   token: string | null,
   options?: RequestInit,
   as: ResponseMode = 'json',
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   // S2: JSON only for a string body. A FormData body goes without a Content-Type, so
   // fetch writes multipart/form-data with the boundary it generated.
   const contentType = contentTypeFor(options?.body);
@@ -257,6 +272,64 @@ export type ApiMyMerchant = {
     logo_url: string | null;
     description: string | null;
   } | null;
+};
+
+/**
+ * S17 (plan §5.12): GET /merchant-applications/me, the account's own application (the web
+ * MerchantApplication in util/api/admin.ts, owner fields). The TIN comes back masked.
+ */
+export type ApiMerchantApplication = {
+  id: number;
+  user_id: number;
+  status: string;
+  submitted_at: string | null;
+  /** Unset while the application is pending_documents (Submit later). */
+  merchant_name: string | null;
+  legal_business_name: string | null;
+  seller_type: SellerType | null;
+  last_name: string | null;
+  first_name: string | null;
+  middle_name: string | null;
+  suffix: string | null;
+  rep_last_name: string | null;
+  rep_first_name: string | null;
+  rep_middle_name: string | null;
+  rep_suffix: string | null;
+  company_name: string | null;
+  trade_name: string | null;
+  vat_status: VatStatus | null;
+  bir_cert_document_original_name: string | null;
+  bir_cert_document_content_type: string | null;
+  small_agri_producer: boolean | null;
+  small_agri_declared_at: string | null;
+  small_agri_declared_year: number | null;
+  terms_accepted_at: string | null;
+  terms_version: string | null;
+  tin: string | null;
+  registration_type: string | null;
+  registration_number: string | null;
+  contact_email: string;
+  contact_number: string;
+  region: string | null;
+  province: string | null;
+  city: string | null;
+  barangay: string | null;
+  address: string | null;
+  postal_code: string | null;
+  available_days: string[];
+  /** The farm pin saved with step 1. */
+  lat?: number | null;
+  lng?: number | null;
+  pin_confirmed?: boolean;
+  rsbsa_number: string | null;
+  rsbsa_document_original_name: string | null;
+  rsbsa_document_content_type: string | null;
+  gov_id_type: string | null;
+  gov_id_document_original_name: string | null;
+  gov_id_document_content_type: string | null;
+  admin_note: string | null;
+  reviewed_at: string | null;
+  merchant_id?: number | null;
 };
 
 /**
@@ -1052,6 +1125,53 @@ export const api = {
         body: JSON.stringify({ number, otp }),
       })
         .then((r) => r.verification_token),
+  },
+  // S17 (plan §5.12): the onboarding contact email gets its own code (backend
+  // api/routes/email_otp.py). Signed in, no captcha; the token says which email it is for
+  // (purpose merchant_email) and goes in the payload as email_verification_token.
+  email: {
+    send: (token: string | null, email: string) =>
+      request<{ ok: boolean }>('/email/otp/send', token, {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+    verify: (token: string | null, email: string, otp: string) =>
+      request<{ ok: boolean; verification_token: string }>('/email/otp/verify', token, {
+        method: 'POST',
+        body: JSON.stringify({ email, otp }),
+      })
+        .then((r) => r.verification_token),
+  },
+  // S17: the account's own merchant application, or null when there is none (404), as the web
+  // fetchMyMerchantApplication.
+  onboarding: {
+    myApplication: (token: string | null) =>
+      request<ApiMerchantApplication>('/merchant-applications/me', token).catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }),
+    // S18: POST /merchant-onboarding/me, multipart as the web submitMyMerchantOnboarding
+    // (util/api/merchants.ts): `payload` as a JSON string, then `rsbsa_file`, `gov_id_file` and
+    // `bir_cert_file` when present. The route allows a 42 MB body (core/body_limit.py); a
+    // larger one is refused here with the server's words, before the upload starts.
+    submit: (token: string | null, payload: OnboardingPayload, documents: OnboardingDocuments) => {
+      const tooLarge = bodyLimitProblem(documents, ONBOARDING_BODY_LIMIT_BYTES);
+      if (tooLarge) return Promise.reject(new ApiError(tooLarge, 413));
+      const form = new FormData();
+      form.append('payload', JSON.stringify(payload));
+      const parts: [string, OnboardingDocuments[keyof OnboardingDocuments]][] = [
+        ['rsbsa_file', documents.rsbsa],
+        ['gov_id_file', documents.govId],
+        ['bir_cert_file', documents.birCert],
+      ];
+      for (const [name, doc] of parts) {
+        // React Native's FormData takes { uri, name, type } as the file part.
+        if (doc) form.append(name, filePart(doc.uri, doc.name, doc.mimeType) as unknown as Blob);
+      }
+      return request<ApiMerchantApplication>(
+        '/merchant-onboarding/me', token, { method: 'POST', body: form }, 'json', UPLOAD_TIMEOUT_MS,
+      );
+    },
   },
   users: {
     me: (token: string | null) =>

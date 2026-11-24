@@ -613,6 +613,18 @@ used voucher has no delete.
    "Next" validates step 1. Not linked from the app yet.
 **Verify:** the three checks.
 **Done when:** step 1 works in isolation and all onboarding rules are tested.
+**Status:** done (2026-11-24): `tsc --noEmit`, `expo lint` and `npm test` (259 tests) are
+green. New: `src/lib/onboarding.ts` (both steps' validation, server-error routing, payload,
+prefill), `src/lib/resendCooldown.ts` + `src/lib/useResendCooldown.ts`,
+`src/components/ContactCodeField.tsx`, `src/screens/OnboardingFormScreen.tsx` (no route yet);
+`api.email.send|verify` and `api.onboarding.myApplication` in `api.ts` (`api.sms` was already
+there from S16). `serviceArea.ts` was already copied in S13; `inStep.test.ts` now checks that
+it equals the web file. Notes: (1) the web asks the seller type on the legal step, not on
+step 1, so the seller types are in the lib and the radio comes with step 2 in S18 (rule 2).
+(2) The web button text is "Continue", not "Next". (3) The OTP bodies have no `purpose`
+field: the server writes `merchant_phone` / `merchant_email` into the token. (4) When the
+account has no verified number, the code goes through BetterAuth (`useAuth().sendPhoneCode`
+/ `verifyPhone`), as on the web.
 **Commit:** none.
 
 ---
@@ -643,6 +655,20 @@ used voucher has no delete.
 **Verify:** the three checks; manual: a new account applies fully on the phone; the admin
 sees the application with both documents; "Submit later" saves step 1 only.
 **Done when:** plan §5.12 "Done" holds.
+**Status:** code done (2026-11-24): `tsc --noEmit`, `expo lint` and `npm test` (271 tests) are
+green. The manual checks (a full application on a phone, the admin sees both documents,
+"Submit later" saves step 1 only) are not done yet. New: `api.onboarding.submit` (multipart,
+the 42 MB check before the upload, a 120 s wait for the upload), step 2 in
+`OnboardingFormScreen.tsx`, `src/lib/application.ts` (status words and the backend status
+map), `ApplicationScreen.tsx` (`/application`), and `OnboardingScreen.tsx` (`/onboarding`:
+status first, else the form, with a "Continue on the web" link). In `app/_layout.tsx`,
+`onboarding` and `application` are in a new group for `allowed` or `forbidden`. Notes:
+(1) The edit button uses the web words "Review and resubmit" (`verification.ts`), not
+"Edit" (rule 2). (2) The app checks each document when the user picks it, so it does not
+keep a file that the server refuses. (3) "Go to Merchant Centre" goes to `/` and runs `retry`
+on the gate. The farm row exists from the first save, so the user then gets the tabs.
+(4) No More row opens `/application` yet; S19 (dashboard checklist) links to it.
+(5) `ComingSoonScreen.tsx` has no route now.
 **Commit:** `feat(mobile-merchant): native onboarding`
 
 ---

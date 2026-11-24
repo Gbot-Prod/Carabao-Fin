@@ -73,8 +73,7 @@ function RootGate() {
         <Stack.Screen name="reviews" options={{ headerShown: false }} />
         <Stack.Screen name="notifications" options={{ headerShown: false }} />
         <Stack.Screen name="order-chat" options={{ headerShown: false }} />
-        {/* Decision D2: placeholders until S14/S15/S16/S18 (S10's earnings, S11's shipments and
-            S12's route are built). */}
+        {/* Decision D2's routes (all built now). */}
         <Stack.Screen name="shipments" options={{ headerShown: false }} />
         <Stack.Screen name="route" options={{ headerShown: false }} />
         <Stack.Screen name="earnings" options={{ headerShown: false }} />
@@ -82,6 +81,14 @@ function RootGate() {
         <Stack.Screen name="shop" options={{ headerShown: false }} />
         <Stack.Screen name="vouchers" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
+      </Stack.Protected>
+      {/* S18: applying and its status are for an account without a farm (`forbidden`) and for a
+          farm still finishing its application (`allowed`, e.g. `?step=business`). */}
+      <Stack.Protected
+        guard={status === 'allowed' || status === 'forbidden'}
+        redirectTo="/auth"
+      >
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="application" options={{ headerShown: false }} />
       </Stack.Protected>
       <Stack.Protected
@@ -95,7 +102,6 @@ function RootGate() {
         redirectTo={status === 'signin' ? '/auth' : '/'}
       >
         <Stack.Screen name="not-merchant" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       </Stack.Protected>
     </Stack>
   );
