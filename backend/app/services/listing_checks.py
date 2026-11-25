@@ -87,6 +87,7 @@ DUPLICATE_LISTING = "DUPLICATE_LISTING"
 POSSIBLE_STOLEN_PHOTO = "POSSIBLE_STOLEN_PHOTO"
 PRICE_TOO_LOW = "PRICE_TOO_LOW"
 PRICE_TOO_HIGH = "PRICE_TOO_HIGH"
+PRICE_ABOVE_LIMIT = "PRICE_ABOVE_LIMIT"
 
 # Price flags (Phase 4): the price per kg against the reference low/high.
 # The reference is the NCR retail price (DA Daily Price Index), where the
@@ -94,6 +95,8 @@ PRICE_TOO_HIGH = "PRICE_TOO_HIGH"
 # retail price, so the low flag is only for prices far below that.
 PRICE_LOW_SHARE = 0.3  # below 0.3 x low: a bait price such as 1 peso
 PRICE_HIGH_SHARE = 2.0  # above 2 x high: usually a typing error
+# A hard limit on every listing, with or without reference data.
+MAX_PRICE_PER_KG = 500
 # Same text as da_price_sync.INHOUSE_SOURCE_PREFIX (no import: da_price_sync
 # imports the audit log, which this module must not need).
 INHOUSE_SOURCE_PREFIX = "Carabao in-house"
@@ -1012,6 +1015,24 @@ def _tier_issue(listing: ListingInput) -> Issue | None:
     return Issue("price_tiers", INVALID_PRICE_TIER, error)
 
 
+def _price_limit_issue(listing: ListingInput) -> Issue | None:
+    """A hard block when the price is above ``MAX_PRICE_PER_KG``.
+
+    Tiers are always cheaper than the price (``pricing_error``), so the
+    price alone is checked.
+    """
+    if listing.price is None:
+        return None
+    if price_per_kg(listing.price, listing.unit, listing.unit_quantity) <= MAX_PRICE_PER_KG:
+        return None
+    return Issue(
+        "price",
+        PRICE_ABOVE_LIMIT,
+        f"The price can be at most {MAX_PRICE_PER_KG} pesos per kg "
+        f"({MAX_PRICE_PER_KG} pesos for each kg in the sale unit).",
+    )
+
+
 def _photo_issue(
     listing: ListingInput, other_photo_hashes: Iterable[int]
 ) -> Issue | None:
@@ -1212,6 +1233,9 @@ def run_checks(
     shelf = _shelf_life_issue(listing)
     if shelf:
         result.soft_flags.append(shelf)
+    limit = _price_limit_issue(listing)
+    if limit:
+        result.hard_blocks.append(limit)
     tier = _tier_issue(listing)
     if tier:
         result.hard_blocks.append(tier)

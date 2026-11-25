@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { Button } from './UI';
 import {
-  addDays, checkListing, LISTING_TIERS_MAX, phToday,
+  addDays, checkListing, LISTING_NAME_MAX, LISTING_TIERS_MAX, phToday,
   type ListingFieldErrors, type PickedPhoto, type TierFields,
 } from '../lib/listingForm';
 import { checkImage, imageMimeType } from '../lib/uploads';
@@ -100,7 +100,7 @@ export function ListingForm({
   const [checked, setChecked] = useState<ProduceCheckResult | null>(null);
   const payloadKey = JSON.stringify(
     visible
-      ? checkPayload({ name, price, stock, harvestDate, bestBefore, minOrderQty, tiers, unit, category }, produce?.id ?? null)
+      ? checkPayload({ name, price, stock, harvestDate, bestBefore, minOrderQty, tiers, unit, category, unitQuantity: produce?.unit_quantity }, produce?.id ?? null)
       : null,
   );
   useEffect(() => {
@@ -183,7 +183,7 @@ export function ListingForm({
   };
 
   const handleSave = () => {
-    const result = checkListing({ name, price, stock, harvestDate, bestBefore, minOrderQty, tiers }, phToday());
+    const result = checkListing({ name, price, stock, harvestDate, bestBefore, minOrderQty, tiers, unitQuantity: produce?.unit_quantity }, phToday());
     if ('error' in result) {
       setLocalFields({ [result.field]: result.error });
       return;
@@ -266,7 +266,7 @@ export function ListingForm({
             )}
 
             <Text style={styles.label}>Name</Text>
-            <TextInput style={styles.input} value={name} onChangeText={setName} />
+            <TextInput style={styles.input} value={name} onChangeText={setName} maxLength={LISTING_NAME_MAX} />
             {fieldNote('name')}
 
             <View style={styles.twoCol}>

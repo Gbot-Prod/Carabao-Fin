@@ -57,6 +57,9 @@ PIN_FLAG_LIMIT = 2
 VERIFIED_RADIUS_M = 10.0
 # The road service gets this many pins at a time (shipment creation, sweep).
 RECHECK_WORKERS = 8
+ROAD_UNCHECKED_DETAIL = (
+    "We could not check the road near this pin now. Try again in a few minutes."
+)
 FLAGGED_PIN_DETAIL = (
     "Riders could not get to this pin on earlier orders. Move the pin to a gate "
     "or road that a rider can get to."
@@ -83,11 +86,15 @@ def _check_coords(lat: float | None, lng: float | None) -> Coords | None:
     return (lat, lng)
 
 
-def validate_pin(lat: float | None, lng: float | None) -> PinCheck | None:
+def validate_pin(
+    lat: float | None, lng: float | None, *, strict: bool = False
+) -> PinCheck | None:
     """Both or neither; inside the Luzon box; a road near it.
 
     Returns the pin and its road point, or None for no pin. A road service
-    outage accepts the pin without a road point (see road_snap).
+    outage accepts the pin without a road point (see road_snap), except with
+    ``strict`` (merchant pickup pins): then the pin is refused with 503,
+    because every delivery starts there.
     """
     pin = _check_coords(lat, lng)
     if pin is None:
@@ -97,6 +104,8 @@ def validate_pin(lat: float | None, lng: float | None) -> PinCheck | None:
         raise HTTPException(status_code=422, detail=NO_ROAD_DETAIL)
     road = snap.road if isinstance(snap, road_snap.Snap) else None
     if road is None and road_snap.provider() != "off":
+        if strict:
+            raise HTTPException(status_code=503, detail=ROAD_UNCHECKED_DETAIL)
         # No coordinates in the log (CF-0059).
         logger.warning("road check skipped: the road service did not answer")
     return PinCheck(pin=pin, road=road)
@@ -123,7 +132,7 @@ def apply_pin(
     setattr(target, f"{prefix}pin_confirmed", bool(check and confirmed))
 
 
-def pin_update(target, updates: dict) -> bool:
+def pin_update(target, updates: dict, *, strict: bool = False) -> bool:
     """Apply a partial update's pin fields (lat, lng, pin_confirmed) to a
     model and drop them from ``updates``. Returns whether anything changed.
 
@@ -136,7 +145,9 @@ def pin_update(target, updates: dict) -> bool:
     confirmed = updates.pop("pin_confirmed", None)
     if confirmed is None:
         confirmed = False if moved else bool(target.pin_confirmed)
-    check = validate_pin(updates.pop("lat", target.lat), updates.pop("lng", target.lng))
+    check = validate_pin(
+        updates.pop("lat", target.lat), updates.pop("lng", target.lng), strict=strict
+    )
     apply_pin(target, check, confirmed=confirmed)
     return True
 

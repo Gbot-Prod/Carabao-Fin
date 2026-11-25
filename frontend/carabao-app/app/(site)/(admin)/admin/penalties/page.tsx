@@ -16,6 +16,7 @@ import Pagination from "@/components/Pagination/Pagination";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import suspend from "../../suspend.module.css";
+import local from "./page.module.css";
 import PageHeader from "../../PageHeader";
 
 type Show = "" | "active" | "inactive";
@@ -123,7 +124,8 @@ function PenaltiesContent() {
         description="Points from rejected listings, counted for 28 days. At 3 points a farm cannot make new listings. At 6 points, review the account and decide if it must be suspended."
       />
 
-      <h2 className={styles.sub}>Farms with points</h2>
+      <section className={local.section}>
+      <h2 className={local.sectionTitle}>Farms with points</h2>
       {accounts.length === 0 ? (
         <div className={styles.state}>No farm has active penalty points.</div>
       ) : (
@@ -176,7 +178,9 @@ function PenaltiesContent() {
           </table>
         </div>
       )}
+      </section>
 
+      <h2 className={local.sectionTitle}>Penalty history</h2>
       <div className={styles.filters}>
         <label className={styles.field}>
           <span>Show</span>

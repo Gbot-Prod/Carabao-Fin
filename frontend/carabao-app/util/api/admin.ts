@@ -4,6 +4,19 @@ import type { Merchant, MerchantPayoutBatch, PayoutProvider, PayoutType, SellerT
 import type { OrderStatus, PayoutStatus, TransactionStatus } from './statuses';
 import type { ListingPenalty, Produce, ProduceStatus } from './produce';
 
+/**
+ * The parts of an application a clarification request can send back
+ * (backend CLARIFICATION_SECTIONS). The applicant changes only these.
+ */
+export const CLARIFICATION_SECTIONS = [
+  { id: "store", label: "Store name" },
+  { id: "location", label: "Address, map pin and available days" },
+  { id: "contact", label: "Contact email and number" },
+  { id: "business", label: "Seller type, legal name and tax details" },
+  { id: "documents", label: "Documents (RSBSA, government ID, BIR 2303)" },
+] as const;
+export type ClarificationSection = (typeof CLARIFICATION_SECTIONS)[number]["id"];
+
 export type MerchantApplication = {
   id: number;
   user_id: number;
@@ -55,6 +68,8 @@ export type MerchantApplication = {
   gov_id_document_content_type: string | null;
   admin_note: string | null;
   reviewed_at: string | null;
+  /** Clarification: the sections the admin flagged. null: every section is open. */
+  clarification_sections?: ClarificationSection[] | null;
   merchant_id?: number | null;
   /** Admin view only: the automated document checks (backend document_checks.py). */
   check_status?: 'pending' | 'completed' | 'failed' | null;
@@ -308,11 +323,14 @@ export const reviewMerchantApplication = async (
   admin_note?: string,
   /** The checklist items the admin ticked; Accept needs every warn and fail one. */
   confirmed_items: string[] = [],
+  /** Clarification only: the sections the applicant must change. */
+  sections: ClarificationSection[] = [],
 ): Promise<MerchantApplication> => {
   const res = await apiClient.patch<MerchantApplication>(`/admin/merchant-applications/${id}`, {
     status,
     admin_note: admin_note ?? null,
     confirmed_items,
+    sections,
   });
   return res.data;
 };

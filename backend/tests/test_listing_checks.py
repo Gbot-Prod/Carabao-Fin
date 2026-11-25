@@ -237,6 +237,14 @@ def test_a_larger_quantity_cannot_cost_more_per_unit():
     assert ("price_tiers", lc.INVALID_PRICE_TIER) in _codes(result.hard_blocks)
 
 
+def test_price_above_500_per_kg_is_a_hard_block():
+    over = _check(name="Talong", price=501)
+    assert ("price", lc.PRICE_ABOVE_LIMIT) in _codes(over.hard_blocks)
+    # 2000 pesos for a 5 kg sale unit is 400 pesos per kg.
+    ok = _check(name="Talong", price=2000, unit_quantity=5)
+    assert lc.PRICE_ABOVE_LIMIT not in {i.code for i in ok.hard_blocks}
+
+
 def test_duplicate_listing_same_name_and_unit():
     others = [("TALONG ", "kg"), ("Ampalaya", "kg")]
     dup = _check(name="talong", unit="kg", other_listings=others)

@@ -42,7 +42,27 @@
   cursor: pointer;
 }
 
+.confirm:disabled,
+.locate:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.edit {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 1px solid var(--green-600);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--green-600);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .confirm:focus-visible,
+.edit:focus-visible,
 .locate:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);

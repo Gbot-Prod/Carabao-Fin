@@ -940,9 +940,10 @@
 }
 
 /* ── Forms ───────────────────────────────────────────────────────────────── */
+/* Light green tint so the open add/edit form stands out from the list. */
 .produceForm {
-  background: var(--bg-white);
-  border: 1px solid rgba(23, 61, 37, 0.10);
+  background: #eef6f0;
+  border: 1px solid #b7d8c0;
   border-radius: var(--radius-md);
   padding: 18px;
 }

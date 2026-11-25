@@ -608,14 +608,26 @@ def run_checks(
     return checklist
 
 
-def run_and_save(db: Session, application: Any, documents: dict[str, bytes]) -> None:
+def run_and_save(
+    db: Session,
+    application: Any,
+    documents: dict[str, bytes],
+    stored: Iterable[str] = (),
+) -> None:
     """Run the checks and commit. Never raises: a failure is saved as
-    check_status "failed" (the admin can re-run, or review by hand)."""
+    check_status "failed" (the admin can re-run, or review by hand).
+
+    ``stored``: documents to read from the private bucket in addition to
+    ``documents`` (kept from an earlier submit).
+    """
     app_id = application.id
     try:
         application.check_status = PENDING
         # A new run is a new review: earlier confirmations no longer apply.
         application.check_confirmations = None
+        wanted = set(stored)
+        if wanted:
+            documents = {**load_documents(application, only=wanted), **documents}
         run_checks(db, application, documents)
         application.check_status = COMPLETED
         application.checked_at = datetime.now(UTC)
@@ -632,9 +644,12 @@ def run_and_save(db: Session, application: Any, documents: dict[str, bytes]) -> 
             db.commit()
 
 
-def load_documents(application: Any) -> dict[str, bytes]:
+def load_documents(
+    application: Any, only: set[str] | None = None
+) -> dict[str, bytes]:
     """The application's uploaded files from the private bucket (for a re-run).
 
+    ``only``: these documents only (rsbsa, gov_id, bir_cert).
     A download error is left to propagate; run_and_save is not reached then,
     so the caller sees a 502 instead of a silently empty checklist.
     """
@@ -643,6 +658,8 @@ def load_documents(application: Any) -> dict[str, bytes]:
 
     documents: dict[str, bytes] = {}
     for doc in DOCUMENT_LABELS:
+        if only is not None and doc not in only:
+            continue
         path = getattr(application, f"{doc}_document_path")
         if not path:
             continue

@@ -176,7 +176,7 @@ function AddressPanel({ addresses, recipient, onChanged }: {
     else if (!phone) errors.recipient_phone = 'Enter a PH mobile number, e.g. 0917 123 4567.';
     // Every address needs a pin; a suggested one counts only once confirmed or moved.
     if (!pin) errors.pin = 'Place your pin on the map at your gate or door.';
-    else if (!pinConfirmed) errors.pin = 'Move the pin to your gate or door, or tap “This pin is correct”.';
+    else if (!pinConfirmed) errors.pin = 'Put the pin at your gate or door, then click “Confirm pin”.';
     setFieldErrors(errors);
     if (Object.keys(errors).length) {
       requestAnimationFrame(focusFirstInvalid);

@@ -156,13 +156,19 @@ def _later(db, user, seller_type="individual_farmer", files=None, **overrides):
     return _post(db, user, body, files)
 
 
-def _review(db, application, status):  # noqa: F811
+def _review(db, application, status, **extra):  # noqa: F811
     # The admin ticks every checklist item they reviewed (Accept needs them).
     db.refresh(application)
     confirmed = [item["id"] for item in application.check_checklist or []]
+    body: dict = {"status": status, "confirmed_items": confirmed}
+    # Reject and clarification need a note; clarification flags sections
+    # (here all of them, so the whole form is open again).
+    if status in ("rejected", "clarification"):
+        body["admin_note"] = "Please correct the application."
+    if status == "clarification":
+        body["sections"] = ["store", "location", "contact", "business", "documents"]
     return _admin_client(db, _staff(db)).patch(
-        f"/admin/merchant-applications/{application.id}",
-        json={"status": status, "confirmed_items": confirmed},
+        f"/admin/merchant-applications/{application.id}", json={**body, **extra}
     )
 
 

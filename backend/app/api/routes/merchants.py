@@ -438,7 +438,7 @@ def update_my_merchant(
         for key in area_keys:
             updates.pop(key, None)
         updates.update(area.columns(), postal_code=postal)
-    pin_changed = pin_update(merchant, updates)
+    pin_changed = pin_update(merchant, updates, strict=True)
     if "contact_number" in updates:
         number = updates.pop("contact_number")
         _set_contact_number(merchant, current_user, number, token)

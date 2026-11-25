@@ -120,7 +120,7 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
       return;
     }
     if (!draft.pin_confirmed) {
-      setPinError("Move the pin to your gate or door, or tap “This pin is correct”.");
+      setPinError("Put the pin at your gate or door, then click “Confirm pin”.");
       requestAnimationFrame(focusFirstInvalid);
       return;
     }
@@ -225,6 +225,7 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
             <MapPinPicker
               value={draft.lat != null && draft.lng != null ? { lat: draft.lat, lng: draft.lng } : null}
               confirmed={draft.pin_confirmed}
+              strict
               onChange={(pin, confirmed) => {
                 setDraft((d) => ({ ...d, lat: pin.lat, lng: pin.lng, pin_confirmed: confirmed }));
                 if (confirmed) setPinError(null);

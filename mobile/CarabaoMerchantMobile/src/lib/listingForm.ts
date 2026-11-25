@@ -4,6 +4,7 @@
 
 export const LISTING_NAME_MAX = 100; // backend MAX_NAME
 export const LISTING_PRICE_MAX = 1_000_000; // backend MAX_PRICE
+export const LISTING_PRICE_PER_KG_MAX = 500; // backend listing_checks.MAX_PRICE_PER_KG
 export const LISTING_STOCK_MAX = 10_000_000; // backend MAX_STOCK
 export const LISTING_TIERS_MAX = 5; // backend MAX_PRICE_TIERS (CF-0116)
 
@@ -40,6 +41,8 @@ export type ListingFields = {
   minOrderQty?: string;
   /** Rows with both boxes blank are left out. */
   tiers?: TierFields[];
+  /** Kg in one sale unit (the listing's unit_quantity). Blank = 1. */
+  unitQuantity?: number | null;
 };
 
 export type PriceTier = { min_qty: number; unit_price: number };
@@ -82,6 +85,10 @@ export function checkListing(f: ListingFields, today: string): { ok: ListingValu
       error: `Price must be a whole number of pesos from 1 to ${LISTING_PRICE_MAX.toLocaleString('en-PH')}.`,
       field: 'price',
     };
+  }
+  const kg = f.unitQuantity && f.unitQuantity > 0 ? f.unitQuantity : 1;
+  if (price / kg > LISTING_PRICE_PER_KG_MAX) {
+    return { error: `The price can be at most ${LISTING_PRICE_PER_KG_MAX} pesos per kg.`, field: 'price' };
   }
   const stock = parseWhole(f.stock);
   if (stock === null || stock > LISTING_STOCK_MAX) {

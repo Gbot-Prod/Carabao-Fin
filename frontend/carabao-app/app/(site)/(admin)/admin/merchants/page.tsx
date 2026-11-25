@@ -11,6 +11,7 @@ import {
 } from "@/util/api/admin";
 import { SELLER_TYPE_LABELS } from "@/util/api/merchants";
 import Pagination from "@/components/Pagination/Pagination";
+import { appUrl } from "@/lib/urls";
 import SuspendControl from "../../SuspendControl";
 import styles from "./page.module.css";
 import PageHeader from "../../PageHeader";
@@ -322,9 +323,9 @@ function ShopPreview({ merchant: m }: { merchant: AdminMerchant }) {
       <div className={details.shopBar}>
         <span>Shop preview{shop ? "" : " · no shop page set up"}</span>
         {isPublic ? (
-          <Link href={`/farms/${m.id}`} target="_blank" className={details.link}>
+          <a href={appUrl(`/farms/${m.id}`)} target="_blank" rel="noreferrer" className={details.link}>
             Open public page ↗
-          </Link>
+          </a>
         ) : (
           <span className={details.muted}>Not visible to buyers</span>
         )}

@@ -80,6 +80,17 @@
   background: #f6f9f7;
 }
 
+/* Light green tint on an open card so it stands out from the list. */
+.cardOpen {
+  border-color: #b7d8c0;
+  background: #eef6f0;
+}
+
+.cardOpen .cardHeader,
+.cardOpen .cardHeader:hover {
+  background: #e6f2e9;
+}
+
 .cardMeta {
   display: flex;
   flex-direction: column;
@@ -326,6 +337,27 @@
 .actionBtnClarify.actionBtnSelected {
   background: #ffedd5;
   border-color: #fb923c;
+}
+
+/* Clarification: the sections the applicant must change. */
+.sectionPicker {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #fed7aa;
+  border-radius: var(--radius-sm);
+  background: #fff7ed;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #1a2e20;
+  cursor: pointer;
 }
 
 .noteInput {

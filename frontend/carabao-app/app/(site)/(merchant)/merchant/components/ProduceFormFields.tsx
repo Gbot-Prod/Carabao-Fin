@@ -1,5 +1,5 @@
 import styles from "../page.module.css";
-import { PRODUCE_DESCRIPTION_MAX, PRODUCE_NAME_MAX } from "@/lib/input-limits";
+import { PRODUCE_DESCRIPTION_MAX, PRODUCE_NAME_MAX, PRODUCE_PRICE_PER_KG_MAX } from "@/lib/input-limits";
 import type { PriceTier, Produce, ProduceCreatePayload } from "@/util/api";
 import { todayInManila } from "../lib/format";
 import ReferencePriceHint from "@/components/ReferencePrice/ReferencePriceHint";
@@ -270,7 +270,7 @@ export default function ProduceFormFields({
       <div className={styles.priceRow}>
         <label className={`${styles.formLabel} ${styles.grow1}`}>
           {t.listing.price}
-          <input className={styles.formInput} type="number" min="0" value={form.price} onChange={(e) => onChange({ ...form, price: Number(e.target.value) })} />
+          <input className={styles.formInput} type="number" min="0" max={PRODUCE_PRICE_PER_KG_MAX * (form.unit_quantity || 1)} value={form.price} onChange={(e) => onChange({ ...form, price: Number(e.target.value) })} />
         </label>
         <div className={styles.pricePerLabel}>{t.listing.per}</div>
         <label className={`${styles.formLabel} ${styles.qtyField}`}>

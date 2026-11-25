@@ -36,13 +36,21 @@ type Area = { pin: Pin; placeName: string | null; location: LocationValue | null
 
 type Props = {
   value: Pin | null;
-  /** `confirmed`: the person placed it (click, drag, their location), not the address. */
+  /**
+   * `confirmed`: true only after "Confirm pin" and a road check that passed.
+   * A click, drag, their location, or the address gives an unconfirmed pin.
+   */
   onChange: (pin: Pin, confirmed: boolean) => void;
   /**
-   * Whether the person placed or confirmed the current pin. A pin placed from
-   * the address is only a suggestion: forms save it only once confirmed.
+   * Whether the person confirmed the current pin. Forms save a pin only once
+   * confirmed. A confirmed pin is locked on the map until "Edit pin".
    */
   confirmed?: boolean;
+  /**
+   * Merchant pickup pins: "Confirm pin" also fails when the road check did
+   * not run (road service down), because every delivery starts there.
+   */
+  strict?: boolean;
   /** Shown under the map, e.g. when saving with the suggested pin not confirmed. */
   error?: string | null;
   /**
@@ -77,7 +85,7 @@ function PinNotice({ title, body }: { title: string; body: string }) {
  * second marker shows where the rider stops, and a pin with no road is
  * reported before the form is saved.
  */
-export default function MapPinPicker({ value, onChange, confirmed, address, error }: Props) {
+export default function MapPinPicker({ value, onChange, confirmed, address, error, strict = false }: Props) {
   const { t } = useLanguage();
   const container = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
@@ -85,6 +93,9 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
   const roadMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const onChangeRef = useRef(onChange);
   const valueRef = useRef(value);
+  // A confirmed pin is locked: map clicks do not move it.
+  const lockedRef = useRef(!!confirmed);
+  const [confirming, setConfirming] = useState(false);
   // The pin last placed from the address; while the value is still this pin,
   // address edits move it. Once the person moves it, it stays put.
   const autoPinRef = useRef<{ pin: Pin; zoom: number } | null>(null);
@@ -105,6 +116,12 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
     valueRef.current = value;
   }, [onChange, value]);
 
+  const locked = !!value && !!confirmed;
+  useEffect(() => {
+    lockedRef.current = locked;
+    markerRef.current?.setDraggable(!locked);
+  }, [locked, ready]);
+
   const showRoad = useCallback((result: PinCheckResult | null) => {
     const map = mapRef.current;
     const marker = roadMarkerRef.current;
@@ -117,25 +134,32 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
     }
   }, []);
 
+  /** Check the pin; returns whether it can be confirmed. Shows the answer. */
   const runCheck = useCallback(
-    async (pin: Pin, seq: number) => {
+    async (pin: Pin, seq: number): Promise<boolean> => {
       setCheck({ state: "checking" });
       showRoad(null);
       try {
-        const result = await checkPin(pin);
-        if (seq !== seqRef.current) return;
+        const result = await checkPin(pin, strict);
+        if (seq !== seqRef.current) return false;
         setCheck({ state: "ok", result });
         showRoad(result);
+        return !result.blocked;
       } catch (error) {
-        if (seq !== seqRef.current) return;
+        if (seq !== seqRef.current) return false;
         const code = getApiErrorStatus(error);
         if (code === 422) setCheck({ state: "error", message: t.mapPin.noRoad });
         else if (code === 400) setCheck({ state: "error", message: getApiErrorMessage(error, t.mapPin.noRoad) });
+        else if (code === 503 || strict) setCheck({ state: "error", message: t.mapPin.unchecked });
         // Anything else (offline, rate limit): the save checks again, so stay quiet.
-        else setCheck({ state: "idle" });
+        else {
+          setCheck({ state: "idle" });
+          return true;
+        }
+        return false;
       }
     },
-    [showRoad, t.mapPin.noRoad],
+    [showRoad, strict, t.mapPin.noRoad, t.mapPin.unchecked],
   );
 
   const lookUpArea = useCallback(async (pin: Pin, seq: number) => {
@@ -149,10 +173,21 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
     if (seq === seqRef.current) setArea(found);
   }, []);
 
-  /** The person placed the pin (click, drag, or their location). */
+  /** The person placed the pin (click, drag, or their location): not yet confirmed. */
   const place = useCallback((pin: Pin) => {
-    onChangeRef.current(pin, true);
+    onChangeRef.current(pin, false);
   }, []);
+
+  /** "Confirm pin": the pin is confirmed only when the road check passes. */
+  const confirmPin = async () => {
+    if (!value || confirming) return;
+    const seq = seqRef.current;
+    const current = check.state === "ok" && samePin({ lat: check.result.lat, lng: check.result.lng }, value);
+    setConfirming(true);
+    const ok = current ? !check.result.blocked : await runCheck(value, seq);
+    setConfirming(false);
+    if (ok && seq === seqRef.current) onChangeRef.current(value, true);
+  };
 
   // Create the map once the address is complete; mapbox-gl is loaded only in the browser.
   useEffect(() => {
@@ -172,7 +207,7 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
       });
       map.addControl(new mapbox.NavigationControl({ showCompass: false }), "top-right");
       map.on("error", () => setStatus("unavailable"));
-      const marker = new mapbox.Marker({ draggable: true, color: PIN_COLOR });
+      const marker = new mapbox.Marker({ draggable: !lockedRef.current, color: PIN_COLOR });
       const roadMarker = new mapbox.Marker({ color: ROAD_COLOR, scale: 0.7 });
       roadMarker.getElement().setAttribute("aria-label", t.mapPin.roadMarker);
       roadMarker.getElement().title = t.mapPin.roadMarker;
@@ -181,6 +216,7 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
         place({ lat, lng });
       });
       map.on("click", (e) => {
+        if (lockedRef.current) return;
         marker.setLngLat(e.lngLat).addTo(map!);
         place({ lat: e.lngLat.lat, lng: e.lngLat.lng });
       });
@@ -305,8 +341,8 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
   const mismatch = currentArea
     ? pinAreaMismatch(currentArea.location, { province: address.province, city: address.city })
     : null;
-  // Placed from the address in this visit, or a saved pin nobody placed by hand.
-  const fromAddress = !!value && (samePin(value, autoPin) || confirmed === false);
+  // Placed from the address in this visit (a suggestion to check and confirm).
+  const fromAddress = !!value && samePin(value, autoPin);
 
   let checkNote: { text: string; tone: "info" | "warn" | "error" } | null = null;
   if (check.state === "checking") checkNote = { text: t.mapPin.checking, tone: "info" };
@@ -324,7 +360,7 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
     <div className={`${styles.wrap}${invalidClass(error)}`}>
       <div className={styles.header}>
         <span className={styles.label}>{t.mapPin.label}</span>
-        <button type="button" className={styles.locate} onClick={useMyLocation} disabled={status === "locating"}>
+        <button type="button" className={styles.locate} onClick={useMyLocation} disabled={status === "locating" || locked}>
           {status === "locating" ? t.mapPin.locating : t.mapPin.useMyLocation}
         </button>
       </div>
@@ -337,13 +373,27 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
             ? notFound
               ? t.mapPin.notFound
               : t.mapPin.hint
-            : fromAddress
-              ? t.mapPin.fromAddress
-              : currentArea?.placeName ?? t.mapPin.pinned}
+            : locked
+              ? currentArea?.placeName
+                ? `${t.mapPin.pinned} ${currentArea.placeName}`
+                : t.mapPin.pinned
+              : fromAddress
+                ? t.mapPin.fromAddress
+                : t.mapPin.placed}
       </p>
-      {value && confirmed === false && (
-        <button type="button" className={styles.confirm} onClick={() => onChangeRef.current(value, true)}>
-          {t.mapPin.confirmPin}
+      {value && !locked && (
+        <button
+          type="button"
+          className={styles.confirm}
+          onClick={() => void confirmPin()}
+          disabled={confirming || check.state === "checking"}
+        >
+          {confirming ? t.mapPin.checking : t.mapPin.confirmPin}
+        </button>
+      )}
+      {locked && (
+        <button type="button" className={styles.edit} onClick={() => onChangeRef.current(value, false)}>
+          {t.mapPin.editPin}
         </button>
       )}
       <FieldError id="map-pin" message={error} />

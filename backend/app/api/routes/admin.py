@@ -759,6 +759,8 @@ def review_merchant_application(
             payload.status,
             admin_id=admin.id,
             confirmed_items=payload.confirmed_items,
+            admin_note=payload.admin_note,
+            sections=list(payload.sections),
         )
     except (ValueError, IntegrityError) as exc:
         db.rollback()
@@ -772,6 +774,7 @@ def review_merchant_application(
     after: dict = {
         "status": application.status,
         "admin_note": application.admin_note,
+        "clarification_sections": application.clarification_sections,
         "merchant_id": application.merchant_id,
         "verification_status": merchant.verification_status if merchant else None,
     }

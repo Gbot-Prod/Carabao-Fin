@@ -156,6 +156,10 @@ class MerchantApplication(Base):
 
     # Admin review
     admin_note = Column(String, nullable=True)
+    # Set with a clarification request: the sections (CLARIFICATION_SECTIONS)
+    # the applicant must change. The other sections stay as sent. NULL: none
+    # flagged, so every section is open.
+    clarification_sections = Column(JSON, nullable=True)
     # The admin who made the last decision, and when.
     reviewed_by_user_id = Column(
         Integer, ForeignKey("backend_users.id", ondelete="SET NULL"), nullable=True

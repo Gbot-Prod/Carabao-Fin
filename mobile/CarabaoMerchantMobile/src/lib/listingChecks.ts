@@ -111,6 +111,7 @@ export function checkPayload(
   f: {
     name: string; price: string; stock: string; harvestDate: string; bestBefore: string;
     minOrderQty: string; tiers: TierFields[]; unit: 'kg'; category: 'Vegetables' | 'Fruits' | null;
+    unitQuantity?: number | null;
   },
   produceId: number | null,
 ) {
@@ -123,6 +124,7 @@ export function checkPayload(
     name: f.name.trim() || null,
     category: f.category,
     unit: f.unit,
+    unit_quantity: f.unitQuantity && f.unitQuantity > 0 ? f.unitQuantity : null,
     price: price !== null && price >= 1 && price <= 1_000_000 ? price : null,
     stock_quantity: whole(f.stock),
     harvest_date: ymd(f.harvestDate),

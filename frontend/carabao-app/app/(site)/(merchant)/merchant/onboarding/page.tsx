@@ -35,6 +35,7 @@ import {
   type SubmitMode,
   type VatStatus,
 } from "@/util/api";
+import { CLARIFICATION_SECTIONS, type ClarificationSection } from "@/util/api/admin";
 
 type StepId = "ops" | "legal";
 
@@ -221,8 +222,39 @@ const INITIAL_FORM: FormState = {
   terms_accepted: false,
 };
 
-/** Applications the applicant may send again, so the form starts from what they sent. */
-const PREFILL_STATUSES = new Set(["pending_documents", "clarification", "rejected"]);
+/**
+ * Applications the applicant finishes or corrects, so the form starts from
+ * what they sent. A rejected application starts over with an empty form.
+ */
+const PREFILL_STATUSES = new Set(["pending_documents", "clarification"]);
+/** Applications whose contact email and number were verified when sent. */
+const SAVED_CONTACT_STATUSES = new Set(["pending_documents", "clarification", "rejected"]);
+
+/**
+ * The flagged sections of a clarification request, or null when every
+ * section is open (no request, or none flagged).
+ */
+function flaggedSections(app: MerchantApplication | null): Set<ClarificationSection> | null {
+  if (app?.status !== "clarification" || !app.clarification_sections?.length) return null;
+  return new Set(app.clarification_sections);
+}
+
+/**
+ * A group of fields from one clarification section. Not flagged: the
+ * fields are disabled, and the server keeps what was sent.
+ */
+function SectionLock({ open, flagged, children }: { open: boolean; flagged: boolean; children: ReactNode }) {
+  return (
+    <fieldset disabled={!open} className={styles.sectionLock}>
+      {flagged && (
+        <p className={`${styles.fieldFull} ${open ? styles.sectionFlagged : styles.sectionLocked}`}>
+          {open ? "Flagged by Carabao: change this section." : "Not flagged: this section stays as you sent it."}
+        </p>
+      )}
+      {children}
+    </fieldset>
+  );
+}
 
 /** The saved application as form values. The TIN comes back masked, so it is entered again. */
 function formFromApplication(app: MerchantApplication): Partial<FormState> {
@@ -417,6 +449,18 @@ export default function MerchantOnboardingPage() {
   const [emailVerificationToken, setEmailVerificationToken] = useState<string | null>(null);
 
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
+  // The saved application (Submit later, sent back, or rejected), if any.
+  const [application, setApplication] = useState<MerchantApplication | null>(null);
+  const flags = flaggedSections(application);
+  const isOpen = (section: ClarificationSection) => flags === null || flags.has(section);
+  const clarifying = application?.status === "clarification";
+  // A document not flagged for changes stays as sent (no new upload).
+  const storedDocument = {
+    rsbsa: application?.rsbsa_document_original_name ?? null,
+    govId: application?.gov_id_document_original_name ?? null,
+    birCert: application?.bir_cert_document_original_name ?? null,
+  };
+  const keepsDocument = (kind: keyof typeof storedDocument) => !isOpen("documents") && !!storedDocument[kind];
 
   const later = form.submit_mode === "later";
   const sellerType = form.seller_type;
@@ -464,8 +508,19 @@ export default function MerchantOnboardingPage() {
       // from what was sent. The map pin and the documents are given again.
       try {
         const application = await fetchMyMerchantApplication();
+        if (application && SAVED_CONTACT_STATUSES.has(application.status)) setApplication(application);
         if (application && PREFILL_STATUSES.has(application.status)) {
-          setForm((prev) => ({ ...prev, ...formFromApplication(application) }));
+          const sentBack = application.status === "clarification";
+          setForm((prev) => ({
+            ...prev,
+            ...formFromApplication(application),
+            // A clarification is answered with Submit now.
+            ...(sentBack ? { submit_mode: "now" as const } : {}),
+            // A locked business section keeps its TIN: show the masked one.
+            ...(sentBack && flaggedSections(application) && !flaggedSections(application)!.has("business")
+              ? { tin: application.tin ?? "" }
+              : {}),
+          }));
           // From the dashboard checklist or a reminder: open the business step.
           if (new URLSearchParams(window.location.search).get("step") === "business") {
             const legal = STEPS.findIndex((s) => s.id === "legal");
@@ -480,10 +535,18 @@ export default function MerchantOnboardingPage() {
   }, []);
 
   const fullPhoneNumber = `+63${form.contact_number.replace(/\s/g, "")}`;
-  const isAccountPhone = accountPhone !== null && normalizePhMobile(fullPhoneNumber) === accountPhone;
-  const phoneVerified = isAccountPhone || phoneVerificationToken !== null;
-  const isAccountEmail = accountEmail !== null && normalizeEmail(form.contact_email) === accountEmail;
-  const emailVerified = isAccountEmail || emailVerificationToken !== null;
+  // Verified once is enough: the account's own number and email, and the ones
+  // this application already saved (verified when sent), need no new code.
+  const savedPhone = application ? normalizePhMobile(application.contact_number) : null;
+  const savedEmail = application ? normalizeEmail(application.contact_email) : null;
+  const typedPhone = normalizePhMobile(fullPhoneNumber);
+  const isAccountPhone = accountPhone !== null && typedPhone === accountPhone;
+  const isKnownPhone = isAccountPhone || (typedPhone !== null && typedPhone === savedPhone);
+  const phoneVerified = isKnownPhone || phoneVerificationToken !== null;
+  const typedEmail = normalizeEmail(form.contact_email);
+  const isAccountEmail = accountEmail !== null && typedEmail === accountEmail;
+  const isKnownEmail = isAccountEmail || (typedEmail !== "" && typedEmail === savedEmail);
+  const emailVerified = isKnownEmail || emailVerificationToken !== null;
 
   const setField =
     <K extends keyof FormState>(key: K) =>
@@ -555,29 +618,48 @@ export default function MerchantOnboardingPage() {
   // Every problem in a step, keyed by field. Mirrors the backend payload models.
   const validateStep = (id: StepId): FieldErrors<FieldKey> => {
     const errors: FieldErrors<FieldKey> = {};
+    // A section not flagged in a clarification request is kept as sent: not checked here.
     if (id === "ops") {
       const merchantName = form.merchant_name.trim();
-      if (!merchantName) errors.merchant_name = "Merchant name is required.";
-      else if (merchantName.length < 3) errors.merchant_name = "Merchant name must be at least 3 characters.";
-      if (!form.address.trim()) errors.address = "Enter your street / house no.";
-      if (!form.region.trim()) errors.region = "Select your region.";
-      else if (!form.province.trim() && !isNcrRegion(form.region)) errors.province = "Select your province.";
-      if (form.region.trim() && !form.city?.trim()) errors.city = "Select your city / municipality.";
-      if (form.city?.trim() && !form.barangay?.trim()) errors.barangay = "Select your barangay.";
-      if (!form.postal_code?.trim()) errors.postal_code = "Postal code is required.";
-      // The farm needs a pin (deliveries start there); a suggested one counts only once confirmed.
-      if (form.lat == null) errors.pin = "Place your pin on the map at your gate or door.";
-      else if (!form.pin_confirmed) errors.pin = "Move the pin to your gate or door, or tap “This pin is correct”.";
-      if (!Array.isArray(form.available_days) || form.available_days.length === 0)
-        errors.available_days = "Select at least one available day.";
-      if (!form.contact_email.trim()) errors.contact_email = "Contact email is required.";
-      else if (!emailVerified) errors.contact_email = "Verify your contact email first.";
-      if (!phoneVerified) errors.contact_number = "Verify your contact number first.";
+      if (isOpen("store")) {
+        if (!merchantName) errors.merchant_name = "Merchant name is required.";
+        else if (merchantName.length < 3) errors.merchant_name = "Merchant name must be at least 3 characters.";
+      }
+      if (isOpen("location")) {
+        if (!form.address.trim()) errors.address = "Enter your street / house no.";
+        if (!form.region.trim()) errors.region = "Select your region.";
+        else if (!form.province.trim() && !isNcrRegion(form.region)) errors.province = "Select your province.";
+        if (form.region.trim() && !form.city?.trim()) errors.city = "Select your city / municipality.";
+        if (form.city?.trim() && !form.barangay?.trim()) errors.barangay = "Select your barangay.";
+        if (!form.postal_code?.trim()) errors.postal_code = "Postal code is required.";
+        // The farm needs a pin (deliveries start there); a suggested one counts only once confirmed.
+        if (form.lat == null) errors.pin = "Place your pin on the map at your gate or door.";
+        else if (!form.pin_confirmed) errors.pin = "Put the pin at your gate or door, then click “Confirm pin”.";
+        if (!Array.isArray(form.available_days) || form.available_days.length === 0)
+          errors.available_days = "Select at least one available day.";
+      }
+      if (isOpen("contact")) {
+        if (!form.contact_email.trim()) errors.contact_email = "Contact email is required.";
+        else if (!emailVerified) errors.contact_email = "Verify your contact email first.";
+        if (!phoneVerified) errors.contact_number = "Verify your contact number first.";
+      }
       return errors;
     }
     if (!form.submit_mode) errors.submit_mode = "Choose Submit now or Submit later.";
     if (!sellerType) errors.seller_type = "Select your seller type.";
     if (later || !sellerType) return errors;
+    if (!form.terms_accepted) errors.terms_accepted = "Accept the Terms of Service and Data Privacy Policy to submit.";
+    const fileError = (kind: keyof typeof storedDocument, file: File | null, label: string) =>
+      keepsDocument(kind) ? null : documentError(file, label);
+    if (isRegistered(sellerType)) {
+      const certError = fileError("birCert", birCertFile, "BIR Certificate of Registration (Form 2303)");
+      if (certError) errors.bir_cert_file = certError;
+    }
+    const rsbsaError = fileError("rsbsa", rsbsaFile, "RSBSA document");
+    if (rsbsaError) errors.rsbsa_file = rsbsaError;
+    const govIdError = fileError("govId", govIdFile, "government ID");
+    if (govIdError) errors.gov_id_file = govIdError;
+    if (!isOpen("business")) return errors;
 
     const required = (key: TextKey, message: string) => {
       if (!form[key].trim()) errors[key] = message;
@@ -602,17 +684,9 @@ export default function MerchantOnboardingPage() {
       required("registration_number", `${registration?.agency ?? "Registration"} number is required.`);
       if (!tinDigits) errors.tin = "TIN is required.";
       if (!form.vat_status) errors.vat_status = "Choose your VAT registration status.";
-      const certError = documentError(birCertFile, "BIR Certificate of Registration (Form 2303)");
-      if (certError) errors.bir_cert_file = certError;
     }
     if (tinDigits && !TIN_DIGITS.test(tinDigits))
       errors.tin = "Enter the 9-digit TIN plus the 3-5 digit branch code, e.g. 123-456-789-000.";
-
-    const rsbsaError = documentError(rsbsaFile, "RSBSA document");
-    if (rsbsaError) errors.rsbsa_file = rsbsaError;
-    const govIdError = documentError(govIdFile, "government ID");
-    if (govIdError) errors.gov_id_file = govIdError;
-    if (!form.terms_accepted) errors.terms_accepted = "Accept the Terms of Service and Data Privacy Policy to submit.";
     return errors;
   };
 
@@ -665,15 +739,22 @@ export default function MerchantOnboardingPage() {
         contact_email: form.contact_email.trim(),
         contact_number: form.contact_number.trim() ? `+63 ${form.contact_number.trim()}` : "",
         available_days: [...form.available_days].sort((a, b) => dayOrder(a) - dayOrder(b)),
-        phone_verification_token: isAccountPhone ? "" : phoneVerificationToken ?? "",
-        email_verification_token: isAccountEmail ? "" : emailVerificationToken ?? "",
+        phone_verification_token: isKnownPhone ? "" : phoneVerificationToken ?? "",
+        email_verification_token: isKnownEmail ? "" : emailVerificationToken ?? "",
         merchant_name: form.merchant_name.trim(),
         // Submit later sends step 1 (with the shop name) and the seller type only.
         ...(later ? {} : businessPayload(form)),
       };
       const merchantApplication = await submitMyMerchantOnboarding(
         payload,
-        later ? {} : { rsbsa: rsbsaFile, govId: govIdFile, birCert: isRegistered(sellerType) ? birCertFile : null },
+        later
+          ? {}
+          : {
+              // A kept document is not sent again.
+              rsbsa: keepsDocument("rsbsa") ? null : rsbsaFile,
+              govId: keepsDocument("govId") ? null : govIdFile,
+              birCert: isRegistered(sellerType) && !keepsDocument("birCert") ? birCertFile : null,
+            },
       );
       setSuccessApplication(merchantApplication);
     } catch (error: unknown) {
@@ -789,8 +870,27 @@ export default function MerchantOnboardingPage() {
         </nav>
 
         <div className={styles.body}>
+          {(clarifying || application?.status === "rejected") && (
+            <div className={styles.reviewNote} role="note">
+              <strong className={styles.reviewNoteTitle}>
+                {clarifying ? "Carabao asked for changes" : "Your application was not approved"}
+              </strong>
+              {application?.admin_note && <p className={styles.reviewNoteText}>{application.admin_note}</p>}
+              <p className={styles.reviewNoteText}>
+                {clarifying
+                  ? flags
+                    ? `Change these sections: ${CLARIFICATION_SECTIONS.filter((s) => flags.has(s.id))
+                        .map((s) => s.label.toLowerCase())
+                        .join("; ")}. The other sections and your documents stay as you sent them.`
+                    : "Correct your application and send it again."
+                  : "Start a new application below. Your contact email and number are already verified, so they need no new code."}
+              </p>
+            </div>
+          )}
+
           {step.id === "ops" && (
             <div className={styles.grid}>
+              <SectionLock open={isOpen("store")} flagged={flags !== null}>
               <TextField
                 id="merchantonboarding-merchant-name"
                 label="Merchant name"
@@ -802,7 +902,9 @@ export default function MerchantOnboardingPage() {
                 help="The store name buyers see. Your Merchant Centre opens as soon as you save this step."
                 full
               />
+              </SectionLock>
 
+              <SectionLock open={isOpen("location")} flagged={flags !== null}>
               <LocationSelects
                 value={{
                   region: form.region,
@@ -839,16 +941,21 @@ export default function MerchantOnboardingPage() {
 
               {/* Farm pickup point (U1c): deliveries start from this pin. */}
               <div className={`${styles.field} ${styles.fieldFull}`}>
-                <MapPinPicker
-                  value={form.lat != null && form.lng != null ? { lat: form.lat, lng: form.lng } : null}
-                  confirmed={form.pin_confirmed}
-                  onChange={(pin, confirmed) => {
-                    setForm((prev) => ({ ...prev, lat: pin.lat, lng: pin.lng, pin_confirmed: confirmed }));
-                    if (confirmed) clearErrors("pin");
-                  }}
-                  error={fieldErrors.pin}
-                  address={{ street: form.address, postalCode: form.postal_code ?? "", province: form.province, city: form.city, barangay: form.barangay }}
-                />
+                {isOpen("location") ? (
+                  <MapPinPicker
+                    value={form.lat != null && form.lng != null ? { lat: form.lat, lng: form.lng } : null}
+                    confirmed={form.pin_confirmed}
+                    strict
+                    onChange={(pin, confirmed) => {
+                      setForm((prev) => ({ ...prev, lat: pin.lat, lng: pin.lng, pin_confirmed: confirmed }));
+                      if (confirmed) clearErrors("pin");
+                    }}
+                    error={fieldErrors.pin}
+                    address={{ street: form.address, postalCode: form.postal_code ?? "", province: form.province, city: form.city, barangay: form.barangay }}
+                  />
+                ) : (
+                  <p className={styles.helper}>Map pin: kept as you placed it.</p>
+                )}
               </div>
 
               <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.available_days)}`}>
@@ -871,7 +978,9 @@ export default function MerchantOnboardingPage() {
                 </div>
                 <FieldError id="merchantonboarding-days" message={fieldErrors.available_days} />
               </div>
+              </SectionLock>
 
+              <SectionLock open={isOpen("contact")} flagged={flags !== null}>
               <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.contact_email)}`}>
                 <label htmlFor="merchantonboarding-contact-email" className={styles.label}>Contact email</label>
                 <input
@@ -889,7 +998,13 @@ export default function MerchantOnboardingPage() {
                   channel="email"
                   value={normalizeEmail(form.contact_email)}
                   verified={emailVerified}
-                  accountNote={isAccountEmail ? "This is your account's verified email, so there's no code to enter." : undefined}
+                  accountNote={
+                    isAccountEmail
+                      ? "This is your account's verified email, so there's no code to enter."
+                      : isKnownEmail
+                        ? "You verified this email before, so there's no code to enter."
+                        : undefined
+                  }
                   disabled={isSubmitting}
                   validate={validateEmail}
                   onSend={sendEmail}
@@ -918,32 +1033,43 @@ export default function MerchantOnboardingPage() {
                   channel="number"
                   value={form.contact_number}
                   verified={phoneVerified}
-                  accountNote={isAccountPhone ? "This is your account's verified number, so there's no code to enter." : undefined}
+                  accountNote={
+                    isAccountPhone
+                      ? "This is your account's verified number, so there's no code to enter."
+                      : isKnownPhone
+                        ? "You verified this number before, so there's no code to enter."
+                        : undefined
+                  }
                   disabled={isSubmitting}
                   validate={validatePhone}
                   onSend={sendPhone}
                   onVerify={verifyPhone}
                 />
               </div>
+              </SectionLock>
             </div>
           )}
 
           {step.id === "legal" && (
             <div className={styles.grid}>
-              <RadioGroup<SubmitMode>
-                id="merchantonboarding-submit-mode"
-                legend="Submit business information?"
-                options={[
-                  { value: "now", label: "Submit now" },
-                  { value: "later", label: "Submit later" },
-                ]}
-                value={form.submit_mode}
-                onChange={(v) => setValue("submit_mode", v)}
-                error={fieldErrors.submit_mode}
-                help={SUBMIT_LATER_HELP}
-                disabled={isSubmitting}
-              />
+              {/* A clarification is answered with Submit now (backend refuses later). */}
+              {!clarifying && (
+                <RadioGroup<SubmitMode>
+                  id="merchantonboarding-submit-mode"
+                  legend="Submit business information?"
+                  options={[
+                    { value: "now", label: "Submit now" },
+                    { value: "later", label: "Submit later" },
+                  ]}
+                  value={form.submit_mode}
+                  onChange={(v) => setValue("submit_mode", v)}
+                  error={fieldErrors.submit_mode}
+                  help={SUBMIT_LATER_HELP}
+                  disabled={isSubmitting}
+                />
+              )}
 
+              <SectionLock open={isOpen("business")} flagged={flags !== null}>
               <RadioGroup<SellerType>
                 id="merchantonboarding-seller-type"
                 legend="Seller type"
@@ -954,9 +1080,11 @@ export default function MerchantOnboardingPage() {
                 stacked
                 disabled={isSubmitting}
               />
+              </SectionLock>
 
               {!later && sellerType && (
                 <>
+                  <SectionLock open={isOpen("business")} flagged={false}>
                   <h3 className={styles.sectionTitle}>Legal name</h3>
                   {isIndividual(sellerType) && personFields("")}
 
@@ -1020,25 +1148,18 @@ export default function MerchantOnboardingPage() {
                     full
                   />
                   {isRegistered(sellerType) && (
-                    <>
-                      <RadioGroup<VatStatus>
-                        id="merchantonboarding-vat-status"
-                        legend="VAT registration status"
-                        options={[
-                          { value: "vat_registered", label: "VAT-registered" },
-                          { value: "non_vat", label: "Non-VAT" },
-                        ]}
-                        value={form.vat_status}
-                        onChange={(v) => setValue("vat_status", v)}
-                        error={fieldErrors.vat_status}
-                        disabled={isSubmitting}
-                      />
-                      <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.bir_cert_file)}`}>
-                        <span className={styles.label}>BIR Certificate of Registration (Form 2303)</span>
-                        <DocumentDropzone label="BIR Certificate of Registration" file={birCertFile} onChange={(f) => { setBirCertFile(f); clearErrors("bir_cert_file"); }} />
-                        <FieldError id="merchantonboarding-bir-cert-file" message={fieldErrors.bir_cert_file} />
-                      </div>
-                    </>
+                    <RadioGroup<VatStatus>
+                      id="merchantonboarding-vat-status"
+                      legend="VAT registration status"
+                      options={[
+                        { value: "vat_registered", label: "VAT-registered" },
+                        { value: "non_vat", label: "Non-VAT" },
+                      ]}
+                      value={form.vat_status}
+                      onChange={(v) => setValue("vat_status", v)}
+                      error={fieldErrors.vat_status}
+                      disabled={isSubmitting}
+                    />
                   )}
                   {isIndividual(sellerType) && (
                     <RadioGroup<boolean>
@@ -1055,7 +1176,9 @@ export default function MerchantOnboardingPage() {
                       disabled={isSubmitting}
                     />
                   )}
+                  </SectionLock>
 
+                  <SectionLock open={isOpen("documents")} flagged={flags !== null}>
                   <h3 className={styles.sectionTitle}>Documents</h3>
                   <div className={`${styles.fieldFull} ${styles.docsIntro}`}>
                     <p className={styles.docsText}>
@@ -1085,16 +1208,38 @@ export default function MerchantOnboardingPage() {
                     <FieldError id="merchantonboarding-gov-id-type" message={fieldErrors.gov_id_type} />
                   </div>
 
+                  </SectionLock>
+
+                  {/* Outside the lock: a document with no saved file is needed even when not flagged. */}
                   <div className={`${styles.field}${invalidClass(fieldErrors.rsbsa_file)}`}>
                     <span className={styles.label}>RSBSA document (photo or PDF)</span>
-                    <DocumentDropzone label="RSBSA document" file={rsbsaFile} onChange={(f) => { setRsbsaFile(f); clearErrors("rsbsa_file"); }} />
+                    {keepsDocument("rsbsa") ? (
+                      <p className={styles.helper}>Kept as sent: {storedDocument.rsbsa}</p>
+                    ) : (
+                      <DocumentDropzone label="RSBSA document" file={rsbsaFile} onChange={(f) => { setRsbsaFile(f); clearErrors("rsbsa_file"); }} />
+                    )}
                     <FieldError id="merchantonboarding-rsbsa-file" message={fieldErrors.rsbsa_file} />
                   </div>
                   <div className={`${styles.field}${invalidClass(fieldErrors.gov_id_file)}`}>
                     <span className={styles.label}>{govIdLabel} (photo or PDF)</span>
-                    <DocumentDropzone label="government ID" file={govIdFile} onChange={(f) => { setGovIdFile(f); clearErrors("gov_id_file"); }} />
+                    {keepsDocument("govId") ? (
+                      <p className={styles.helper}>Kept as sent: {storedDocument.govId}</p>
+                    ) : (
+                      <DocumentDropzone label="government ID" file={govIdFile} onChange={(f) => { setGovIdFile(f); clearErrors("gov_id_file"); }} />
+                    )}
                     <FieldError id="merchantonboarding-gov-id-file" message={fieldErrors.gov_id_file} />
                   </div>
+                  {isRegistered(sellerType) && (
+                    <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.bir_cert_file)}`}>
+                      <span className={styles.label}>BIR Certificate of Registration (Form 2303)</span>
+                      {keepsDocument("birCert") ? (
+                        <p className={styles.helper}>Kept as sent: {storedDocument.birCert}</p>
+                      ) : (
+                        <DocumentDropzone label="BIR Certificate of Registration" file={birCertFile} onChange={(f) => { setBirCertFile(f); clearErrors("bir_cert_file"); }} />
+                      )}
+                      <FieldError id="merchantonboarding-bir-cert-file" message={fieldErrors.bir_cert_file} />
+                    </div>
+                  )}
 
                   <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.terms_accepted)}`}>
                     <label className={styles.checkboxRow}>

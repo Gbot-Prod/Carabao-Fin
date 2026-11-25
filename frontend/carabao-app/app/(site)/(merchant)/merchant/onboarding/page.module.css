@@ -704,3 +704,53 @@
   color: var(--green-600);
   font-weight: 700;
 }
+
+/* ── Review feedback (clarification / rejection) ─────────────────── */
+.reviewNote {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reviewNoteTitle {
+  font-size: 14px;
+  font-weight: 900;
+  color: #92400e;
+}
+
+.reviewNoteText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #78350f;
+  white-space: pre-wrap;
+}
+
+/* A clarification section: no box of its own, the fields stay in the grid. */
+.sectionLock {
+  display: contents;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.sectionFlagged,
+.sectionLocked {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sectionFlagged {
+  color: #9a3412;
+}
+
+.sectionLocked {
+  color: var(--text-muted);
+}

@@ -14,8 +14,12 @@ export type PinCheckResult = {
   blocked: boolean;
 };
 
-export const checkPin = async (pin: { lat: number; lng: number }): Promise<PinCheckResult> => {
-  const response = await apiClient.post<PinCheckResult>('/locations/pin-check', pin);
+/** `strict`: refuse (503) when the road check did not run (merchant pickup pins). */
+export const checkPin = async (
+  pin: { lat: number; lng: number },
+  strict = false,
+): Promise<PinCheckResult> => {
+  const response = await apiClient.post<PinCheckResult>('/locations/pin-check', { ...pin, strict });
   return response.data;
 };
 

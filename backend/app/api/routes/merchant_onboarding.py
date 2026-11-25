@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
+from functools import partial
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -19,9 +20,11 @@ from app.models.merchant_application import MerchantApplication
 from app.models.user import User, normalize_email
 from app.schemas.merchant_application import (
     BUSINESS_DETAILS_MODELS,
+    CLARIFICATION_SECTIONS,
     INDIVIDUAL_SELLERS,
     REGISTERED_SELLERS,
     REGISTRATION_FOR_SELLER,
+    SECTION_FIELDS,
     MerchantApplicationResponse,
     MerchantOnboardingPayload,
     full_name,
@@ -35,7 +38,9 @@ from app.services import (
     upload_validation,
 )
 from app.services.application_review import (
+    CLARIFICATION,
     PENDING_DOCUMENTS,
+    REJECTED,
     SUBMITTED,
     check_can_resubmit,
 )
@@ -262,60 +267,6 @@ def submit_my_merchant_onboarding_route(
         ) from exc
     if not isinstance(parsed, dict):
         raise HTTPException(status_code=400, detail="Invalid onboarding payload")
-    data, details = _validate_payload(parsed)
-
-    sent = {
-        "rsbsa_file": rsbsa_file,
-        "gov_id_file": gov_id_file,
-        "bir_cert_file": bir_cert_file,
-    }
-    files = {field: f for field, f in sent.items() if f is not None and f.filename}
-    _check_files_for_mode(data, files)
-
-    data = _checked_area(db, data)
-    pin = _with_field("pin", validate_pin, data.lat, data.lng)
-    # Before any upload: a pin far from the chosen city is refused here.
-    area_mismatch = _with_field(
-        "pin",
-        pin_area.check,
-        db,
-        pin.pin if pin else None,
-        data.city_code,
-        data.barangay_code,
-    )
-
-    # The shop's contact number is proven either by being the account's own
-    # verified number or by a code sent to it (/sms/otp/verify).
-    contact = normalize_ph_mobile(data.contact_number)
-    account_phone = normalize_ph_mobile(current_user.phone_number or "")
-    verified = read_token(data.phone_verification_token)
-    is_account_phone = contact is not None and contact == account_phone
-    has_token = (
-        verified is not None
-        and verified.get("purpose") == "merchant_phone"
-        and verified.get("user_id") == current_user.id
-        and verified.get("number") == contact
-    )
-    if not (is_account_phone or has_token):
-        raise FieldErrors(
-            {"contact_number": "Please verify your contact number first."}
-        )
-
-    # The same for the contact email: the account's own verified email, or a
-    # code sent to it (/email/otp/verify).
-    contact_email = normalize_email(str(data.contact_email))
-    account_email = current_user.verified_email
-    email_token = read_token(data.email_verification_token)
-    email_verified = (
-        account_email is not None and normalize_email(account_email) == contact_email
-    ) or (
-        email_token is not None
-        and email_token.get("purpose") == MERCHANT_EMAIL_PURPOSE
-        and email_token.get("user_id") == current_user.id
-        and email_token.get("email") == contact_email
-    )
-    if not email_verified:
-        raise FieldErrors({"contact_email": "Please verify your contact email first."})
 
     # The merchant row exists from the first save (Submit now or later), so it
     # no longer means "approved"; check_can_resubmit decides from the
@@ -330,21 +281,113 @@ def submit_my_merchant_onboarding_route(
     # Only a new, rejected, clarification or pending_documents application
     # goes (back) to submitted (CF-0010); checked before any upload.
     check_can_resubmit(application, has_active_merchant)
+    previous_status = application.status if application else None
+
+    # A clarification request opens only the flagged sections: the others
+    # keep the values the applicant sent before, whatever the form sends now.
+    locked = _locked_sections(application)
+    if locked:
+        parsed = _with_stored_sections(parsed, application, locked)
+    data, details = _validate_payload(parsed)
+    if previous_status == CLARIFICATION and details is None:
+        raise FieldErrors(
+            {"submit_mode": "Send the requested changes with Submit now."}
+        )
+
+    sent = {
+        "rsbsa_file": rsbsa_file,
+        "gov_id_file": gov_id_file,
+        "bir_cert_file": bir_cert_file,
+    }
+    # Documents not flagged for changes stay as sent: a new file for one of
+    # them is ignored (a client that sends every document again still works).
+    kept = _kept_documents(application, locked)
+    files = {
+        field: f
+        for field, f in sent.items()
+        if f is not None and f.filename and field not in kept
+    }
+    _check_files_for_mode(data, files, kept)
+
+    if "location" in locked:
+        # Checked when it was sent: no new road or area check.
+        pin = _stored_pin(application)
+        area_mismatch = application.pin_area_mismatch
+    else:
+        data = _checked_area(db, data)
+        # Strict: the pickup pin needs a road check that ran (every delivery
+        # starts here).
+        pin = _with_field("pin", partial(validate_pin, strict=True), data.lat, data.lng)
+        # Before any upload: a pin far from the chosen city is refused here.
+        area_mismatch = _with_field(
+            "pin",
+            pin_area.check,
+            db,
+            pin.pin if pin else None,
+            data.city_code,
+            data.barangay_code,
+        )
+
+    # The shop's contact number is proven by being the account's own verified
+    # number, by a code sent to it (/sms/otp/verify), or by being the number
+    # this application already saved (it was verified then, so once is enough).
+    contact = normalize_ph_mobile(data.contact_number)
+    account_phone = normalize_ph_mobile(current_user.phone_number or "")
+    saved_phone = (
+        normalize_ph_mobile(application.contact_number or "") if application else None
+    )
+    verified = read_token(data.phone_verification_token)
+    is_known_phone = contact is not None and contact in (account_phone, saved_phone)
+    has_token = (
+        verified is not None
+        and verified.get("purpose") == "merchant_phone"
+        and verified.get("user_id") == current_user.id
+        and verified.get("number") == contact
+    )
+    if not (is_known_phone or has_token):
+        raise FieldErrors(
+            {"contact_number": "Please verify your contact number first."}
+        )
+
+    # The same for the contact email: the account's own verified email, a
+    # code sent to it (/email/otp/verify), or the email already saved here.
+    contact_email = normalize_email(str(data.contact_email))
+    known_emails = {
+        normalize_email(email)
+        for email in (
+            current_user.verified_email,
+            application.contact_email if application else None,
+        )
+        if email
+    }
+    email_token = read_token(data.email_verification_token)
+    email_verified = contact_email in known_emails or (
+        email_token is not None
+        and email_token.get("purpose") == MERCHANT_EMAIL_PURPOSE
+        and email_token.get("user_id") == current_user.id
+        and email_token.get("email") == contact_email
+    )
+    if not email_verified:
+        raise FieldErrors({"contact_email": "Please verify your contact email first."})
 
     if details is None:
         # Submit later: step 1 and the seller type only. Business information
-        # already on the row (e.g. from a rejected application) stays for the
-        # pre-fill.
+        # already on the row stays for the pre-fill, except after a rejection:
+        # a rejected application starts over.
+        replaced: list[str | None] = []
         if application is None:
             application = MerchantApplication(user_id=current_user.id)
             db.add(application)
+        elif previous_status == REJECTED:
+            replaced = _clear_business_details(application)
         _apply_operations(application, data, contact_email, f"+{contact}", pin)
         application.pin_area_mismatch = area_mismatch
         application.seller_type = data.seller_type
         application.status = PENDING_DOCUMENTS
         application.submitted_at = None
+        application.clarification_sections = None
         _ensure_merchant(db, application)
-        return _commit(db, application, uploaded=[], replaced=[])
+        return _commit(db, application, uploaded=[], replaced=replaced)
 
     tin = details.get("tin")
     rsbsa_number = details.get("rsbsa_number")
@@ -394,26 +437,30 @@ def submit_my_merchant_onboarding_route(
     application.pin_area_mismatch = area_mismatch
     application.seller_type = data.seller_type
     _apply_business_details(application, data.seller_type, details)
-    for prefix in _DOCUMENT_COLUMNS.values():
-        # A document the seller type does not use (BIR 2303 for a farmer).
-        setattr(application, f"{prefix}_path", None)
-        setattr(application, f"{prefix}_original_name", None)
-        setattr(application, f"{prefix}_content_type", None)
-    for field, path in uploaded.items():
-        prefix = _DOCUMENT_COLUMNS[field]
-        setattr(application, f"{prefix}_path", path)
-        setattr(
-            application,
-            f"{prefix}_original_name",
-            upload_validation.safe_filename(files[field].filename),
-        )
-        # The type the server found, not the type the client declared.
-        setattr(application, f"{prefix}_content_type", checked[field].content_type)
+    needed = _needed_files(data.seller_type)
+    for field, prefix in _DOCUMENT_COLUMNS.items():
+        if field in uploaded:
+            setattr(application, f"{prefix}_path", uploaded[field])
+            setattr(
+                application,
+                f"{prefix}_original_name",
+                upload_validation.safe_filename(files[field].filename),
+            )
+            # The type the server found, not the type the client declared.
+            setattr(application, f"{prefix}_content_type", checked[field].content_type)
+        elif field in needed and field in kept:
+            continue  # Not flagged for changes: the document sent before stays.
+        else:
+            # A document the seller type does not use (BIR 2303 for a farmer).
+            setattr(application, f"{prefix}_path", None)
+            setattr(application, f"{prefix}_original_name", None)
+            setattr(application, f"{prefix}_content_type", None)
 
     now = datetime.now(UTC)
     application.terms_accepted_at = now
     application.status = SUBMITTED
     application.submitted_at = now
+    application.clarification_sections = None
     try:
         _ensure_merchant(db, application)
     except Exception:
@@ -422,17 +469,106 @@ def submit_my_merchant_onboarding_route(
     saved = _commit(
         db, application, uploaded=list(uploaded.values()), replaced=replaced
     )
-    # The automated review checklist, from the files this submit sent. It only
-    # assists the admin and never blocks the submit (check_status "failed").
+    if {"business", "documents"} <= locked:
+        # Nothing the checks read has changed: the checklist stays.
+        return saved
+    # The automated review checklist, from the files this submit sent and the
+    # kept ones. It only assists the admin and never blocks the submit
+    # (check_status "failed").
     document_checks.run_and_save(
         db,
         saved,
-        {
-            _DOCUMENT_COLUMNS[f].removesuffix("_document"): c.data
-            for f, c in checked.items()
-        },
+        {_doc_key(f): c.data for f, c in checked.items()},
+        stored=[_doc_key(f) for f in kept if f in needed and f not in checked],
     )
     return saved
+
+
+def _doc_key(field: str) -> str:
+    """rsbsa_file -> rsbsa (the document_checks name)."""
+    return _DOCUMENT_COLUMNS[field].removesuffix("_document")
+
+
+def _locked_sections(application: MerchantApplication | None) -> frozenset[str]:
+    """The sections a clarification request did not flag (they stay as sent).
+
+    None flagged (or not a clarification): every section is open.
+    """
+    if application is None or application.status != CLARIFICATION:
+        return frozenset()
+    flagged = set(application.clarification_sections or [])
+    if not flagged:
+        return frozenset()
+    return frozenset(CLARIFICATION_SECTIONS) - flagged
+
+
+def _with_stored_sections(
+    parsed: dict[str, Any], application: MerchantApplication, locked: frozenset[str]
+) -> dict[str, Any]:
+    """``parsed`` with the saved values for every field of a locked section."""
+    merged = dict(parsed)
+    for section in locked:
+        for field in SECTION_FIELDS[section]:
+            value = getattr(application, field, None)
+            if value is None:
+                merged.pop(field, None)
+            else:
+                merged[field] = value
+    if "contact" in locked:
+        # The saved contacts were verified when they were sent.
+        merged.pop("email_verification_token", None)
+        merged.pop("phone_verification_token", None)
+    return merged
+
+
+def _kept_documents(
+    application: MerchantApplication | None, locked: frozenset[str]
+) -> frozenset[str]:
+    """Upload fields whose saved document stays (documents not flagged)."""
+    if application is None or "documents" not in locked:
+        return frozenset()
+    return frozenset(
+        field
+        for field, prefix in _DOCUMENT_COLUMNS.items()
+        if getattr(application, f"{prefix}_path")
+    )
+
+
+def _stored_pin(application: MerchantApplication) -> PinCheck | None:
+    """The pin saved before, with its road point, as a checked pin."""
+    if application.lat is None or application.lng is None:
+        return None
+    road = (
+        (application.road_lat, application.road_lng)
+        if application.road_lat is not None and application.road_lng is not None
+        else None
+    )
+    return PinCheck(pin=(application.lat, application.lng), road=road)
+
+
+def _clear_business_details(application: MerchantApplication) -> list[str | None]:
+    """A rejected application starts over: remove its business information
+    and documents. Returns the document paths, to delete once saved."""
+    replaced = [
+        getattr(application, f"{prefix}_path") for prefix in _DOCUMENT_COLUMNS.values()
+    ]
+    for column in _BUSINESS_COLUMNS:
+        if column != "merchant_name":  # Part of step 1.
+            setattr(application, column, None)
+    application.registration_type = None
+    application.legal_business_name = None
+    application.small_agri_declared_at = None
+    application.small_agri_declared_year = None
+    application.terms_accepted_at = None
+    for prefix in _DOCUMENT_COLUMNS.values():
+        setattr(application, f"{prefix}_path", None)
+        setattr(application, f"{prefix}_original_name", None)
+        setattr(application, f"{prefix}_content_type", None)
+    application.check_status = None
+    application.check_checklist = None
+    application.check_confirmations = None
+    application.checked_at = None
+    return replaced
 
 
 def _ensure_merchant(db: Session, application: MerchantApplication) -> None:
@@ -519,22 +655,30 @@ def _validate_payload(
     return data, details
 
 
+def _needed_files(seller_type: str) -> list[str]:
+    needed = ["rsbsa_file", "gov_id_file"]
+    if seller_type in REGISTERED_SELLERS:
+        needed.append("bir_cert_file")
+    return needed
+
+
 def _check_files_for_mode(
-    data: MerchantOnboardingPayload, files: dict[str, UploadFile]
+    data: MerchantOnboardingPayload,
+    files: dict[str, UploadFile],
+    kept: frozenset[str] = frozenset(),
 ) -> None:
-    """Submit later sends no documents; Submit now sends the ones its type needs."""
+    """Submit later sends no documents; Submit now sends the ones its type
+    needs, except the ``kept`` ones (not flagged in a clarification request)."""
     if data.submit_mode == "later":
         if files:
             message = "Remove this document, or choose Submit now."
             raise FieldErrors({field: message for field in files}, status_code=422)
         return
-    needed = ["rsbsa_file", "gov_id_file"]
-    if data.seller_type in REGISTERED_SELLERS:
-        needed.append("bir_cert_file")
+    needed = _needed_files(data.seller_type)
     errors = {
         field: f"{_FILE_LABELS[field]} is required."
         for field in needed
-        if field not in files
+        if field not in files and field not in kept
     }
     for field in files:
         if field not in needed:

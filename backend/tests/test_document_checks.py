@@ -259,7 +259,12 @@ def test_real_pdf_without_text_is_unreadable(db, applicant):  # noqa: F811
 
 
 def _decide(db, application, status, confirmed=None):
-    body = {"status": status}
+    body: dict = {"status": status}
+    # Reject and clarification need a note; clarification flags a section.
+    if status in ("rejected", "clarification"):
+        body["admin_note"] = "Please correct the application."
+    if status == "clarification":
+        body["sections"] = ["documents"]
     if confirmed is not None:
         body["confirmed_items"] = confirmed
     return _admin_client(db, _staff(db)).patch(

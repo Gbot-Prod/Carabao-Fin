@@ -104,13 +104,18 @@ def test_application_review_is_logged(db, merchant):
     db.commit()
     res = _client(db, staff).patch(
         f"/admin/merchant-applications/{application.id}",
-        json={"status": "clarification", "admin_note": "Upload a clearer RSBSA"},
+        json={
+            "status": "clarification",
+            "admin_note": "Upload a clearer RSBSA",
+            "sections": ["documents"],
+        },
     )
     assert res.status_code == 200, res.text
     [entry] = _entries(db, "merchant_application.review")
     assert entry.before["status"] == "submitted"
     assert entry.after["status"] == "clarification"
     assert entry.after["admin_note"] == "Upload a clearer RSBSA"
+    assert entry.after["clarification_sections"] == ["documents"]
 
 
 def test_refund_is_logged_and_failed_refund_is_not(db, merchant, monkeypatch):

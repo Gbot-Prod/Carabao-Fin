@@ -78,6 +78,8 @@ test('each bad field gives its message', () => {
   assert.match(err({ name: '  ' })!, /Name is required/);
   assert.match(err({ name: 'x'.repeat(LISTING_NAME_MAX + 1) })!, /at most 100/);
   for (const price of ['0', '1.5', '-3', 'abc', String(LISTING_PRICE_MAX + 1)]) assert.match(err({ price })!, /Price/, price);
+  assert.match(err({ price: '501' })!, /at most 500 pesos per kg/);
+  assert.ok('ok' in checkListing({ ...ok, price: '2000', unitQuantity: 5 }, today)); // 400 per kg
   for (const stock of ['-1', '2.5', String(LISTING_STOCK_MAX + 1)]) assert.match(err({ stock })!, /Stock/, stock);
   assert.equal(err({ stock: '0' }), null);
   assert.match(err({ harvestDate: '2026-02-30' })!, /real date/);

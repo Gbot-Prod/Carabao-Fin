@@ -105,10 +105,65 @@ MAX_ADMIN_NOTE = 2000
 # Shop name and legal business name (onboarding/page.tsx NAME_MAX).
 MERCHANT_NAME_MAX = 50
 
+# The parts of an application an admin can send back with a clarification
+# request. The applicant can change only these; the other parts stay as sent
+# (merchant_onboarding.py). Keep in step with the review page and the form.
+ClarificationSection = Literal["store", "location", "contact", "business", "documents"]
+CLARIFICATION_SECTIONS: tuple[str, ...] = (
+    "store",
+    "location",
+    "contact",
+    "business",
+    "documents",
+)
+# The payload fields each section holds. The terms agreement is not in a
+# section: every submit accepts it again.
+SECTION_FIELDS: dict[str, tuple[str, ...]] = {
+    "store": ("merchant_name",),
+    "location": (
+        "region",
+        "province",
+        "city",
+        "barangay",
+        "region_code",
+        "province_code",
+        "city_code",
+        "barangay_code",
+        "address",
+        "postal_code",
+        "lat",
+        "lng",
+        "pin_confirmed",
+        "available_days",
+    ),
+    "contact": ("contact_email", "contact_number"),
+    "business": (
+        "seller_type",
+        "last_name",
+        "first_name",
+        "middle_name",
+        "suffix",
+        "rep_last_name",
+        "rep_first_name",
+        "rep_middle_name",
+        "rep_suffix",
+        "company_name",
+        "trade_name",
+        "registration_number",
+        "tin",
+        "vat_status",
+        "small_agri_producer",
+    ),
+    "documents": ("rsbsa_number", "gov_id_type"),
+}
+
 
 class ApplicationReviewPayload(BaseModel):
     status: ReviewStatus
+    # Required for a rejection and a clarification request (application_review.py).
     admin_note: str | None = Field(default=None, max_length=MAX_ADMIN_NOTE)
+    # Clarification only: the sections the applicant must change (at least one).
+    sections: list[ClarificationSection] = Field(default_factory=list, max_length=5)
     # The checklist items the admin ticked as reviewed (document_checks.py).
     # Approval needs every warn and fail item; other decisions ignore it.
     confirmed_items: list[Annotated[str, Field(max_length=40)]] = Field(
@@ -386,6 +441,8 @@ class MerchantApplicationResponse(BaseModel):
 
     admin_note: str | None = None
     reviewed_at: datetime | None = None
+    # Clarification: the sections the admin flagged. None: every section is open.
+    clarification_sections: list[str] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

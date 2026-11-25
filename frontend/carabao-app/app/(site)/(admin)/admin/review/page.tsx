@@ -7,6 +7,8 @@ import {
   fetchGovIdDocumentUrl,
   fetchRsbsaDocumentUrl,
   reviewMerchantApplication,
+  CLARIFICATION_SECTIONS,
+  type ClarificationSection,
   type MerchantApplication,
 } from "@/util/api/admin";
 import { SELLER_TYPE_LABELS } from "@/util/api/merchants";
@@ -119,6 +121,8 @@ function ApplicationCard({
   const [open, setOpen] = useState(false);
   const [action, setAction] = useState<ReviewAction | null>(null);
   const [note, setNote] = useState("");
+  // Clarification: the sections the applicant must change.
+  const [sections, setSections] = useState<Set<ClarificationSection>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState<DocumentKind | null>(null);
@@ -148,6 +152,17 @@ function ApplicationCard({
     setError(null);
   };
 
+  const toggleSection = (id: ClarificationSection) =>
+    setSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  // Reject and clarification tell the applicant why (the server requires it).
+  const needsNote = action === "rejected" || action === "clarification";
+  const takesNote = needsNote || action === "suspended";
+
   const handleSubmit = async () => {
     if (!action) return;
     setSubmitting(true);
@@ -156,12 +171,14 @@ function ApplicationCard({
       const updated = await reviewMerchantApplication(
         app.id,
         action,
-        action === "clarification" || action === "suspended" ? note.trim() || undefined : undefined,
+        takesNote ? note.trim() || undefined : undefined,
         action === "approved" ? [...ticked] : [],
+        action === "clarification" ? CLARIFICATION_SECTIONS.map((s) => s.id).filter((id) => sections.has(id)) : [],
       );
       onUpdate(updated);
       setAction(null);
       setNote("");
+      setSections(new Set());
     } catch (err) {
       setError(getApiErrorMessage(err, "Failed to update application. Please try again."));
     } finally {
@@ -207,7 +224,7 @@ function ApplicationCard({
   };
 
   return (
-    <div className={styles.card}>
+    <div className={open ? `${styles.card} ${styles.cardOpen}` : styles.card}>
       <button className={styles.cardHeader} onClick={() => setOpen((v) => !v)}>
         <div className={styles.cardMeta}>
           <span className={styles.cardName}>
@@ -309,6 +326,14 @@ function ApplicationCard({
             <div className={styles.adminNote}>
               <span className={styles.adminNoteLabel}>Admin Note</span>
               <p className={styles.adminNoteText}>{app.admin_note}</p>
+              {app.status === "clarification" && app.clarification_sections?.length ? (
+                <p className={styles.adminNoteText}>
+                  Flagged:{" "}
+                  {CLARIFICATION_SECTIONS.filter((s) => app.clarification_sections?.includes(s.id))
+                    .map((s) => s.label)
+                    .join("; ")}
+                </p>
+              ) : null}
             </div>
           )}
 
@@ -366,11 +391,39 @@ function ApplicationCard({
               </p>
             )}
 
-            {(action === "clarification" || action === "suspended") && (
+            {action === "clarification" && (
+              <fieldset className={styles.sectionPicker}>
+                <legend className={styles.actionLabel}>Sections to change</legend>
+                <p className={styles.adminNoteText}>
+                  The applicant can change only the sections you tick. The other sections and the documents stay as
+                  they sent them.
+                </p>
+                {CLARIFICATION_SECTIONS.map((s) => (
+                  <label key={s.id} className={styles.sectionOption}>
+                    <input type="checkbox" checked={sections.has(s.id)} onChange={() => toggleSection(s.id)} />
+                    <span>{s.label}</span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+
+            {takesNote && (
               <textarea
                 className={styles.noteInput}
-                aria-label={action === "suspended" ? "Reason for the suspension" : "Clarification request for the applicant"}
-                placeholder={action === "suspended" ? "Reason for the suspension (optional)…" : "Describe what additional information or corrections are needed from the applicant…"}
+                aria-label={
+                  action === "suspended"
+                    ? "Reason for the suspension"
+                    : action === "rejected"
+                      ? "Reason for the rejection"
+                      : "Clarification request for the applicant"
+                }
+                placeholder={
+                  action === "suspended"
+                    ? "Reason for the suspension (optional)…"
+                    : action === "rejected"
+                      ? "Tell the applicant why you rejected the application. They must start a new application…"
+                      : "Describe what additional information or corrections are needed from the applicant…"
+                }
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={2000}
@@ -385,7 +438,8 @@ function ApplicationCard({
                   className={styles.submitBtn}
                   disabled={
                     submitting ||
-                    (action === "clarification" && !note.trim()) ||
+                    (needsNote && !note.trim()) ||
+                    (action === "clarification" && sections.size === 0) ||
                     (action === "approved" && acceptBlocked)
                   }
                   onClick={handleSubmit}

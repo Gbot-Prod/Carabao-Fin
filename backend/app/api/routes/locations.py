@@ -34,6 +34,8 @@ router = APIRouter(tags=["locations"])
 class PinCheckRequest(BaseModel):
     lat: float
     lng: float
+    # Merchant pickup pins: refuse (503) when the road check did not run.
+    strict: bool = False
 
     model_config = ConfigDict(extra="forbid")
 
@@ -58,8 +60,9 @@ def check_pin(
     current_user: User = Depends(get_current_user),
 ):
     rate_limit.enforce_action(db, "pin_check", str(current_user.id))
-    # Raises 400 (outside Luzon) or 422 (no road near the pin).
-    check = validate_pin(payload.lat, payload.lng)
+    # Raises 400 (outside Luzon), 422 (no road near the pin), or with
+    # ``strict`` 503 (the road check did not run).
+    check = validate_pin(payload.lat, payload.lng, strict=payload.strict)
     assert check is not None
     reports = flag_count_near(db, cast(int, current_user.id), check.pin)
     road = check.road

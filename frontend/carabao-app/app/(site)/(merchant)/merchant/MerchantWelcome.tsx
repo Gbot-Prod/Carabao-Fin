@@ -91,14 +91,15 @@ export default function MerchantWelcome({ applicationStatus }: { applicationStat
     case "clarification":
       return (
         <Card title="More information needed" action={startLink("Update application")}>
-          We need more information about your application. Open the application, change the details and send it
-          again.
+          We need more information about your application. Open the application to see our note and the sections to
+          change. The other details and your documents stay as you sent them.
         </Card>
       );
     case "rejected":
       return (
         <Card title="Application not approved" action={startLink("Apply again")}>
-          We did not approve your merchant application. You can correct it and send it again.
+          We did not approve your merchant application. Open the application to see the reason, then start a new
+          application.
         </Card>
       );
     case "suspended":

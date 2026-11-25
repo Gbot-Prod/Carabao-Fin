@@ -103,6 +103,10 @@ def test_outage_fails_open_and_is_not_cached(monkeypatch):
     assert len(calls) == 2
     # The pin is accepted without a road point.
     assert pinned_location.validate_pin(*MALOLOS) == (MALOLOS, None)
+    # Strict (merchant pickup pins): an unchecked pin is refused.
+    with pytest.raises(pinned_location.HTTPException) as unchecked:
+        pinned_location.validate_pin(*MALOLOS, strict=True)
+    assert unchecked.value.status_code == 503
 
 
 def test_osrm_provider(monkeypatch):

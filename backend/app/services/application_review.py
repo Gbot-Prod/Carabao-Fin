@@ -10,10 +10,17 @@ Admin moves (PATCH /admin/merchant-applications/{id}):
     approved  -> suspended   (also suspends the merchant)
 
 Applicant moves (POST /merchant-onboarding/me):
-    (none) | rejected | clarification | pending_documents
+    (none) | rejected | pending_documents
         -> submitted (Submit now) | pending_documents (Submit later)
+    clarification -> submitted (Submit now only)
     approved -> submitted | pending_documents, only after the merchant closed
         their account
+
+Rejection and clarification need an admin note. Clarification also flags the
+sections the applicant must change (clarification_sections); the other
+sections and the documents stay as sent. A rejection starts over: the form
+opens empty, and the next save clears the business information it does not
+send again.
 
 Any other move is refused with 409.
 
@@ -32,8 +39,10 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.errors import FieldErrors
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
+from app.schemas.merchant_application import CLARIFICATION_SECTIONS
 from app.services import document_checks
 from app.services.merchant_service import create_merchant_from_application
 from app.services.merchant_verification import (
@@ -100,6 +109,18 @@ def _merchant_for(db: Session, application: Any) -> Merchant | None:
     return query.filter(Merchant.user_id == application.user_id).first()
 
 
+def _check_decision_input(target: str, note: str | None, sections: list[str]) -> None:
+    """A rejection and a clarification request tell the applicant why; a
+    clarification request also names the sections to change."""
+    errors: dict[str, str] = {}
+    if target in (REJECTED, CLARIFICATION) and not (note or "").strip():
+        errors["admin_note"] = "Write a note for the applicant."
+    if target == CLARIFICATION and not sections:
+        errors["sections"] = "Flag at least one section to change."
+    if errors:
+        raise FieldErrors(errors, status_code=422)
+
+
 def apply_admin_decision(
     db: Session,
     application: Any,
@@ -107,21 +128,30 @@ def apply_admin_decision(
     *,
     admin_id: int | None = None,
     confirmed_items: list[str] | None = None,
+    admin_note: str | None = None,
+    sections: list[str] | None = None,
 ) -> Merchant | None:
     """Move the application to ``target`` and do what that move requires.
 
     Approval refuses (409) until every warn and fail checklist item is in
     ``confirmed_items``; the confirmations are stored on the application.
-    Reject and clarification never need the checklist.
+    Reject and clarification never need the checklist, but need a note
+    (422); clarification also needs the flagged ``sections``.
 
     Approval can raise ValueError or IntegrityError from creating a merchant
     (an application from before merchants were made at onboarding); the caller
     rolls back.
     """
     check_admin_transition(application.status, target)
+    _check_decision_input(target, admin_note, sections or [])
     if target == APPROVED:
         document_checks.confirm_items(application, confirmed_items or [], admin_id)
     application.status = target
+    application.clarification_sections = (
+        [s for s in CLARIFICATION_SECTIONS if s in (sections or [])]
+        if target == CLARIFICATION
+        else None
+    )
 
     merchant = _merchant_for(db, application)
     if target == APPROVED:
