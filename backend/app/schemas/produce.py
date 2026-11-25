@@ -31,7 +31,7 @@ class ProduceBase(BaseModel):
     description: str | None = None
     category: Literal["Vegetables", "Fruits"] | None = None
     price: int
-    unit: Literal["kg", "lbs"] = "kg"
+    unit: Literal["kg"] = "kg"
     unit_quantity: float = 1.0
     stock_quantity: int = 0
     image_url: str | None = None
@@ -63,7 +63,7 @@ class ProduceUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION)
     category: Literal["Vegetables", "Fruits"] | None = None
     price: int | None = Field(default=None, ge=1, le=MAX_PRICE)
-    unit: Literal["kg", "lbs"] | None = None
+    unit: Literal["kg"] | None = None
     unit_quantity: float | None = Field(default=None, gt=0, le=MAX_UNIT_QUANTITY)
     stock_quantity: int | None = Field(default=None, ge=0, le=MAX_STOCK)
     # CF-0049: the stock the merchant's form loaded. When sent with
@@ -142,7 +142,7 @@ class ProduceCheckRequest(BaseModel):
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION)
     category: Literal["Vegetables", "Fruits"] | None = None
     price: int | None = Field(default=None, ge=1, le=MAX_PRICE)
-    unit: Literal["kg", "lbs"] | None = None
+    unit: Literal["kg"] | None = None
     unit_quantity: float | None = Field(default=None, gt=0, le=MAX_UNIT_QUANTITY)
     stock_quantity: int | None = Field(default=None, ge=0, le=MAX_STOCK)
     harvest_date: date | None = None
@@ -158,6 +158,24 @@ class ProduceCheckRequest(BaseModel):
         return None if v == "" else v
 
 
+class MarketPriceView(BaseModel):
+    """The NCR market price for the produce (listing_checks.MarketPrice).
+
+    The form recommends ``recommended_max`` pesos per kg or less: buyers
+    expect a farm price below the NCR retail price. Null when no usable
+    reference row matches the name.
+    """
+
+    commodity: str
+    low: int
+    high: int
+    unit: str
+    source: str
+    as_of: date
+    recommended_max: int
+    price_per_kg: float | None = None
+
+
 class ProduceCheckResponse(BaseModel):
     valid: bool
     has_hard_blocks: bool
@@ -165,6 +183,7 @@ class ProduceCheckResponse(BaseModel):
     recommended_status: ProduceStatus
     hard_blocks: list[ListingIssue]
     soft_flags: list[ListingIssue]
+    market_price: MarketPriceView | None = None
 
 
 class ListingPenaltyView(BaseModel):

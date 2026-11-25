@@ -382,7 +382,8 @@ export type ApiProduce = {
 
 // Mirrors backend ProduceCreate / ProduceUpdate (app/schemas/produce.py).
 export type ProduceCategory = 'Vegetables' | 'Fruits';
-export type ProduceUnit = 'kg' | 'lbs';
+// Listings are sold in kg only (backend ProduceBase.unit).
+export type ProduceUnit = 'kg';
 
 export type ProduceCreatePayload = {
   name: string;

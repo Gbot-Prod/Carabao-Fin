@@ -132,6 +132,7 @@ function OrderCard({
 
   const merchantHref = order.merchant_id ? `/farms/${order.merchant_id}` : null;
   const detailHref = `/orders/${order.order_id}`;
+  const chatHref = `/chats?order=${order.order_id}`;
   const hint = statusHint(order);
   const toPay = order.status === "pending";
   const toShip = order.status === "processing";
@@ -224,7 +225,7 @@ function OrderCard({
         <div className={styles.shop}>
           <ShopMark name={order.merchant} logoUrl={order.merchant_logo_url} />
           <span className={styles.shopName}>{order.merchant}</span>
-          <Link href={`${detailHref}#chat`} className={styles.chatBtn}>Chat</Link>
+          <Link href={chatHref} className={styles.chatBtn}>Chat</Link>
           {merchantHref && <Link href={merchantHref} className={styles.shopBtn}>View Farm</Link>}
         </div>
         <div className={styles.status}>
@@ -266,7 +267,7 @@ function OrderCard({
               )}
               {toShip && (
                 <>
-                  <Link href={`${detailHref}#chat`} className={styles.primary}>Contact Farm</Link>
+                  <Link href={chatHref} className={styles.primary}>Contact Farm</Link>
                   <button type="button" className={styles.secondary} onClick={() => setConfirm("cancel")}>
                     Cancel Order
                   </button>
@@ -279,7 +280,7 @@ function OrderCard({
                     Order Received
                   </button>
                   <Link href="/track" className={styles.secondary}>Live Tracking</Link>
-                  <Link href={`${detailHref}#chat`} className={styles.secondary}>Contact Farm</Link>
+                  <Link href={chatHref} className={styles.secondary}>Contact Farm</Link>
                 </>
               )}
               {completed && (
@@ -290,7 +291,7 @@ function OrderCard({
                   >
                     {order.reviewed ? "View Rating" : order.can_review ? "Rate" : "View Order"}
                   </Link>
-                  <Link href={`${detailHref}#chat`} className={styles.secondary}>Contact Farm</Link>
+                  <Link href={chatHref} className={styles.secondary}>Contact Farm</Link>
                   <button type="button" className={styles.secondary} onClick={() => void buyAgain()} disabled={busy}>
                     {busy ? "Adding…" : "Buy Again"}
                   </button>

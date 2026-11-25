@@ -1,7 +1,7 @@
 // src/components/ListingForm.tsx
 // Create/edit form for one produce listing, shown in a modal from My listings.
 // Field rules mirror backend ProduceUpdate (app/schemas/produce.py):
-// price and stock are whole numbers, unit is kg|lbs, category is Vegetables|Fruits.
+// price and stock are whole numbers, unit is always kg, category is Vegetables|Fruits.
 // CF-0107: harvest and best-before dates are required by the backend on create and
 // on every edit (services/produce_freshness.py); checks are in src/lib/listingForm.ts.
 // S6 (plan §5.7): the photo is picked here (camera or library) and uploaded by the
@@ -22,7 +22,7 @@ import {
 } from '../lib/listingForm';
 import { checkImage, imageMimeType } from '../lib/uploads';
 import {
-  CHECK_DELAY_MS, checkNotes, checkPayload, hasBlocks, type ProduceCheckResult,
+  CHECK_DELAY_MS, checkNotes, checkPayload, hasBlocks, marketPriceNote, type ProduceCheckResult,
 } from '../lib/listingChecks';
 import { safeImageUri } from '../lib/imageUri';
 import type {
@@ -32,7 +32,8 @@ import type {
 // A soft flag's text: a darker amber than Colors.warning, readable on white.
 const FLAG_TEXT = '#b45309';
 
-const UNITS: ProduceUnit[] = ['kg', 'lbs'];
+// Listings are sold in kg only: the form has no unit choice.
+const UNIT: ProduceUnit = 'kg';
 const CATEGORIES: ProduceCategory[] = ['Vegetables', 'Fruits'];
 
 // One photo, as the web input takes it (ProduceTab.tsx: PNG, JPG or WebP): no crop,
@@ -84,7 +85,7 @@ export function ListingForm({
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('');
-  const [unit, setUnit] = useState<ProduceUnit>('kg');
+  const unit = UNIT;
   const [category, setCategory] = useState<ProduceCategory | null>(null);
   const [harvestDate, setHarvestDate] = useState('');
   const [bestBefore, setBestBefore] = useState('');
@@ -122,6 +123,7 @@ export function ListingForm({
     };
   }, [onCheck, payloadKey]);
   const notes = checkNotes(visible ? checked : null);
+  const market = marketPriceNote(visible ? checked?.market_price : null);
 
   // CF-0101: reset the fields when the sheet opens or the listing changes. Done during
   // render (React's "adjust state on prop change"), not in an effect.
@@ -132,7 +134,6 @@ export function ListingForm({
       setName(produce?.name ?? '');
       setPrice(produce ? String(produce.price) : '');
       setStock(produce ? String(produce.stock_quantity) : '');
-      setUnit(produce?.unit === 'lbs' ? 'lbs' : 'kg');
       setCategory(
         produce?.category === 'Vegetables' || produce?.category === 'Fruits' ? produce.category : null,
       );
@@ -286,6 +287,12 @@ export function ListingForm({
                 {fieldNote('stock')}
               </View>
             </View>
+            {market ? (
+              <View accessibilityRole="text">
+                <Text style={styles.hint}>{market.range}</Text>
+                <Text style={styles.marketAdvice}>{market.advice}</Text>
+              </View>
+            ) : null}
 
             <Text style={styles.label}>Harvest date (YYYY-MM-DD)</Text>
             <TextInput
@@ -359,16 +366,13 @@ export function ListingForm({
 
             <Text style={styles.label}>Unit</Text>
             <View style={styles.pills}>
-              {UNITS.map((u) => (
-                <TouchableOpacity
-                  key={u}
-                  style={[styles.pill, unit === u && styles.pillActive]}
-                  onPress={() => setUnit(u)}
-                >
-                  <Text style={[styles.pillText, unit === u && styles.pillTextActive]}>{u}</Text>
-                </TouchableOpacity>
-              ))}
+              <View style={[styles.pill, styles.pillActive]}>
+                <Text style={[styles.pillText, styles.pillTextActive]}>kg</Text>
+              </View>
             </View>
+            <Text style={styles.hint}>
+              All listings are sold in kilograms (kg). Enter the price and quantity in kg. Pounds (lbs) are not accepted.
+            </Text>
 
             <Text style={styles.label}>Category</Text>
             <View style={styles.pills}>
@@ -458,6 +462,7 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   chipRow: { marginTop: Spacing.sm, flexWrap: 'wrap' },
   hint: { fontSize: FontSize.xs, color: Colors.textMuted, marginTop: Spacing.xs },
+  marketAdvice: { fontSize: FontSize.xs, color: Colors.text, marginTop: Spacing.xs },
   tierRow: { alignItems: 'center', marginTop: Spacing.sm },
   tierRemove: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   tierRemoveText: { fontSize: FontSize.lg, color: Colors.textMuted },

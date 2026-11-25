@@ -8,6 +8,7 @@ import {
   hideReview,
   unhideReview,
   type AdminReview,
+  type AdminReviewSort,
 } from "@/util/api/admin";
 import getApiErrorMessage from "@/util/errorHelper";
 import Pagination from "@/components/Pagination/Pagination";
@@ -15,6 +16,11 @@ import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import suspend from "../../suspend.module.css";
 import PageHeader from "../../PageHeader";
+import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
+
+const SORT_KEYS = ["date", "farm", "rating"] as const;
+// The server's own order: newest first.
+const DEFAULT_SORT: SortState<AdminReviewSort> = { sort: "date", order: "desc" };
 
 type Visibility = "" | "visible" | "hidden";
 type Stars = "" | "1" | "2" | "3";
@@ -36,7 +42,9 @@ function ReviewsContent() {
   const visibility = (searchParams.get("show") as Visibility) || "";
   const stars = (searchParams.get("stars") as Stars) || "";
   const q = searchParams.get("q") || "";
-  const key = `${visibility}|${stars}|${q}|${page}`;
+  const { sort, order } = readSort<AdminReviewSort>(searchParams, SORT_KEYS, DEFAULT_SORT);
+  const current: SortState<AdminReviewSort> = { sort, order };
+  const key = `${visibility}|${stars}|${q}|${sort}|${order}|${page}`;
 
   const [rows, setRows] = useState<AdminReview[]>([]);
   const [total, setTotal] = useState(0);
@@ -48,19 +56,22 @@ function ReviewsContent() {
 
   useEffect(() => {
     const hidden = visibility === "hidden" ? true : visibility === "visible" ? false : undefined;
-    fetchAdminReviews({ hidden, max_rating: stars ? Number(stars) : undefined, q: q || undefined }, page)
+    fetchAdminReviews(
+      { hidden, max_rating: stars ? Number(stars) : undefined, q: q || undefined, sort: sort ?? undefined, order },
+      page,
+    )
       .then((res) => {
         setRows(res.items);
         setTotal(res.total);
         setError(null);
       })
       .catch(() => setError("Failed to load reviews."))
-      .finally(() => setLoadedKey(`${visibility}|${stars}|${q}|${page}`));
-  }, [visibility, stars, q, page]);
+      .finally(() => setLoadedKey(`${visibility}|${stars}|${q}|${sort}|${order}|${page}`));
+  }, [visibility, stars, q, sort, order, page]);
 
   const loading = loadedKey !== key;
 
-  const go = (next: { show?: Visibility; stars?: Stars; q?: string; page?: number }) => {
+  const go = (next: { show?: Visibility; stars?: Stars; q?: string; sort?: SortState<AdminReviewSort>; page?: number }) => {
     const params = new URLSearchParams();
     const show = next.show ?? visibility;
     const maxStars = next.stars ?? stars;
@@ -68,10 +79,13 @@ function ReviewsContent() {
     if (show) params.set("show", show);
     if (maxStars) params.set("stars", maxStars);
     if (query) params.set("q", query);
+    const nextSort = next.sort ?? current;
+    if (nextSort.sort !== DEFAULT_SORT.sort || nextSort.order !== DEFAULT_SORT.order) writeSort(params, nextSort);
     if (next.page && next.page > 1) params.set("page", String(next.page));
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   };
+  const onSort = (next: SortState<AdminReviewSort>) => go({ sort: next, page: 1 });
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -165,9 +179,9 @@ function ReviewsContent() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Farm</th>
-                <th>Rating</th>
+                <SortHeader label="Date" sortKey="date" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Farm" sortKey="farm" current={current} onSort={onSort} />
+                <SortHeader label="Rating" sortKey="rating" current={current} onSort={onSort} />
                 <th>Review</th>
                 <th>By</th>
                 <th>Moderation</th>

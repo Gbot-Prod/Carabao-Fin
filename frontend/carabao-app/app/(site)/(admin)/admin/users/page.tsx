@@ -11,6 +11,8 @@ import {
   reactivateAdmin,
   resendAdminInvite,
   resetAdminAccount,
+  type AdminUserRole,
+  type AdminUserSort,
   type UserProfile,
 } from "@/util/api/admin";
 import { getApiErrorDetail, getApiErrorStatus } from "@/util/errorHelper";
@@ -21,6 +23,17 @@ import styles from "./page.module.css";
 import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import FieldError, { focusFirstInvalid, invalidClass, invalidProps } from "@/components/FieldError/FieldError";
+import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
+
+const SORT_KEYS = ["id", "name", "email", "joined"] as const;
+
+// "" shows every account.
+type RoleView = "" | AdminUserRole;
+const ROLE_VIEWS: { value: RoleView; label: string }[] = [
+  { value: "", label: "All" },
+  { value: "user", label: "Users" },
+  { value: "admin", label: "Admins" },
+];
 
 // Admin accounts (DB_ROLE_SPLIT_PLAN.md section 2): admins are invited, never
 // promoted. An invite emails a link; the code is shown here once, for the
@@ -42,28 +55,42 @@ function AdminUsersContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const roleParam = searchParams.get("role");
+  const role: RoleView = roleParam === "user" || roleParam === "admin" ? roleParam : "";
+  const { sort, order } = readSort<AdminUserSort>(searchParams, SORT_KEYS);
+  const current: SortState<AdminUserSort> = { sort, order };
+  const key = `${role}|${sort ?? ""}|${order}|${page}`;
 
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [total, setTotal] = useState(0);
-  const [loadedPage, setLoadedPage] = useState<number | null>(null);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const query = () => fetchAdminUsers(page, { role: role || undefined, ...(sort ? { sort, order } : {}) });
+
   useEffect(() => {
-    fetchAdminUsers(page)
+    fetchAdminUsers(page, { role: role || undefined, ...(sort ? { sort, order } : {}) })
       .then((res) => {
         setUsers(res.items);
         setTotal(res.total);
         setError(null);
       })
       .catch(() => setError("Failed to load users."))
-      .finally(() => setLoadedPage(page));
-  }, [page]);
+      .finally(() => setLoadedKey(`${role}|${sort ?? ""}|${order}|${page}`));
+  }, [role, sort, order, page]);
 
-  const loading = loadedPage !== page;
+  const loading = loadedKey !== key;
 
-  const goToPage = (next: number) => {
-    router.push(`${pathname}?page=${next}`);
+  const go = (next: { role?: RoleView; sort?: SortState<AdminUserSort>; page?: number }) => {
+    const params = new URLSearchParams();
+    const nextRole = next.role ?? role;
+    if (nextRole) params.set("role", nextRole);
+    writeSort(params, next.sort ?? current);
+    if (next.page && next.page > 1) params.set("page", String(next.page));
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
   };
+  const onSort = (next: SortState<AdminUserSort>) => go({ sort: next, page: 1 });
 
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
@@ -73,7 +100,7 @@ function AdminUsersContent() {
     setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)));
 
   const reload = () =>
-    fetchAdminUsers(page)
+    query()
       .then((res) => {
         setUsers(res.items);
         setTotal(res.total);
@@ -162,11 +189,27 @@ function AdminUsersContent() {
         onInvited={(invite, email) => {
           setNotice(null);
           setIssued({ email, code: invite.code, why: "Invite sent." });
+          // The Users view shows no admins.
+          if (role === "user") return;
           setUsers((prev) => (prev.some((u) => u.id === invite.user.id) ? prev : [...prev, invite.user]));
           setTotal((t) => t + 1);
         }}
       />
       {issued && <CodePanel issued={issued} onDone={() => setIssued(null)} />}
+      <div className={styles.roleToggle} role="group" aria-label="Show accounts">
+        {ROLE_VIEWS.map((v) => (
+          <button
+            key={v.value || "all"}
+            type="button"
+            className={`${styles.roleOption} ${role === v.value ? styles.roleOptionActive : ""}`}
+            aria-pressed={role === v.value}
+            disabled={loading}
+            onClick={() => go({ role: v.value, page: 1 })}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
       {notice && (
         <p className={`${styles.notice} ${notice.error ? styles.noticeError : ""}`} role={notice.error ? "alert" : "status"}>
           {notice.text}
@@ -176,18 +219,25 @@ function AdminUsersContent() {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Email</th>
+              <SortHeader label="ID" sortKey="id" current={current} onSort={onSort} />
+              <SortHeader label="Name" sortKey="name" current={current} onSort={onSort} />
+              <SortHeader label="Email" sortKey="email" current={current} onSort={onSort} />
               <th>Phone</th>
               <th>City</th>
               <th>Merchant</th>
-              <th>Joined</th>
+              <SortHeader label="Joined" sortKey="joined" current={current} onSort={onSort} firstOrder="desc" />
               <th>Role</th>
               <th>Account</th>
             </tr>
           </thead>
           <tbody>
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={9} className={styles.empty}>
+                  {role === "admin" ? "No admin accounts." : "No accounts."}
+                </td>
+              </tr>
+            )}
             {users.map((u) => (
               <tr key={u.id}>
                 <td className={styles.mono}>{u.id}</td>
@@ -254,7 +304,7 @@ function AdminUsersContent() {
           </tbody>
         </table>
       </div>
-      <Pagination page={page} pageSize={ADMIN_PAGE_SIZE} total={total} disabled={loading} onPageChange={goToPage} />
+      <Pagination page={page} pageSize={ADMIN_PAGE_SIZE} total={total} disabled={loading} onPageChange={(p) => go({ page: p })} />
     </div>
   );
 }

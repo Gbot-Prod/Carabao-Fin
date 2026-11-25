@@ -120,7 +120,7 @@ def test_mobile_edit_form_payload_is_accepted(db, merchant):  # noqa: F811
             "name": "Okra (fresh)",
             "price": 45,
             "stock_quantity": 0,
-            "unit": "lbs",
+            "unit": "kg",
             "category": None,
         },
     )
@@ -128,7 +128,7 @@ def test_mobile_edit_form_payload_is_accepted(db, merchant):  # noqa: F811
     assert res.status_code == 200, res.text
     body = res.json()
     fields = ("name", "price", "stock_quantity", "unit", "category")
-    assert tuple(body[f] for f in fields) == ("Okra (fresh)", 45, 0, "lbs", None)
+    assert tuple(body[f] for f in fields) == ("Okra (fresh)", 45, 0, "kg", None)
 
 
 def test_mobile_create_form_payload_is_accepted(db, merchant):  # noqa: F811

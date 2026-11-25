@@ -136,6 +136,49 @@
   margin: 0 0 16px;
 }
 
+/* All | Users | Admins: which accounts the table shows. */
+.roleToggle {
+  display: inline-flex;
+  margin: 0 0 16px;
+  padding: 3px;
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-white);
+}
+
+.roleOption {
+  min-width: 72px;
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-subtle);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.roleOption:hover:not(:disabled) {
+  color: var(--text-strong);
+}
+
+.roleOption:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.roleOption:disabled {
+  cursor: default;
+}
+
+.roleOptionActive,
+.roleOptionActive:hover:not(:disabled) {
+  background: var(--green-900);
+  color: #fff;
+}
+
 .primaryButton {
   padding: 8px 16px;
   border: none;

@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt } from "@/lib/i18n/format";
 import { fetchMerchantById } from "@/util/api";
+import { fetchOrder } from "@/util/api/orders";
 import { farmInquiryEndpoint, type BuyerChatSummary, type InquirySummary } from "@/util/api/users";
 import s from "./page.module.css";
 
@@ -79,17 +80,58 @@ function BuyerChats() {
   const selectedFarm = Number(params.get("farm")) || null;
   const selectedKey = selectedOrder ? orderKey(selectedOrder) : selectedFarm ? farmKey(selectedFarm) : null;
 
-  // Chats with messages first, newest first; then paid orders with no messages yet.
+  // Opened from an order ("Chat" / "Contact Farm") that the list does not have
+  // (for example, it is past the list limit): a temporary thread from the order.
+  const [draftOrder, setDraftOrder] = useState<BuyerChatSummary | null>(null);
+  const needsOrderDraft =
+    isAuthenticated && loaded && selectedOrder != null && !chats.some((chat) => chat.order_id === selectedOrder);
+  useEffect(() => {
+    if (!needsOrderDraft || selectedOrder == null) return;
+    if (draftOrder?.order_id === selectedOrder) return;
+    let cancelled = false;
+    fetchOrder(selectedOrder)
+      .then((o) => {
+        if (cancelled) return;
+        const year = o.date_bought ? new Date(o.date_bought).getFullYear() : "XXXX";
+        setDraftOrder({
+          order_id: o.order_id,
+          order_ref: `CB-${year}-${String(o.order_id).padStart(4, "0")}`,
+          order_status: o.status,
+          merchant_id: o.merchant_id ?? null,
+          farm_name: o.merchant || null,
+          farm_logo_url: o.merchant_logo_url ?? null,
+          closed: false,
+          last_body: null,
+          last_sender_role: null,
+          last_mine: false,
+          last_at: null,
+          ordered_at: o.date_bought,
+          unread: 0,
+        });
+      })
+      .catch(() => {
+        // Not the buyer's order, or it is gone: show the plain list.
+        if (!cancelled) router.replace(pathname, { scroll: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsOrderDraft, selectedOrder, draftOrder?.order_id, router, pathname]);
+  const orderDraft = needsOrderDraft && draftOrder?.order_id === selectedOrder ? draftOrder : null;
+
+  // Chats with messages, newest first. A chat with no messages is temporary:
+  // it shows only while it is open, and goes away if nothing is sent.
   const items = useMemo<ChatItem[]>(() => {
     const all: ChatItem[] = [
       ...chats.map((chat) => ({ kind: "order" as const, key: orderKey(chat.order_id), chat })),
+      ...(orderDraft ? [{ kind: "order" as const, key: orderKey(orderDraft.order_id), chat: orderDraft }] : []),
       ...inquiries.map((chat) => ({ kind: "farm" as const, key: farmKey(chat.merchant_id), chat })),
     ];
     const withMessages = all.filter((i) => i.chat.last_body != null);
-    const without = all.filter((i) => i.chat.last_body == null);
+    const temporary = all.filter((i) => i.chat.last_body == null && i.key === selectedKey);
     withMessages.sort((a, b) => Date.parse(lastAt(b) ?? "") - Date.parse(lastAt(a) ?? ""));
-    return [...withMessages, ...without];
-  }, [chats, inquiries]);
+    return [...temporary, ...withMessages];
+  }, [chats, inquiries, orderDraft, selectedKey]);
 
   const selected = items.find((item) => item.key === selectedKey) ?? null;
 
@@ -151,7 +193,7 @@ function BuyerChats() {
         </div>
       ) : !loaded && error ? (
         <LoadError message={c.error} onRetry={() => void reload()} />
-      ) : !loaded || (needsDraft && !draft) ? (
+      ) : !loaded || (needsDraft && !draft) || (needsOrderDraft && !orderDraft) ? (
         <SkeletonList label={c.loading} rows={4} />
       ) : items.length === 0 && !draft ? (
         <div className={s.empty}>
@@ -176,7 +218,7 @@ function BuyerChats() {
 
           <div className={s.thread}>
             {selected?.kind === "order" ? (
-              <OrderThread chat={selected.chat} onBack={() => open(null)} />
+              <OrderThread chat={selected.chat} onBack={() => open(null)} onSent={() => void reload()} />
             ) : selected?.kind === "farm" ? (
               <FarmThread
                 merchantId={selected.chat.merchant_id}
@@ -201,7 +243,15 @@ function BuyerChats() {
   );
 }
 
-function OrderThread({ chat, onBack }: { chat: BuyerChatSummary; onBack: () => void }) {
+function OrderThread({
+  chat,
+  onBack,
+  onSent,
+}: {
+  chat: BuyerChatSummary;
+  onBack: () => void;
+  onSent: () => void;
+}) {
   const { t } = useLanguage();
   const c = t.chats;
   return (
@@ -229,7 +279,7 @@ function OrderThread({ chat, onBack }: { chat: BuyerChatSummary; onBack: () => v
         </Link>
       </div>
       <div className={s.threadBody}>
-        <OrderChat key={chat.order_id} orderId={chat.order_id} title={c.threadTitle} fill />
+        <OrderChat key={chat.order_id} orderId={chat.order_id} title={c.threadTitle} onSent={onSent} fill />
       </div>
     </>
   );

@@ -15,7 +15,7 @@ export type JsonLdProduce = {
   description: string | null;
   category: string | null;
   price: number;
-  unit: 'kg' | 'lbs';
+  unit: 'kg';
   unit_quantity: number;
   stock_quantity: number;
   image_url: string | null;
@@ -43,7 +43,7 @@ export type JsonLdShopPage = {
 export const MAX_PRODUCTS = 30;
 
 // UN/CEFACT codes that schema.org unitCode expects.
-const UNIT_CODE: Record<JsonLdProduce['unit'], string> = { kg: 'KGM', lbs: 'LBR' };
+const UNIT_CODE: Record<JsonLdProduce['unit'], string> = { kg: 'KGM' };
 
 /** Absolute http(s) URLs only; anything else is dropped. */
 function absoluteUrl(value: string | null | undefined): string | undefined {
@@ -171,7 +171,7 @@ export type JsonLdOtherListing = {
   id: number;
   name: string | null;
   price: number;
-  unit: 'kg' | 'lbs';
+  unit: 'kg';
   stock_quantity: number;
   merchant_name: string;
 };

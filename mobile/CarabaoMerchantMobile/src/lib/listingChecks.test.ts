@@ -2,7 +2,7 @@
 // Run with `npm test`. Guardrails Phase 1.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkNotes, checkPayload, hasBlocks, reviewNote, type ProduceCheckResult } from './listingChecks.ts';
+import { checkNotes, checkPayload, hasBlocks, marketPriceNote, reviewNote, type ProduceCheckResult } from './listingChecks.ts';
 
 const result: ProduceCheckResult = {
   valid: false,
@@ -52,4 +52,18 @@ test('review state of a listing', () => {
   assert.equal(reviewNote({ status: 'live' }), null);
   assert.match(reviewNote({ status: 'under_review' }) ?? '', /24 hours/);
   assert.match(reviewNote({ status: 'rejected', rejection_reason: 'Wrong category.' }) ?? '', /Wrong category\./);
+});
+
+test('marketPriceNote recommends the NCR low end or less', () => {
+  const market = {
+    commodity: 'Tomato', low: 110, high: 120, unit: 'kg', source: 'DA Daily Price Index NCR',
+    as_of: '2026-11-24', recommended_max: 110, price_per_kg: null as number | null,
+  };
+  assert.equal(marketPriceNote(null), null);
+  const none = marketPriceNote(market)!;
+  assert.match(none.range, /NCR market price for Tomato: ₱110–₱120 \/ kg/);
+  assert.match(none.advice, /^Recommended: ₱110 \/ kg or less\./);
+  assert.match(marketPriceNote({ ...market, price_per_kg: 60 })!.advice, /below the NCR market price/);
+  assert.match(marketPriceNote({ ...market, price_per_kg: 115 })!.advice, /in the NCR market range/);
+  assert.match(marketPriceNote({ ...market, price_per_kg: 150 })!.advice, /above the NCR market price/);
 });

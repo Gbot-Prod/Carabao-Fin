@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
@@ -650,6 +651,9 @@ def _check_response(result: listing_checks.CheckResult) -> ProduceCheckResponse:
             "recommended_status": result.recommended_status,
             "hard_blocks": [i.as_dict() for i in result.hard_blocks],
             "soft_flags": [i.as_dict() for i in result.soft_flags],
+            "market_price": (
+                dataclasses.asdict(result.market_price) if result.market_price else None
+            ),
         }
     )
 

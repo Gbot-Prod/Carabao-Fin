@@ -240,12 +240,6 @@ export default function Sidebar() {
         <div className="sidebar__brand">
           <Image src={Logo} alt="Carabao Logo" className="sidebar__brand-icon" />
           <span className="sidebarBrandName">Carabao</span>
-          {/* Everyone can reach the merchant site: its /auth is the Merchant Centre sign-in. */}
-          {!onMerchantHost && (
-            <a href={merchantUrl("/")} className="sidebar__merchant-site">
-              {t.nav.merchant}
-            </a>
-          )}
         </div>
 
         
@@ -309,6 +303,20 @@ export default function Sidebar() {
             <span className="sidebar__nav-icon"><HelpIcon /></span>
             <span className="sidebar__nav-label">{t.nav.help}</span>
           </Link>
+          {/* Not yet a merchant: the merchant site's /auth signs in or registers. */}
+          {!onMerchantHost && merchantId == null && (
+            <div className="sidebar__merchant sidebar__apply">
+              <span className="sidebar__merchant-label">{t.nav.merchant}</span>
+              <a
+                href={merchantUrl("/auth")}
+                className="sidebar__nav-link"
+                onClick={() => setIsMobileOpen(false)}
+              >
+                <span className="sidebar__nav-icon"><StoreIcon /></span>
+                <span className="sidebar__nav-label">{t.nav.applyMerchant}</span>
+              </a>
+            </div>
+          )}
           {!isLoading && (
             isAuthenticated ? (
               <LogoutButton className="sidebar__logout sidebar__logout-button">

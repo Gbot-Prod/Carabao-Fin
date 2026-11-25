@@ -10,7 +10,7 @@ export type Produce = {
   description: string | null;
   category: 'Vegetables' | 'Fruits' | null;
   price: number;
-  unit: 'kg' | 'lbs';
+  unit: 'kg';
   unit_quantity: number;
   stock_quantity: number;
   image_url: string | null;
@@ -63,7 +63,7 @@ export type ProduceCreatePayload = {
   description?: string | null;
   category?: 'Vegetables' | 'Fruits' | null;
   price: number;
-  unit?: 'kg' | 'lbs';
+  unit?: 'kg';
   unit_quantity?: number;
   stock_quantity?: number;
   image_url?: string | null;
@@ -78,7 +78,7 @@ export type ProduceUpdatePayload = {
   description?: string | null;
   category?: 'Vegetables' | 'Fruits' | null;
   price?: number | null;
-  unit?: 'kg' | 'lbs' | null;
+  unit?: 'kg' | null;
   unit_quantity?: number | null;
   stock_quantity?: number | null;
   // CF-0049: the stock the form loaded; the server answers 409 if it changed.

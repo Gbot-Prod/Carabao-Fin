@@ -34,6 +34,48 @@ const VAT_LABELS: Record<string, string> = { vat_registered: "VAT-registered", n
 
 const personName = (...parts: (string | null)[]) => parts.filter(Boolean).join(" ") || null;
 const dateTime = (value: string | null) => (value ? new Date(value).toLocaleString("en-PH") : null);
+const shortDate = (value: string | null) =>
+  value ? new Date(value).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : null;
+
+// The order of the cards in each section. The page has every open application,
+// so it sorts here. Empty values go last.
+type ApplicationSort = "newest" | "oldest" | "name" | "location" | "seller";
+const SORT_OPTIONS: { value: ApplicationSort; label: string }[] = [
+  { value: "newest", label: "Newest submitted" },
+  { value: "oldest", label: "Oldest submitted" },
+  { value: "name", label: "Store name (A–Z)" },
+  { value: "location", label: "Location (A–Z)" },
+  { value: "seller", label: "Seller type" },
+];
+
+const textKey = (value: string | null | undefined) => value?.trim().toLocaleLowerCase("en-PH") || null;
+
+function compareApplications(sort: ApplicationSort) {
+  return (a: MerchantApplication, b: MerchantApplication): number => {
+    let x: string | number | null;
+    let y: string | number | null;
+    if (sort === "newest" || sort === "oldest") {
+      x = a.submitted_at ? Date.parse(a.submitted_at) : null;
+      y = b.submitted_at ? Date.parse(b.submitted_at) : null;
+    } else if (sort === "name") {
+      x = textKey(a.merchant_name);
+      y = textKey(b.merchant_name);
+    } else if (sort === "location") {
+      x = textKey([a.province, a.city].filter(Boolean).join(" "));
+      y = textKey([b.province, b.city].filter(Boolean).join(" "));
+    } else {
+      x = a.seller_type ? textKey(SELLER_TYPE_LABELS[a.seller_type] ?? a.seller_type) : null;
+      y = b.seller_type ? textKey(SELLER_TYPE_LABELS[b.seller_type] ?? b.seller_type) : null;
+    }
+    if (x === null || y === null) {
+      if (x !== y) return x === null ? 1 : -1;
+      return b.id - a.id;
+    }
+    const byValue = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "en-PH");
+    if (byValue !== 0) return sort === "newest" ? -byValue : byValue;
+    return b.id - a.id;
+  };
+}
 
 /** The small agricultural producer declaration (BIR RR No. 12-2023), as the admin reads it. */
 function declarationText(app: MerchantApplication): string | null {
@@ -172,7 +214,13 @@ function ApplicationCard({
             {app.merchant_name ?? `Business information to follow (${app.contact_email})`}
           </span>
           <span className={styles.cardSub}>
-            {[app.legal_business_name, `${app.city}, ${app.province}`].filter(Boolean).join(" · ")}
+            {[
+              app.legal_business_name,
+              `${app.city}, ${app.province}`,
+              app.submitted_at ? `Submitted ${shortDate(app.submitted_at)}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         </div>
         <div className={styles.cardRight}>
@@ -378,6 +426,7 @@ export default function AdminReviewPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sort, setSort] = useState<ApplicationSort>("newest");
 
   useEffect(() => {
     Promise.all([
@@ -416,13 +465,14 @@ export default function AdminReviewPage() {
   if (loading) return <PageLoader label="Loading applications…" />;
   if (error) return <div className={styles.stateError}>{error}</div>;
 
-  const pending = applications.filter(
+  const sorted = [...applications].sort(compareApplications(sort));
+  const pending = sorted.filter(
     (a) => a.status === "submitted" || a.status === "clarification",
   );
-  const reviewed = applications.filter(
+  const reviewed = sorted.filter(
     (a) => a.status === "approved" || a.status === "rejected" || a.status === "suspended",
   );
-  const incomplete = applications.filter((a) => a.status === "pending_documents");
+  const incomplete = sorted.filter((a) => a.status === "pending_documents");
 
   return (
     <div className={styles.page}>
@@ -433,13 +483,26 @@ export default function AdminReviewPage() {
         description="Approve, reject or ask a seller for more information before their store goes live."
       />
 
-      {applications.length === 0 && (
+      {applications.length === 0 ? (
         <p className={styles.emptyState}>No applications yet.</p>
+      ) : (
+        <div className={styles.toolbar}>
+          <label className={styles.sortField}>
+            <span>Sort by</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value as ApplicationSort)}>
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       )}
 
       {pending.length > 0 && (
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Pending</h2>
+          <h2 className={styles.sectionTitle}>Pending ({pending.length})</h2>
           {pending.map((a) => (
             <ApplicationCard key={a.id} app={a} onUpdate={handleUpdate} />
           ))}
@@ -448,7 +511,7 @@ export default function AdminReviewPage() {
 
       {incomplete.length > 0 && (
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Incomplete (Submit later)</h2>
+          <h2 className={styles.sectionTitle}>Incomplete (Submit later) ({incomplete.length})</h2>
           {incomplete.map((a) => (
             <ApplicationCard key={a.id} app={a} onUpdate={handleUpdate} />
           ))}
@@ -457,7 +520,7 @@ export default function AdminReviewPage() {
 
       {reviewed.length > 0 && (
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Reviewed</h2>
+          <h2 className={styles.sectionTitle}>Reviewed ({reviewed.length})</h2>
           {reviewed.map((a) => (
             <ApplicationCard key={a.id} app={a} onUpdate={handleUpdate} />
           ))}

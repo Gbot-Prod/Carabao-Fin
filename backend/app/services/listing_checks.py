@@ -89,10 +89,16 @@ PRICE_TOO_LOW = "PRICE_TOO_LOW"
 PRICE_TOO_HIGH = "PRICE_TOO_HIGH"
 
 # Price flags (Phase 4): the price per kg against the reference low/high.
-PRICE_LOW_SHARE = 0.5  # below 0.5 x low: a bait price such as 1 peso
-PRICE_HIGH_SHARE = 2.5  # above 2.5 x high: usually a typing error
+# The reference is the NCR retail price (DA Daily Price Index), where the
+# farms deliver. A farm-direct price is usually below it, often 40-60% of the
+# retail price, so the low flag is only for prices far below that.
+PRICE_LOW_SHARE = 0.3  # below 0.3 x low: a bait price such as 1 peso
+PRICE_HIGH_SHARE = 2.0  # above 2 x high: usually a typing error
+# Same text as da_price_sync.INHOUSE_SOURCE_PREFIX (no import: da_price_sync
+# imports the audit log, which this module must not need).
+INHOUSE_SOURCE_PREFIX = "Carabao in-house"
+INHOUSE_MAX_AGE_DAYS = 180
 REFERENCE_MAX_AGE_DAYS = 45
-KG_PER_LB = 0.45359237
 
 # An admin's reason for a rejection (POST /admin/produce/{id}/reject).
 REJECTION_CODES: dict[str, str] = {
@@ -121,9 +127,29 @@ class Issue:
 
 
 @dataclass
+class MarketPrice:
+    """The NCR market price for the listing's produce, for the form.
+
+    Buyers expect a farm price below the NCR retail price, so the form
+    recommends ``recommended_max`` (the low end) or less per kg.
+    """
+
+    commodity: str
+    low: int
+    high: int
+    unit: str
+    source: str
+    as_of: date
+    recommended_max: int
+    # The listing's price per kg (unit and unit_quantity counted), if given.
+    price_per_kg: float | None = None
+
+
+@dataclass
 class CheckResult:
     hard_blocks: list[Issue] = field(default_factory=list)
     soft_flags: list[Issue] = field(default_factory=list)
+    market_price: MarketPrice | None = None
 
     @property
     def valid(self) -> bool:
@@ -1005,23 +1031,64 @@ def _photo_issue(
 
 
 def price_per_kg(price: int, unit: str | None, unit_quantity: float | None) -> float:
-    """Pesos per kg for a price per sale unit (``unit_quantity`` kg or lbs)."""
+    """Pesos per kg for a price per sale unit of ``unit_quantity`` kg.
+
+    Listings are sold in kg only (ProduceBase.unit); ``unit`` stays in the
+    signature for the callers.
+    """
     quantity = unit_quantity if unit_quantity and unit_quantity > 0 else 1.0
-    kg = quantity * (KG_PER_LB if (unit or "kg").strip().lower() == "lbs" else 1.0)
-    return price / kg
+    return price / quantity
 
 
 def usable_reference_rows(
     rows: Sequence[ReferencePrice], today: date
 ) -> list[ReferencePrice]:
-    """Real (not SAMPLE), per-kg rows at most ``REFERENCE_MAX_AGE_DAYS`` old."""
+    """Real (not SAMPLE), per-kg rows that are not too old.
+
+    DA rows: at most ``REFERENCE_MAX_AGE_DAYS`` old (the daily sync keeps
+    them new). In-house estimates (``app/data/inhouse_reference_prices.csv``)
+    change only when someone checks them, so they get
+    ``INHOUSE_MAX_AGE_DAYS``.
+    """
     return [
         r
         for r in rows
         if not reference_prices.is_sample(r)
         and (r.unit or "kg").strip().lower() == "kg"
-        and (today - r.as_of).days <= REFERENCE_MAX_AGE_DAYS
+        and (today - r.as_of).days <= _max_age_days(r)
     ]
+
+
+def _max_age_days(row: ReferencePrice) -> int:
+    if row.source.startswith(INHOUSE_SOURCE_PREFIX):
+        return INHOUSE_MAX_AGE_DAYS
+    return REFERENCE_MAX_AGE_DAYS
+
+
+def market_price(
+    listing: ListingInput, rows: Sequence[ReferencePrice], today: date
+) -> MarketPrice | None:
+    """The usable reference row for the listing's name, or None."""
+    if not listing.name:
+        return None
+    row = reference_prices.match(usable_reference_rows(rows, today), listing.name, "kg")
+    if row is None:
+        return None
+    per_kg = (
+        round(price_per_kg(listing.price, listing.unit, listing.unit_quantity), 2)
+        if listing.price is not None
+        else None
+    )
+    return MarketPrice(
+        commodity=row.commodity,
+        low=row.low,
+        high=row.high,
+        unit=row.unit,
+        source=row.source,
+        as_of=row.as_of,
+        recommended_max=row.low,
+        price_per_kg=per_kg,
+    )
 
 
 def _price_issues(
@@ -1035,7 +1102,9 @@ def _price_issues(
     row = reference_prices.match(usable, listing.name, "kg")
     if row is None:
         return []
-    band = f"market price {row.low}-{row.high} pesos per kg on {row.as_of:%Y-%m-%d}"
+    band = (
+        f"NCR market price ({row.low}-{row.high} pesos per kg on {row.as_of:%Y-%m-%d})"
+    )
     issues: list[Issue] = []
     base = price_per_kg(listing.price, listing.unit, listing.unit_quantity)
     tier_prices = [
@@ -1058,7 +1127,8 @@ def _price_issues(
                 "price",
                 PRICE_TOO_HIGH,
                 f"The price is much higher than the {band}. Check for a typing "
-                "error. An admin will check it.",
+                "error. Buyers expect a farm price below the market price. "
+                "An admin will check it.",
             )
         )
     return issues
@@ -1152,6 +1222,7 @@ def run_checks(
     photo = _photo_issue(listing, other_photo_hashes)
     if photo:
         result.soft_flags.append(photo)
+    result.market_price = market_price(listing, reference_rows, today)
     return result
 
 

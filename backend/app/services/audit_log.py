@@ -49,6 +49,7 @@ REVIEW_HIDE = "review.hide"  # CF-0075
 REVIEW_UNHIDE = "review.unhide"
 ORDER_CANCEL = "order.cancel"  # CF-0045
 REFERENCE_PRICES_IMPORT = "reference_prices.import"  # guardrails Phase 4
+REFERENCE_PRICES_SYNC = "reference_prices.sync_da"
 
 ACTIONS = (
     ROLE_CHANGE,
@@ -79,6 +80,7 @@ ACTIONS = (
     REVIEW_UNHIDE,
     ORDER_CANCEL,
     REFERENCE_PRICES_IMPORT,
+    REFERENCE_PRICES_SYNC,
 )
 
 

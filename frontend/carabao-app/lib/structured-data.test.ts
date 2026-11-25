@@ -91,9 +91,9 @@ test('each listed produce item is a Product with a PHP Offer from the farm', () 
   });
 });
 
-test('out of stock, lbs units, and unnamed or unpriced items', () => {
+test('out of stock, multi-kg units, and unnamed or unpriced items', () => {
   const items: JsonLdProduce[] = [
-    { ...tomato, id: 2, stock_quantity: 0, unit: 'lbs', unit_quantity: 2 },
+    { ...tomato, id: 2, stock_quantity: 0, unit: 'kg', unit_quantity: 2 },
     { ...tomato, id: 3, name: '  ' },
     { ...tomato, id: 4, price: 0 },
   ];
@@ -102,7 +102,7 @@ test('out of stock, lbs units, and unnamed or unpriced items', () => {
   );
   assert.equal(products.length, 1);
   assert.equal(products[0].offers.availability, 'https://schema.org/OutOfStock');
-  assert.equal(products[0].offers.priceSpecification.referenceQuantity.unitCode, 'LBR');
+  assert.equal(products[0].offers.priceSpecification.referenceQuantity.unitCode, 'KGM');
 });
 
 test('products are capped', () => {

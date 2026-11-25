@@ -3,7 +3,12 @@
 import { Fragment, Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ADMIN_PAGE_SIZE, fetchAdminMerchantsPage, type AdminMerchant } from "@/util/api/admin";
+import {
+  ADMIN_PAGE_SIZE,
+  fetchAdminMerchantsPage,
+  type AdminMerchant,
+  type AdminMerchantSort,
+} from "@/util/api/admin";
 import { SELLER_TYPE_LABELS } from "@/util/api/merchants";
 import Pagination from "@/components/Pagination/Pagination";
 import SuspendControl from "../../SuspendControl";
@@ -12,6 +17,10 @@ import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import ExpandToggle, { formatDate, formatDateTime } from "../../ExpandToggle";
 import details from "../../details.module.css";
+import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
+
+const SORT_KEYS = ["id", "name", "location", "rating", "products", "delivery", "approved"] as const;
+const COLUMNS = 11;
 
 /** Products shown in the shop preview before the "see all" link. */
 const PREVIEW_PRODUCTS = 8;
@@ -37,29 +46,37 @@ function AdminMerchantsContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const { sort, order } = readSort<AdminMerchantSort>(searchParams, SORT_KEYS);
+  const current: SortState<AdminMerchantSort> = { sort, order };
+  const key = `${sort ?? ""}|${order}|${page}`;
 
   const [merchants, setMerchants] = useState<AdminMerchant[]>([]);
   const [total, setTotal] = useState(0);
-  const [loadedPage, setLoadedPage] = useState<number | null>(null);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
-    fetchAdminMerchantsPage(page)
+    fetchAdminMerchantsPage(page, sort ? { sort, order } : {})
       .then((res) => {
         setMerchants(res.items);
         setTotal(res.total);
         setError(null);
       })
       .catch(() => setError("Failed to load merchants."))
-      .finally(() => setLoadedPage(page));
-  }, [page]);
+      .finally(() => setLoadedKey(`${sort ?? ""}|${order}|${page}`));
+  }, [sort, order, page]);
 
-  const loading = loadedPage !== page;
+  const loading = loadedKey !== key;
 
-  const goToPage = (next: number) => {
-    router.push(`${pathname}?page=${next}`);
+  const go = (next: { sort?: SortState<AdminMerchantSort>; page?: number }) => {
+    const params = new URLSearchParams();
+    writeSort(params, next.sort ?? current);
+    if (next.page && next.page > 1) params.set("page", String(next.page));
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
   };
+  const onSort = (next: SortState<AdminMerchantSort>) => go({ sort: next, page: 1 });
 
   const toggle = (id: number) =>
     setExpanded((prev) => {
@@ -80,14 +97,15 @@ function AdminMerchantsContent() {
           <thead>
             <tr>
               <th className={details.toggleCell} aria-label="Details" />
-              <th>ID</th>
-              <th>Name</th>
-              <th>Location</th>
+              <SortHeader label="ID" sortKey="id" current={current} onSort={onSort} />
+              <SortHeader label="Name" sortKey="name" current={current} onSort={onSort} />
+              <SortHeader label="Location" sortKey="location" current={current} onSort={onSort} />
               <th>Contact</th>
               <th>Hours</th>
-              <th>Delivery</th>
-              <th>Rating</th>
-              <th>Products</th>
+              <SortHeader label="Delivery" sortKey="delivery" current={current} onSort={onSort} />
+              <SortHeader label="Rating" sortKey="rating" current={current} onSort={onSort} firstOrder="desc" />
+              <SortHeader label="Products" sortKey="products" current={current} onSort={onSort} firstOrder="desc" />
+              <SortHeader label="Approval date" sortKey="approved" current={current} onSort={onSort} firstOrder="desc" />
               <th>Account</th>
             </tr>
           </thead>
@@ -103,7 +121,10 @@ function AdminMerchantsContent() {
                     </td>
                     <td className={styles.mono}>{m.id}</td>
                     <td className={styles.bold}>{m.merchant_name}</td>
-                    <td>{m.address ?? <span className={styles.empty}>—</span>}</td>
+                    <td>
+                      {m.address ?? <span className={styles.empty}>—</span>}
+                      {m.city && <div className={styles.sub}>{m.city}</div>}
+                    </td>
                     <td>{m.contact_number}</td>
                     <td>{formatHours(m.operating_hours) ?? <span className={styles.empty}>—</span>}</td>
                     <td>
@@ -113,6 +134,7 @@ function AdminMerchantsContent() {
                     </td>
                     <td>{m.rating ?? <span className={styles.empty}>—</span>}</td>
                     <td className={styles.mono}>{m.produces.length}</td>
+                    <td className={styles.mono}>{formatDate(m.verified_at) ?? <span className={styles.empty}>—</span>}</td>
                     <td>
                       <SuspendControl
                         userId={m.user_id}
@@ -131,7 +153,7 @@ function AdminMerchantsContent() {
                   </tr>
                   {open && (
                     <tr id={detailId} className={details.detailRow}>
-                      <td colSpan={10}>
+                      <td colSpan={COLUMNS}>
                         <MerchantDetails merchant={m} />
                       </td>
                     </tr>
@@ -142,7 +164,7 @@ function AdminMerchantsContent() {
           </tbody>
         </table>
       </div>
-      <Pagination page={page} pageSize={ADMIN_PAGE_SIZE} total={total} disabled={loading} onPageChange={goToPage} />
+      <Pagination page={page} pageSize={ADMIN_PAGE_SIZE} total={total} disabled={loading} onPageChange={(p) => go({ page: p })} />
     </div>
   );
 }

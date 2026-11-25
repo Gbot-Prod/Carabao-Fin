@@ -115,6 +115,11 @@ def is_sample(price: ReferencePrice) -> bool:
     return price.source.strip().upper().startswith(SAMPLE_PREFIX)
 
 
+def norm_name(text: str) -> str:
+    """A name as `match` compares it."""
+    return _norm(text)
+
+
 def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9ñ ]+", " ", text.lower()).strip()
 

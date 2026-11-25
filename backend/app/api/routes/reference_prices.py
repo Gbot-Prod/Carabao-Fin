@@ -1,7 +1,8 @@
 """Market reference prices (P1).
 
 Public: read-only list and match. Admin (guardrails Phase 4): import a CSV
-that replaces the table, and the status of the price flags.
+that replaces the table, sync from the DA Price Index API, and the status of
+the price flags.
 """
 
 from datetime import date
@@ -17,6 +18,7 @@ from app.models.user import User
 from app.schemas.reference_price import ReferencePriceResponse
 from app.services import (
     audit_log,
+    da_price_sync,
     listing_checks,
     rate_limit,
     reference_prices,
@@ -141,3 +143,66 @@ def import_reference_prices(
     )
     db.commit()
     return after
+
+
+class DaSyncResponse(BaseModel):
+    region: str
+    as_of: date | None = None
+    groups: int
+    skipped_unavailable: int
+    skipped_drift: int
+    # DA rows not per kg (the price flags compare per kg only).
+    skipped_unit: list[str]
+    rows_kept: int
+    # In-house rows (app/data/inhouse_reference_prices.csv) written, and the
+    # ones left out because DA has that produce now.
+    inhouse: int
+    inhouse_overlap: list[str]
+    status: ReferencePriceStatus
+
+
+@router.post("/admin/reference-prices/sync-da", response_model=DaSyncResponse)
+def sync_da_reference_prices(
+    region: str = Query(da_price_sync.DEFAULT_REGION, min_length=2, max_length=10),
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """Replace the SAMPLE, DA and in-house rows: latest DA report + in-house CSV.
+
+    Rows that an admin imported with another source stay. If the API fails or
+    gives too few produce prices, nothing changes.
+    """
+    before = _status(db.query(ReferencePrice).all())
+    try:
+        result = da_price_sync.sync(db, region=region, commit=False)
+    except da_price_sync.DaPriceSyncError as exc:
+        db.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except reference_prices.ReferencePriceFileError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"In-house price file: {exc}"
+        ) from exc
+    after = _status(db.query(ReferencePrice).all())
+    audit_log.record_admin_action(
+        db,
+        admin=admin,
+        action=audit_log.REFERENCE_PRICES_SYNC,
+        target_type="reference_prices",
+        target_id=None,
+        before=before.model_dump(),
+        after={**after.model_dump(), **da_price_sync.sync_summary(result)},
+    )
+    db.commit()
+    return DaSyncResponse(
+        region=result.region,
+        as_of=result.as_of,
+        groups=result.groups,
+        skipped_unavailable=result.skipped_unavailable,
+        skipped_drift=result.skipped_drift,
+        skipped_unit=result.skipped_unit,
+        rows_kept=result.rows_kept,
+        inhouse=result.inhouse,
+        inhouse_overlap=result.inhouse_overlap,
+        status=after,
+    )

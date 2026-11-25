@@ -159,9 +159,21 @@ export type Paginated<T> = {
 
 export const ADMIN_PAGE_SIZE = 20;
 
-export const fetchAdminUsers = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Promise<Paginated<UserProfile>> => {
+/** The sort a table asks the server for (sort=<column key>&order=asc|desc). */
+export type SortOrder = 'asc' | 'desc';
+export type AdminSort<K extends string> = { sort?: K; order?: SortOrder };
+
+export type AdminUserSort = 'id' | 'name' | 'email' | 'joined';
+/** "admin": admin accounts only; "user": buyer and merchant accounts only. */
+export type AdminUserRole = 'user' | 'admin';
+
+export const fetchAdminUsers = async (
+  page = 1,
+  filters: { role?: AdminUserRole } & AdminSort<AdminUserSort> = {},
+  pageSize = ADMIN_PAGE_SIZE,
+): Promise<Paginated<UserProfile>> => {
   const res = await apiClient.get<Paginated<UserProfile>>('/admin/users', {
-    params: { page, page_size: pageSize },
+    params: { ...filters, page, page_size: pageSize },
   });
   return res.data;
 };
@@ -194,9 +206,15 @@ export type AdminMerchant = Merchant & {
   shop_page: AdminMerchantShop | null;
 };
 
-export const fetchAdminMerchantsPage = async (page = 1, pageSize = ADMIN_PAGE_SIZE): Promise<Paginated<AdminMerchant>> => {
+export type AdminMerchantSort = 'id' | 'name' | 'location' | 'rating' | 'products' | 'delivery' | 'approved';
+
+export const fetchAdminMerchantsPage = async (
+  page = 1,
+  sort: AdminSort<AdminMerchantSort> = {},
+  pageSize = ADMIN_PAGE_SIZE,
+): Promise<Paginated<AdminMerchant>> => {
   const res = await apiClient.get<Paginated<AdminMerchant>>('/admin/merchants', {
-    params: { page, page_size: pageSize },
+    params: { ...sort, page, page_size: pageSize },
   });
   return res.data;
 };
@@ -616,8 +634,10 @@ export type AdminListingReport = {
   created_at: string;
 };
 
+export type AdminProduceSort = 'id' | 'name' | 'category' | 'merchant' | 'price' | 'stock' | 'best_before';
+
 export const fetchAdminProduce = async (
-  filters: { hidden?: boolean; status?: ProduceStatus; q?: string; merchant_id?: number },
+  filters: { hidden?: boolean; status?: ProduceStatus; q?: string; merchant_id?: number } & AdminSort<AdminProduceSort>,
   page = 1,
   pageSize = ADMIN_PAGE_SIZE,
 ): Promise<Paginated<AdminProduce>> => {
@@ -760,8 +780,10 @@ export type AdminReview = {
   hidden_reason: string | null;
 };
 
+export type AdminReviewSort = 'date' | 'farm' | 'rating';
+
 export const fetchAdminReviews = async (
-  filters: { hidden?: boolean; max_rating?: number; q?: string; merchant_id?: number },
+  filters: { hidden?: boolean; max_rating?: number; q?: string; merchant_id?: number } & AdminSort<AdminReviewSort>,
   page = 1,
   pageSize = ADMIN_PAGE_SIZE,
 ): Promise<Paginated<AdminReview>> => {

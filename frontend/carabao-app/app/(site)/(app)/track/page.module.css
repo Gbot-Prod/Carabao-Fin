@@ -19,8 +19,10 @@
 .detailsSection {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--spacing-md);
   background: var(--bg-white);
   border: 1px solid var(--green-border);
@@ -119,6 +121,7 @@
 
 /* Inner tiles sit inside a 12px-radius pane, so they step down to 8px. */
 .detailItem {
+  min-width: 0;
   padding: 10px 12px;
   background: #f7faf7;
   border: 1px solid #e2ece2;
@@ -137,6 +140,16 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+/* Long names with no spaces (e.g. a farm name) break, not overflow. */
+.detailValue,
+.shipmentTitle,
+.shipmentStopName,
+.shipmentStopAddress,
+.shipmentSummaryRow strong,
+.shipmentSummaryLabel {
+  overflow-wrap: anywhere;
 }
 
 .detailValue {
@@ -169,6 +182,15 @@
   margin-bottom: 12px;
 }
 
+/* The title side shrinks, so the status pill stays inside the pane. */
+.shipmentPanelHeader > div {
+  min-width: 0;
+}
+
+.shipmentStatus {
+  flex-shrink: 0;
+}
+
 .shipmentTitle {
   margin: 0;
   font-size: 1rem;
@@ -197,6 +219,7 @@
 }
 
 .shipmentSummaryRow > div {
+  min-width: 0;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: #f7faf7;

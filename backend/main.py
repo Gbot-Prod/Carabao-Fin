@@ -42,7 +42,13 @@ from app.models import (  # noqa: F401
     user_address,
     voucher,
 )
-from app.services import address_log, rate_limit, retention, setup_reminders
+from app.services import (
+    address_log,
+    da_price_sync,
+    rate_limit,
+    retention,
+    setup_reminders,
+)
 from app.services import otp as otp_service
 from app.services.chat import send_unread_merchant_sms
 from app.services.order_reservations import (
@@ -63,6 +69,7 @@ from app.services.sms_service import notify_merchant_new_order
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def _check_field_encryption_keys() -> None:
     """CF-0021: stop the app at startup if the field encryption keys are bad."""
@@ -209,6 +216,25 @@ async def lifespan(_: FastAPI):
         finally:
             db.close()
 
+    def sync_reference_prices() -> None:
+        # Guardrails Phase 4: DA Price Index (NCR) + in-house rows, every
+        # DA_PRICE_SYNC_HOURS (default 6). Not due: one small query.
+        db = SessionLocal()
+        try:
+            result = da_price_sync.sync_if_due(db)
+            if result:
+                logger.info(
+                    "Synced %s DA and %s in-house reference prices (as of %s)",
+                    result.groups,
+                    result.inhouse,
+                    result.as_of,
+                )
+        except Exception:
+            db.rollback()
+            logger.exception("Could not sync reference prices")
+        finally:
+            db.close()
+
     async def reservation_cleanup_loop() -> None:
         while True:
             # DB and PayMongo calls block, so keep them off the event loop.
@@ -219,6 +245,7 @@ async def lifespan(_: FastAPI):
             await asyncio.to_thread(purge_expired_codes_and_limits)
             await asyncio.to_thread(purge_old_order_details)
             await asyncio.to_thread(remind_unfinished_applications)
+            await asyncio.to_thread(sync_reference_prices)
             await asyncio.sleep(60)
 
     cleanup_task = asyncio.create_task(reservation_cleanup_loop())

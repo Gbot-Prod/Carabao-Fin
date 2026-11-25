@@ -270,7 +270,7 @@ export default function OrderDetailPage() {
       .catch(() => setState("missing"));
   }, [orderId]);
 
-  // The order list links to #review and #chat. Those sections render only
+  // Links can point to #review or #chat. Those sections render only
   // after the order loads, so the browser cannot scroll to them on its own.
   useEffect(() => {
     if (state !== "ready" || !window.location.hash) return;
@@ -474,7 +474,7 @@ export default function OrderDetailPage() {
 
       {/* Chat with the farm (CH1b) */}
       <div id="chat">
-        <OrderChat orderId={order.order_id} />
+        <OrderChat orderId={order.order_id} compose />
       </div>
     </div>
   );

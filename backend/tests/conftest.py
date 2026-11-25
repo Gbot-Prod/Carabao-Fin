@@ -40,6 +40,9 @@ for _name in _DOTENV_LEAKS:
 # Pin road check off: tests that set MAPBOX_ACCESS_TOKEN must not snap pins.
 # test_pin_quality turns it on with monkeypatch.
 os.environ["ROAD_SNAP_PROVIDER"] = "off"
+# The main.py loop must not call the DA price API. test_da_price_sync turns
+# it on with monkeypatch.
+os.environ["DA_PRICE_SYNC_HOURS"] = "0"
 
 import sqlite3  # noqa: E402
 from datetime import date, datetime  # noqa: E402

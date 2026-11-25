@@ -10,16 +10,18 @@ queue. An approve, reject or hide closes the open reports on the listing.
 
 from collections import defaultdict
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import nulls_last
+from sqlalchemy import func, nulls_last
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_db
 from app.api.routes.admin import _require_admin
-from app.core.sql import ilike_contains
+from app.core.sql import SortOrder, ilike_contains, sort_clauses
 from app.models.listing_report import ListingReport
+from app.models.merchant import Merchant
 from app.models.produce import Produce
 from app.models.reference_price import ReferencePrice
 from app.models.statuses import ProduceStatus
@@ -173,6 +175,21 @@ def list_rejection_codes(_: User = Depends(_require_admin)):
     ]
 
 
+# The columns the admin listings table can be sorted on.
+ProduceSort = Literal[
+    "id", "name", "category", "merchant", "price", "stock", "best_before"
+]
+_PRODUCE_SORT_COLUMNS = {
+    "id": Produce.id,
+    "name": func.lower(Produce.name),
+    "category": func.lower(Produce.category),
+    "merchant": func.lower(Merchant.merchant_name),
+    "price": Produce.price,
+    "stock": Produce.stock_quantity,
+    "best_before": Produce.best_before,
+}
+
+
 @router.get("/admin/produce", response_model=Page[AdminProduceResponse])
 def list_all_produce(
     merchant_id: int | None = Query(None, ge=1, le=MAX_ID),
@@ -181,6 +198,9 @@ def list_all_produce(
     q: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
+    # No sort: newest first, or oldest first for the review queue.
+    sort: ProduceSort | None = None,
+    order: SortOrder = "asc",
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
@@ -197,14 +217,17 @@ def list_all_produce(
     if q and q.strip():
         query = query.filter(ilike_contains(Produce.name, q.strip()))
     total = query.count()
-    order = (
-        (nulls_last(Produce.submitted_for_review_at.asc()), Produce.id.asc())
-        if status == ProduceStatus.UNDER_REVIEW
-        else (Produce.id.desc(),)
-    )
+    if sort is not None:
+        if sort == "merchant":
+            query = query.outerjoin(Merchant, Produce.merchant_id == Merchant.id)
+        clauses = sort_clauses(_PRODUCE_SORT_COLUMNS[sort], order, Produce.id)
+    elif status == ProduceStatus.UNDER_REVIEW:
+        clauses = (nulls_last(Produce.submitted_for_review_at.asc()), Produce.id.asc())
+    else:
+        clauses = (Produce.id.desc(),)
     rows = (
         query.options(joinedload(Produce.merchant))
-        .order_by(*order)
+        .order_by(*clauses)
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

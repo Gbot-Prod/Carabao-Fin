@@ -304,10 +304,15 @@ def test_price_far_below_or_above_the_market_is_flagged():
     assert _price_codes(rows, price=800) == [listing_checks.PRICE_TOO_HIGH]
     # 30 pesos for 0.5 kg is 60 per kg: inside the band.
     assert _price_codes(rows, price=30, unit_quantity=0.5) == []
-    # 20 pesos per lb is about 44 per kg: above 0.5 x 60.
-    assert _price_codes(rows, price=20, unit="lbs") == []
-    # 10 pesos per lb is about 22 per kg: below 0.5 x 60.
-    assert _price_codes(rows, price=10, unit="lbs") == [listing_checks.PRICE_TOO_LOW]
+    # 25 pesos is about 40% of the NCR low: a normal farm price, no flag.
+    assert _price_codes(rows, price=25) == []
+    # 199 is just under 2 x 100; 201 is over it.
+    assert _price_codes(rows, price=199) == []
+    assert _price_codes(rows, price=201) == [listing_checks.PRICE_TOO_HIGH]
+    # 20 pesos for 0.5 kg is 40 per kg: above 0.3 x 60.
+    assert _price_codes(rows, price=20, unit_quantity=0.5) == []
+    # 5 pesos for 0.5 kg is 10 per kg: below 0.3 x 60.
+    assert _price_codes(rows, price=5, unit_quantity=0.5) == [listing_checks.PRICE_TOO_LOW]
 
 
 def test_bait_price_in_a_tier_is_flagged_on_the_tier():
@@ -316,7 +321,7 @@ def test_bait_price_in_a_tier_is_flagged_on_the_tier():
             name="Talong",
             price=80,
             unit="kg",
-            price_tiers=(PriceTier(min_qty=5, unit_price=20),),
+            price_tiers=(PriceTier(min_qty=5, unit_price=15),),
         ),
         reference_rows=[_ref()],
         reference_is_real=True,

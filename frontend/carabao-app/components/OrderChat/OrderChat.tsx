@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 import { apiClient } from "@/util/api/client";
 import getApiErrorMessage, { isPhoneVerificationRequired } from "@/util/errorHelper";
@@ -27,6 +28,7 @@ export default function OrderChat({
   fill = false,
   onSent,
   closedText,
+  compose = false,
 }: {
   orderId?: number;
   endpoint?: string;
@@ -38,6 +40,12 @@ export default function OrderChat({
   fill?: boolean;
   /** After a message is sent, e.g. so a chat list shows a newly started chat. */
   onSent?: () => void;
+  /**
+   * Only the title, the message box and Send. The messages show in the Chats
+   * page, not here; after a send, a link goes there. Checks once if the chat
+   * is closed, and does not poll.
+   */
+  compose?: boolean;
 }) {
   const { t } = useLanguage();
   const c = t.chat;
@@ -54,6 +62,7 @@ export default function OrderChat({
   // After verifying, the unsent message is still in the box; say so.
   const [verified, setVerified] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [sent, setSent] = useState(false);
   const lastId = useRef(0);
   const listRef = useRef<HTMLOListElement | null>(null);
 
@@ -85,7 +94,10 @@ export default function OrderChat({
     lastId.current = 0;
   }, [url]);
   // CF-0047: paused while the tab is hidden, one poll when it is shown again.
-  useVisibleInterval(poll, POLL_MS);
+  useVisibleInterval(poll, POLL_MS, !compose);
+  useEffect(() => {
+    if (compose) void poll();
+  }, [compose, poll]);
 
   useEffect(() => {
     listRef.current?.lastElementChild?.scrollIntoView({ block: "nearest" });
@@ -103,6 +115,7 @@ export default function OrderChat({
       lastId.current = Math.max(lastId.current, res.data.id);
       setMessages((prev) => [...prev, res.data]);
       setDraft("");
+      setSent(true);
       onSent?.();
     } catch (err) {
       if (isPhoneVerificationRequired(err)) setNeedsPhone(true);
@@ -117,7 +130,7 @@ export default function OrderChat({
   return (
     <section className={`${styles.chat} ${fill ? styles.fill : ""}`} aria-label={title ?? c.title}>
       <h3 className={styles.title}>{title ?? c.title}</h3>
-      {!loaded ? (
+      {compose ? null : !loaded ? (
         <p className={styles.note}>{c.loading}</p>
       ) : messages.length === 0 ? (
         <p className={styles.note}>{emptyText ?? c.empty}</p>
@@ -156,8 +169,14 @@ export default function OrderChat({
           <button type="submit" disabled={sending || !draft.trim()}>{sending ? c.sending : c.send}</button>
         </form>
       )}
-      {closesAt && !closed && (
+      {!compose && closesAt && !closed && (
         <p className={styles.note}>{fmt(c.closesOn, { date: new Date(closesAt).toLocaleDateString("en-PH") })}</p>
+      )}
+      {compose && sent && !error && orderId != null && (
+        <p className={styles.note} role="status">
+          {c.sent}{" "}
+          <Link href={`/chats?order=${orderId}`}>{c.openChats}</Link>
+        </p>
       )}
       {error && <p className={styles.error} role="alert">{error}</p>}
       {verified && !error && <p className={styles.note} role="status">Number verified. Press Send to send your message.</p>}

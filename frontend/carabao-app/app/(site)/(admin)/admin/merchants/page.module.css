@@ -57,6 +57,12 @@
   color: var(--text-faint);
 }
 
+.sub {
+  margin-top: 2px;
+  color: var(--text-subtle);
+  font-size: 12px;
+}
+
 .state {
   padding: 40px 24px;
   border: 1px dashed #cdd8d0;

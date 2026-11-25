@@ -115,8 +115,8 @@ def test_duplicate_listing_is_refused(db, merchant):
     res = farmer.post("/produce/", json=_payload(name="  talong "))
     assert res.status_code == 400
     assert "name" in res.json()["errors"]
-    # A different unit is another listing.
-    assert farmer.post("/produce/", json=_payload(unit="lbs")).status_code == 200
+    # Listings are sold in kg only: pounds are refused.
+    assert farmer.post("/produce/", json=_payload(unit="lbs")).status_code == 422
 
 
 def test_edit_runs_the_checker_and_can_clear_a_review(db, merchant):
@@ -240,3 +240,34 @@ def test_admin_manages_terms(db, merchant):
     assert listed["total"] == 1
     actions = [e.action for e in db.query(AdminAuditLog).order_by(AdminAuditLog.id)]
     assert actions == ["prohibited_term.create", "prohibited_term.update"]
+
+
+def test_check_gives_the_ncr_market_price_and_the_recommendation(db, merchant):
+    from app.models.reference_price import ReferencePrice
+
+    db.add(
+        ReferencePrice(
+            commodity="Tomato",
+            aliases="kamatis",
+            unit="kg",
+            low=110,
+            high=120,
+            source="DA Daily Price Index NCR",
+            as_of=TODAY,
+        )
+    )
+    db.commit()
+    farmer = _farmer(db, merchant)
+
+    body = farmer.post(
+        "/produce/check",
+        json={"name": "Kamatis", "price": 50, "unit": "kg", "unit_quantity": 0.5},
+    ).json()
+    market = body["market_price"]
+    assert market["commodity"] == "Tomato"
+    assert (market["low"], market["high"], market["recommended_max"]) == (110, 120, 110)
+    assert market["price_per_kg"] == 100.0  # 50 pesos for 0.5 kg
+    assert market["source"] == "DA Daily Price Index NCR"
+
+    unknown = farmer.post("/produce/check", json={"name": "Durian"}).json()
+    assert unknown["market_price"] is None

@@ -8,15 +8,17 @@ Each hide / restore writes an audit row with the reason.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_db
 from app.api.routes.admin import _require_admin
-from app.core.sql import ilike_contains
+from app.core.sql import SortOrder, ilike_contains, sort_clauses
+from app.models.merchant import Merchant
 from app.models.review import Review
 from app.models.user import User
 from app.schemas.pagination import MAX_ID, MAX_PAGE, Page
@@ -67,6 +69,15 @@ def _state(review: Review) -> dict[str, Any]:
     return {"hidden_at": review.hidden_at, "hidden_reason": review.hidden_reason}
 
 
+# The columns the admin reviews table can be sorted on.
+ReviewSort = Literal["date", "farm", "rating"]
+_REVIEW_SORT_COLUMNS = {
+    "date": Review.created_at,
+    "farm": func.lower(Merchant.merchant_name),
+    "rating": Review.rating,
+}
+
+
 @router.get("/admin/reviews", response_model=Page[AdminReviewResponse])
 def list_reviews(
     hidden: bool | None = None,
@@ -75,10 +86,12 @@ def list_reviews(
     q: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
+    sort: ReviewSort = "date",
+    order: SortOrder = "desc",
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ) -> dict[str, Any]:
-    """Newest first. ``max_rating=2`` is the usual moderation queue."""
+    """Newest first by default. ``max_rating=2`` is the usual moderation queue."""
     query = db.query(Review)
     if hidden is True:
         query = query.filter(Review.hidden_at.isnot(None))
@@ -91,9 +104,11 @@ def list_reviews(
     if q and q.strip():
         query = query.filter(ilike_contains(Review.comment, q.strip()))
     total = query.count()
+    if sort == "farm":
+        query = query.outerjoin(Merchant, Review.merchant_id == Merchant.id)
     rows = (
         query.options(selectinload(Review.user), selectinload(Review.merchant))
-        .order_by(Review.created_at.desc(), Review.id.desc())
+        .order_by(*sort_clauses(_REVIEW_SORT_COLUMNS[sort], order, Review.id))
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

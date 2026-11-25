@@ -12,7 +12,7 @@ export type ProduceFormState = {
   description: string;
   category: "Vegetables" | "Fruits" | "";
   price: number;
-  unit: "kg" | "lbs";
+  unit: "kg";
   unit_quantity: number;
   stock_quantity: number;
   image_url: string;
@@ -35,7 +35,7 @@ export const produceToForm = (p: Produce): ProduceFormState => ({
   description: p.description ?? "",
   category: p.category ?? "",
   price: p.price,
-  unit: p.unit ?? "kg",
+  unit: "kg",
   unit_quantity: p.unit_quantity ?? 1,
   stock_quantity: p.stock_quantity,
   image_url: p.image_url ?? "",
@@ -261,15 +261,11 @@ export default function ProduceFormFields({
           value={form.category}
           onChange={(v) => onChange({ ...form, category: v })}
         />
-        <TickGroup
-          label={t.listing.unit}
-          options={["kg", "lbs"] as const}
-          value={form.unit}
-          onChange={(v) => onChange({ ...form, unit: v })}
-        />
       </div>
       <FieldMessages notes={notes} field="category" onApply={apply} />
       <FieldMessages notes={notes} field="unit" />
+      {/* All listings are sold in kilograms: no unit choice. */}
+      <p className={styles.tierHint}>{t.listing.kgOnly}</p>
 
       <div className={styles.priceRow}>
         <label className={`${styles.formLabel} ${styles.grow1}`}>

@@ -13,7 +13,44 @@ export type ProduceCheckResult = {
   recommended_status: ProduceStatus;
   hard_blocks: ListingIssue[];
   soft_flags: ListingIssue[];
+  // Phase 4: the NCR market price for the produce, or null (no usable reference row).
+  market_price?: MarketPrice | null;
 };
+
+/** Backend MarketPriceView: the NCR retail price; the form recommends `recommended_max` or less. */
+export type MarketPrice = {
+  commodity: string;
+  low: number;
+  high: number;
+  unit: string;
+  source: string;
+  as_of: string; // YYYY-MM-DD
+  recommended_max: number;
+  price_per_kg: number | null;
+};
+
+const peso = (n: number) => `₱${Math.round(n).toLocaleString('en-PH')}`;
+
+/**
+ * The lines under the price field. Buyers expect a farm price below the NCR market
+ * price, so the note recommends the low end or less. Information only: the save never
+ * refuses a price for this.
+ */
+export function marketPriceNote(market: MarketPrice | null | undefined): { range: string; advice: string } | null {
+  if (!market) return null;
+  const range = `NCR market price for ${market.commodity}: ${peso(market.low)}–${peso(market.high)} / ${market.unit} (${market.source}, ${market.as_of}).`;
+  const recommended = `${peso(market.recommended_max)} / ${market.unit}`;
+  const perKg = market.price_per_kg;
+  let advice = `Recommended: ${recommended} or less. Buyers expect a farm price below the NCR market price.`;
+  if (perKg != null && perKg > market.high) {
+    advice = `Your price is ${peso(perKg)} / kg, above the NCR market price. Recommended: ${recommended} or less.`;
+  } else if (perKg != null && perKg > market.recommended_max) {
+    advice = `Your price is ${peso(perKg)} / kg, in the NCR market range. Recommended: ${recommended} or less.`;
+  } else if (perKg != null) {
+    advice = `Your price is ${peso(perKg)} / kg, below the NCR market price.`;
+  }
+  return { range, advice };
+}
 
 /** The wait after the last key press before the form is checked (web: the same). */
 export const CHECK_DELAY_MS = 400;
@@ -73,7 +110,7 @@ export function hasBlocks(notes: CheckNotes): boolean {
 export function checkPayload(
   f: {
     name: string; price: string; stock: string; harvestDate: string; bestBefore: string;
-    minOrderQty: string; tiers: TierFields[]; unit: 'kg' | 'lbs'; category: 'Vegetables' | 'Fruits' | null;
+    minOrderQty: string; tiers: TierFields[]; unit: 'kg'; category: 'Vegetables' | 'Fruits' | null;
   },
   produceId: number | null,
 ) {

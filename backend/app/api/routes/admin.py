@@ -1,15 +1,16 @@
 import logging
 from datetime import UTC, datetime, time, timedelta
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Date, cast, func, or_
+from sqlalchemy import Date, cast, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db
 from app.core.errors import upstream_error
+from app.core.sql import SortOrder, sort_clauses
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.order import Order
@@ -91,18 +92,42 @@ def _require_admin(current_user: User = Depends(get_current_user)) -> User:
 # authenticator or password is an account reset (POST /admin/admins/{id}/reset).
 
 
+# The columns an admin table can be sorted on (sort=<key>&order=asc|desc).
+UserSort = Literal["id", "name", "email", "joined"]
+MerchantSort = Literal[
+    "id", "name", "location", "rating", "products", "delivery", "approved"
+]
+
+
+def _user_sort_column(sort: UserSort) -> Any:
+    return {
+        "id": User.id,
+        "name": func.lower(User.name),
+        "email": func.lower(User.email),
+        "joined": User.created_at,
+    }[sort]
+
+
 @router.get("/admin/users", response_model=Page[UserResponse])
 def list_all_users(
     page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
+    # "admin": admin accounts only; "user": buyer and merchant accounts only.
+    role: Literal["user", "admin"] | None = None,
+    sort: UserSort = "id",
+    order: SortOrder = "asc",
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
     q = db.query(User)
+    if role == "admin":
+        q = q.filter(User.is_admin)
+    elif role == "user":
+        q = q.filter(~User.is_admin)
     total = q.count()
     users = (
         q.options(selectinload(User.addresses))
-        .order_by(User.id.asc())
+        .order_by(*sort_clauses(_user_sort_column(sort), order, User.id))
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -123,10 +148,31 @@ def list_all_users(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
+def _merchant_sort_column(sort: MerchantSort) -> Any:
+    if sort == "products":
+        return (
+            select(func.count(Produce.id))
+            .where(Produce.merchant_id == Merchant.id)
+            .correlate(Merchant)
+            .scalar_subquery()
+        )
+    return {
+        "id": Merchant.id,
+        "name": func.lower(Merchant.merchant_name),
+        "location": func.lower(Merchant.city),
+        "rating": Merchant.rating,
+        "delivery": Merchant.delivery_price,
+        # Set when an admin approves the application.
+        "approved": Merchant.verified_at,
+    }[sort]
+
+
 @router.get("/admin/merchants", response_model=Page[AdminMerchantResponse])
 def list_all_merchants(
     page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
+    sort: MerchantSort = "id",
+    order: SortOrder = "asc",
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
@@ -147,7 +193,7 @@ def list_all_merchants(
             selectinload(Merchant.shop_page),
             selectinload(Merchant.produces),
         )
-        .order_by(Merchant.id.asc())
+        .order_by(*sort_clauses(_merchant_sort_column(sort), order, Merchant.id))
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

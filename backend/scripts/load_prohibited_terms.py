@@ -13,6 +13,8 @@ prints a word. Use --dry-run first to see the counts without a write.
 """
 
 import argparse
+import importlib
+import pkgutil
 import sys
 from pathlib import Path
 
@@ -23,7 +25,13 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 load_dotenv(BACKEND_ROOT / ".env")
 
+import app.models as models_pkg  # noqa: E402
 from app.services import term_list  # noqa: E402
+
+# Register every model so SQLAlchemy can resolve string relationships
+# (e.g. Produce -> "Merchant") when the mappers configure.
+for _module in pkgutil.iter_modules(models_pkg.__path__):
+    importlib.import_module(f"{models_pkg.__name__}.{_module.name}")
 
 
 def _range(text: str) -> tuple[int, int]:

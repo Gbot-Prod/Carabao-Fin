@@ -12,6 +12,7 @@ import {
   rejectProduce,
   unhideProduce,
   type AdminProduce,
+  type AdminProduceSort,
   type RejectionCode,
 } from "@/util/api/admin";
 import getApiErrorMessage from "@/util/errorHelper";
@@ -22,6 +23,11 @@ import suspend from "../../suspend.module.css";
 import PageHeader from "../../PageHeader";
 import ExpandToggle, { formatDate, formatDateTime } from "../../ExpandToggle";
 import details from "../../details.module.css";
+import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
+
+// No sort: newest first, or oldest first for the review queue (server order).
+const SORT_KEYS = ["id", "name", "category", "merchant", "price", "stock", "best_before"] as const;
+const COLUMNS = 9;
 
 type Visibility = "" | "visible" | "hidden" | "under_review" | "rejected";
 
@@ -52,7 +58,9 @@ function ListingsContent() {
   const q = searchParams.get("q") || "";
   const merchantParam = Number(searchParams.get("merchant"));
   const merchantId = Number.isInteger(merchantParam) && merchantParam > 0 ? merchantParam : undefined;
-  const key = `${visibility}|${q}|${merchantId ?? ""}|${page}`;
+  const { sort, order } = readSort<AdminProduceSort>(searchParams, SORT_KEYS);
+  const current: SortState<AdminProduceSort> = { sort, order };
+  const key = `${visibility}|${q}|${merchantId ?? ""}|${sort ?? ""}|${order}|${page}`;
 
   const [rows, setRows] = useState<AdminProduce[]>([]);
   const [total, setTotal] = useState(0);
@@ -80,19 +88,28 @@ function ListingsContent() {
   useEffect(() => {
     const hidden = visibility === "hidden" ? true : visibility === "visible" ? false : undefined;
     const status = visibility === "under_review" || visibility === "rejected" ? visibility : undefined;
-    fetchAdminProduce({ hidden, status, q: q || undefined, merchant_id: merchantId }, page)
+    fetchAdminProduce(
+      { hidden, status, q: q || undefined, merchant_id: merchantId, ...(sort ? { sort, order } : {}) },
+      page,
+    )
       .then((res) => {
         setRows(res.items);
         setTotal(res.total);
         setError(null);
       })
       .catch(() => setError("Failed to load listings."))
-      .finally(() => setLoadedKey(`${visibility}|${q}|${merchantId ?? ""}|${page}`));
-  }, [visibility, q, merchantId, page]);
+      .finally(() => setLoadedKey(`${visibility}|${q}|${merchantId ?? ""}|${sort ?? ""}|${order}|${page}`));
+  }, [visibility, q, merchantId, sort, order, page]);
 
   const loading = loadedKey !== key;
 
-  const go = (next: { show?: Visibility; q?: string; merchant?: number | null; page?: number }) => {
+  const go = (next: {
+    show?: Visibility;
+    q?: string;
+    merchant?: number | null;
+    sort?: SortState<AdminProduceSort>;
+    page?: number;
+  }) => {
     const params = new URLSearchParams();
     const show = next.show ?? visibility;
     const query = next.q ?? q;
@@ -100,10 +117,12 @@ function ListingsContent() {
     if (show) params.set("show", show);
     if (query) params.set("q", query);
     if (merchant) params.set("merchant", String(merchant));
+    writeSort(params, next.sort ?? current);
     if (next.page && next.page > 1) params.set("page", String(next.page));
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   };
+  const onSort = (next: SortState<AdminProduceSort>) => go({ sort: next, page: 1 });
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
@@ -204,6 +223,11 @@ function ListingsContent() {
             Merchant #{merchantId} only · Clear
           </button>
         )}
+        {sort && (
+          <button type="button" className={styles.clear} onClick={() => go({ sort: { sort: null, order: "asc" }, page: 1 })}>
+            Default order
+          </button>
+        )}
       </div>
 
       {error ? (
@@ -216,12 +240,13 @@ function ListingsContent() {
             <thead>
               <tr>
                 <th className={details.toggleCell} aria-label="Details" />
-                <th>ID</th>
-                <th>Listing</th>
-                <th>Merchant</th>
-                <th>Price</th>
-                <th>Stock</th>
-                <th>Best before</th>
+                <SortHeader label="ID" sortKey="id" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Listing" sortKey="name" current={current} onSort={onSort} />
+                <SortHeader label="Category" sortKey="category" current={current} onSort={onSort} />
+                <SortHeader label="Merchant" sortKey="merchant" current={current} onSort={onSort} />
+                <SortHeader label="Price" sortKey="price" current={current} onSort={onSort} />
+                <SortHeader label="Stock" sortKey="stock" current={current} onSort={onSort} />
+                <SortHeader label="Best before" sortKey="best_before" current={current} onSort={onSort} />
                 <th>Moderation</th>
               </tr>
             </thead>
@@ -236,10 +261,8 @@ function ListingsContent() {
                     <ExpandToggle expanded={open} controls={detailId} label={row.name ?? `listing ${row.id}`} onToggle={() => toggle(row.id)} />
                   </td>
                   <td className={styles.mono}>{row.id}</td>
-                  <td>
-                    {row.name}
-                    {row.category && <div className={styles.sub}>{row.category}</div>}
-                  </td>
+                  <td>{row.name}</td>
+                  <td>{row.category ?? <span className={styles.sub}>—</span>}</td>
                   <td>{row.merchant_name ?? "—"}</td>
                   <td className={styles.mono}>₱{row.price} / {row.unit}</td>
                   <td className={styles.mono}>{row.stock_quantity}</td>
@@ -321,7 +344,7 @@ function ListingsContent() {
                 </tr>
                 {open && (
                   <tr id={detailId} className={details.detailRow}>
-                    <td colSpan={8}>
+                    <td colSpan={COLUMNS}>
                       <ListingDetails row={row} />
                     </td>
                   </tr>

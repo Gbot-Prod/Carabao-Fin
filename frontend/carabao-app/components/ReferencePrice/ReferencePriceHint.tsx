@@ -35,6 +35,8 @@ type Props = {
 /**
  * The market reference range for a listing (P1). Information only: it never
  * sets or caps a price. Sample rows are always labelled as samples.
+ * The range is the NCR retail price; the form recommends the low end or less,
+ * because buyers expect a farm price below the market price.
  */
 export default function ReferencePriceHint({ name, unit, price, variant = "form", prices }: Props) {
   const loaded = useReferencePrices();
@@ -62,6 +64,11 @@ export default function ReferencePriceHint({ name, unit, price, variant = "form"
         <span className={styles.source}>
           {ref.source} · {fmt(t.reference.asOf, { date: asOf(ref.as_of) })}
           {!sameUnit && ` · ${fmt(t.reference.listedPer, { refUnit: ref.unit, unit: unit ?? "" })}`}
+        </span>
+      )}
+      {variant === "form" && !ref.is_sample && (
+        <span className={styles.comparison}>
+          {fmt(t.reference.recommend, { price: ref.low.toLocaleString(), unit: ref.unit })}
         </span>
       )}
       {comparison && <span className={styles.comparison}>{comparison}</span>}
