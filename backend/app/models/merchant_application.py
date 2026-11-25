@@ -124,6 +124,11 @@ class MerchantApplication(Base):
     gov_id_document_path = Column(String, nullable=True)
     gov_id_document_original_name = Column(String, nullable=True)
     gov_id_document_content_type = Column(String, nullable=True)
+    # Selfie with ID: a camera photo of the applicant holding the government
+    # ID (onboarding section 2), private bucket. The admin compares the faces.
+    selfie_document_path = Column(String, nullable=True)
+    selfie_document_original_name = Column(String, nullable=True)
+    selfie_document_content_type = Column(String, nullable=True)
 
     # Step 2: Location / availability
     region = Column(String, nullable=False)
@@ -182,6 +187,7 @@ class MerchantApplication(Base):
     # Read from the uploaded BIR Form 2303. The TIN and name are encrypted;
     # ocr_bir_tin_hmac is for duplicate lookups.
     bir_file_sha256 = Column(String(64), nullable=True, index=True)
+    selfie_file_sha256 = Column(String(64), nullable=True, index=True)
     ocr_bir_tin = Column(EncryptedString("tin"), nullable=True)
     ocr_bir_tin_hmac = Column(String(64), nullable=True)
     ocr_bir_name = Column(EncryptedString("ocr_bir_name"), nullable=True)

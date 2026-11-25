@@ -175,18 +175,20 @@ def _refuse_if_blocked(db: Session, user: User) -> None:
 def _identity_documents(db: Session, user: User) -> list[str]:
     """Every private ID document stored for this user (CF-0040)."""
     paths: set[str] = set()
-    for rsbsa, gov_id, bir_cert in db.query(
+    for row in db.query(
         MerchantApplication.rsbsa_document_path,
         MerchantApplication.gov_id_document_path,
         MerchantApplication.bir_cert_document_path,
+        MerchantApplication.selfie_document_path,
     ).filter(MerchantApplication.user_id == user.id):
-        paths.update((rsbsa, gov_id, bir_cert))
+        paths.update(row)
     if user.merchant:
         paths.update(
             (
                 user.merchant.rsbsa_document_path,
                 user.merchant.gov_id_document_path,
                 user.merchant.bir_cert_document_path,
+                user.merchant.selfie_document_path,
             )
         )
     return sorted(path for path in paths if path)

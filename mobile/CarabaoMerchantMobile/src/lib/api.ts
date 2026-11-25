@@ -1172,8 +1172,8 @@ export const api = {
         throw err;
       }),
     // S18: POST /merchant-onboarding/me, multipart as the web submitMyMerchantOnboarding
-    // (util/api/merchants.ts): `payload` as a JSON string, then `rsbsa_file`, `gov_id_file` and
-    // `bir_cert_file` when present. The route allows a 42 MB body (core/body_limit.py); a
+    // (util/api/merchants.ts): `payload` as a JSON string, then `rsbsa_file`, `gov_id_file`,
+    // `bir_cert_file` and `selfie_file` when present. The route allows a 52 MB body (core/body_limit.py); a
     // larger one is refused here with the server's words, before the upload starts.
     submit: (token: string | null, payload: OnboardingPayload, documents: OnboardingDocuments) => {
       const tooLarge = bodyLimitProblem(documents, ONBOARDING_BODY_LIMIT_BYTES);
@@ -1184,6 +1184,7 @@ export const api = {
         ['rsbsa_file', documents.rsbsa],
         ['gov_id_file', documents.govId],
         ['bir_cert_file', documents.birCert],
+        ['selfie_file', documents.selfie],
       ];
       for (const [name, doc] of parts) {
         // React Native's FormData takes { uri, name, type } as the file part.

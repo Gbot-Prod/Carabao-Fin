@@ -370,9 +370,6 @@ export function ListingForm({
                 <Text style={[styles.pillText, styles.pillTextActive]}>kg</Text>
               </View>
             </View>
-            <Text style={styles.hint}>
-              All listings are sold in kilograms (kg). Enter the price and quantity in kg. Pounds (lbs) are not accepted.
-            </Text>
 
             <Text style={styles.label}>Category</Text>
             <View style={styles.pills}>

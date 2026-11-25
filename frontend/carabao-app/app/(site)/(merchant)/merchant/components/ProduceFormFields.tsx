@@ -264,8 +264,6 @@ export default function ProduceFormFields({
       </div>
       <FieldMessages notes={notes} field="category" onApply={apply} />
       <FieldMessages notes={notes} field="unit" />
-      {/* All listings are sold in kilograms: no unit choice. */}
-      <p className={styles.tierHint}>{t.listing.kgOnly}</p>
 
       <div className={styles.priceRow}>
         <label className={`${styles.formLabel} ${styles.grow1}`}>

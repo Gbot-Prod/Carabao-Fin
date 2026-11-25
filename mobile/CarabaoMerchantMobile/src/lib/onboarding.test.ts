@@ -31,6 +31,7 @@ import {
   stepOfField,
   STEPS,
   toggleDay,
+  selfieError,
   validateStep,
   type ContactProof,
   type OnboardingDocument,
@@ -39,7 +40,8 @@ import {
 } from './onboarding.ts';
 
 const PDF: OnboardingDocument = { uri: 'file:///a.pdf', name: 'a.pdf', mimeType: 'application/pdf', size: 1000 };
-const DOCS: OnboardingDocuments = { rsbsa: PDF, govId: PDF, birCert: PDF };
+const SELFIE: OnboardingDocument = { uri: 'file:///s.jpg', name: 's.jpg', mimeType: 'image/jpeg', size: 1000 };
+const DOCS: OnboardingDocuments = { rsbsa: PDF, govId: PDF, birCert: PDF, selfie: SELFIE };
 
 /** A step 1 that passes: address with a confirmed pin, the account's own email and number. */
 const OPS_OK: OnboardingForm = {
@@ -128,9 +130,14 @@ test('step 2 per seller type, as the web validateStep', () => {
   const now = { ...INITIAL_FORM, submit_mode: 'now' as const };
   const farmer = validateStep('legal', { ...now, seller_type: 'individual_farmer' }, NO_PROOF);
   assert.deepEqual(Object.keys(farmer).sort(), [
-    'first_name', 'gov_id_file', 'last_name', 'rsbsa_file', 'small_agri_producer', 'terms_accepted',
+    'first_name', 'gov_id_file', 'last_name', 'rsbsa_file', 'selfie_file', 'small_agri_producer', 'terms_accepted',
   ]);
   assert.equal(farmer.rsbsa_file, 'Please upload your RSBSA document (photo or PDF).');
+  assert.equal(farmer.selfie_file, 'Take a selfie while you hold your government ID.');
+  // A saved file or a PDF is not a camera photo.
+  assert.equal(selfieError(PDF), 'The selfie must be a photo (JPG).');
+  assert.equal(selfieError({ ...SELFIE, size: 11 * 1024 * 1024 }), 'The selfie must be 10MB or smaller. Take it again.');
+  assert.equal(selfieError(SELFIE), null);
 
   const sole = validateStep('legal', { ...now, seller_type: 'sole_proprietor' }, NO_PROOF, DOCS);
   assert.equal(sole.registration_number, 'DTI number is required.');
@@ -220,7 +227,7 @@ test('Submit later sends step 1 and the seller type only, and no files', () => {
     email_verification_token: '',
     merchant_name: 'Carabao Fresh Farm',
   });
-  assert.deepEqual(payloadDocuments(form, DOCS), { rsbsa: null, govId: null, birCert: null });
+  assert.deepEqual(payloadDocuments(form, DOCS), { rsbsa: null, govId: null, birCert: null, selfie: null });
   assert.equal(buildPayload({ ...form, seller_type: null }, OWN), null);
 });
 

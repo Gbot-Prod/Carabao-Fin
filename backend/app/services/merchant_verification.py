@@ -159,6 +159,9 @@ _REVIEWED_FIELDS = (
     "bir_cert_document_path",
     "bir_cert_document_original_name",
     "bir_cert_document_content_type",
+    "selfie_document_path",
+    "selfie_document_original_name",
+    "selfie_document_content_type",
 )
 
 CONTACT_NUMBER_TAKEN = "This number is already used by another shop."

@@ -148,6 +148,7 @@ _FIELD_LABELS = {
     "rsbsa_file": "RSBSA document",
     "gov_id_file": "Government ID",
     "bir_cert_file": "BIR Certificate of Registration",
+    "selfie_file": "Selfie with ID",
 }
 
 
@@ -248,11 +249,13 @@ def get_my_merchant_application_route(
 @router.post("/merchant-onboarding/me", response_model=MerchantApplicationResponse)
 def submit_my_merchant_onboarding_route(
     payload: str = Form(...),
-    # Needed for "Submit now" only: RSBSA and government ID always, BIR Form
+    # Needed for "Submit now" only: RSBSA, government ID and selfie always, BIR Form
     # 2303 for registered seller types. "Submit later" sends none.
     rsbsa_file: UploadFile | None = File(None),
     gov_id_file: UploadFile | None = File(None),
     bir_cert_file: UploadFile | None = File(None),
+    # Selfie with ID, a camera photo (every seller type).
+    selfie_file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_verified_phone),
 ):
@@ -298,6 +301,7 @@ def submit_my_merchant_onboarding_route(
         "rsbsa_file": rsbsa_file,
         "gov_id_file": gov_id_file,
         "bir_cert_file": bir_cert_file,
+        "selfie_file": selfie_file,
     }
     # Documents not flagged for changes stay as sent: a new file for one of
     # them is ignored (a client that sends every document again still works).
@@ -402,7 +406,7 @@ def submit_my_merchant_onboarding_route(
     checked = {
         field: _with_field(
             field,
-            upload_validation.check_document_upload,
+            _FILE_CHECKS.get(field, upload_validation.check_document_upload),
             upload,
             _FILE_LABELS[field],
         )
@@ -428,9 +432,7 @@ def submit_my_merchant_onboarding_route(
         application = MerchantApplication(user_id=current_user.id)
         db.add(application)
     replaced = [
-        application.rsbsa_document_path,
-        application.gov_id_document_path,
-        application.bir_cert_document_path,
+        getattr(application, f"{prefix}_path") for prefix in _DOCUMENT_COLUMNS.values()
     ]
 
     _apply_operations(application, data, contact_email, f"+{contact}", pin)
@@ -469,7 +471,7 @@ def submit_my_merchant_onboarding_route(
     saved = _commit(
         db, application, uploaded=list(uploaded.values()), replaced=replaced
     )
-    if {"business", "documents"} <= locked:
+    if {"business", "documents", "selfie"} <= locked:
         # Nothing the checks read has changed: the checklist stays.
         return saved
     # The automated review checklist, from the files this submit sent and the
@@ -479,7 +481,13 @@ def submit_my_merchant_onboarding_route(
         db,
         saved,
         {_doc_key(f): c.data for f, c in checked.items()},
-        stored=[_doc_key(f) for f in kept if f in needed and f not in checked],
+        # A kept selfie is not read again: it has no text, and its SHA-256
+        # is already saved.
+        stored=[
+            _doc_key(f)
+            for f in kept
+            if f in needed and f not in checked and f not in _FILE_SECTIONS
+        ],
     )
     return saved
 
@@ -524,13 +532,14 @@ def _with_stored_sections(
 def _kept_documents(
     application: MerchantApplication | None, locked: frozenset[str]
 ) -> frozenset[str]:
-    """Upload fields whose saved document stays (documents not flagged)."""
-    if application is None or "documents" not in locked:
+    """Upload fields whose saved document stays (their section is not flagged)."""
+    if application is None:
         return frozenset()
     return frozenset(
         field
         for field, prefix in _DOCUMENT_COLUMNS.items()
-        if getattr(application, f"{prefix}_path")
+        if _FILE_SECTIONS.get(field, "documents") in locked
+        and getattr(application, f"{prefix}_path")
     )
 
 
@@ -611,13 +620,19 @@ _FILE_LABELS = {
     "rsbsa_file": "RSBSA document",
     "gov_id_file": "Government ID",
     "bir_cert_file": "BIR Certificate of Registration",
+    "selfie_file": "Selfie with ID",
 }
 # The column prefix each upload is stored under.
 _DOCUMENT_COLUMNS = {
     "rsbsa_file": "rsbsa_document",
     "gov_id_file": "gov_id_document",
     "bir_cert_file": "bir_cert_document",
+    "selfie_file": "selfie_document",
 }
+# The clarification section of an upload that is not in "documents".
+_FILE_SECTIONS = {"selfie_file": "selfie"}
+# The selfie is a photo only (re-encoded, EXIF removed): no PDF.
+_FILE_CHECKS = {"selfie_file": upload_validation.check_selfie_upload}
 
 
 def _upload(field: str, user_id: int, checked: CheckedFile) -> str:
@@ -626,6 +641,8 @@ def _upload(field: str, user_id: int, checked: CheckedFile) -> str:
         return r2_service.upload_rsbsa_document(user_id, checked)
     if field == "gov_id_file":
         return r2_service.upload_gov_id_document(user_id, checked)
+    if field == "selfie_file":
+        return r2_service.upload_selfie_document(user_id, checked)
     return r2_service.upload_bir_cert_document(user_id, checked)
 
 
@@ -656,7 +673,7 @@ def _validate_payload(
 
 
 def _needed_files(seller_type: str) -> list[str]:
-    needed = ["rsbsa_file", "gov_id_file"]
+    needed = ["rsbsa_file", "gov_id_file", "selfie_file"]
     if seller_type in REGISTERED_SELLERS:
         needed.append("bir_cert_file")
     return needed
@@ -786,9 +803,7 @@ def _commit(
         raise
 
     current = {
-        application.rsbsa_document_path,
-        application.gov_id_document_path,
-        application.bir_cert_document_path,
+        getattr(application, f"{prefix}_path") for prefix in _DOCUMENT_COLUMNS.values()
     }
     stale = [path for path in replaced if path not in current]
     _discard_uploads(*_unreferenced(db, stale))
@@ -810,11 +825,13 @@ def _unreferenced(db: Session, paths: list[str | None]) -> list[str]:
             Merchant.rsbsa_document_path,
             Merchant.gov_id_document_path,
             Merchant.bir_cert_document_path,
+            Merchant.selfie_document_path,
         )
         .filter(
             Merchant.rsbsa_document_path.in_(wanted)
             | Merchant.gov_id_document_path.in_(wanted)
             | Merchant.bir_cert_document_path.in_(wanted)
+            | Merchant.selfie_document_path.in_(wanted)
         )
         .all()
         for path in row

@@ -35,7 +35,7 @@ External services:
 | PayMongo | API | Checkout sessions, webhooks, outward transfers (payouts) |
 | Semaphore | API | SMS: account codes, payout codes, order alerts, admin setup links |
 | Resend | API | Email: password reset, email verification, admin setup links, payout change alerts |
-| Cloudflare R2 | API | Public bucket (photos, logos, banners). Private bucket (RSBSA and government ID documents) |
+| Cloudflare R2 | API | Public bucket (photos, logos, banners). Private bucket (RSBSA, government ID and selfie with ID documents) |
 | Mapbox | Web app, API | Browser maps. Road data and geocoding in the API (blocked on some dev networks; use OSRM/Nominatim for local benchmarks) |
 | Google, Facebook | Web app | OAuth through Better Auth |
 
@@ -172,7 +172,7 @@ Hard start-up failures:
 | `PAYMONGO_WEBHOOK_SECRET` | Yes | test webhook secret | live webhook secret; one webhook + secret per mode |
 | `CLOUDFLARE_ACCOUNT_ID` | Uploads | | |
 | `CLOUDFLARE_R2_BUCKET_NAME` | Uploads | | public bucket |
-| `CLOUDFLARE_R2_PRIVATE_BUCKET_NAME` | Uploads | | private bucket (RSBSA, government IDs); must not be public |
+| `CLOUDFLARE_R2_PRIVATE_BUCKET_NAME` | Uploads | | private bucket (RSBSA, government IDs, selfies with ID); must not be public |
 | `CLOUDFLARE_R2_PUBLIC_URL` | Uploads | | |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Uploads | | access to both buckets |
 | `RESEND_KEY`, `RESEND_FROM` | Email | | From on a verified domain (default `Carabao <onboarding@resend.dev>`) |
@@ -387,6 +387,14 @@ You need Docker Desktop running and these values from Railway:
 
 **Warning: an empty URL makes every step run on your LOCAL database, and nothing tells you.** `backend/.env` and `frontend/carabao-app/.env*` point to `localhost:5432`, and they are used when the shell has no `DATABASE_URL`. In PowerShell, `$env:DATABASE_URL = ""` deletes the variable. This happens when you press Enter at an empty `Read-Host` prompt. Also, never put the URL in the prompt *text* (`Read-Host "postgresql://..."`): that writes the password to the PSReadLine history file. If that happens, change the `postgres` password.
 
+**One step:** `backend\db\migrate_prod.ps1` does steps 1 to 8 below. It asks for the URL (hidden) and the database name one time, and stops at the first failure. Save the `PGSSL_CA` PEM to a file outside the repo first. Add `-Data` with the scripts from step 6 that you need (`psgc`, `boundaries`, `terms`, `phash`, `prices`, `all`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File backend\db\migrate_prod.ps1 -PgsslCaFile $HOME\railway-ca.pem -Data prices
+```
+
+The manual steps follow.
+
 1. **Back up.** `powershell -ExecutionPolicy Bypass -File backend\db\backup.ps1`. Continue only after `OK: ... every row count matches the restore.`
 2. **Set the shell**, from `backend`. Paste the URL at the `URL:` prompt:
 
@@ -542,21 +550,22 @@ other moves: 409
 
 - **Form:** 2 sections.
   1. Operations and contact: location, map pin, available days, contact email, contact number. The email and the number each need a 6-digit code, unless the value is the account's own verified email or number. The applicant cannot continue until both are verified.
-  2. Legal and documents: business details, TIN, registration, RSBSA number, RSBSA document, government ID type and government ID document.
+  2. Legal and documents: business details, TIN, registration, RSBSA number, RSBSA document, government ID type, government ID document, and the selfie with ID.
+- **Selfie with ID:** a camera photo of the applicant (for a corporation, the representative) who holds the government ID. Required for every seller type. No file pick: the web uses `getUserMedia` in the page (`onboarding/SelfieCapture.tsx`, front camera first, switch allowed, JPEG max 1600 px); the merchant app uses `expo-image-picker` `launchCameraAsync` (front camera, quality 0.6, no gallery). The API accepts JPEG/PNG/WebP only, 10 MB max (`check_selfie_upload`), and re-encodes it. Clarification section `selfie` asks for a new selfie only; the other documents stay. Checklist item `selfie_matches_id` is always `warn` (`fail` if missing), so Accept needs the admin's tick. `selfie_file_sha256` is in the duplicate check. The admin review card shows the selfie next to the ID ("Compare selfie and ID").
 - **Contact proofs:** `POST /sms/otp/verify` returns a token with purpose `merchant_phone`. `POST /email/otp/verify` returns a token with purpose `merchant_email`. Each token is for one user and one value and lasts 60 min (`CONTACT_VERIFICATION_TTL`). The submit refuses a contact value that has no proof (400).
 - Endpoints:
   - `POST /email/otp/send`, `POST /email/otp/verify` (contact email codes, signed-in user)
-  - `POST /merchant-onboarding/me` (multipart: `payload`, `rsbsa_file`, `gov_id_file`)
+  - `POST /merchant-onboarding/me` (multipart: `payload`, `rsbsa_file`, `gov_id_file`, `selfie_file`, and `bir_cert_file` for registered seller types)
   - `PATCH /admin/merchant-applications/{id}` (records `reviewed_by_user_id` and `reviewed_at`; approval also sets `merchants.verified_by_user_id` and `verified_at`)
-  - `GET /admin/merchant-applications/{id}/rsbsa-document`, `GET /admin/merchant-applications/{id}/gov-id-document` (short-lived links to the private bucket)
-- **Documents:** R2 keys `rsbsa/{user_id}/...` and `gov-id/{user_id}/...` in the private bucket. Both files are checked before either is uploaded. If the submit fails after an upload, the API deletes the uploaded objects. Approval copies the keys and metadata to `merchants`, not the files.
+  - `GET /admin/merchant-applications/{id}/rsbsa-document`, `GET /admin/merchant-applications/{id}/gov-id-document`, `GET /admin/merchant-applications/{id}/selfie-document` (short-lived links to the private bucket)
+- **Documents:** R2 keys `rsbsa/{user_id}/...`, `gov-id/{user_id}/...`, `bir-2303/{user_id}/...` and `selfie/{user_id}/...` in the private bucket. All files are checked before any is uploaded. If the submit fails after an upload, the API deletes the uploaded objects. Approval copies the keys and metadata to `merchants`, not the files.
 - **Government ID types:** PhilSys National ID, Passport, Driver's License, UMID, SSS, PRC, Postal ID, Voter's ID, PhilHealth, Senior Citizen ID, PWD ID (`GovIdType`). RSBSA is a separate upload.
 - **Document check columns** (`check_status`, `check_flags`, `gov_id_number_hmac`, `ocr_rsbsa_number_hmac`, file SHA-256s, OCR name and score) exist on `merchant_applications` but nothing fills them yet.
 - **Identifier storage:** TIN and RSBSA are encrypted (`EncryptedString`, `v1:` prefix, purpose as AAD). Lookups and uniqueness use the `*_hmac` blind-index columns (normalized alphanumeric, uppercase). Non-admins see masked values (`***-***-***-000`).
 - **Uploads:**
   - Images are 5 MB max, re-encoded with Pillow (strips EXIF/GPS), JPEG/PNG/WEBP only, and limited to 40 MP and 4096 px per side.
   - PDFs are 20 MB max. They need the magic bytes, must parse, and must not be encrypted or contain JS, launch actions or embedded files.
-- **Body limits:** 12 MB by default; 42 MB for `/merchant-onboarding/me` (2 documents). Oversize → 413, with CORS headers.
+- **Body limits:** 12 MB by default; 52 MB for `/merchant-onboarding/me` (documents and the selfie). Oversize → 413, with CORS headers.
 - **Shop page draft and publish** (`shop_pages`):
   - The merchant edits a draft (`draft_title`, `draft_description`, `draft_logo_url`, `draft_banner_image_url`). `PATCH /merchants/me/shoppage` and the logo and banner uploads change only the draft. Each upload gets a new R2 key, so the live image does not change.
   - `POST /merchants/me/shoppage/publish` copies the draft to the live columns and sets `published_at`. A blank draft title → 422. `POST /merchants/me/shoppage/discard` copies the live columns back to the draft (400 if never published). `POST /merchants/me/shoppage/unpublish` sets `published_at` to NULL, so the farm is hidden again (400 if not live). The draft stays. Open orders continue, because order routes do not use `merchant_is_public()`. Publish makes the farm public again.

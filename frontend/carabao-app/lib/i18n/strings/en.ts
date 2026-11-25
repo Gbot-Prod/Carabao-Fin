@@ -288,7 +288,6 @@ const en = {
     vegetables: 'Vegetables',
     fruits: 'Fruits',
     unit: 'Unit',
-    kgOnly: 'All listings are sold in kilograms (kg). Enter the price and quantity in kg. Pounds (lbs) are not accepted.',
     price: 'Price (₱)',
     per: 'per',
     quantity: 'Quantity',

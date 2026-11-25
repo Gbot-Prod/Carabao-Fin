@@ -97,6 +97,11 @@ def upload_bir_cert_document(user_id: int, file: CheckedFile) -> str:
     return _put_private(f"bir-2303/{user_id}", file)
 
 
+def upload_selfie_document(user_id: int, file: CheckedFile) -> str:
+    """Selfie with ID (a camera photo of the applicant holding the ID)."""
+    return _put_private(f"selfie/{user_id}", file)
+
+
 def delete_private_document(stored_path: str) -> None:
     """Remove a document that was uploaded for a submit that then failed."""
     _client().delete_object(Bucket=_private_bucket(), Key=_object_key(stored_path))

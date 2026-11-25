@@ -30,7 +30,7 @@ from app.models.merchant_application import MerchantApplication
 from app.services import r2_service
 from app.services.receipts import SMALL_PRODUCER_LABEL, build_receipt
 from tests.better_auth import make_user
-from tests.files import pdf_bytes
+from tests.files import pdf_bytes, png_bytes
 from tests.test_audit_log import _client as _admin_client
 from tests.test_audit_log import _staff
 from tests.test_merchant_onboarding_phone import PAYLOAD, patch_uploads
@@ -107,7 +107,11 @@ def _pdf(name: str) -> tuple[str, bytes, str]:
 
 
 def files_for(seller_type: str) -> dict:
-    files = {"rsbsa_file": _pdf("rsbsa.pdf"), "gov_id_file": _pdf("id.pdf")}
+    files = {
+        "rsbsa_file": _pdf("rsbsa.pdf"),
+        "gov_id_file": _pdf("id.pdf"),
+        "selfie_file": ("selfie.png", png_bytes(), "image/png"),
+    }
     if seller_type != "individual_farmer":
         files["bir_cert_file"] = _pdf("2303.pdf")
     return files

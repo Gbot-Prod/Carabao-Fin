@@ -881,3 +881,12 @@ def get_bir_cert_document_url(
     return _document_url_response(
         db, app_id, "bir_cert", "BIR Certificate of Registration"
     )
+
+
+@router.get("/admin/merchant-applications/{app_id}/selfie-document")
+def get_selfie_document_url(
+    app_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(_require_admin),
+):
+    return _document_url_response(db, app_id, "selfie", "selfie with ID")

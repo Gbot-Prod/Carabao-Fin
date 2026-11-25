@@ -26,6 +26,7 @@ from app.core.errors import FieldErrors
 MB = 1024 * 1024
 IMAGE_MAX_BYTES = 5 * MB
 DOCUMENT_MAX_BYTES = 20 * MB
+SELFIE_MAX_BYTES = 10 * MB
 
 _CHUNK = 64 * 1024
 # A 5 MB file can decode to a very large bitmap; refuse those before decoding.
@@ -222,6 +223,12 @@ def check_pdf(data: bytes, label: str) -> CheckedFile:
 
 def check_image_upload(upload: UploadFile, label: str) -> CheckedFile:
     return reencode_image(read_upload(upload, IMAGE_MAX_BYTES, label), label)
+
+
+def check_selfie_upload(upload: UploadFile, label: str) -> CheckedFile:
+    """Selfie with ID: an image only, re-encoded (EXIF/GPS removed). A larger
+    cap than other images: the mobile app sends the camera photo unresized."""
+    return reencode_image(read_upload(upload, SELFIE_MAX_BYTES, label), label)
 
 
 def check_document_upload(upload: UploadFile, label: str) -> CheckedFile:

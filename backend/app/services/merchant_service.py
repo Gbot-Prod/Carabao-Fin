@@ -175,6 +175,9 @@ def create_merchant_from_application(
         "bir_cert_document_path": application.bir_cert_document_path,
         "bir_cert_document_original_name": application.bir_cert_document_original_name,
         "bir_cert_document_content_type": application.bir_cert_document_content_type,
+        "selfie_document_path": application.selfie_document_path,
+        "selfie_document_original_name": application.selfie_document_original_name,
+        "selfie_document_content_type": application.selfie_document_content_type,
     }
 
     existing_merchant = (

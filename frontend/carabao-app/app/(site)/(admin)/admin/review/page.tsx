@@ -6,6 +6,7 @@ import {
   fetchBirCertDocumentUrl,
   fetchGovIdDocumentUrl,
   fetchRsbsaDocumentUrl,
+  fetchSelfieDocumentUrl,
   reviewMerchantApplication,
   CLARIFICATION_SECTIONS,
   type ClarificationSection,
@@ -15,6 +16,7 @@ import { SELLER_TYPE_LABELS } from "@/util/api/merchants";
 import getApiErrorMessage from "@/util/errorHelper";
 import styles from "./page.module.css";
 import ReviewChecklist, { initialTicks, itemsToConfirm, type DocumentKind } from "./ReviewChecklist";
+import SelfieCompare from "./SelfieCompare";
 import { ADMIN_LIST_LIMIT, ADMIN_LIST_MAX, mayHaveMore, mergeById } from "@/lib/admin-window";
 
 // CF-0067: always load every application waiting for a decision, and the
@@ -93,6 +95,7 @@ const DOCUMENTS: Record<
   rsbsa: { label: "RSBSA document", button: "View RSBSA Document", fetchUrl: fetchRsbsaDocumentUrl },
   govId: { label: "government ID", button: "View Government ID", fetchUrl: fetchGovIdDocumentUrl },
   birCert: { label: "BIR Form 2303", button: "View BIR Form 2303", fetchUrl: fetchBirCertDocumentUrl },
+  selfie: { label: "selfie with ID", button: "View Selfie with ID", fetchUrl: fetchSelfieDocumentUrl },
 };
 
 const documentName = (app: MerchantApplication, kind: DocumentKind) =>
@@ -100,7 +103,9 @@ const documentName = (app: MerchantApplication, kind: DocumentKind) =>
     ? app.rsbsa_document_original_name
     : kind === "govId"
       ? app.gov_id_document_original_name
-      : app.bir_cert_document_original_name;
+      : kind === "birCert"
+        ? app.bir_cert_document_original_name
+        : (app.selfie_document_original_name ?? null);
 
 type ReviewAction = "approved" | "rejected" | "clarification" | "suspended";
 
@@ -297,7 +302,7 @@ function ApplicationCard({
           </div>
 
           <div className={styles.documentPanel}>
-            {(["rsbsa", "govId", "birCert"] as const).map((kind) => {
+            {(["rsbsa", "govId", "birCert", "selfie"] as const).map((kind) => {
               const fileName = documentName(app, kind);
               // Only the documents this application has (none while incomplete).
               if (!fileName) return null;
@@ -321,6 +326,8 @@ function ApplicationCard({
               <span className={styles.actionError}>{documentError}</span>
             )}
           </div>
+
+          <SelfieCompare app={app} onOpenGovId={() => void handleViewDocument("govId")} />
 
           {app.admin_note && (
             <div className={styles.adminNote}>

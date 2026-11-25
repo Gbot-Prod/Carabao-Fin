@@ -17,7 +17,7 @@ export const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 // Backend core/body_limit.py DEFAULT_MAX_BODY and PATH_LIMITS["/merchant-onboarding/me"].
 export const BODY_LIMIT_BYTES = 12 * 1024 * 1024;
-export const ONBOARDING_BODY_LIMIT_BYTES = 42 * 1024 * 1024;
+export const ONBOARDING_BODY_LIMIT_BYTES = 52 * 1024 * 1024;
 
 /** A picked file. Some pickers leave the size or the type out. */
 export type FileInfo = {

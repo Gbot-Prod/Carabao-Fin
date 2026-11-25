@@ -16,6 +16,7 @@ import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
 import ContactCodeField from "./ContactCodeField";
 import DocumentDropzone, { documentError } from "./DocumentDropzone";
+import SelfieCapture, { selfieError } from "./SelfieCapture";
 import {
   defaultAddress,
   fetchMyProfile,
@@ -78,7 +79,7 @@ type TextKey = {
   [K in keyof FormState]-?: FormState[K] extends string ? K : never;
 }[keyof FormState];
 // Form fields plus the parts of the form that are not payload fields.
-type FieldKey = keyof FormState | "pin" | "rsbsa_file" | "gov_id_file" | "bir_cert_file";
+type FieldKey = keyof FormState | "pin" | "rsbsa_file" | "gov_id_file" | "bir_cert_file" | "selfie_file";
 
 // The shop name is part of step 1: the Merchant Centre and the draft shop
 // page are created on the first save, Submit later included.
@@ -103,7 +104,7 @@ const SHOWN_FIELDS = new Set<string>([
   "submit_mode", "seller_type", "merchant_name", "last_name", "first_name", "middle_name", "suffix",
   "rep_last_name", "rep_first_name", "rep_middle_name", "rep_suffix", "company_name", "trade_name",
   "registration_number", "tin", "vat_status", "small_agri_producer", "rsbsa_number", "gov_id_type",
-  "terms_accepted", "rsbsa_file", "gov_id_file", "bir_cert_file",
+  "terms_accepted", "rsbsa_file", "gov_id_file", "bir_cert_file", "selfie_file",
 ]);
 // NCR has no provinces; the payload still needs one (backend requires it).
 const isNcrRegion = (region: string) => /\b(ncr|national capital|metro manila)\b/i.test(region);
@@ -432,6 +433,7 @@ export default function MerchantOnboardingPage() {
   const [rsbsaFile, setRsbsaFile] = useState<File | null>(null);
   const [govIdFile, setGovIdFile] = useState<File | null>(null);
   const [birCertFile, setBirCertFile] = useState<File | null>(null);
+  const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Errors that belong to no field (network, server); field errors show under each field.
   const [error, setError] = useState<string | null>(null);
@@ -459,8 +461,11 @@ export default function MerchantOnboardingPage() {
     rsbsa: application?.rsbsa_document_original_name ?? null,
     govId: application?.gov_id_document_original_name ?? null,
     birCert: application?.bir_cert_document_original_name ?? null,
+    selfie: application?.selfie_document_original_name ?? null,
   };
-  const keepsDocument = (kind: keyof typeof storedDocument) => !isOpen("documents") && !!storedDocument[kind];
+  // The selfie has its own clarification section; the other files are "documents".
+  const keepsDocument = (kind: keyof typeof storedDocument) =>
+    !isOpen(kind === "selfie" ? "selfie" : "documents") && !!storedDocument[kind];
 
   const later = form.submit_mode === "later";
   const sellerType = form.seller_type;
@@ -659,6 +664,8 @@ export default function MerchantOnboardingPage() {
     if (rsbsaError) errors.rsbsa_file = rsbsaError;
     const govIdError = fileError("govId", govIdFile, "government ID");
     if (govIdError) errors.gov_id_file = govIdError;
+    const selfieMissing = keepsDocument("selfie") ? null : selfieError(selfieFile);
+    if (selfieMissing) errors.selfie_file = selfieMissing;
     if (!isOpen("business")) return errors;
 
     const required = (key: TextKey, message: string) => {
@@ -754,6 +761,7 @@ export default function MerchantOnboardingPage() {
               rsbsa: keepsDocument("rsbsa") ? null : rsbsaFile,
               govId: keepsDocument("govId") ? null : govIdFile,
               birCert: isRegistered(sellerType) && !keepsDocument("birCert") ? birCertFile : null,
+              selfie: keepsDocument("selfie") ? null : selfieFile,
             },
       );
       setSuccessApplication(merchantApplication);
@@ -1240,6 +1248,26 @@ export default function MerchantOnboardingPage() {
                       <FieldError id="merchantonboarding-bir-cert-file" message={fieldErrors.bir_cert_file} />
                     </div>
                   )}
+
+                  <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.selfie_file)}`}>
+                    <span className={styles.label}>
+                      {sellerType === "corporation"
+                        ? "Selfie of the authorized representative with their government ID"
+                        : "Selfie with your government ID"}
+                    </span>
+                    {keepsDocument("selfie") ? (
+                      <p className={styles.helper}>Kept as sent.</p>
+                    ) : (
+                      <>
+                        <p className={styles.helper}>
+                          Take a photo of yourself while you hold the ID that you uploaded. Our team compares your face with
+                          the photo on the ID. Use the camera on this device; you cannot upload a saved photo.
+                        </p>
+                        <SelfieCapture file={selfieFile} onChange={(f) => { setSelfieFile(f); clearErrors("selfie_file"); }} />
+                      </>
+                    )}
+                    <FieldError id="merchantonboarding-selfie-file" message={fieldErrors.selfie_file} />
+                  </div>
 
                   <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.terms_accepted)}`}>
                     <label className={styles.checkboxRow}>

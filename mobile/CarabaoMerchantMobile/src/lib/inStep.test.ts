@@ -596,7 +596,7 @@ test('S18 submit = web submitMyMerchantOnboarding; body limit = backend body_lim
   assert.ok(client.includes("'/merchant-onboarding/me'"));
   assert.ok(web.includes("formData.append('payload', JSON.stringify(payload));"));
   assert.ok(client.includes("form.append('payload', JSON.stringify(payload));"));
-  for (const part of ['rsbsa_file', 'gov_id_file', 'bir_cert_file']) {
+  for (const part of ['rsbsa_file', 'gov_id_file', 'bir_cert_file', 'selfie_file']) {
     assert.ok(web.includes(`formData.append('${part}'`), `the web has no ${part}`);
     assert.ok(client.includes(`['${part}', documents.`), `api.ts has no ${part}`);
   }

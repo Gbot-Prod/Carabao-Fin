@@ -429,3 +429,58 @@
   color: var(--danger);
   font-size: 14px;
 }
+
+/* Selfie with ID next to the government ID (SelfieCompare.tsx). */
+.selfieCompare {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.selfieCompareHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.selfieCompareLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #4b5563;
+}
+
+.selfieCompareGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.selfieCompareFigure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.selfieCompareFigure img {
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #111827;
+}
+
+.selfieCompareFigure figcaption {
+  font-size: 12px;
+  color: #4b5563;
+}
+
+@media (max-width: 640px) {
+  .selfieCompareGrid {
+    grid-template-columns: 1fr;
+  }
+}

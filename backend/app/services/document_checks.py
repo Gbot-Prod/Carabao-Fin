@@ -93,7 +93,10 @@ DOCUMENT_LABELS = {
     "rsbsa": "RSBSA document",
     "gov_id": "Government ID",
     "bir_cert": "BIR Form 2303",
+    "selfie": "Selfie with ID",
 }
+# Photos with no text to read: only hashed (duplicates) and checked by eye.
+_PHOTO_DOCUMENTS = frozenset({"selfie"})
 
 
 # --- text extraction ----------------------------------------------------------
@@ -451,6 +454,22 @@ def _check_small_producer(application: Any) -> Item | None:
     return Item("small_producer_vat", label, "pass", "Consistent with the tax status.")
 
 
+def _check_selfie(application: Any) -> Item:
+    """The face match is always the admin's call: never a pass, so Accept
+    needs a tick (confirm_items)."""
+    label = "Selfie matches the government ID"
+    if not application.selfie_document_path:
+        return Item("selfie_matches_id", label, "fail", "Missing.", "selfie")
+    return Item(
+        "selfie_matches_id",
+        label,
+        "warn",
+        "Compare the face with the photo on the ID, and check that the card in "
+        "the selfie is the uploaded ID.",
+        "selfie",
+    )
+
+
 def _check_duplicates(db: Session, application: Any) -> Item:
     """The same number or file on another application (the same person
     reapplying, or a document used twice)."""
@@ -514,6 +533,7 @@ def _check_duplicates(db: Session, application: Any) -> Item:
             application.rsbsa_file_sha256,
             application.gov_id_file_sha256,
             application.bir_file_sha256,
+            application.selfie_file_sha256,
         )
         if h
     }
@@ -525,6 +545,7 @@ def _check_duplicates(db: Session, application: Any) -> Item:
                     MerchantApplication.rsbsa_file_sha256.in_(hashes),
                     MerchantApplication.gov_id_file_sha256.in_(hashes),
                     MerchantApplication.bir_file_sha256.in_(hashes),
+                    MerchantApplication.selfie_file_sha256.in_(hashes),
                 )
             ).all(),
         )
@@ -554,11 +575,12 @@ def run_checks(
     db: Session, application: Any, documents: dict[str, bytes]
 ) -> list[dict[str, Any]]:
     """Fill the check columns and the checklist from ``documents``
-    ({"rsbsa"|"gov_id"|"bir_cert": file bytes}). The caller commits."""
+    ({"rsbsa"|"gov_id"|"bir_cert"|"selfie": file bytes}). The caller commits."""
     extractor = get_extractor()
     texts: dict[str, str | None] = {}
     for doc, data in documents.items():
-        texts[doc] = extractor.extract_text(data)
+        if doc not in _PHOTO_DOCUMENTS:
+            texts[doc] = extractor.extract_text(data)
 
     if "rsbsa" in documents:
         application.rsbsa_file_sha256 = _sha256(documents["rsbsa"])
@@ -567,6 +589,8 @@ def run_checks(
     application.bir_file_sha256 = (
         _sha256(documents["bir_cert"]) if "bir_cert" in documents else None
     )
+    if "selfie" in documents:
+        application.selfie_file_sha256 = _sha256(documents["selfie"])
 
     gov_text = texts.get("gov_id")
     id_number = find_id_number(gov_text) if gov_text else None
@@ -578,6 +602,7 @@ def run_checks(
     application.ocr_rsbsa_number_hmac = blind_index(ocr_rsbsa)
 
     items: list[Item] = _check_documents(application, texts)
+    items.append(_check_selfie(application))
     name_item, score, line = _check_name(application, gov_text)
     application.name_match_score = score
     application.ocr_gov_id_name = line
@@ -649,7 +674,7 @@ def load_documents(
 ) -> dict[str, bytes]:
     """The application's uploaded files from the private bucket (for a re-run).
 
-    ``only``: these documents only (rsbsa, gov_id, bir_cert).
+    ``only``: these documents only (rsbsa, gov_id, bir_cert, selfie).
     A download error is left to propagate; run_and_save is not reached then,
     so the caller sees a 502 instead of a silently empty checklist.
     """

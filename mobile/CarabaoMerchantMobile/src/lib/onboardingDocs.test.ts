@@ -52,9 +52,9 @@ test('documentMeta is the web card line', () => {
 });
 
 test('the body limit is checked before the upload, with the backend words', () => {
-  assert.equal(bodyLimitMessage(ONBOARDING_BODY_LIMIT_BYTES), 'Request body must be under 42 MB');
+  assert.equal(bodyLimitMessage(ONBOARDING_BODY_LIMIT_BYTES), 'Request body must be under 52 MB');
   const tenMb = { uri: 'u', name: 'a.pdf', mimeType: 'application/pdf', size: 10 * MB };
-  const three = { rsbsa: tenMb, govId: tenMb, birCert: tenMb };
+  const three = { rsbsa: tenMb, govId: tenMb, birCert: tenMb, selfie: null };
   assert.equal(documentsBytes(three), 30 * MB);
   assert.equal(bodyLimitProblem(three, ONBOARDING_BODY_LIMIT_BYTES), null);
   assert.equal(bodyLimitProblem(NO_DOCUMENTS, ONBOARDING_BODY_LIMIT_BYTES), null);

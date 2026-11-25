@@ -6,12 +6,13 @@ import { rerunDocumentChecks, type ChecklistItem, type ChecklistResult, type Mer
 import getApiErrorMessage from "@/util/errorHelper";
 import styles from "./checklist.module.css";
 
-export type DocumentKind = "rsbsa" | "govId" | "birCert";
+export type DocumentKind = "rsbsa" | "govId" | "birCert" | "selfie";
 
 const DOCUMENT_KIND: Record<NonNullable<ChecklistItem["document"]>, DocumentKind> = {
   rsbsa: "rsbsa",
   gov_id: "govId",
   bir_cert: "birCert",
+  selfie: "selfie",
 };
 
 const RESULT: Record<ChecklistResult, { label: string; icon: typeof CheckCircle2; tone: string }> = {

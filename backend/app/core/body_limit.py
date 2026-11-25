@@ -13,10 +13,10 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 MB = 1024 * 1024
 DEFAULT_MAX_BODY = 12 * MB
-# The RSBSA document and the government ID may be 20 MB each; allow room for
-# the form fields and boundaries.
+# The RSBSA document and the government ID may be 20 MB each, the selfie with
+# ID 10 MB; allow room for the form fields and boundaries.
 PATH_LIMITS: dict[str, int] = {
-    "/merchant-onboarding/me": 42 * MB,
+    "/merchant-onboarding/me": 52 * MB,
 }
 
 

@@ -13,11 +13,12 @@
 // src/screens/OnboardingScreen.tsx (route /onboarding) mounts this screen.
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet,
+  ActivityIndicator, Image, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { api, ApiError, WEB_BASE, type ApiMerchantApplication } from '../lib/api';
@@ -38,7 +39,7 @@ import {
   formatTIN, formFromApplication, formFromProfile, fullPhoneNumber, GOV_ID_TYPES, govIdLabel,
   INITIAL_FORM, isIndividual, isRegistered, keepOtherSteps, LEGAL_WORDS, LOCAL_PHONE_MAX,
   NAME_MAX, NAME_SUFFIXES, NO_DOCUMENTS, NO_PROOF, normalizeEmail, OPS_WORDS, payloadDocuments,
-  PERSON_MAX, phoneSendProblem, pickedDocument, placeServerErrors, PREFILL_STATUSES,
+  PERSON_MAX, phoneSendProblem, pickedDocument, placeServerErrors, PREFILL_STATUSES, selfieError,
   progressText, REGISTRATION, REGISTRATION_MAX, RSBSA_MAX, SELLER_OPTIONS, SMALL_PRODUCER_HELP,
   STEPS, SUBMIT_LATER_HELP, SUBMIT_MODE_OPTIONS, submitLabel, TIN_MAX, toggleDay, VAT_OPTIONS,
   validateStep, YES_NO_OPTIONS,
@@ -190,6 +191,63 @@ function DocumentField({ label, doc, error, onPick, onRemove, disabled }: {
   );
 }
 
+// Selfie with ID: the camera only (no gallery). The system camera shows its own Retake / Use
+// photo step, and lets the applicant switch to the rear camera.
+const SELFIE_CAMERA: ImagePicker.ImagePickerOptions = {
+  mediaTypes: ['images'],
+  cameraType: ImagePicker.CameraType.front,
+  allowsEditing: false,
+  // No resize library in the app: a lower quality keeps the photo far under the 10 MB limit.
+  quality: 0.6,
+  exif: false,
+};
+
+const SELFIE_TIPS = [
+  'Hold your ID next to your face. Show your full face and the full card.',
+  'Make sure that the text on the ID is clear and easy to read.',
+  'Use good light. Do not wear a cap, mask or sunglasses.',
+];
+
+/** The selfie with ID: tips, then the camera; after the photo, a preview and Retake. */
+function SelfieField({ label, doc, error, onTake, disabled }: {
+  label: string;
+  doc: OnboardingDocuments['selfie'];
+  error?: string;
+  onTake: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.hint}>
+        Take a photo of yourself while you hold the ID that you uploaded. Our team compares your face with the photo
+        on the ID. You cannot upload a saved photo.
+      </Text>
+      {SELFIE_TIPS.map((tip) => (
+        <Text key={tip} style={styles.hint}>{'•'} {tip}</Text>
+      ))}
+      {doc ? (
+        <View style={styles.selfieBox}>
+          <Image source={{ uri: doc.uri }} style={styles.selfiePreview} resizeMode="contain" accessibilityLabel="Your selfie with ID" />
+          <Button label="Retake" onPress={onTake} disabled={disabled} />
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={[styles.dropzone, error ? styles.inputBad : null]}
+          onPress={onTake}
+          disabled={disabled}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+        >
+          <Ionicons name="camera-outline" size={28} color={Colors.primary} />
+          <Text style={styles.dropTitle}>Open camera</Text>
+        </TouchableOpacity>
+      )}
+      <FieldError message={error} />
+    </View>
+  );
+}
+
 type Props = {
   /** 0 = operations, 1 = business information (`?step=business`). */
   initialStep?: number;
@@ -325,7 +383,7 @@ export default function OnboardingFormScreen({ initialStep = 0, onSubmitted }: P
 
   // The S2 type and size check runs on the pick, so a file the server would refuse is never
   // kept; the same words show again on submit for a document still missing (web documentError).
-  const pickDocument = async (key: keyof OnboardingDocuments, field: FieldKey) => {
+  const pickDocument = async (key: Exclude<keyof OnboardingDocuments, 'selfie'>, field: FieldKey) => {
     const result = await DocumentPicker.getDocumentAsync({
       type: [...DOCUMENT_TYPES],
       copyToCacheDirectory: true,
@@ -344,6 +402,33 @@ export default function OnboardingFormScreen({ initialStep = 0, onSubmitted }: P
   };
   const removeDocument = (key: keyof OnboardingDocuments) =>
     setDocuments((prev) => ({ ...prev, [key]: null }));
+
+  const takeSelfie = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        selfie_file: 'Camera access is blocked. Allow the camera for Carabao in your phone settings, then try again.',
+      }));
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync(SELFIE_CAMERA);
+    const asset = result.canceled ? null : result.assets?.[0];
+    if (!asset) return;
+    const doc = {
+      uri: asset.uri,
+      name: asset.fileName?.trim() || 'selfie-with-id.jpg',
+      mimeType: asset.mimeType ?? 'image/jpeg',
+      size: typeof asset.fileSize === 'number' ? asset.fileSize : null,
+    };
+    const problem = selfieError(doc);
+    if (problem) {
+      setFieldErrors((prev) => ({ ...prev, selfie_file: problem }));
+      return;
+    }
+    setDocuments((prev) => ({ ...prev, selfie: doc }));
+    clearErrors('selfie_file');
+  };
 
   const goNext = () => {
     setError(null);
@@ -612,6 +697,15 @@ export default function OnboardingFormScreen({ initialStep = 0, onSubmitted }: P
             onRemove={() => removeDocument('govId')}
             disabled={submitting}
           />
+          <SelfieField
+            label={sellerType === 'corporation'
+              ? 'Selfie of the authorized representative with their government ID'
+              : 'Selfie with your government ID'}
+            doc={documents.selfie}
+            error={fieldErrors.selfie_file}
+            onTake={() => void takeSelfie()}
+            disabled={submitting}
+          />
 
           <View style={styles.field}>
             <TouchableOpacity
@@ -876,6 +970,8 @@ const styles = StyleSheet.create({
   fileName: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
   fileMeta: { fontSize: FontSize.xs, color: Colors.textMuted },
   remove: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  selfieBox: { gap: Spacing.sm },
+  selfiePreview: { width: '100%', aspectRatio: 3 / 4, borderRadius: Radius.md, backgroundColor: Colors.text },
 
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, minHeight: 44 },
   checkText: { fontSize: FontSize.sm, color: Colors.text, lineHeight: 22 },

@@ -12,7 +12,7 @@ from app.api.routes import merchant_onboarding
 from app.services import r2_service
 from app.services.phone_verification import sign_token
 from tests.better_auth import make_user
-from tests.files import pdf_bytes
+from tests.files import pdf_bytes, png_bytes
 
 # A Submit now from an individual farmer (the least demanding seller type).
 PAYLOAD = {
@@ -39,10 +39,11 @@ PAYLOAD = {
 
 
 def onboarding_files() -> dict:
-    """The two documents the submit needs (RSBSA and a government ID)."""
+    """The files the submit needs (RSBSA, a government ID, the selfie with ID)."""
     return {
         "rsbsa_file": ("rsbsa.pdf", pdf_bytes(), "application/pdf"),
         "gov_id_file": ("id.pdf", pdf_bytes(), "application/pdf"),
+        "selfie_file": ("selfie.png", png_bytes(), "image/png"),
     }
 
 
@@ -51,6 +52,7 @@ def patch_uploads(monkeypatch) -> None:
         "upload_rsbsa_document": "rsbsa/x.pdf",
         "upload_gov_id_document": "gov-id/x.pdf",
         "upload_bir_cert_document": "bir-2303/x.pdf",
+        "upload_selfie_document": "selfie/x.png",
         "delete_private_document": None,
     }
     for name, result in uploads.items():

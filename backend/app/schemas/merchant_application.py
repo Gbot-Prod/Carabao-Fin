@@ -108,13 +108,17 @@ MERCHANT_NAME_MAX = 50
 # The parts of an application an admin can send back with a clarification
 # request. The applicant can change only these; the other parts stay as sent
 # (merchant_onboarding.py). Keep in step with the review page and the form.
-ClarificationSection = Literal["store", "location", "contact", "business", "documents"]
+ClarificationSection = Literal[
+    "store", "location", "contact", "business", "documents", "selfie"
+]
 CLARIFICATION_SECTIONS: tuple[str, ...] = (
     "store",
     "location",
     "contact",
     "business",
     "documents",
+    # The selfie with ID only (e.g. a blurry photo): the ID file stays.
+    "selfie",
 )
 # The payload fields each section holds. The terms agreement is not in a
 # section: every submit accepts it again.
@@ -155,6 +159,8 @@ SECTION_FIELDS: dict[str, tuple[str, ...]] = {
         "small_agri_producer",
     ),
     "documents": ("rsbsa_number", "gov_id_type"),
+    # A file only (selfie_file), no payload fields.
+    "selfie": (),
 }
 
 
@@ -438,6 +444,8 @@ class MerchantApplicationResponse(BaseModel):
     gov_id_type: str | None = None
     gov_id_document_original_name: str | None = None
     gov_id_document_content_type: str | None = None
+    selfie_document_original_name: str | None = None
+    selfie_document_content_type: str | None = None
 
     admin_note: str | None = None
     reviewed_at: datetime | None = None

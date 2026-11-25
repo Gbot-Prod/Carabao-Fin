@@ -19,7 +19,7 @@ import {
   type AddressValue,
 } from './pinLocation.ts';
 import { DAYS, formatLocalPhone, type MerchantDay } from './storeSettings.ts';
-import { checkDocument, type FileInfo } from './uploads.ts';
+import { checkDocument, DOCUMENT_MAX_BYTES, IMAGE_TYPES, type FileInfo } from './uploads.ts';
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
 
@@ -162,9 +162,11 @@ export type OnboardingDocuments = {
   rsbsa: OnboardingDocument | null;
   govId: OnboardingDocument | null;
   birCert: OnboardingDocument | null;
+  /** Selfie with ID: a camera photo only (expo-image-picker launchCameraAsync). */
+  selfie: OnboardingDocument | null;
 };
 
-export const NO_DOCUMENTS: OnboardingDocuments = { rsbsa: null, govId: null, birCert: null };
+export const NO_DOCUMENTS: OnboardingDocuments = { rsbsa: null, govId: null, birCert: null, selfie: null };
 
 /**
  * Everything the form holds (the web FormState). The address part is the AddressValue that
@@ -208,7 +210,8 @@ export type FieldKey =
   | keyof AddressErrors
   | 'rsbsa_file'
   | 'gov_id_file'
-  | 'bir_cert_file';
+  | 'bir_cert_file'
+  | 'selfie_file';
 export type FieldErrors = Partial<Record<FieldKey, string>>;
 
 export const INITIAL_FORM: OnboardingForm = {
@@ -346,6 +349,17 @@ export function documentError(file: OnboardingDocument | null, label: string): s
   return checkDocument(label, info);
 }
 
+/**
+ * The web selfieError, then the backend check_selfie_upload rules: an image (the camera gives
+ * a JPEG) of 10 MB or less.
+ */
+export function selfieError(file: OnboardingDocument | null): string | null {
+  if (!file) return 'Take a selfie while you hold your government ID.';
+  if (!file.mimeType || !IMAGE_TYPES.includes(file.mimeType)) return 'The selfie must be a photo (JPG).';
+  if (file.size != null && file.size > DOCUMENT_MAX_BYTES) return 'The selfie must be 10MB or smaller. Take it again.';
+  return null;
+}
+
 /** Every problem in a step, keyed by field. Mirrors the backend payload models. */
 export function validateStep(
   id: StepId,
@@ -404,6 +418,8 @@ export function validateStep(
   if (rsbsaError) errors.rsbsa_file = rsbsaError;
   const govIdError = documentError(documents.govId, DOCUMENT_LABELS.govId);
   if (govIdError) errors.gov_id_file = govIdError;
+  const selfieMissing = selfieError(documents.selfie);
+  if (selfieMissing) errors.selfie_file = selfieMissing;
   if (!form.terms_accepted) errors.terms_accepted = MESSAGES.terms;
   return errors;
 }
@@ -449,7 +465,7 @@ export const SHOWN_FIELDS = new Set<string>([
   'submit_mode', 'seller_type', 'merchant_name', 'last_name', 'first_name', 'middle_name', 'suffix',
   'rep_last_name', 'rep_first_name', 'rep_middle_name', 'rep_suffix', 'company_name', 'trade_name',
   'registration_number', 'tin', 'vat_status', 'small_agri_producer', 'rsbsa_number', 'gov_id_type',
-  'terms_accepted', 'rsbsa_file', 'gov_id_file', 'bir_cert_file',
+  'terms_accepted', 'rsbsa_file', 'gov_id_file', 'bir_cert_file', 'selfie_file',
 ]);
 
 /**
@@ -808,7 +824,7 @@ export function documentMeta(doc: OnboardingDocument): string {
 
 /** Sum of the known file sizes a submit sends. */
 export const documentsBytes = (documents: OnboardingDocuments): number =>
-  [documents.rsbsa, documents.govId, documents.birCert].reduce((sum, d) => sum + (d?.size ?? 0), 0);
+  [documents.rsbsa, documents.govId, documents.birCert, documents.selfie].reduce((sum, d) => sum + (d?.size ?? 0), 0);
 
 /** The backend 413 words (core/body_limit.py _detail). */
 export const bodyLimitMessage = (limitBytes: number): string =>

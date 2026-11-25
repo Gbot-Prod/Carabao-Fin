@@ -234,6 +234,8 @@ export type OnboardingFiles = {
   govId?: File | null;
   /** BIR Form 2303, registered seller types only. */
   birCert?: File | null;
+  /** Selfie with ID, a camera photo (every seller type). */
+  selfie?: File | null;
 };
 
 export const submitMyMerchantOnboarding = async (
@@ -245,6 +247,7 @@ export const submitMyMerchantOnboarding = async (
   if (files.rsbsa) formData.append('rsbsa_file', files.rsbsa);
   if (files.govId) formData.append('gov_id_file', files.govId);
   if (files.birCert) formData.append('bir_cert_file', files.birCert);
+  if (files.selfie) formData.append('selfie_file', files.selfie);
   const response = await apiClient.post<MerchantApplication>('/merchant-onboarding/me', formData);
   return response.data;
 };

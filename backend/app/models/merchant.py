@@ -148,6 +148,10 @@ class Merchant(Base):
     bir_cert_document_path = Column(String, nullable=True)
     bir_cert_document_original_name = Column(String, nullable=True)
     bir_cert_document_content_type = Column(String, nullable=True)
+    # Selfie with ID, R2 key and metadata.
+    selfie_document_path = Column(String, nullable=True)
+    selfie_document_original_name = Column(String, nullable=True)
+    selfie_document_content_type = Column(String, nullable=True)
     # The admin who approved the application, and when.
     verified_by_user_id = Column(
         Integer, ForeignKey("backend_users.id", ondelete="SET NULL"), nullable=True

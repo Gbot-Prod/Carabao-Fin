@@ -14,6 +14,7 @@ export const CLARIFICATION_SECTIONS = [
   { id: "contact", label: "Contact email and number" },
   { id: "business", label: "Seller type, legal name and tax details" },
   { id: "documents", label: "Documents (RSBSA, government ID, BIR 2303)" },
+  { id: "selfie", label: "Selfie with ID" },
 ] as const;
 export type ClarificationSection = (typeof CLARIFICATION_SECTIONS)[number]["id"];
 
@@ -66,6 +67,9 @@ export type MerchantApplication = {
   gov_id_type: string | null;
   gov_id_document_original_name: string | null;
   gov_id_document_content_type: string | null;
+  /** Selfie with ID (a camera photo of the applicant holding the ID). */
+  selfie_document_original_name?: string | null;
+  selfie_document_content_type?: string | null;
   admin_note: string | null;
   reviewed_at: string | null;
   /** Clarification: the sections the admin flagged. null: every section is open. */
@@ -85,8 +89,8 @@ export type ChecklistItem = {
   label: string;
   result: ChecklistResult;
   reason: string;
-  /** rsbsa | gov_id | bir_cert, when the item is about one document. */
-  document: 'rsbsa' | 'gov_id' | 'bir_cert' | null;
+  /** rsbsa | gov_id | bir_cert | selfie, when the item is about one document. */
+  document: 'rsbsa' | 'gov_id' | 'bir_cert' | 'selfie' | null;
   /** Other applications sharing a number or file (duplicates check). */
   related_application_ids: number[];
 };
@@ -367,6 +371,17 @@ export const fetchBirCertDocumentUrl = async (
 ): Promise<RsbsaDocumentUrl> => {
   const response = await apiClient.get<RsbsaDocumentUrl>(
     `/admin/merchant-applications/${applicationId}/bir-cert-document`,
+  );
+
+  return response.data;
+};
+
+/** Selfie with ID: the applicant holding the government ID. */
+export const fetchSelfieDocumentUrl = async (
+  applicationId: number,
+): Promise<RsbsaDocumentUrl> => {
+  const response = await apiClient.get<RsbsaDocumentUrl>(
+    `/admin/merchant-applications/${applicationId}/selfie-document`,
   );
 
   return response.data;

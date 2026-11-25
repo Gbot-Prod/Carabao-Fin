@@ -16,13 +16,13 @@ import {
   imageMimeType,
 } from './uploads.ts';
 
-test('S2 limits: images 5 MB, documents 10 MB, bodies 12 MB and 42 MB', () => {
+test('S2 limits: images 5 MB, documents 10 MB, bodies 12 MB and 52 MB', () => {
   assert.deepEqual([...IMAGE_TYPES], ['image/png', 'image/jpeg', 'image/webp']);
   assert.deepEqual([...DOCUMENT_TYPES], ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']);
   assert.equal(IMAGE_MAX_BYTES, 5 * 1024 * 1024);
   assert.equal(DOCUMENT_MAX_BYTES, 10 * 1024 * 1024);
   assert.equal(BODY_LIMIT_BYTES, 12 * 1024 * 1024);
-  assert.equal(ONBOARDING_BODY_LIMIT_BYTES, 42 * 1024 * 1024);
+  assert.equal(ONBOARDING_BODY_LIMIT_BYTES, 52 * 1024 * 1024);
 });
 
 test('S2 checkImage: PNG/JPEG/WebP up to 5 MB', () => {

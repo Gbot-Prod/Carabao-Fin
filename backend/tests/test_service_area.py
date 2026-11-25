@@ -14,6 +14,7 @@ from app.models.produce import Produce
 from app.models.user import User
 from app.services.service_area import address_in_luzon, in_luzon_bbox, is_luzon_region
 from app.utils import geocoding
+from tests.files import png_bytes
 
 
 @pytest.mark.parametrize(
@@ -155,6 +156,7 @@ def test_onboarding_outside_luzon_is_rejected(db, buyer):  # noqa: F811
         files={
             "rsbsa_file": ("rsbsa.pdf", b"%PDF-1.4", "application/pdf"),
             "gov_id_file": ("id.pdf", b"%PDF-1.4", "application/pdf"),
+            "selfie_file": ("selfie.png", png_bytes(), "image/png"),
         },
     )
     assert resp.status_code == 400
