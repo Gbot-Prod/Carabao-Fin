@@ -272,9 +272,9 @@ Run it before the first start of web-admin. Alembic ignores `jwks`, `jwks_admin`
 
 ### 3.1 Database logins
 
-**Status: logins and guards are on Railway (2026-11-22, [DB_ROLE_SPLIT_PLAN.md](DB_ROLE_SPLIT_PLAN.md) step 5). Each service uses its own login (steps 6–8, 2026-11-22): the API `carabao_api`, web-admin `carabao_web_admin`, web `carabao_web_public`.** No service uses the `postgres` login. To check this, see DB_ROLE_SPLIT_PLAN.md step 9.
+**Status: logins and guards are on Railway (2026-11-22). Each service uses its own login (2026-11-22): the API `carabao_api`, web-admin `carabao_web_admin`, web `carabao_web_public`.** No service uses the `postgres` login. To check this, look at each service's `DATABASE_URL` user name on Railway. (The plan for this work, `DB_ROLE_SPLIT_PLAN.md`, was removed in commit `22da43e`. The `apply_roles.ps1` and `backup.ps1` headers still give its step numbers.)
 
-The API's pre-deploy command `uv run alembic upgrade head` now runs as `carabao_api`. With no new migration it does nothing. With one, the deploy fails (`must be owner of table …`) and the previous deployment stays live: run the migration as `carabao_owner` (below), then redeploy.
+The API's pre-deploy command `uv run alembic upgrade head` now runs as `carabao_api`. With no new migration it does nothing. With one, the deploy fails (`must be owner of table …`) and the previous deployment stays live: run the migration by hand (**Migrations**, below), then redeploy.
 
 Each service gets its own Postgres login. It is still one database.
 
@@ -290,7 +290,7 @@ The files:
 - `backend/db/roles.sql`: makes the logins, gives every table to `carabao_owner`, and sets the grants. Run it as the superuser.
 - `backend/db/guards.sql`: the trigger and row-level security policies (G1–G3). Run it as the superuser, after `roles.sql`.
 - `backend/tests_pg/test_db_roles.py`: checks both files on a throwaway Postgres ([LOCAL_DATABASE.md](LOCAL_DATABASE.md) section 11).
-- `backend/db/apply_roles.ps1`: runs both files against a database and checks the result (needs Docker only). It asks for the superuser URL at a hidden prompt, shows the target and its current state, and asks you to type the database name before it changes anything. Then it checks ownership, login attributes, RLS, the 18 policies, the trigger, the guard functions, what each web login can reach, and that no row count changed. `-SetPasswords` then opens psql's `\password` prompt for the three service logins.
+- `backend/db/apply_roles.ps1`: runs both files against a database and checks the result (needs Docker only). It asks for the superuser URL at a hidden prompt, shows the target and its current state, and asks you to type the database name before it changes anything. Then it checks ownership, login attributes, RLS, the 20 policies, the trigger, the guard functions, what each web login can reach, and that no row count changed. `-SetPasswords` then opens psql's `\password` prompt for the three service logins.
 
 Both files can be run again safely. Each one is a single transaction.
 
@@ -310,7 +310,11 @@ psql "$SUPERUSER_URL"
 
 The service logins have no password until you set one. `\password` hashes it in psql, so it is never in the shell history or the server log. Each service's `DATABASE_URL` is then its own login's URL. It must never be `${{Postgres.DATABASE_URL}}`, because that URL is the superuser.
 
-**Migrations** run as `carabao_owner`. That way the owner owns new tables, and the API gets them through default privileges.
+**Migrations.** There are two methods. Both finish with `roles.sql` and `guards.sql`. Until those run, a new table is closed to `carabao_api`, so the API gets `permission denied for table …`. Run them before you deploy the new code.
+
+*Method A: as the superuser (used on production, 2026-11-25).* Run the migrations with the `postgres` URL (`DATABASE_PUBLIC_URL`). The new tables are then owned by `postgres`. `roles.sql` gives every table in `public` to `carabao_owner` and grants the business tables to `carabao_api`. The full procedure is in SYSTEM_REFERENCE.md section 6, "Updating production".
+
+*Method B: as `carabao_owner`.* The owner owns the new tables, and the API gets them through default privileges.
 
 ```
 -- as the superuser
@@ -324,6 +328,8 @@ ALTER ROLE carabao_owner LOGIN;
 \i backend/db/guards.sql    -- always after auth:migrate:apply
 ALTER ROLE carabao_owner NOLOGIN;
 ```
+
+`roles.sql` does not set `carabao_owner` back to `NOLOGIN`. If you do not do the last line, `apply_roles.ps1` shows `FAIL carabao_owner is NOLOGIN`. On 2026-11-25 the role was found with `LOGIN` still on after an earlier migration. The fix is `ALTER ROLE carabao_owner NOLOGIN PASSWORD NULL;`, run as the superuser.
 
 A new Better Auth table stays closed to both web logins until `roles.sql` grants it. That shows up as a sign-in error, not a silent opening.
 

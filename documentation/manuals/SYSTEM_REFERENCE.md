@@ -298,6 +298,8 @@ uv run alembic upgrade head
 uv run python scripts/load_psgc.py
 # Both cases: the city/barangay polygons (the pin-area check is off until this runs)
 uv run python scripts/load_psgc_boundaries.py
+# Both cases: the listing word list (prohibited_terms)
+uv run python scripts/load_prohibited_terms.py
 
 # run
 cd backend && uv run uvicorn main:app --reload --port 8000   # log: "Field encryption keys OK"
@@ -370,9 +372,53 @@ Multiple API workers or instances are safe. Codes, attempts and rate limits are 
 5. Use the same https `BETTER_AUTH_URL` on both services.
 6. Set `ALLOWED_ORIGINS` and `APP_URL` on the API to the web origin.
 7. Set `NEXT_PUBLIC_API_URL` on the web app, then build.
-8. Run `npm run auth:migrate:apply`, then `uv run alembic upgrade head`, against the production DB. On an EMPTY DB, run `uv run python scripts/create_tables.py` and `uv run alembic stamp head` in place of `alembic upgrade head` (section 5). Then run `uv run python scripts/load_psgc.py` and `uv run python scripts/load_psgc_boundaries.py`.
+8. Run `npm run auth:migrate:apply`, then `uv run alembic upgrade head`, against the production DB. On an EMPTY DB, run `uv run python scripts/create_tables.py` and `uv run alembic stamp head` in place of `alembic upgrade head` (section 5). Then run `uv run python scripts/load_psgc.py`, `uv run python scripts/load_psgc_boundaries.py` and `uv run python scripts/load_prohibited_terms.py`. Then run `backend\db\apply_roles.ps1 -SetPasswords` (SUBDOMAINS.md 3.1).
 9. Start the API and confirm the log shows "Field encryption keys OK". Then start the web app.
 10. Run `make_admin.py` in the API service shell.
+
+### Updating production (new migrations)
+
+Use this procedure when a deploy adds Alembic revisions or Better Auth schema changes. The API pre-deploy command cannot run them, because it runs as `carabao_api` (SUBDOMAINS.md 3.1). Last done 2026-11-25 (`c3d5e7f9a1b4` → `b3e5f7a9c1d4`, 9 revisions).
+
+You need Docker Desktop running and these values from Railway:
+
+- Postgres service > Variables > `DATABASE_PUBLIC_URL`: the superuser, through the TCP proxy (`*.proxy.rlwy.net`). The private `DATABASE_URL` (`*.railway.internal`) cannot be reached from your PC.
+- Backend service > Variables > `PGSSL_CA`. `PGSSL_SERVERNAME` is `localhost`.
+
+**Warning: an empty URL makes every step run on your LOCAL database, and nothing tells you.** `backend/.env` and `frontend/carabao-app/.env*` point to `localhost:5432`, and they are used when the shell has no `DATABASE_URL`. In PowerShell, `$env:DATABASE_URL = ""` deletes the variable. This happens when you press Enter at an empty `Read-Host` prompt. Also, never put the URL in the prompt *text* (`Read-Host "postgresql://..."`): that writes the password to the PSReadLine history file. If that happens, change the `postgres` password.
+
+1. **Back up.** `powershell -ExecutionPolicy Bypass -File backend\db\backup.ps1`. Continue only after `OK: ... every row count matches the restore.`
+2. **Set the shell**, from `backend`. Paste the URL at the `URL:` prompt:
+
+   ```powershell
+   $s = Read-Host "URL" -AsSecureString
+   $env:DATABASE_URL = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))
+   $env:PGSSL_CA = "<PEM from the Backend service>"
+   $env:PGSSL_SERVERNAME = "localhost"
+   uv run python -c "import os; print(os.environ['DATABASE_URL'].split('@')[1])"
+   ```
+
+   The last line must show `*.proxy.rlwy.net:<port>/railway`. If it shows an error or `localhost`, stop.
+3. **Look.** `uv run alembic current` gives the production revision. Optional: `uv run alembic upgrade <rev>:head --sql` prints the SQL, without a change.
+4. **Better Auth first**, in the same window: `cd ..\frontend\carabao-app; npm run auth:migrate; npm run auth:migrate:apply; cd ..\..\backend`.
+5. **Alembic.** `uv run alembic upgrade head`, then `uv run alembic current` must show `(head)`.
+6. **Data.** Each script is safe to run again. Run the ones whose table is new or whose data file changed:
+
+   | Script | Table | Without it |
+   |---|---|---|
+   | `scripts/load_psgc.py` | `psgc_areas` | address saves answer 503 |
+   | `scripts/load_psgc_boundaries.py` | `psgc_boundaries` | the pin-area check does not run |
+   | `scripts/load_prohibited_terms.py` (`--dry-run` first) | `prohibited_terms` | the word check finds nothing |
+   | `scripts/backfill_photo_hashes.py` (`--dry-run` first) | `produces.image_phash` | old photos get no stolen-photo check |
+   | `scripts/sync_da_prices.py` | `reference_prices` | no price flags until the API's own sync (every `DA_PRICE_SYNC_HOURS`) |
+
+7. **Roles and guards.** From the repo root: `powershell -ExecutionPolicy Bypass -File backend\db\apply_roles.ps1` (no `-SetPasswords`). Type the database name (`railway`). All checks must be `ok`. **Do this before the deploy.** Until this step runs, the new tables are owned by `postgres` and closed to `carabao_api`. If you see `FAIL carabao_owner is NOLOGIN`, see section 9.
+8. **Clean up.** `Remove-Item Env:DATABASE_URL, Env:PGSSL_CA, Env:PGSSL_SERVERNAME`.
+9. **Deploy** the API, then the web app. Set any new env vars first (4.1). Then do the post-deploy checks below.
+
+**Rollback:** restore the dump from step 1 (`pg_restore --clean --no-owner` as the superuser), run `apply_roles.ps1`, then redeploy the previous commit.
+
+Windows PowerShell 5.1 breaks double quotes inside native-command arguments, for example `docker run ... sh -c '... -c "SQL"'`. Then `psql` does not get its arguments and tries a local socket (`/var/run/postgresql/.s.PGSQL.5432`). Put the SQL in a mounted file and use `psql -f`, as `backup.ps1` and `apply_roles.ps1` do.
 
 ### External settings
 
@@ -670,6 +716,13 @@ If you change the issuer or audience in `lib/auth.ts`, change the API env at the
 | `/api/auth/token` 500, then API 401 | no `jwks` table (old migrate script) | `npm run auth:migrate:apply` with the fixed script (LOCAL_DATABASE.md 10.4) |
 | `alembic upgrade head`: relation "backend_users" does not exist | empty DB | `create_tables.py` + `alembic stamp head` (section 5) |
 | certificate verify failed | CA/servername | `PGSSL_CA` + `PGSSL_SERVERNAME` in both apps |
+| a production migration shows "already at head" or "already up to date", but production is not | `DATABASE_URL` empty in the shell, so `.env` (localhost) was used | set it again and check the host (6, "Updating production", step 2) |
+| `Could not parse SQLAlchemy URL` / "The Postgres URL could not be parsed" | the shell's `DATABASE_URL` is not a URL (wrong text at the prompt) | set it again |
+| `password authentication failed for user "postgres"` on `*.proxy.rlwy.net` | the password changed; old URL | copy `DATABASE_PUBLIC_URL` again |
+| API `permission denied for table …` after a migration | new table owned by `postgres` | `apply_roles.ps1` (6, "Updating production", step 7) |
+| `apply_roles.ps1`: `FAIL carabao_owner is NOLOGIN` | `LOGIN` left on after a migration | as the superuser: `ALTER ROLE carabao_owner NOLOGIN PASSWORD NULL;`, then run the script again |
+| `backup.ps1` restore: role "carabao_…" does not exist | old `backup.ps1` | update it; it creates the four roles in the scratch server |
+| `psql` tries socket `/var/run/postgresql/.s.PGSQL.5432` in `docker run` | PowerShell 5.1 broke the quoted arguments | SQL in a mounted file, `psql -f` (6, "Updating production") |
 | every API call 401 | issuer/audience mismatch | same `BETTER_AUTH_URL` both sides, origin only |
 | 503 "Could not reach the sign-in service" | JWKS unreachable | API must reach `<BETTER_AUTH_URL>/api/auth/jwks` |
 | CORS error in browser | origin not allowed | add to `ALLOWED_ORIGINS` |

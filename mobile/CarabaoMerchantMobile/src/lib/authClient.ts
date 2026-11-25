@@ -17,8 +17,11 @@ const APP_SCHEME = 'carabaomerchant';
 export const authClient = createAuthClient({
   baseURL: WEB_BASE,
   plugins: [
-    // A different prefix from the buyer app, so both can share a device.
-    expoClient({ scheme: APP_SCHEME, storagePrefix: 'carabao-merchant', storage: SecureStore }),
+    // A different storage prefix from the buyer app, so both can share a device.
+    // cookiePrefix must equal advanced.cookiePrefix in lib/auth.ts on the web
+    // (public surface). Else the client does not save the session cookie and
+    // GET /api/auth/token returns 401.
+    expoClient({ scheme: APP_SCHEME, storagePrefix: 'carabao-merchant', cookiePrefix: 'carabao', storage: SecureStore }),
     jwtClient(),
     // Phone signup, sign-in, verification and SMS password reset.
     phoneNumberClient(),

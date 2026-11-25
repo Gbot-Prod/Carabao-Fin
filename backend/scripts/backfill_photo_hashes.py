@@ -8,6 +8,8 @@ stolen-photo flag uses the hashes on the next check of each listing.
 """
 
 import argparse
+import importlib
+import pkgutil
 import sys
 from pathlib import Path
 
@@ -18,9 +20,14 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 load_dotenv(BACKEND_ROOT / ".env")
 
+import app.models as models_pkg  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
 from app.models.produce import Produce  # noqa: E402
 from app.services import listing_vision, photo_checks  # noqa: E402
+
+# Produce -> Merchant -> ... needs every mapper, as in sync_da_prices.py.
+for _module in pkgutil.iter_modules(models_pkg.__path__):
+    importlib.import_module(f"{models_pkg.__name__}.{_module.name}")
 
 
 def main() -> None:

@@ -71,6 +71,11 @@ New-Item -ItemType Directory -Force $work | Out-Null
 $utf8 = New-Object Text.UTF8Encoding $false
 [IO.File]::WriteAllText((Join-Path $work "count.sql"), $countSql.Replace("`r`n", "`n"), $utf8)
 [IO.File]::WriteAllText((Join-Path $work "version.sql"), "SELECT version();`n", $utf8)
+# The RLS policies (guards.sql) name these roles, and --no-acl does not skip
+# CREATE POLICY ... TO <role>. Make them in the scratch server only.
+$rolesSql = "CREATE ROLE carabao_owner NOLOGIN;`nCREATE ROLE carabao_api NOLOGIN;`n" +
+  "CREATE ROLE carabao_web_public NOLOGIN;`nCREATE ROLE carabao_web_admin NOLOGIN;`n"
+[IO.File]::WriteAllText((Join-Path $work "roles.sql"), $rolesSql, $utf8)
 
 $env:PGURL = $url
 $scratch = "carabao-backup-check-$PID"
@@ -105,9 +110,12 @@ try {
   }
   if (-not $ready) { throw "Scratch Postgres did not start." }
 
-  # Roles in the dump other than postgres don't exist here; --no-owner and
-  # --no-acl keep the restore about the data. --exit-on-error makes any
-  # other problem fatal.
+  # Owners and grants are skipped (--no-owner, --no-acl), so the restore is
+  # about the data. The policies still need their roles (roles.sql above).
+  # --exit-on-error makes any other problem fatal.
+  Invoke-Native "Creating scratch roles" {
+    docker exec $scratch psql -U postgres -d postgres -XAq -v ON_ERROR_STOP=1 -f /work/roles.sql
+  }
   Invoke-Native "pg_restore" {
     docker exec $scratch pg_restore -U postgres -d postgres --no-owner --no-acl --exit-on-error "/backup/$name"
   }
