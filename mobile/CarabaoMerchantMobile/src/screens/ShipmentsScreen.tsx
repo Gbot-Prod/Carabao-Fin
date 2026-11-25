@@ -7,7 +7,7 @@
 // and their poll come from MerchantDataContext, so the ready count badge follows a create.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Modal, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  Alert, Modal, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -62,22 +62,32 @@ import {
   type ReadyGroup,
   type SelectionChange,
 } from '../lib/shipments';
+import { missingPackingPhotos } from '../lib/orderActions';
+import { takeProofPhoto } from '../lib/proofCapture';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, Button, Card } from '../components/UI';
 import { SkeletonList, LoadError } from '../components/Skeleton';
+
+const PACKING_PHOTO_ERROR = 'The packing photo could not be sent. Try again.';
 
 /** One ready order: the whole row is the checkbox, as the web wraps it in a <label>. */
 function ReadyRow({
   order,
   checked,
   blocked,
+  photoBusy,
   onToggle,
+  onPhoto,
 }: {
   order: ApiMerchantOrder;
   checked: boolean;
   /** The cap is reached, so the row cannot be picked (the tap says why). */
   blocked: boolean;
+  /** The packing photo of this order is uploading. */
+  photoBusy: boolean;
   onToggle: () => void;
+  /** Take (or retake) the packing photo: a route takes only orders with one. */
+  onPhoto: () => void;
 }) {
   const itemCount = order.items.length;
   return (
@@ -105,9 +115,30 @@ function ReadyRow({
           {order.requested_delivery_date ? formatRequestedDate(order.requested_delivery_date) : ANY_DAY}
           {order.delivery_window ? ` · ${order.delivery_window}` : ''} · {itemsLabel(itemCount)}
         </Text>
+        <TouchableOpacity
+          style={[styles.photoBtn, order.packing_photo && styles.photoBtnDone, photoBusy && styles.readyRowBlocked]}
+          onPress={onPhoto}
+          disabled={photoBusy}
+          accessibilityRole="button"
+          accessibilityLabel={`${packingPhotoLabel(order.packing_photo === true, photoBusy)}, order ${order.id}`}
+        >
+          <Ionicons
+            name={order.packing_photo ? 'checkmark-circle' : 'camera-outline'}
+            size={16}
+            color={order.packing_photo ? Colors.primaryDark : Colors.text}
+          />
+          <Text style={styles.photoBtnText}>
+            {packingPhotoLabel(order.packing_photo === true, photoBusy)}
+          </Text>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
+}
+
+function packingPhotoLabel(taken: boolean, busy: boolean): string {
+  if (busy) return 'Sending photo…';
+  return taken ? 'Packing photo taken · Retake' : 'Take packing photo';
 }
 
 /** One shipment row: "Shipment #12", its progress and the button to its route. */
@@ -166,6 +197,8 @@ export default function ShipmentsScreen() {
   /** The shipment just made: the result sheet lists the stops it had to leave out. */
   const [created, setCreated] = useState<MerchantShipmentTracking | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // The order whose packing photo is uploading (one at a time).
+  const [photoBusyId, setPhotoBusyId] = useState<number | null>(null);
 
   const today = useMemo(() => todayInManila(), []);
   const ready = useMemo(() => readyToShipOrders(orders ?? []), [orders]);
@@ -243,9 +276,31 @@ export default function ShipmentsScreen() {
     router.push({ pathname: '/route', params: { shipmentId: String(shipmentId) } });
   };
 
+  // ORDER_PROOF_PHOTOS_PLAN.md: each order needs its own packing photo before it ships.
+  const takePackingPhoto = async (order: ApiMerchantOrder) => {
+    if (photoBusyId !== null) return;
+    setPhotoBusyId(order.id);
+    try {
+      const photo = await takeProofPhoto('packing');
+      if (!photo) return;
+      await api.merchants.packingPhoto(token, order.id, photo);
+      await refreshOrders();
+    } catch (err) {
+      // An alert: the action bar (where createError shows) is there only while rows are picked.
+      Alert.alert('Packing photo', err instanceof Error && err.message ? err.message : PACKING_PHOTO_ERROR);
+    } finally {
+      setPhotoBusyId(null);
+    }
+  };
+
   const makeRoute = async () => {
     const ids = selectedIds(current);
     if (ids.length === 0 || creating) return;
+    const missing = missingPackingPhotos(ready, ids);
+    if (missing.length > 0) {
+      setCreateError(`Take a packing photo of each order first. No photo: ${missing.map((id) => `#${id}`).join(', ')}`);
+      return;
+    }
     setCreating(true);
     setCreateError(null);
     try {
@@ -343,7 +398,9 @@ export default function ShipmentsScreen() {
                         order={order}
                         checked={checked}
                         blocked={!checked && current.size >= MAX_SHIPMENT_ORDERS}
+                        photoBusy={photoBusyId === order.id}
                         onToggle={() => toggle(order.id)}
+                        onPhoto={() => void takePackingPhoto(order)}
                       />
                     );
                   })}
@@ -516,6 +573,13 @@ const styles = StyleSheet.create({
   readyTotal: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.text },
   readyAddress: { fontSize: FontSize.xs, color: Colors.textMuted },
   readyWhen: { fontSize: FontSize.xs, color: Colors.textMuted },
+  photoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+    marginTop: Spacing.xs, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm, minHeight: 36, backgroundColor: Colors.white,
+  },
+  photoBtnDone: { borderColor: Colors.primary },
+  photoBtnText: { fontSize: FontSize.xs, fontWeight: '700', color: Colors.text },
   shipmentRow: {
     gap: 6, borderWidth: 1, borderColor: Colors.borderLight, borderRadius: Radius.md,
     padding: Spacing.md, backgroundColor: Colors.white,

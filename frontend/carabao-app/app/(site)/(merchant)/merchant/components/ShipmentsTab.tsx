@@ -42,6 +42,8 @@ const bySchedule = (a: MerchantOrder, b: MerchantOrder) =>
   a.id - b.id;
 
 const PAST_PAGE = 10;
+// ORDER_PROOF_PHOTOS_PLAN.md: the web cannot take the packing photo; the merchant app does.
+const PACKING_PHOTO_NEEDED = "Packing photo needed. Use the merchant app.";
 
 type Message = { type: "success" | "error"; text: string; shipmentId?: number };
 
@@ -135,7 +137,8 @@ export default function ShipmentsTab({ ordersState, selection, onOpenOrders }: P
             <h2 className={`${styles.panelTitle} ${styles.flush}`}>Ready to ship</h2>
             <p className={s.sectionHint}>
               Paid, confirmed orders not yet on a route. Pick up to {MAX_SHIPMENT_ORDERS} for one run;
-              the stop order is computed for you.
+              the stop order is computed for you. Each order needs a packing photo, taken in the
+              merchant app.
             </p>
           </div>
         </div>
@@ -228,9 +231,10 @@ function ReadyGroup({ label, urgent, orders, selection }: {
   orders: MerchantOrder[];
   selection: ShipmentSelection;
 }) {
-  const ids = orders.map((o) => o.id);
+  // ORDER_PROOF_PHOTOS_PLAN.md: only orders with a packing photo can go on a route.
+  const ids = orders.filter((o) => o.packing_photo).map((o) => o.id);
   const picked = ids.filter((id) => selection.selectedIds.has(id)).length;
-  const all = picked === ids.length;
+  const all = ids.length > 0 && picked === ids.length;
   const some = picked > 0 && !all;
 
   const boxRef = useRef<HTMLInputElement>(null);
@@ -243,9 +247,9 @@ function ReadyGroup({ label, urgent, orders, selection }: {
           ref={boxRef}
           type="checkbox"
           checked={all}
-          disabled={!all && !some && selection.full}
+          disabled={ids.length === 0 || (!all && !some && selection.full)}
           onChange={() => selection.setSelected(ids, !all)}
-          aria-label={`Select all ${orders.length} orders: ${label}`}
+          aria-label={`Select all ${ids.length} orders with a packing photo: ${label}`}
         />
         <span className={`${s.groupLabel} ${urgent ? s.groupLabelUrgent : ""}`}>{label}</span>
         <span className={s.groupCount}>{orders.length}</span>
@@ -254,12 +258,22 @@ function ReadyGroup({ label, urgent, orders, selection }: {
       <ul className={s.readyList}>
         {orders.map((order) => {
           const checked = selection.selectedIds.has(order.id);
-          const blocked = !checked && selection.full;
+          const noPhoto = !order.packing_photo;
+          const blocked = noPhoto || (!checked && selection.full);
           const itemCount = order.items.length;
           return (
             <li key={order.id}>
-              <label className={`${s.readyRow} ${checked ? s.readyRowChecked : ""} ${blocked ? s.readyRowBlocked : ""}`}>
-                <input type="checkbox" checked={checked} disabled={blocked} onChange={() => selection.toggle(order.id)} />
+              <label
+                className={`${s.readyRow} ${checked ? s.readyRowChecked : ""} ${blocked ? s.readyRowBlocked : ""}`}
+                title={noPhoto ? PACKING_PHOTO_NEEDED : undefined}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked && !noPhoto}
+                  disabled={blocked}
+                  onChange={() => selection.toggle(order.id)}
+                  aria-describedby={noPhoto ? `packing-photo-${order.id}` : undefined}
+                />
                 <span className={s.readyId}>#{order.id}</span>
                 <span className={s.readyBuyer}>{order.buyer_name ?? "—"}</span>
                 <span className={s.readyAddress} title={order.delivery_address ?? undefined}>
@@ -271,6 +285,9 @@ function ReadyGroup({ label, urgent, orders, selection }: {
                 </span>
                 <span className={s.readyItems}>{itemCount} item{itemCount === 1 ? "" : "s"}</span>
                 <span className={s.readyTotal}>{formatPeso(order.total_price)}</span>
+                {noPhoto && (
+                  <span id={`packing-photo-${order.id}`} className={s.sectionHint}>{PACKING_PHOTO_NEEDED}</span>
+                )}
               </label>
             </li>
           );

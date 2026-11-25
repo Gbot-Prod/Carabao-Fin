@@ -242,6 +242,34 @@
   color: var(--text-subtle);
 }
 
+/* DA RSBSA Finder */
+.rsbsaFinder {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rsbsaFinderFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rsbsaFinderChip {
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--bg-white);
+  font-size: 13px;
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+.rsbsaFinderChip:hover {
+  border-color: var(--green-600);
+}
+
 /* Admin note */
 .adminNote {
   margin-top: 16px;

@@ -14,27 +14,63 @@ export const MERCHANT_CANCEL_REASONS = [
   { key: 'quality', label: "Produce didn't meet quality standards" },
   { key: 'cannot_deliver', label: "Can't deliver to this address or date" },
   { key: 'buyer_request', label: 'The buyer asked to cancel' },
+  { key: 'buyer_not_home', label: 'The buyer was not at the address' },
   { key: 'other', label: 'Other' },
 ] as const;
 export type MerchantCancelReason = (typeof MERCHANT_CANCEL_REASONS)[number]['key'];
+
+// Backend ATTEMPT_ONLY_CANCEL_REASONS: only a cancel with a failed drop-off photo uses these.
+const ATTEMPT_ONLY_REASONS: readonly MerchantCancelReason[] = ['buyer_not_home'];
+
+/**
+ * The reasons the cancel sheet offers. With a failed drop-off photo (`attempt`) every reason;
+ * without one, not the attempt-only reasons.
+ */
+export function cancelReasonsFor(attempt: boolean) {
+  return MERCHANT_CANCEL_REASONS.filter((r) => attempt || !ATTEMPT_ONLY_REASONS.includes(r.key));
+}
 // CancelOrderForm.tsx: "other" needs a message; every reason may add one up to this.
 export const MERCHANT_CANCEL_NOTE_MAX = 300;
 
 // The statuses a farm may move an order to, from each status (backend
 // MERCHANT_TRANSITIONS). Only the server enforces it; this decides the buttons.
-// "delivered" is never here: the buyer confirms it, or the auto-confirm sweep does.
+// The moves in PHOTO_MOVES need a proof photo (ORDER_PROOF_PHOTOS_PLAN.md), so the app
+// takes one and calls the photo endpoint, not the status PATCH.
 const MERCHANT_TRANSITIONS: Record<MerchantOrderStatus, readonly MerchantOrderStatus[]> = {
   pending: [],
   processing: ['shipped', 'cancelled'],
-  shipped: ['out_for_delivery', 'cancelled'],
-  out_for_delivery: ['cancelled'],
+  shipped: ['out_for_delivery', 'delivered', 'cancelled'],
+  out_for_delivery: ['delivered', 'cancelled'],
   delivered: [],
   cancelled: [],
 };
 
+// Backend PHOTO_MOVES: ship (packing photo), deliver (drop-off photo) and cancel from
+// out_for_delivery (failed drop-off photo).
+const PHOTO_MOVES: readonly string[] = [
+  'processing>shipped',
+  'shipped>delivered',
+  'out_for_delivery>delivered',
+  'out_for_delivery>cancelled',
+];
+
 /** The status changes the web lets a farm make from `status`, and no other. */
 export function nextStatuses(status: string): MerchantOrderStatus[] {
   return [...(MERCHANT_TRANSITIONS[status as MerchantOrderStatus] ?? [])];
+}
+
+/** Whether the move from `from` to `to` needs a proof photo (the status PATCH refuses it). */
+export function needsPhoto(from: string, to: string): boolean {
+  return PHOTO_MOVES.includes(`${from}>${to}`);
+}
+
+/** Order ids in `ids` that have no packing photo yet: a route refuses them (409). */
+export function missingPackingPhotos(
+  orders: readonly { id: number; packing_photo?: boolean }[],
+  ids: readonly number[],
+): number[] {
+  const packed = new Set(orders.filter((o) => o.packing_photo).map((o) => o.id));
+  return ids.filter((id) => !packed.has(id));
 }
 
 /**

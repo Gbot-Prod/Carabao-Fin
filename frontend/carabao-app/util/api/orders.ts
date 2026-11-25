@@ -166,10 +166,32 @@ export type OrderDetail = CurrentOrderItem & {
   review?: Review | null;
   can_review: boolean;
   review_deadline?: string | null;
+  /** ORDER_PROOF_PHOTOS_PLAN.md: the proof photos the buyer may see. */
+  proof_photos?: BuyerProofKind[];
+  /** A merchant-set delivery: "I did not get this" is open until this time. */
+  dispute_until?: string | null;
+  can_dispute?: boolean;
+  delivery_buyer_confirmed_at?: string | null;
+  delivery_disputed_at?: string | null;
+  dispute_resolution?: "release" | "refund" | null;
 };
+
+export type BuyerProofKind = "packing" | "dropoff";
 
 export const fetchOrder = async (orderId: number): Promise<OrderDetail> => {
   const response = await apiClient.get<OrderDetail>(`/orders/me/${orderId}`);
+  return response.data;
+};
+
+/** The image bytes of a proof photo; the endpoint needs the Bearer token, so no plain <img src>. */
+export const fetchOrderProofPhoto = async (orderId: number, kind: BuyerProofKind): Promise<Blob> => {
+  const response = await apiClient.get<Blob>(`/orders/me/${orderId}/proof/${kind}`, { responseType: "blob" });
+  return response.data;
+};
+
+/** "I did not get this": the farm marked the order delivered, but it did not arrive. */
+export const disputeOrderDelivery = async (orderId: number): Promise<OrderDetail> => {
+  const response = await apiClient.post<OrderDetail>(`/orders/me/${orderId}/dispute-delivery`);
   return response.data;
 };
 

@@ -186,6 +186,8 @@ Optional tuning (defaults):
 |---|---|---|
 | `ORDER_RESERVATION_TTL_MINUTES` | 30 | stock hold and PayMongo session life |
 | `ORDER_AUTO_CONFIRM_DAYS` | 7 | auto-confirm delivered orders |
+| `PROOF_GPS_MAX_M` | 200 | a drop-off or failed drop-off photo farther than this from the buyer pin gets the `gps_far` flag |
+| `DELIVERY_DISPUTE_HOURS` | 48 | payout hold of a merchant-set delivery with no flags; the buyer can dispute in this time |
 | `REVIEW_WINDOW_DAYS` | 30 | review window after delivery |
 | `PAYOUT_TRANSFER_FEE` | 10 | pesos taken per payout |
 | `ACCOUNT_OTP_PER_HOUR` | 5 | account SMS codes per number per hour |
@@ -611,6 +613,24 @@ Order timing:
 - Buyers can review for 30 days after delivery.
 - Order chat: a buyer message unread for 15 min sends one SMS to the merchant.
 
+Proof photos (`documentation/plans/ORDER_PROOF_PHOTOS_PLAN.md`, `services/order_proof.py`, table `order_proof_photos`):
+- **Merchant app only.** The web merchant site cannot take them. It shows "Use the merchant app".
+- **Packing photo:** each order needs one before `processing` → `shipped`. `POST /merchants/me/orders/{id}/packing-photo` (the order stays `processing`; a route takes only orders with one) or `POST /merchants/me/orders/{id}/ship` (photo, then `shipped`). `POST /merchants/me/shipments` refuses orders without one (409).
+- **Drop-off photo:** `POST /merchants/me/orders/{id}/deliver` (photo, optional `lat`/`lng`) sets `delivered` with `delivery_confirmed_by = "merchant"`.
+- **Failed drop-off photo:** `POST /merchants/me/orders/{id}/attempt-cancel` (photo, `lat`/`lng`, `reason`, `note`) cancels a `shipped` or `out_for_delivery` order. It is the only way to cancel from `out_for_delivery`. The reason `buyer_not_home` is allowed only here.
+- The status PATCH refuses these moves (409, "Use the merchant app").
+- **Kept data:** received time, SHA-256 of the sent file, distance to the buyer pin in metres. The raw phone position is not stored and not logged.
+- **Flags** (the order is still delivered; the payout is held): `gps_far` (> `PROOF_GPS_MAX_M`), `gps_missing`, `pin_missing`, `hash_reused`, `pin_reported`.
+- Photos are in the private R2 bucket under `proof/{order_id}/{kind}/`. Only these endpoints serve them:
+  - merchant: `GET /merchants/me/orders/{id}/proof/{kind}` (own orders, all kinds);
+  - buyer: `GET /orders/me/{id}/proof/{kind}` (own orders, `packing` and `dropoff` only);
+  - admin: `GET /admin/orders/{id}/proof/{kind}` (all kinds). `GET /admin/orders/{id}` lists them with time, distance and flags.
+- **Buyer dispute** (`services/delivery_dispute.py`): in the `DELIVERY_DISPUTE_HOURS` after a merchant-set delivery, the buyer can tap "I did not get this" (`POST /orders/me/{id}/dispute-delivery`, web and buyer app). It sets `delivery_disputed_at`, freezes the payout, and notifies the admins and the merchant. After the window: 409, support chat. "Confirm received" during an open dispute: 409.
+- **Admin decision:** `POST /admin/orders/{id}/dispute` with `decision` `release` (the farm is paid) or `refund` (the paid transaction goes to `refund_pending`, so `/admin/refunds` lists it; the order stays `delivered`). Refused (409) if no dispute is open or the money is already in a payout batch. Audit log action `order.dispute_decision`. The buyer and the merchant are notified.
+- **Admin list filter:** `GET /admin/orders?delivery=flagged` (a drop-off or failed drop-off photo has a flag) or `delivery=disputed` (open dispute). Each row has `delivery_flagged` and `dispute_open`.
+- Rate limits: `proof_upload` 200/h, `proof_view` 300/h per user.
+- Photo objects are deleted 90 days after the order `closed_at`. The row stays (hash, time, distance, flags), with `deleted_at` set.
+
 ### 7.7 Payouts
 
 1. **Set the destination** (bank, GCash or Maya).
@@ -621,6 +641,14 @@ Order timing:
 2. **Cash out:** `POST /merchants/me/payouts/request` creates a `pending` batch and saves the destination and institution name.
 3. **Release:** an admin releases the batch with `PATCH /admin/batches/...`. It is locked and committed as `processing` before PayMongo is called, so it can never be sent twice.
 4. **Settle:** the webhook `transfer.outward.successful` / `failed` moves the batch to `released` / `failed`. Admins can refresh the status or resend a failed batch.
+
+Payable orders (`payout_service.delivery_payable`):
+- Buyer or auto confirm: payable at once.
+- Merchant-set delivery (drop-off photo): payable when the buyer taps "Confirm received" (sets `delivery_buyer_confirmed_at`), or when an admin resolves a dispute with `release`. Otherwise:
+  - no flags: `DELIVERY_DISPUTE_HOURS` (48) after `delivered_at`;
+  - flags: the auto-confirm time (7 days from shipping);
+  - an open dispute (`delivery_disputed_at`, no resolution) or `refund` holds it.
+- `BUYER_DISPUTES_LIVE` (now `True`): set it to `False` to make every merchant-set delivery count as flagged (no 48 h early payout), for example if buyers cannot dispute.
 
 Routing and fees:
 - InstaPay is used up to ₱50,000; PESONet up to ₱10M.
@@ -634,7 +662,7 @@ Routing and fees:
 1. `expire_stale_reservations` releases stock, settles late payments, and sends merchant SMS for orders that turn out paid.
 2. `auto_confirm_delivered_orders`
 3. `send_unread_merchant_sms`
-4. `otp.purge_expired` + `rate_limit.purge_expired` + `retention.purge_old_rows` (CF-0056: `search_log` rows older than 90 days, read notifications read more than 180 days ago; unread ones are kept)
+4. `otp.purge_expired` + `rate_limit.purge_expired` + `retention.purge_old_rows` (CF-0056: `search_log` rows older than 90 days, read notifications read more than 180 days ago; unread ones are kept) + `order_proof.purge_old_photos` (proof photo objects 90 days after the order closed, 200 per run)
 
 Startup runs `_check_field_encryption_keys`:
 - It loads the keys and does a round trip.

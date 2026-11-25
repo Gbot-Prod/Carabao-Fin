@@ -7,18 +7,23 @@ import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvo
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import {
   MERCHANT_CANCEL_NOTE_MAX,
-  MERCHANT_CANCEL_REASONS,
+  cancelReasonsFor,
   type MerchantCancelReason,
 } from '../lib/orderActions';
 
 type Props = {
   orderId: number | null;
+  /**
+   * ORDER_PROOF_PHOTOS_PLAN.md: an order out for delivery is cancelled only with a failed
+   * drop-off photo. The submit then opens the camera, and the attempt-only reasons show.
+   */
+  withPhoto?: boolean;
   onClose: () => void;
   /** Rejects with the API error, which is shown in the sheet. */
   onSubmit: (reason: MerchantCancelReason, note: string) => Promise<void>;
 };
 
-export function CancelOrderSheet({ orderId, onClose, onSubmit }: Props) {
+export function CancelOrderSheet({ orderId, withPhoto = false, onClose, onSubmit }: Props) {
   const [reason, setReason] = useState<MerchantCancelReason | null>(null);
   const [note, setNote] = useState('');
   const [reasonError, setReasonError] = useState<string | null>(null);
@@ -63,13 +68,18 @@ export function CancelOrderSheet({ orderId, onClose, onSubmit }: Props) {
             <Text style={styles.text}>
               The buyer will be refunded by Carabao and the stock returned to your listing. We&apos;ll send them the reason you choose.
             </Text>
+            {withPhoto ? (
+              <Text style={styles.text}>
+                This order is out for delivery. Take a photo at the address to show that you were there.
+              </Text>
+            ) : null}
 
             <Text style={styles.label}>Why are you cancelling?</Text>
             <View
               style={[styles.reasons, reasonError ? styles.invalid : null]}
               accessibilityRole="radiogroup"
             >
-              {MERCHANT_CANCEL_REASONS.map((r) => {
+              {cancelReasonsFor(withPhoto).map((r) => {
                 const selected = reason === r.key;
                 return (
                   <TouchableOpacity
@@ -106,7 +116,9 @@ export function CancelOrderSheet({ orderId, onClose, onSubmit }: Props) {
 
             {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
             <TouchableOpacity style={[styles.danger, busy && styles.disabled]} onPress={submit} disabled={busy} accessibilityRole="button">
-              <Text style={styles.dangerText}>{busy ? 'Cancelling…' : 'Cancel order and notify buyer'}</Text>
+              <Text style={styles.dangerText}>
+                {busy ? 'Cancelling…' : withPhoto ? 'Take photo and cancel order' : 'Cancel order and notify buyer'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancel} onPress={close} disabled={busy} accessibilityRole="button">
               <Text style={styles.cancelText}>Keep order</Text>

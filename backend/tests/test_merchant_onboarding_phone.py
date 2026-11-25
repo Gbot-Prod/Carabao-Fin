@@ -21,6 +21,8 @@ PAYLOAD = {
     "merchant_name": "Bulacan Farm",
     "last_name": "Dela Cruz",
     "first_name": "Juan",
+    "sex": "male",
+    "birth_date": "1980-05-01",
     "tin": "123-456-789-000",
     "small_agri_producer": True,
     "terms_accepted": True,

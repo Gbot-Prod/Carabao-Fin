@@ -6,6 +6,7 @@ import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView, Alert, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, type ApiOrderDetail } from '../lib/api';
@@ -14,7 +15,9 @@ import { Badge } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
-import { HIDDEN_REVIEW_NOTICE, orderActions, orderRef, parseOrderId, voucherLine } from '../lib/orderDetail';
+import {
+  HIDDEN_REVIEW_NOTICE, deliveryProofState, orderActions, orderRef, parseOrderId, voucherLine,
+} from '../lib/orderDetail';
 import { canEditReview } from '../lib/reviewForm';
 import { hasReceipt } from '../lib/receipt';
 import { OrderReviewForm } from '../components/OrderReviewForm';
@@ -51,6 +54,31 @@ function Row({ label, value }: { label: string; value: string }) {
     </View>
   );
 }
+
+const PROOF_CAPTIONS = { packing: 'Packed at the farm', dropoff: 'Left at your address' } as const;
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+/** "21 h left" or "35 min left" until ``iso``. */
+function timeLeft(iso: string): string {
+  const minutes = Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 60000));
+  return minutes >= 60 ? `${Math.floor(minutes / 60)} h left` : `${minutes} min left`;
+}
+
+const PROOF_TEXT: Record<'refund' | 'release' | 'disputed' | 'confirmed' | 'closed', string> = {
+  refund: 'Carabao checked your report. Your payment will be refunded.',
+  release:
+    'Carabao checked your report and the photos. The order counts as delivered. For more help, message the farm or support.',
+  disputed: 'You reported that you did not get this order. Carabao is checking it.',
+  confirmed: 'You confirmed that you received this order.',
+  closed:
+    'The time to report this delivery here has ended. If you did not get it, message the farm or Carabao support.',
+};
 
 function OrderDetailContent() {
   const router = useRouter();
@@ -139,6 +167,7 @@ function OrderDetailContent() {
   const ref = orderRef(order.order_id, order.date_bought);
   const schedule = [order.requested_delivery_date, order.delivery_window].filter(Boolean).join(' · ');
   const voucher = voucherLine(order.discount, order.voucher_code);
+  const proofState = deliveryProofState(order);
 
   return (
     <SafeAreaView style={styles.root}>
@@ -179,6 +208,7 @@ function OrderDetailContent() {
             <Text style={styles.note}>
               Delivered {formatDate(order.delivered_at)}
               {order.delivery_confirmed_by === 'buyer' ? ' · confirmed by you' : ''}
+              {order.delivery_confirmed_by === 'merchant' ? ' · marked by the farm' : ''}
             </Text>
           )}
         </View>
@@ -208,6 +238,74 @@ function OrderDetailContent() {
             {order.delivery_address ? <Row label="Address" value={order.delivery_address} /> : null}
             {schedule ? <Row label="Requested" value={schedule} /> : null}
             {order.notes ? <Row label="Notes" value={order.notes} /> : null}
+          </View>
+        )}
+
+        {(proofState !== null || (order.proof_photos ?? []).length > 0) && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Delivery photos</Text>
+            {(order.proof_photos ?? []).length > 0 ? (
+              <View style={styles.photoRow}>
+                {(order.proof_photos ?? []).map((kind) => (
+                  <View key={kind} style={styles.photoBox}>
+                    <Image
+                      // Private photo: sent with the Bearer token, never kept in the disk cache.
+                      source={{
+                        uri: api.orders.proofPhotoUrl(order.order_id, kind),
+                        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+                      }}
+                      cachePolicy="memory"
+                      contentFit="cover"
+                      style={styles.photo}
+                      accessibilityLabel={PROOF_CAPTIONS[kind]}
+                    />
+                    <Text style={styles.muted}>{PROOF_CAPTIONS[kind]}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.muted}>The photos of this order are no longer kept.</Text>
+            )}
+            {proofState === 'open' && order.dispute_until ? (
+              <>
+                <Text style={styles.note}>
+                  The farm marked this order delivered with a photo. If you did not get it, tell us before{' '}
+                  {formatDateTime(order.dispute_until)} ({timeLeft(order.dispute_until)}).
+                </Text>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnPrimary]}
+                  disabled={busy}
+                  onPress={() =>
+                    runAction(
+                      'Confirm received',
+                      'Confirm you received this order? This releases payment to the farm.',
+                      'Yes, I received it',
+                      false,
+                      () => api.orders.confirmReceived(token, order.order_id),
+                    )
+                  }
+                >
+                  <Text style={styles.btnPrimaryText}>Confirm received</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.btn, styles.btnDanger]}
+                  disabled={busy}
+                  onPress={() =>
+                    runAction(
+                      'I did not get this',
+                      'Report that you did not get this order? The payment to the farm stops until Carabao checks it.',
+                      'Report it',
+                      true,
+                      () => api.orders.disputeDelivery(token, order.order_id),
+                    )
+                  }
+                >
+                  <Text style={styles.btnDangerText}>I did not get this</Text>
+                </TouchableOpacity>
+              </>
+            ) : proofState !== null && proofState !== 'open' ? (
+              <Text style={styles.note}>{PROOF_TEXT[proofState]}</Text>
+            ) : null}
           </View>
         )}
 
@@ -394,6 +492,9 @@ const styles = StyleSheet.create({
   reviewText: { fontSize: FontSize.sm, color: Colors.text, lineHeight: 20 },
   editLink: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.primary },
   actions: { gap: Spacing.sm },
+  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
+  photoBox: { width: 140, gap: Spacing.xs },
+  photo: { width: 140, height: 105, borderRadius: Radius.md, backgroundColor: Colors.offWhite },
   btn: {
     minHeight: 48, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: Colors.primary, backgroundColor: Colors.white,

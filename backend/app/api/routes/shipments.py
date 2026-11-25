@@ -27,7 +27,13 @@ from app.schemas.shipment import (
     TrackingPosition,
     Waypoint,
 )
-from app.services import mapbox_routing, notifications, rate_limit, road_snap
+from app.services import (
+    mapbox_routing,
+    notifications,
+    order_proof,
+    rate_limit,
+    road_snap,
+)
 from app.services.merchant_service import get_active_merchant, get_editable_merchant
 from app.services.order_status import CLOSED_ORDER_STATUSES, mark_shipped
 from app.services.pinned_location import (
@@ -197,6 +203,16 @@ def create_merchant_shipment(
             status_code=400,
             detail="Only confirmed (processing) orders not already in a shipment "
             f"can be shipped. Not eligible: {', '.join(map(str, blocked))}",
+        )
+    # ORDER_PROOF_PHOTOS_PLAN.md: each order needs its own packing photo,
+    # taken in the merchant app, before it ships.
+    with_photo = order_proof.has_packing_photo(db, order_ids)
+    no_photo = [order_id for order_id in order_ids if order_id not in with_photo]
+    if no_photo:
+        raise HTTPException(
+            status_code=409,
+            detail="Take a packing photo of each order in the merchant app first. "
+            f"No photo: {', '.join(map(str, sorted(no_photo)))}",
         )
 
     merchant_address = ", ".join(

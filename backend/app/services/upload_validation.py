@@ -12,6 +12,7 @@ The client-declared Content-Type and filename are never trusted:
 
 from __future__ import annotations
 
+import hashlib
 import io
 import re
 import threading
@@ -27,6 +28,7 @@ MB = 1024 * 1024
 IMAGE_MAX_BYTES = 5 * MB
 DOCUMENT_MAX_BYTES = 20 * MB
 SELFIE_MAX_BYTES = 10 * MB
+PROOF_PHOTO_MAX_BYTES = 10 * MB
 
 _CHUNK = 64 * 1024
 # A 5 MB file can decode to a very large bitmap; refuse those before decoding.
@@ -229,6 +231,14 @@ def check_selfie_upload(upload: UploadFile, label: str) -> CheckedFile:
     """Selfie with ID: an image only, re-encoded (EXIF/GPS removed). A larger
     cap than other images: the mobile app sends the camera photo unresized."""
     return reencode_image(read_upload(upload, SELFIE_MAX_BYTES, label), label)
+
+
+def check_proof_photo_upload(upload: UploadFile, label: str) -> tuple[CheckedFile, str]:
+    """An order proof photo: an image only, re-encoded (EXIF/GPS removed), the
+    selfie cap (an unresized camera photo). Also returns the SHA-256 of the
+    bytes as sent, so the same file sent for two orders can be found."""
+    data = read_upload(upload, PROOF_PHOTO_MAX_BYTES, label)
+    return reencode_image(data, label), hashlib.sha256(data).hexdigest()
 
 
 def check_document_upload(upload: UploadFile, label: str) -> CheckedFile:

@@ -18,8 +18,9 @@ import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { Badge } from './UI';
 
 // The button text per destination; "cancelled" has its own sheet (needs a reason).
+// "delivered" is on the route screen's stop card (drop-off photo), not here.
 const STEP_LABELS: Partial<Record<MerchantOrderStatus, string>> = {
-  shipped: 'Mark shipped',
+  shipped: 'Mark shipped – take photo',
   out_for_delivery: 'Out for delivery',
 };
 
@@ -49,7 +50,9 @@ type Props = {
 };
 
 export function OrderDetailSheet({ order, busy, onClose, onChat, onAdvance, onCancel }: Props) {
-  const steps = order ? nextStatuses(order.status).filter((s) => s !== 'cancelled') : [];
+  const steps = order
+    ? nextStatuses(order.status).filter((s) => s !== 'cancelled' && s !== 'delivered')
+    : [];
   const canCancelNow = order ? canCancel(order.status) : false;
   const refund = order ? REFUND_LABELS[order.payment_status] : undefined;
   const inTransit = order?.status === 'shipped' || order?.status === 'out_for_delivery';
@@ -138,8 +141,16 @@ export function OrderDetailSheet({ order, busy, onClose, onChat, onAdvance, onCa
 
                 {inTransit ? (
                   <Text style={styles.awaiting}>
-                    Awaiting buyer confirmation
+                    Awaiting delivery: mark it delivered with a photo on the route screen
                     {order.auto_confirm_at ? ` · auto-confirms ${formatDate(order.auto_confirm_at)}` : ''}
+                  </Text>
+                ) : null}
+
+                {order.packing_photo || order.dropoff_photo ? (
+                  <Text style={styles.muted}>
+                    {[order.packing_photo && 'Packing photo taken', order.dropoff_photo && 'Drop-off photo taken']
+                      .filter(Boolean)
+                      .join(' · ')}
                   </Text>
                 ) : null}
 

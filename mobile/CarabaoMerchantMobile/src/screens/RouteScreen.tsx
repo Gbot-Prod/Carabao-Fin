@@ -30,6 +30,7 @@ import { Badge, Button, EmptyState } from '../components/UI';
 import { LoadError, SkeletonList } from '../components/Skeleton';
 import { api, ApiError, type ApiShipmentStop, type ApiShipmentTracking } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
+import { takeProofAtAddress } from '../lib/proofCapture';
 import { usePolling } from '../lib/usePolling';
 import {
   googleMapsDirectionsUrl,
@@ -59,7 +60,12 @@ import {
   APPROXIMATE_NOTE,
   BACK_TO_SHIPMENTS,
   CLOSED_STOPS_LEGEND,
+  DELIVERED_PHOTO,
   HONESTY_NOTE,
+  NOT_HOME_CONFIRM,
+  NOT_HOME_PHOTO,
+  PROOF_ERROR,
+  PROOF_SENDING,
   LINK_ERROR,
   LOADING_ROUTE,
   LOAD_ERROR,
@@ -217,6 +223,8 @@ export default function RouteScreen() {
   const [roadAttempt, setRoadAttempt] = useState(0);
   // The order whose pin report form is open; one at a time, like the web.
   const [reportingOrder, setReportingOrder] = useState<number | null>(null);
+  // The stop whose proof photo is uploading (one at a time).
+  const [proofOrder, setProofOrder] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!token || shipmentId === null) {
@@ -280,6 +288,43 @@ export default function RouteScreen() {
     setRoadAttempt((n) => n + 1);
     setRefreshing(false);
   }, [load]);
+
+  // ORDER_PROOF_PHOTOS_PLAN.md: a drop-off or a failed drop-off needs a live camera photo and
+  // the phone position. The stop changes only when the upload succeeds (no offline queue).
+  const sendProof = useCallback(
+    async (stop: ApiShipmentStop, kind: 'dropoff' | 'attempt') => {
+      if (proofOrder !== null) return;
+      setProofOrder(stop.order_id);
+      try {
+        const proof = await takeProofAtAddress(kind);
+        if (!proof) return;
+        if (kind === 'dropoff') {
+          await api.merchants.deliverOrder(token, stop.order_id, proof.photo, proof.position);
+        } else {
+          await api.merchants.attemptCancel(
+            token, stop.order_id, proof.photo, proof.position, 'buyer_not_home', '',
+          );
+        }
+        await load();
+      } catch (err) {
+        Alert.alert(kind === 'dropoff' ? DELIVERED_PHOTO : NOT_HOME_PHOTO,
+          err instanceof Error && err.message ? err.message : PROOF_ERROR);
+      } finally {
+        setProofOrder(null);
+      }
+    },
+    [proofOrder, token, load],
+  );
+
+  const confirmNotHome = useCallback(
+    (stop: ApiShipmentStop) => {
+      Alert.alert(NOT_HOME_PHOTO, NOT_HOME_CONFIRM, [
+        { text: 'Back', style: 'cancel' },
+        { text: 'Take photo', style: 'destructive', onPress: () => void sendProof(stop, 'attempt') },
+      ]);
+    },
+    [sendProof],
+  );
 
   const nextOrderId = stops.find((stop) => !isClosedStatus(stop.status))?.order_id ?? null;
   const doneCount = stops.filter((stop) => isClosedStatus(stop.status)).length;
@@ -512,6 +557,27 @@ export default function RouteScreen() {
                 </View>
               )}
 
+              {!closed && (
+                <View style={styles.navRow}>
+                  <Button
+                    label={proofOrder === stop.order_id ? PROOF_SENDING : DELIVERED_PHOTO}
+                    onPress={() => void sendProof(stop, 'dropoff')}
+                    loading={proofOrder === stop.order_id}
+                    disabled={proofOrder !== null}
+                    style={styles.navBtn}
+                  />
+                  <TouchableOpacity
+                    style={[styles.secondaryBtn, proofOrder !== null && styles.disabled]}
+                    onPress={() => confirmNotHome(stop)}
+                    disabled={proofOrder !== null}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${NOT_HOME_PHOTO}, ${stopLabel(number)}`}
+                  >
+                    <Text style={styles.secondaryBtnText}>{NOT_HOME_PHOTO}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {!closed &&
                 (stop.pin_unreachable ? (
                   <Text style={styles.reportedNote}>
@@ -650,6 +716,7 @@ const styles = StyleSheet.create({
   },
   reportError: { fontSize: FontSize.xs, color: Colors.error, lineHeight: 17 },
   navBtn: { flex: 1 },
+  disabled: { opacity: 0.5 },
   ghostBtn: { paddingHorizontal: Spacing.md, minHeight: 44, justifyContent: 'center' },
   ghostBtnText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textMuted },
   statePanel: { padding: Spacing.xxl },

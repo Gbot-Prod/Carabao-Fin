@@ -428,3 +428,11 @@
     margin-bottom: 0.45rem;
   }
 }
+
+/* Delivery photos (ORDER_PROOF_PHOTOS_PLAN.md) */
+.proofPhotos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}

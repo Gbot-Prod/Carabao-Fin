@@ -220,7 +220,17 @@ export type ApiOrderDetail = {
   review: ApiOrderReview | null;
   can_review: boolean;
   review_deadline: string | null;
+  // ORDER_PROOF_PHOTOS_PLAN.md: the proof photos the buyer may see (api.orders.proofPhotoUrl).
+  proof_photos?: ApiBuyerProofKind[];
+  // A delivery the farm marked with a photo: "I did not get this" is open until dispute_until.
+  dispute_until?: string | null;
+  can_dispute?: boolean;
+  delivery_buyer_confirmed_at?: string | null;
+  delivery_disputed_at?: string | null;
+  dispute_resolution?: 'release' | 'refund' | null;
 };
+
+export type ApiBuyerProofKind = 'packing' | 'dropoff';
 
 // CF-0135 (M54): the buyer's receipt for a paid order (backend schemas/receipt.py, web OrderReceipt).
 export type ApiReceiptLine = {
@@ -474,6 +484,11 @@ export const api = {
       request<ApiOrderReview>(`/orders/me/${orderId}/review`, token, { method: 'PATCH', body: JSON.stringify(body) }),
     confirmReceived: (token: string | null, orderId: number) =>
       request<ApiCurrentOrder>(`/orders/me/${orderId}/confirm-received`, token, { method: 'POST' }),
+    // ORDER_PROOF_PHOTOS_PLAN.md: the image needs the Bearer header (expo-image source.headers).
+    proofPhotoUrl: (orderId: number, kind: ApiBuyerProofKind) => `${API_BASE}/orders/me/${orderId}/proof/${kind}`,
+    // "I did not get this": only in the hold after a delivery the farm marked; 409 after it.
+    disputeDelivery: (token: string | null, orderId: number) =>
+      request<ApiOrderDetail>(`/orders/me/${orderId}/dispute-delivery`, token, { method: 'POST' }),
     // CF-0131: what a farm voucher code takes off the server cart now (no hold).
     previewVoucher: (token: string | null, voucherCode: string) =>
       request<VoucherPreview>('/orders/me/voucher-preview', token, {

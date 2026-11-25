@@ -71,12 +71,15 @@ class FakeSession:
 
 
 @pytest.mark.parametrize("status", ["shipped", "out_for_delivery"])
-def test_merchant_cannot_mark_delivered(status):
-    assert "delivered" not in MERCHANT_TRANSITIONS[status]
+def test_merchant_marks_delivered_only_with_a_photo(status):
+    # ORDER_PROOF_PHOTOS_PLAN.md: only the deliver endpoint (drop-off photo).
+    assert (status, "delivered") in order_status.PHOTO_MOVES
 
 
-def test_no_merchant_transition_reaches_delivered():
-    assert all("delivered" not in nxt for nxt in MERCHANT_TRANSITIONS.values())
+def test_every_merchant_move_to_delivered_needs_a_photo():
+    for frm, nxt in MERCHANT_TRANSITIONS.items():
+        if "delivered" in nxt:
+            assert (frm, "delivered") in order_status.PHOTO_MOVES
 
 
 def test_mark_shipped_sets_timestamp_once():

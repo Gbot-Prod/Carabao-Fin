@@ -25,6 +25,8 @@ const deliveryUrgency = (order: MerchantOrder, today: string): DeliveryUrgency |
   return null;
 };
 
+const USE_MERCHANT_APP = "Use the merchant app: this needs a photo at the address.";
+
 const URGENCY_LABEL: Record<DeliveryUrgency, string> = {
   overdue: "Past requested date",
   today: "Deliver today",
@@ -49,6 +51,7 @@ export default function OrderCard({ order, today, focused, onCancel }: Props) {
   const urgency = deliveryUrgency(order, today);
   const itemCount = order.items.length;
   const isOpenOrder = !isClosed(order.status);
+  const photoOnlyCancel = order.status === "out_for_delivery";
   const detailsId = `merchant-order-details-${order.id}`;
 
   return (
@@ -86,14 +89,22 @@ export default function OrderCard({ order, today, focused, onCancel }: Props) {
 
         {isOpenOrder && !cancelling && (
           <div className={s.summaryActions}>
-            <button className={styles.orderCancelBtn} onClick={() => setCancelling(true)}>
+            {/* ORDER_PROOF_PHOTOS_PLAN.md: out for delivery, a cancel needs a photo at the
+                address, which only the merchant app takes. */}
+            <button
+              className={styles.orderCancelBtn}
+              disabled={photoOnlyCancel}
+              title={photoOnlyCancel ? USE_MERCHANT_APP : undefined}
+              onClick={() => setCancelling(true)}
+            >
               Cancel
             </button>
+            {photoOnlyCancel && <span className={s.sectionHint}>{USE_MERCHANT_APP}</span>}
           </div>
         )}
       </div>
 
-      {isOpenOrder && cancelling && (
+      {isOpenOrder && cancelling && !photoOnlyCancel && (
         <CancelOrderForm
           orderId={order.id}
           onSubmit={async (reason, note) => {

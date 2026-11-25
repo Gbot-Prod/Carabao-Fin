@@ -4,7 +4,7 @@ import re
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import ColumnElement, TextClause, or_, text
 from sqlalchemy.orm import Session, selectinload
 
@@ -12,6 +12,7 @@ from app.api.dependencies import get_current_user, get_db, require_verified_phon
 from app.core.sql import LIKE_ESCAPE, contains_pattern, ilike_contains
 from app.models.merchant import Merchant
 from app.models.order import Order
+from app.models.order_proof_photo import OrderProofPhoto
 from app.models.produce import Produce
 from app.models.review import Review
 from app.models.statuses import OrderStatus, TransactionStatus
@@ -30,7 +31,14 @@ from app.schemas.order import (
 )
 from app.schemas.pagination import MAX_PAGE, Page
 from app.schemas.receipt import ReceiptResponse
-from app.services import notifications, rate_limit, store_pause, vouchers
+from app.services import (
+    delivery_dispute,
+    notifications,
+    order_proof,
+    rate_limit,
+    store_pause,
+    vouchers,
+)
 from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
     MAX_OPEN_PENDING_ORDERS,
@@ -714,7 +722,83 @@ def get_my_order(
         review=to_review_response(review, order) if review else None,
         can_review=review is None and can_review(order),
         review_deadline=review_deadline(order),
+        proof_photos=_buyer_photo_kinds(db, order.id),
+        dispute_until=delivery_dispute.dispute_until(order),
+        can_dispute=delivery_dispute.can_dispute(order),
+        delivery_buyer_confirmed_at=order.delivery_buyer_confirmed_at,
+        delivery_disputed_at=order.delivery_disputed_at,
+        dispute_resolution=order.dispute_resolution,
     )
+
+
+# The proof photos a buyer sees; the failed drop-off photo is the farm's and
+# the admins'.
+BUYER_PROOF_KINDS = (order_proof.PACKING, order_proof.DROPOFF)
+
+
+def _buyer_photo_kinds(db: Session, order_id: int) -> list[str]:
+    kinds = {
+        kind
+        for (kind,) in db.query(OrderProofPhoto.kind).filter(
+            OrderProofPhoto.order_id == order_id,
+            OrderProofPhoto.kind.in_(BUYER_PROOF_KINDS),
+            OrderProofPhoto.object_key.isnot(None),
+        )
+    }
+    return [k for k in BUYER_PROOF_KINDS if k in kinds]
+
+
+@router.get("/orders/me/{order_id}/proof/{kind}")
+def get_my_order_proof_photo(
+    order_id: int,
+    kind: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The packing or drop-off photo of the buyer's own order (image bytes)."""
+    if kind not in BUYER_PROOF_KINDS:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    rate_limit.enforce_action(db, "proof_view", str(current_user.id))
+    owned = (
+        db.query(Order.id)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
+        .first()
+    )
+    row = order_proof.get_photo(db, order_id, kind) if owned else None
+    if row is None:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return Response(
+        content=order_proof.read_photo(row),
+        media_type=row.content_type,
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+@router.post(
+    "/orders/me/{order_id}/dispute-delivery", response_model=OrderDetailResponse
+)
+def dispute_my_delivery(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """ "I did not get this": the farm marked the order delivered, the buyer
+    says it did not arrive. Only in the hold after a merchant-set delivery;
+    the payout freezes until an admin decides."""
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.user_id == current_user.id)
+        .with_for_update(of=Order)
+        .first()
+    )
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    try:
+        delivery_dispute.open_dispute(db, order)
+    except delivery_dispute.DisputeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    db.commit()
+    return get_my_order(order_id, db, current_user)
 
 
 @router.get("/orders/me/{order_id}/receipt", response_model=ReceiptResponse)
@@ -757,6 +841,23 @@ def confirm_order_received(
     )
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
+    merchant_set = (
+        order.status == OrderStatus.DELIVERED
+        and order.delivery_confirmed_by == "merchant"
+    )
+    if merchant_set and delivery_dispute.is_open(order):
+        raise HTTPException(
+            status_code=409,
+            detail="You reported this order as not received. Carabao is checking it.",
+        )
+    if merchant_set:
+        # The farm marked it delivered with a photo; the buyer's confirm ends
+        # the payout hold at once (payout_service.delivery_payable).
+        if order.delivery_buyer_confirmed_at is None:
+            order.delivery_buyer_confirmed_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(order)
+        return to_current_order_item(order)
     if order.status not in IN_TRANSIT_STATUSES:
         raise HTTPException(
             status_code=400,

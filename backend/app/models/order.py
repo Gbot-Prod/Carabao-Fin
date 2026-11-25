@@ -25,6 +25,10 @@ class Order(Base):
     # CF-0009; the migration is c5e9a2d7f4b1.
     __table_args__ = (
         CheckConstraint("total_price >= 0", name="ck_orders_total_not_negative"),
+        CheckConstraint(
+            "dispute_resolution IS NULL OR dispute_resolution IN ('release', 'refund')",
+            name="ck_orders_dispute_resolution",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -68,7 +72,25 @@ class Order(Base):
     shipment_id = Column(Integer, ForeignKey("shipments.id"), nullable=True, index=True)
     shipped_at = Column(DateTime(timezone=True), nullable=True, index=True)
     delivered_at = Column(DateTime(timezone=True), nullable=True)
-    delivery_confirmed_by = Column(String, nullable=True)  # buyer | auto | legacy
+    # buyer | auto | merchant (drop-off photo) | legacy
+    delivery_confirmed_by = Column(String, nullable=True)
+    # A merchant-set delivery: the buyer tapped "Confirm received" after it,
+    # which ends the payout hold at once.
+    delivery_buyer_confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    # The buyer said "I did not get this" during the hold; payout is frozen
+    # until an admin decides (dispute_resolution: release | refund).
+    delivery_disputed_at = Column(DateTime(timezone=True), nullable=True)
+    dispute_resolution = Column(String(16), nullable=True)
+    dispute_resolved_at = Column(DateTime(timezone=True), nullable=True)
+    dispute_resolved_by = Column(
+        Integer,
+        ForeignKey(
+            "backend_users.id",
+            ondelete="SET NULL",
+            name="fk_orders_dispute_resolved_by",
+        ),
+        nullable=True,
+    )
     # When the order became delivered, cancelled or payment_mismatch. The
     # retention sweep starts its clock here (CF-0044; migration d2a6f8c4e1b7).
     closed_at = Column(DateTime(timezone=True), nullable=True, index=True)
@@ -90,7 +112,7 @@ class Order(Base):
     hidden_by_buyer_at = Column(DateTime(timezone=True), nullable=True)
     image = Column(String, nullable=True)
 
-    user = relationship("User")
+    user = relationship("User", foreign_keys=[user_id])
     merchant = relationship("Merchant", back_populates="orders")
     shipment = relationship("Shipment", back_populates="orders")
     # Every checkout attempt; read through payment_status(), not directly.

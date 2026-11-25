@@ -79,7 +79,8 @@ def test_order_lifecycle_notifies_buyer_and_farm(db, merchant, buyer):  # noqa: 
     paid = PaidPayment(id="pay_1", amount=txn.amount * 100, currency="PHP")
     assert settle_checkout_payment(txn, paid, db) == "paid"
     db.commit()
-    order_status.apply_merchant_transition(order, "shipped", db)
+    # The ship endpoint stores the packing photo first (order_proof).
+    order_status.apply_merchant_transition(order, "shipped", db, photo_checked=True)
     order_status.apply_merchant_transition(order, "out_for_delivery", db)
     order_status.mark_delivered(order, "buyer")
     db.commit()

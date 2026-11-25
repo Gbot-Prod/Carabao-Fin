@@ -5,9 +5,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ADMIN_PAGE_SIZE,
   cancelAdminOrder,
+  decideAdminDispute,
   fetchAdminMerchants,
   fetchAdminOrder,
   fetchAdminOrders,
+  fetchAdminProofPhoto,
   type AdminOrderDetail,
   type AdminOrderFilters,
   type AdminOrderStatus,
@@ -20,13 +22,27 @@ import styles from "./page.module.css";
 import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import OrderChat from "@/components/OrderChat/OrderChat";
+import ProofPhoto from "@/components/ProofPhoto/ProofPhoto";
 import getApiErrorMessage from "@/util/errorHelper";
 
 const ORDER_STATUSES: AdminOrderStatus[] = ["pending", "processing", "shipped", "out_for_delivery", "delivered", "cancelled", "payment_mismatch"];
 const PAYMENT_STATUSES: AdminPaymentStatus[] = ["awaiting_payment", "paid", "refund_pending", "refunded", "unpaid"];
 // Orders an admin may still cancel (mirrors ACTIVE_ORDER_STATUSES in the backend).
 const CANCELLABLE: AdminOrderStatus[] = ["pending", "processing", "shipped", "out_for_delivery"];
-const FILTER_KEYS = ["status", "merchant_id", "payment_status", "date_from", "date_to"] as const;
+const FILTER_KEYS = ["status", "merchant_id", "payment_status", "date_from", "date_to", "delivery"] as const;
+// ORDER_PROOF_PHOTOS_PLAN.md: proof photo kinds and flags, as admins read them.
+const PROOF_LABELS: Record<string, string> = {
+  packing: "Packing",
+  dropoff: "Drop-off",
+  attempt: "Failed drop-off",
+};
+const FLAG_LABELS: Record<string, string> = {
+  gps_far: "Far from the buyer pin",
+  gps_missing: "No GPS from the phone",
+  pin_missing: "Order has no pin",
+  hash_reused: "Same photo on another order",
+  pin_reported: "Rider reported the pin",
+};
 
 const peso = (n: number) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 }).format(n);
@@ -41,6 +57,7 @@ function filtersFrom(params: URLSearchParams): AdminOrderFilters {
     payment_status: (params.get("payment_status") as AdminPaymentStatus) || undefined,
     date_from: params.get("date_from") || undefined,
     date_to: params.get("date_to") || undefined,
+    delivery: (params.get("delivery") as AdminOrderFilters["delivery"]) || undefined,
   };
 }
 
@@ -129,6 +146,14 @@ function AdminOrdersContent() {
           </select>
         </label>
         <label className={styles.field}>
+          <span>Delivery</span>
+          <select value={filters.delivery ?? ""} onChange={(e) => setFilter("delivery", e.target.value)}>
+            <option value="">All</option>
+            <option value="flagged">Flagged photo</option>
+            <option value="disputed">Disputed, not decided</option>
+          </select>
+        </label>
+        <label className={styles.field}>
           <span>From</span>
           <input type="date" value={filters.date_from ?? ""} onChange={(e) => setFilter("date_from", e.target.value)} />
         </label>
@@ -174,7 +199,11 @@ function AdminOrdersContent() {
                   <td className={styles.mono}>{new Date(o.ordered_at).toLocaleDateString("en-PH")}</td>
                   <td>{o.buyer_name ?? o.buyer_email ?? <span className={styles.empty}>—</span>}</td>
                   <td>{o.merchant_name ?? <span className={styles.empty}>—</span>}</td>
-                  <td><span className={styles.badge}>{label(o.status)}</span></td>
+                  <td>
+                    <span className={styles.badge}>{label(o.status)}</span>
+                    {o.dispute_open && <span className={`${styles.badge} ${styles.flag}`}>disputed</span>}
+                    {o.delivery_flagged && <span className={`${styles.badge} ${styles.flag}`}>flagged</span>}
+                  </td>
                   <td><span className={`${styles.badge} ${styles[`pay_${o.payment_status}`] ?? ""}`}>{label(o.payment_status)}</span></td>
                   <td className={styles.mono}>{peso(o.total_price)}</td>
                 </tr>
@@ -298,8 +327,18 @@ function OrderDetailPanel({ orderId, onClose }: { orderId: number; onClose: () =
                 <dt>Delivered</dt><dd>{when(d.delivery.delivered_at)}</dd>
                 <dt>Confirmed by</dt><dd>{d.delivery.delivery_confirmed_by ?? "Not confirmed"}</dd>
                 {d.delivery.cancel_reason && (<><dt>Cancel reason</dt><dd>{d.delivery.cancel_reason}</dd></>)}
+                {d.delivery.dispute_until && (<><dt>Dispute window</dt><dd>until {when(d.delivery.dispute_until)}</dd></>)}
+                {d.delivery.delivery_buyer_confirmed_at && (<><dt>Buyer confirmed</dt><dd>{when(d.delivery.delivery_buyer_confirmed_at)}</dd></>)}
+                {d.delivery.delivery_disputed_at && (<><dt>Buyer disputed</dt><dd>{when(d.delivery.delivery_disputed_at)}</dd></>)}
+                {d.delivery.dispute_resolution && (
+                  <><dt>Decision</dt><dd>{d.delivery.dispute_resolution} · {when(d.delivery.dispute_resolved_at ?? null)}</dd></>
+                )}
               </dl>
             </section>
+
+            <ProofSection detail={d} />
+
+            {d.dispute_open && <DisputeDecisionSection orderId={d.id} onDecided={setDetail} />}
 
             {CANCELLABLE.includes(d.status as AdminOrderStatus) && (
               <CancelOrderSection orderId={d.id} onCancelled={setDetail} />
@@ -359,6 +398,101 @@ function CancelOrderSection({
       <button type="button" className={styles.cancelButton} onClick={submit} disabled={busy}>
         {busy ? "Cancelling…" : "Cancel order"}
       </button>
+    </section>
+  );
+}
+
+function ProofSection({ detail }: { detail: AdminOrderDetail }) {
+  const photos = detail.proof_photos ?? [];
+  return (
+    <section className={styles.section}>
+      <h3>Proof photos</h3>
+      {photos.length === 0 ? (
+        <p className={styles.empty}>No proof photos.</p>
+      ) : (
+        <div className={styles.proofGrid}>
+          {photos.map((p) => {
+            const caption = (
+              <>
+                <strong>{PROOF_LABELS[p.kind] ?? p.kind}</strong> · {when(p.received_at)}
+                {p.distance_m !== null && <> · {p.distance_m} m from the pin</>}
+                {p.flags.length > 0 && (
+                  <span className={styles.flagList}>{p.flags.map((f) => FLAG_LABELS[f] ?? f).join(", ")}</span>
+                )}
+              </>
+            );
+            return p.deleted ? (
+              <p key={p.kind} className={styles.sub}>{caption} · image deleted after 90 days</p>
+            ) : (
+              <ProofPhoto
+                key={p.kind}
+                orderId={detail.id}
+                kind={p.kind}
+                load={fetchAdminProofPhoto}
+                alt={`${PROOF_LABELS[p.kind] ?? p.kind} photo of order #${detail.id}`}
+                caption={caption}
+              />
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DisputeDecisionSection({
+  orderId,
+  onDecided,
+}: {
+  orderId: number;
+  onDecided: (detail: AdminOrderDetail) => void;
+}) {
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const decide = async (decision: "release" | "refund") => {
+    const question =
+      decision === "release"
+        ? "Release the payout? The farm can then claim the earnings of this order."
+        : "Refund the buyer? The payment goes to the refund queue and the farm is not paid.";
+    if (!window.confirm(question)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onDecided(await decideAdminDispute(orderId, decision, note.trim()));
+    } catch (err) {
+      setError(getApiErrorMessage(err) ?? "Could not save the decision.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className={styles.section}>
+      <h3>Disputed delivery</h3>
+      <p className={styles.sub}>
+        The buyer says the order did not arrive. The payout is frozen. Check the drop-off photo, the distance and the
+        flags, then decide.
+      </p>
+      <textarea
+        className={styles.cancelReason}
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        maxLength={500}
+        rows={2}
+        placeholder="Note for the audit log (optional)"
+        aria-label="Decision note"
+      />
+      {error && <p className={styles.stateError}>{error}</p>}
+      <div className={styles.decisionRow}>
+        <button type="button" className={styles.releaseButton} onClick={() => void decide("release")} disabled={busy}>
+          Release payout
+        </button>
+        <button type="button" className={styles.cancelButton} onClick={() => void decide("refund")} disabled={busy}>
+          Refund buyer
+        </button>
+      </div>
     </section>
   );
 }

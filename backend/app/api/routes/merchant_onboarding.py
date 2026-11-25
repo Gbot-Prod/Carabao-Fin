@@ -131,6 +131,8 @@ _FIELD_LABELS = {
     "first_name": "First name",
     "middle_name": "Middle name",
     "suffix": "Suffix",
+    "sex": "Sex",
+    "birth_date": "Birth date",
     "rep_last_name": "Representative's last name",
     "rep_first_name": "Representative's first name",
     "rep_middle_name": "Representative's middle name",
@@ -601,6 +603,8 @@ _BUSINESS_COLUMNS = (
     "first_name",
     "middle_name",
     "suffix",
+    "sex",
+    "birth_date",
     "rep_last_name",
     "rep_first_name",
     "rep_middle_name",
@@ -666,7 +670,7 @@ def _validate_payload(
         return data, None
     model = BUSINESS_DETAILS_MODELS[data.seller_type]
     try:
-        details = model.model_validate(data.business_fields()).model_dump()
+        details = model.model_validate(data.business_fields()).model_dump(mode="json")
     except ValidationError as exc:
         raise FieldErrors(_payload_field_errors(exc)) from exc
     return data, details

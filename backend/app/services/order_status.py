@@ -2,9 +2,11 @@
 
 The one place that moves ``orders.status``. Payment (via
 ``order_reservations.settle_checkout_payment``) is the only way out of
-``pending``; merchants act on paid orders only. Only the buyer, or the
-auto-confirm sweep after the holding window, may mark an order delivered.
-Payouts depend on ``delivered``, so merchants never set it.
+``pending``; merchants act on paid orders only. The buyer, the auto-confirm
+sweep after the holding window, or the merchant with a drop-off photo
+(``order_proof``, ORDER_PROOF_PHOTOS_PLAN.md) may mark an order delivered.
+A merchant-set delivery is not payable at once: see
+``payout_service.delivery_payable``.
 """
 
 import os
@@ -47,18 +49,32 @@ MONEY_RECEIVED_STATUSES = frozenset(
 )
 
 # Transitions a merchant may make. "pending" is awaiting payment, so only the
-# payment webhook or the expiry sweep moves it; "delivered" is the buyer's.
+# payment webhook or the expiry sweep moves it. The moves in PHOTO_MOVES need
+# a proof photo, so only their merchant-app endpoints make them (the status
+# PATCH refuses them with 409): ship (packing photo), deliver (drop-off photo)
+# and cancel from out_for_delivery (failed drop-off photo).
 MERCHANT_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
     OrderStatus.PENDING: frozenset(),
     OrderStatus.PROCESSING: frozenset({OrderStatus.SHIPPED, OrderStatus.CANCELLED}),
     OrderStatus.SHIPPED: frozenset(
-        {OrderStatus.OUT_FOR_DELIVERY, OrderStatus.CANCELLED}
+        {OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED, OrderStatus.CANCELLED}
     ),
-    OrderStatus.OUT_FOR_DELIVERY: frozenset({OrderStatus.CANCELLED}),
+    OrderStatus.OUT_FOR_DELIVERY: frozenset(
+        {OrderStatus.DELIVERED, OrderStatus.CANCELLED}
+    ),
     OrderStatus.DELIVERED: frozenset(),
     OrderStatus.CANCELLED: frozenset(),
     OrderStatus.PAYMENT_MISMATCH: frozenset(),
 }
+PHOTO_MOVES: frozenset[tuple[OrderStatus, OrderStatus]] = frozenset(
+    {
+        (OrderStatus.PROCESSING, OrderStatus.SHIPPED),
+        (OrderStatus.SHIPPED, OrderStatus.DELIVERED),
+        (OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED),
+        (OrderStatus.OUT_FOR_DELIVERY, OrderStatus.CANCELLED),
+    }
+)
+USE_MERCHANT_APP = "Use the merchant app: this step needs a photo"
 
 
 # Why a farm may cancel; the label is what the buyer reads. The web and mobile
@@ -68,8 +84,11 @@ MERCHANT_CANCEL_REASONS: dict[str, str] = {
     "quality": "The produce did not meet quality standards",
     "cannot_deliver": "The farm cannot deliver to this address or date",
     "buyer_request": "The buyer asked to cancel",
+    "buyer_not_home": "The buyer was not at the address",
     "other": "Other",
 }
+# Only a failed drop-off (attempt photo) may use these.
+ATTEMPT_ONLY_CANCEL_REASONS = frozenset({"buyer_not_home"})
 MERCHANT_CANCEL_NOTE_MAX = 300
 
 
@@ -84,6 +103,10 @@ def merchant_cancel_text(reason: str, note: str | None) -> str:
 
 class InvalidTransition(ValueError):
     """The merchant asked for a move MERCHANT_TRANSITIONS doesn't allow."""
+
+
+class PhotoRequired(ValueError):
+    """The move is in PHOTO_MOVES; only its merchant-app endpoint makes it."""
 
 
 class PaymentInProgress(RuntimeError):
@@ -116,23 +139,35 @@ def money_received_clause():
     )
 
 
-def apply_merchant_transition(
-    order: Order,
-    new_status: OrderStatus,
-    db: Session,
-    cancel_reason: str | None = None,
-):
-    """Move ``order`` to ``new_status`` for its merchant; the caller commits.
-
-    ``cancel_reason`` is the buyer-facing text (``merchant_cancel_text``) and is
-    required to cancel. Raises InvalidTransition or PaymentInProgress, leaving
-    the order unchanged.
-    """
+def check_merchant_move(
+    order: Order, new_status: OrderStatus, photo_checked: bool = False
+) -> None:
+    """Raise InvalidTransition or PhotoRequired if the merchant may not move
+    ``order`` to ``new_status`` now."""
     allowed = MERCHANT_TRANSITIONS.get(order.status, frozenset())
     if new_status not in allowed:
         raise InvalidTransition(
             f"Cannot transition order from '{order.status}' to '{new_status}'"
         )
+    if (order.status, new_status) in PHOTO_MOVES and not photo_checked:
+        raise PhotoRequired(USE_MERCHANT_APP)
+
+
+def apply_merchant_transition(
+    order: Order,
+    new_status: OrderStatus,
+    db: Session,
+    cancel_reason: str | None = None,
+    photo_checked: bool = False,
+):
+    """Move ``order`` to ``new_status`` for its merchant; the caller commits.
+
+    ``cancel_reason`` is the buyer-facing text (``merchant_cancel_text``) and is
+    required to cancel. A move in PHOTO_MOVES needs ``photo_checked`` (the
+    caller stored the proof photo). Raises InvalidTransition, PhotoRequired or
+    PaymentInProgress, leaving the order unchanged.
+    """
+    check_merchant_move(order, new_status, photo_checked)
 
     if new_status == OrderStatus.CANCELLED:
         if not cancel_reason:
@@ -145,6 +180,9 @@ def apply_merchant_transition(
         )
     elif new_status == OrderStatus.SHIPPED:
         mark_shipped(order)
+    elif new_status == OrderStatus.DELIVERED:
+        # order_proof.deliver_with_photo calls mark_delivered itself.
+        raise InvalidTransition("Use the deliver endpoint to mark it delivered")
     else:
         order.status = new_status
         if new_status == OrderStatus.OUT_FOR_DELIVERY:
@@ -256,7 +294,15 @@ def auto_confirm_at(order: Order, days: int | None = None) -> datetime | None:
     day, whichever is later, so an order shipped early cannot confirm (and
     become payable) before the buyer could get it (CF-0050).
     """
-    if order.status not in IN_TRANSIT_STATUSES or order.shipped_at is None:
+    if order.status not in IN_TRANSIT_STATUSES:
+        return None
+    return auto_confirm_due(order, days)
+
+
+def auto_confirm_due(order: Order, days: int | None = None) -> datetime | None:
+    """The auto-confirm time from shipping, whatever the status now. A flagged
+    merchant-set delivery is payable only from this time (payout_service)."""
+    if order.shipped_at is None:
         return None
     start = order.shipped_at
     if start.tzinfo is None:  # SQLite drops the zone
@@ -313,14 +359,16 @@ def close_shipment_if_done(order: Order) -> None:
         )
 
 
-def mark_delivered(order: Order, confirmed_by: str) -> None:
+def mark_delivered(order: Order, confirmed_by: str, verify_pin: bool = True) -> None:
+    """``verify_pin`` False: a flagged merchant drop-off does not prove the pin."""
     order.status = OrderStatus.DELIVERED
     order.delivered_at = datetime.now(UTC)
     order.closed_at = order.delivered_at
     order.delivery_confirmed_by = confirmed_by
     close_shipment_if_done(order)
     # The rider got to the pin: the buyer's saved address there is verified.
-    mark_pin_verified(order)
+    if verify_pin:
+        mark_pin_verified(order)
     notifications.notify(
         order,
         notifications.buyer_id(order),

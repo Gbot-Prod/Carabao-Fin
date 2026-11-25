@@ -38,7 +38,7 @@ import {
   firstStepWithProblem, FORM_SUBTITLE, FORM_TITLE, formatLocalPhone, formatRegNum, formatRSBSA,
   formatTIN, formFromApplication, formFromProfile, fullPhoneNumber, GOV_ID_TYPES, govIdLabel,
   INITIAL_FORM, isIndividual, isRegistered, keepOtherSteps, LEGAL_WORDS, LOCAL_PHONE_MAX,
-  NAME_MAX, NAME_SUFFIXES, NO_DOCUMENTS, NO_PROOF, normalizeEmail, OPS_WORDS, payloadDocuments,
+  NAME_MAX, NAME_SUFFIXES, SEX_OPTIONS, formatBirthDate, NO_DOCUMENTS, NO_PROOF, normalizeEmail, OPS_WORDS, payloadDocuments,
   PERSON_MAX, phoneSendProblem, pickedDocument, placeServerErrors, PREFILL_STATUSES, selfieError,
   progressText, REGISTRATION, REGISTRATION_MAX, RSBSA_MAX, SELLER_OPTIONS, SMALL_PRODUCER_HELP,
   STEPS, SUBMIT_LATER_HELP, SUBMIT_MODE_OPTIONS, submitLabel, TIN_MAX, toggleDay, VAT_OPTIONS,
@@ -537,6 +537,21 @@ export default function OnboardingFormScreen({ initialStep = 0, onSubmitted }: P
           error={fieldErrors[suffixKey]}
           disabled={submitting}
         />
+        {prefix === '' && (
+          <>
+            <RadioGroup<string>
+              legend={LEGAL_WORDS.sex}
+              options={SEX_OPTIONS}
+              value={form.sex}
+              onChange={(v) => setValue('sex', v as OnboardingForm['sex'])}
+              error={fieldErrors.sex}
+              disabled={submitting}
+            />
+            <TextField label={LEGAL_WORDS.birthDate} value={form.birth_date} max={10} counter={false} numeric
+              onChange={(v) => setValue('birth_date', formatBirthDate(v))} error={fieldErrors.birth_date}
+              placeholder="YYYY-MM-DD" disabled={submitting} />
+          </>
+        )}
         <Text style={styles.hint}>{LEGAL_WORDS.nameHelp}</Text>
       </>
     );

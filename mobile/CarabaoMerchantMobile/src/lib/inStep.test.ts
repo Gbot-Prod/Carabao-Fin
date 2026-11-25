@@ -14,8 +14,11 @@ import { dirname, join } from 'node:path';
 import { ORDER_STATUSES, ORDER_STATUS_LABELS } from './orderStatus.ts';
 import {
   canCancel,
+  cancelReasonsFor,
   MERCHANT_CANCEL_NOTE_MAX,
   MERCHANT_CANCEL_REASONS,
+  missingPackingPhotos,
+  needsPhoto,
   nextStatuses,
   ORDER_FILTERS,
   orderCounts,
@@ -217,6 +220,38 @@ test('S4 nextStatuses = backend merchant transitions = web order buttons', () =>
     const webOffersCancel = !closedStatuses.includes(status);
     assert.equal(canCancel(status), webOffersCancel && pyTransitions[status].includes('cancelled'), status);
   }
+});
+
+test('proof photo moves and attempt-only reasons = backend order_status.py', () => {
+  // ORDER_PROOF_PHOTOS_PLAN.md: the status PATCH refuses these moves; the app takes a photo.
+  const backend = read('backend/app/services/order_status.py');
+  const block = /PHOTO_MOVES: [^=]*= frozenset\(\s*\{([\s\S]*?)\}\s*\)/.exec(backend)?.[1] ?? '';
+  const moves = [...block.matchAll(/\(OrderStatus\.([A-Z_]+), OrderStatus\.([A-Z_]+)\)/g)].map(
+    (m) => `${m[1].toLowerCase()}>${m[2].toLowerCase()}`,
+  );
+  assert.ok(moves.length > 0, 'PHOTO_MOVES not found');
+  for (const from of ORDER_STATUSES) {
+    for (const to of ORDER_STATUSES) {
+      assert.equal(needsPhoto(from, to), moves.includes(`${from}>${to}`), `${from}>${to}`);
+    }
+  }
+
+  const attemptOnly = /ATTEMPT_ONLY_CANCEL_REASONS = frozenset\(\{([^}]*)\}\)/.exec(backend)?.[1] ?? '';
+  const keys = [...attemptOnly.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+  assert.ok(keys.length > 0, 'ATTEMPT_ONLY_CANCEL_REASONS not found');
+  const plain = cancelReasonsFor(false).map((r) => r.key as string);
+  assert.ok(keys.every((k) => !plain.includes(k)), 'a plain cancel offers an attempt-only reason');
+  assert.deepEqual(cancelReasonsFor(true), [...MERCHANT_CANCEL_REASONS]);
+});
+
+test('missingPackingPhotos names the picked orders with no packing photo', () => {
+  const orders = [
+    { id: 1, packing_photo: true },
+    { id: 2, packing_photo: false },
+    { id: 3 },
+  ];
+  assert.deepEqual(missingPackingPhotos(orders, [1, 2, 3]), [2, 3]);
+  assert.deepEqual(missingPackingPhotos(orders, [1]), []);
 });
 
 test('S4 filter chips = web OrdersTab.tsx, and orderFilter/orderCounts use them', () => {

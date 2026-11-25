@@ -31,6 +31,7 @@ from app.models import (  # noqa: F401
     merchant_application,
     merchant_payout,
     order,
+    order_proof_photo,
     otp,
     payout_batch,
     produce,
@@ -45,6 +46,7 @@ from app.models import (  # noqa: F401
 from app.services import (
     address_log,
     da_price_sync,
+    order_proof,
     rate_limit,
     retention,
     setup_reminders,
@@ -173,6 +175,10 @@ async def lifespan(_: FastAPI):
             # Pin quality item 3: address change rows past address_log.KEEP_DAYS.
             changes = address_log.purge_old(db)
             db.commit()
+            # Proof photo objects 90 days after the order closed (the rows stay).
+            photos = order_proof.purge_old_photos(db)
+            if photos:
+                logger.info("Deleted %s old order proof photo(s)", photos)
             if codes or hits or searches or notes or changes:
                 logger.info(
                     "Purged %s OTP code(s), %s rate-limit hit(s), %s search row(s), "

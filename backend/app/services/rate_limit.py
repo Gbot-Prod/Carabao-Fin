@@ -110,6 +110,11 @@ ACTION_LIMITS: dict[str, Limit] = {
     "pin_check": Limit(120, 3600),
     # A rider reports a pin that could not be reached (control 6).
     "pin_report": Limit(60, 3600),
+    # Order proof photos (packing, drop-off, failed drop-off). A run of 40
+    # stops is 40 packing + 40 drop-off photos, with room for retakes.
+    "proof_upload": Limit(200, 3600),
+    # Proof photo reads through the API (each one reads from R2).
+    "proof_view": Limit(300, 3600),
     # Pin quality item 3: saved address create + edit + delete, and shop
     # location edits, per user. Each write may ask the road service and run
     # the pin-area check; a person edits a few addresses at a time.
@@ -258,8 +263,7 @@ def enforce_action(db: Session, scope: str, identifier: str) -> None:
         raise HTTPException(
             status_code=429,
             detail=(
-                "Too many requests. "
-                f"Please try again in {_humanize(retry_after)}."
+                f"Too many requests. Please try again in {_humanize(retry_after)}."
             ),
             headers={"Retry-After": str(retry_after)},
         )

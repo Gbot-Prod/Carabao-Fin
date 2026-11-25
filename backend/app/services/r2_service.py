@@ -102,6 +102,11 @@ def upload_selfie_document(user_id: int, file: CheckedFile) -> str:
     return _put_private(f"selfie/{user_id}", file)
 
 
+def upload_proof_photo(order_id: int, kind: str, file: CheckedFile) -> str:
+    """Packing, drop-off or failed drop-off photo of an order (private)."""
+    return _put_private(f"proof/{order_id}/{kind}", file)
+
+
 def delete_private_document(stored_path: str) -> None:
     """Remove a document that was uploaded for a submit that then failed."""
     _client().delete_object(Bucket=_private_bucket(), Key=_object_key(stored_path))

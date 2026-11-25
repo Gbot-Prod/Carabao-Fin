@@ -15,9 +15,10 @@ import { useAuth } from '../lib/AuthContext';
 import { api, type ApiMerchantOrder, type MerchantOrderStatus } from '../lib/api';
 import { useMerchantData } from '../lib/MerchantDataContext';
 import {
-  orderCounts, orderFilter, orderFilterLabel, ORDER_FILTERS,
+  needsPhoto, orderCounts, orderFilter, orderFilterLabel, ORDER_FILTERS,
   type MerchantCancelReason, type OrderFilterKey,
 } from '../lib/orderActions';
+import { takeProofAtAddress, takeProofPhoto } from '../lib/proofCapture';
 import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
 import { formatPeso, formatRequestedDate } from '../lib/format';
 import { parseOrderId } from '../lib/orderChat';
@@ -153,11 +154,36 @@ export default function MerchantOrdersScreen() {
     }
   };
 
+  // ORDER_PROOF_PHOTOS_PLAN.md: shipping needs a packing photo from the live camera. The
+  // status changes only when the upload succeeds.
+  const shipWithPhoto = async (order: ApiMerchantOrder) => {
+    setBusyId(order.id);
+    try {
+      const photo = await takeProofPhoto('packing');
+      if (!photo) return;
+      await api.merchants.shipOrder(token, order.id, photo);
+      await refreshOrders();
+    } catch (err) {
+      Alert.alert('Could not ship order', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const advance = (order: ApiMerchantOrder, to: MerchantOrderStatus) => {
     if (to === 'cancelled') {
       // Cancelling needs a reason, so its own sheet replaces the detail one.
       setDetailId(null);
       setCancelId(order.id);
+      return;
+    }
+    if (to === 'shipped') {
+      // The camera opens over the screen, not over the sheet (iOS presents one modal at a time).
+      setDetailId(null);
+      Alert.alert('Ship order', `Take a photo of packed order #${order.id}. Then it is marked shipped.`, [
+        { text: 'Back', style: 'cancel' },
+        { text: 'Take photo', onPress: () => void shipWithPhoto(order) },
+      ]);
       return;
     }
     Alert.alert('Update order', `Move order #${order.id} to "${orderStatusLabel(to)}"?`, [
@@ -166,10 +192,19 @@ export default function MerchantOrdersScreen() {
     ]);
   };
 
+  const cancelling = useMemo(() => orders?.find((o) => o.id === cancelId) ?? null, [orders, cancelId]);
+  const cancelNeedsPhoto = cancelling != null && needsPhoto(cancelling.status, 'cancelled');
+
   const cancelOrder = async (reason: MerchantCancelReason, note: string) => {
     if (cancelId == null) return;
     // Errors are thrown back to the sheet, which shows them.
-    await api.merchants.cancelOrder(token, cancelId, reason, note);
+    if (cancelNeedsPhoto) {
+      const proof = await takeProofAtAddress('attempt');
+      if (!proof) throw new Error('No photo was taken, so the order is not cancelled.');
+      await api.merchants.attemptCancel(token, cancelId, proof.photo, proof.position, reason, note);
+    } else {
+      await api.merchants.cancelOrder(token, cancelId, reason, note);
+    }
     await refreshOrders();
     setCancelId(null);
   };
@@ -246,7 +281,12 @@ export default function MerchantOrdersScreen() {
         onAdvance={(to) => detail && advance(detail, to)}
         onCancel={() => detail && advance(detail, 'cancelled')}
       />
-      <CancelOrderSheet orderId={cancelId} onClose={() => setCancelId(null)} onSubmit={cancelOrder} />
+      <CancelOrderSheet
+        orderId={cancelId}
+        withPhoto={cancelNeedsPhoto}
+        onClose={() => setCancelId(null)}
+        onSubmit={cancelOrder}
+      />
     </SafeAreaView>
   );
 }

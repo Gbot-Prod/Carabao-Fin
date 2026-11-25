@@ -41,6 +41,7 @@ const ACTION_LABELS: Record<string, string> = {
   "review.hide": "Review hidden",
   "review.unhide": "Review restored",
   "order.cancel": "Order cancelled",
+  "order.dispute_decision": "Delivery dispute decided",
 };
 
 const TARGET_LINKS: Partial<Record<string, (id: number) => string>> = {

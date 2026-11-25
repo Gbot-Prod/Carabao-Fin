@@ -9,9 +9,11 @@ from fastapi import (
     Body,
     Depends,
     File,
+    Form,
     HTTPException,
     Query,
     Request,
+    Response,
     UploadFile,
 )
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,6 +27,7 @@ from app.core.errors import FieldErrors, upstream_error
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.order import Order
+from app.models.order_proof_photo import PROOF_KINDS, OrderProofPhoto
 from app.models.produce import Produce
 from app.models.statuses import (
     OrderStatus,
@@ -68,6 +71,7 @@ from app.services import (
     listing_vision,
     mapbox_routing,
     notifications,
+    order_proof,
     photo_checks,
     pin_area,
     psgc,
@@ -85,14 +89,20 @@ from app.services.merchant_service import (
 )
 from app.services.order_status import (
     ACTIVE_ORDER_STATUSES,
+    ATTEMPT_ONLY_CANCEL_REASONS,
     CLOSED_ORDER_STATUSES,
+    IN_TRANSIT_STATUSES,
     MERCHANT_CANCEL_NOTE_MAX,
     MERCHANT_CANCEL_REASONS,
     SHIPPED_STATUSES,
+    USE_MERCHANT_APP,
     InvalidTransition,
     PaymentInProgress,
+    PhotoRequired,
     apply_merchant_transition,
     auto_confirm_at,
+    check_merchant_move,
+    mark_delivered,
     merchant_cancel_text,
     money_received_clause,
     payment_status,
@@ -970,10 +980,23 @@ def upload_produce_image(
 # ---------------------------------------------------------------------------
 
 
+def _photo_kinds(db: Session, order_ids: list[int]) -> dict[int, set[str]]:
+    """The proof photo kinds each order has (deleted photos count: the row stays)."""
+    kinds: dict[int, set[str]] = {}
+    if not order_ids:
+        return kinds
+    for order_id, kind in db.query(
+        OrderProofPhoto.order_id, OrderProofPhoto.kind
+    ).filter(OrderProofPhoto.order_id.in_(order_ids)):
+        kinds.setdefault(order_id, set()).add(kind)
+    return kinds
+
+
 def _to_merchant_order_response(
-    order: Order, user: User | None
+    order: Order, user: User | None, photo_kinds: set[str] | None = None
 ) -> MerchantOrderResponse:
     """One order as the merchant's orders tab shows it."""
+    photo_kinds = photo_kinds or set()
     buyer_name = None
     if user:
         buyer_name = user.name or None
@@ -1000,6 +1023,10 @@ def _to_merchant_order_response(
         delivery_window=order.delivery_window,
         notes=order.notes,
         cancel_reason=order.cancel_reason,
+        packing_photo=order_proof.PACKING in photo_kinds,
+        dropoff_photo=order_proof.DROPOFF in photo_kinds,
+        attempt_photo=order_proof.ATTEMPT in photo_kinds,
+        delivery_confirmed_by=order.delivery_confirmed_by,
     )
 
 
@@ -1038,7 +1065,11 @@ def get_my_merchant_orders(
         key=lambda r: (r[0].ordered_at or datetime.min.replace(tzinfo=UTC), r[0].id),
         reverse=True,
     )
-    return [_to_merchant_order_response(order, user) for order, user in rows]
+    kinds = _photo_kinds(db, [order.id for order, _ in rows])
+    return [
+        _to_merchant_order_response(order, user, kinds.get(order.id))
+        for order, user in rows
+    ]
 
 
 @router.patch(
@@ -1050,12 +1081,24 @@ def update_my_merchant_order_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Status moves that need no photo. Ship, deliver and a cancel from
+    out_for_delivery need one, so this refuses them (409, "Use the merchant
+    app"); the photo endpoints below make them."""
     status = body.status
+    if body.cancel_reason in ATTEMPT_ONLY_CANCEL_REASONS:
+        raise HTTPException(status_code=409, detail=USE_MERCHANT_APP)
     cancel_text = _cancel_text(body)
     merchant = get_editable_merchant(db, current_user.id)
     if not merchant:
         raise HTTPException(status_code=404, detail="Merchant profile not found")
 
+    order = _lock_my_order(db, merchant, order_id)
+    _apply_move(order, status, db, cancel_text)
+    db.commit()
+    return _after_status_change(db, order, merchant, status, cancel_text)
+
+
+def _lock_my_order(db: Session, merchant: Merchant, order_id: int) -> Order:
     order = (
         db.query(Order)
         .filter(Order.id == order_id, Order.merchant_id == merchant.id)
@@ -1064,9 +1107,22 @@ def update_my_merchant_order_status(
     )
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    return order
 
+
+def _apply_move(
+    order: Order,
+    status: OrderStatus,
+    db: Session,
+    cancel_text: str | None,
+    photo_checked: bool = False,
+) -> None:
     try:
-        apply_merchant_transition(order, status, db, cancel_reason=cancel_text)
+        apply_merchant_transition(
+            order, status, db, cancel_reason=cancel_text, photo_checked=photo_checked
+        )
+    except PhotoRequired as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except InvalidTransition as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PaymentInProgress as exc:
@@ -1077,8 +1133,32 @@ def update_my_merchant_order_status(
     if status == OrderStatus.SHIPPED and not order.route_waypoints:
         _compute_and_store_route(db, order)
 
-    db.commit()
 
+def _check_move(order: Order, status: OrderStatus) -> None:
+    """400 before the photo is stored, when the move is not allowed now."""
+    try:
+        check_merchant_move(order, status, photo_checked=True)
+    except InvalidTransition as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _commit_photo(db: Session, stored: order_proof.StoredPhoto) -> None:
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        stored.failed()
+        raise
+    stored.committed()
+
+
+def _after_status_change(
+    db: Session,
+    order: Order,
+    merchant: Merchant,
+    status: OrderStatus,
+    cancel_text: str | None,
+) -> MerchantOrderResponse:
     user = order.user
     # U5: only when the buyer accepts SMS updates.
     buyer_phone = (
@@ -1099,7 +1179,167 @@ def update_my_merchant_order_status(
             reason=cancel_text,
         )
 
-    return _to_merchant_order_response(order, user)
+    kinds = _photo_kinds(db, [order.id]).get(order.id)
+    return _to_merchant_order_response(order, user, kinds)
+
+
+# ---------------------------------------------------------------------------
+# Proof photos (ORDER_PROOF_PHOTOS_PLAN.md): merchant app only
+# ---------------------------------------------------------------------------
+
+
+def _photo_merchant(db: Session, current_user: User) -> Merchant:
+    # First, so a blocked call reaches neither the image decoder nor R2.
+    rate_limit.enforce_action(db, "proof_upload", str(current_user.id))
+    merchant = get_editable_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    return merchant
+
+
+@router.post(
+    "/merchants/me/orders/{order_id}/packing-photo",
+    response_model=MerchantOrderResponse,
+)
+def upload_packing_photo(
+    order_id: int,
+    photo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Store the packing photo of a processing order; it stays processing.
+    A route (POST /merchants/me/shipments) takes only orders with one. A new
+    photo replaces the old one."""
+    merchant = _photo_merchant(db, current_user)
+    order = _lock_my_order(db, merchant, order_id)
+    if order.status != OrderStatus.PROCESSING:
+        raise HTTPException(
+            status_code=400, detail="Only an order being prepared takes a packing photo"
+        )
+    stored = order_proof.store_photo(
+        db, order, order_proof.PACKING, photo, current_user.id
+    )
+    _commit_photo(db, stored)
+    kinds = _photo_kinds(db, [order.id]).get(order.id)
+    return _to_merchant_order_response(order, order.user, kinds)
+
+
+@router.post(
+    "/merchants/me/orders/{order_id}/ship", response_model=MerchantOrderResponse
+)
+def ship_with_photo(
+    order_id: int,
+    photo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Packing photo, then processing -> shipped (one order, not on a route)."""
+    merchant = _photo_merchant(db, current_user)
+    order = _lock_my_order(db, merchant, order_id)
+    _check_move(order, OrderStatus.SHIPPED)
+    stored = order_proof.store_photo(
+        db, order, order_proof.PACKING, photo, current_user.id
+    )
+    _apply_move(order, OrderStatus.SHIPPED, db, None, photo_checked=True)
+    _commit_photo(db, stored)
+    return _after_status_change(db, order, merchant, OrderStatus.SHIPPED, None)
+
+
+@router.post(
+    "/merchants/me/orders/{order_id}/deliver", response_model=MerchantOrderResponse
+)
+def deliver_with_photo(
+    order_id: int,
+    photo: UploadFile = File(...),
+    lat: float | None = Form(default=None),
+    lng: float | None = Form(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Drop-off photo and the phone position, then -> delivered.
+
+    The server records the time, the file hash and the distance to the buyer
+    pin (not the position). A flag does not stop the delivery; it holds the
+    payout until the buyer confirms or the auto-confirm time.
+    """
+    position = order_proof.check_position(lat, lng)
+    merchant = _photo_merchant(db, current_user)
+    order = _lock_my_order(db, merchant, order_id)
+    _check_move(order, OrderStatus.DELIVERED)
+    stored = order_proof.store_photo(
+        db, order, order_proof.DROPOFF, photo, current_user.id, position
+    )
+    mark_delivered(order, confirmed_by="merchant", verify_pin=not stored.flags)
+    _commit_photo(db, stored)
+    return _after_status_change(db, order, merchant, OrderStatus.DELIVERED, None)
+
+
+@router.post(
+    "/merchants/me/orders/{order_id}/attempt-cancel",
+    response_model=MerchantOrderResponse,
+)
+def cancel_after_failed_dropoff(
+    order_id: int,
+    photo: UploadFile = File(...),
+    reason: str = Form(...),
+    note: str | None = Form(default=None, max_length=MERCHANT_CANCEL_NOTE_MAX),
+    lat: float | None = Form(default=None),
+    lng: float | None = Form(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """A photo at the address (the buyer was not there), then cancel a shipped
+    or out_for_delivery order. Same position and hash checks as a drop-off.
+    From out_for_delivery this is the only way to cancel."""
+    cancel_text = _cancel_text(
+        MerchantOrderStatusUpdate(
+            status=OrderStatus.CANCELLED, cancel_reason=reason, cancel_note=note
+        )
+    )
+    position = order_proof.check_position(lat, lng)
+    merchant = _photo_merchant(db, current_user)
+    order = _lock_my_order(db, merchant, order_id)
+    # A route stop can still be "shipped"; the photo is the same proof there.
+    if order.status not in IN_TRANSIT_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Only an order on its way takes a failed drop-off photo",
+        )
+    stored = order_proof.store_photo(
+        db, order, order_proof.ATTEMPT, photo, current_user.id, position
+    )
+    _apply_move(order, OrderStatus.CANCELLED, db, cancel_text, photo_checked=True)
+    _commit_photo(db, stored)
+    return _after_status_change(db, order, merchant, OrderStatus.CANCELLED, cancel_text)
+
+
+@router.get("/merchants/me/orders/{order_id}/proof/{kind}")
+def get_my_proof_photo(
+    order_id: int,
+    kind: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The farm's own proof photo of its own order (image bytes)."""
+    if kind not in PROOF_KINDS:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    rate_limit.enforce_action(db, "proof_view", str(current_user.id))
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    order = (
+        db.query(Order.id)
+        .filter(Order.id == order_id, Order.merchant_id == merchant.id)
+        .first()
+    )
+    row = order_proof.get_photo(db, order_id, kind) if order else None
+    if row is None:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return Response(
+        content=order_proof.read_photo(row),
+        media_type=row.content_type,
+        headers={"Cache-Control": "private, no-store"},
+    )
 
 
 def _refuse_merchant_delete_if_blocked(db: Session, merchant: Merchant) -> None:

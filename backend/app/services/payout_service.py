@@ -19,7 +19,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -27,11 +27,13 @@ from sqlalchemy.orm import Session
 from app.models.merchant import Merchant
 from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
+from app.models.order_proof_photo import OrderProofPhoto
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.services import money, notifications, paymongo
 from app.services.merchant_verification import merchant_can_request_payout
+from app.services.order_status import auto_confirm_due
 
 logger = logging.getLogger(__name__)
 
@@ -199,15 +201,63 @@ def get_payout_info(db: Session, merchant_id: int) -> MerchantPayoutInfo | None:
     )
 
 
+def dispute_hours() -> int:
+    """Hours a buyer has to dispute a merchant-set delivery (no flags)."""
+    return int(os.getenv("DELIVERY_DISPUTE_HOURS", "48"))
+
+
+# ORDER_PROOF_PHOTOS_PLAN.md: buyers can dispute a merchant-set delivery
+# (Phase 2), so one with no flags is payable after the 48 h hold. False makes
+# every merchant-set delivery count as flagged (no early payout).
+BUYER_DISPUTES_LIVE = True
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def delivery_payable(
+    order: Order, dropoff_flags: list[str] | None, now: datetime | None = None
+) -> bool:
+    """Whether a delivered order's earnings may be paid out now.
+
+    A buyer or auto confirm: at once. A merchant-set delivery (drop-off
+    photo): when the buyer confirmed it, when an admin released a dispute, or
+    else after the hold unless a dispute is open. The hold is
+    DELIVERY_DISPUTE_HOURS after delivery with no flags, and the auto-confirm
+    time (7 days from shipping) with flags.
+    """
+    if order.delivery_confirmed_by != "merchant":
+        return True
+    if order.dispute_resolution == "release":
+        return True
+    if order.delivery_disputed_at is not None or order.dispute_resolution:
+        return False
+    if order.delivery_buyer_confirmed_at is not None:
+        return True
+    now = now or datetime.now(UTC)
+    flagged = bool(dropoff_flags) or not BUYER_DISPUTES_LIVE
+    if flagged:
+        due = auto_confirm_due(order)
+    else:
+        due = (
+            _aware(order.delivered_at) + timedelta(hours=dispute_hours())
+            if order.delivered_at
+            else None
+        )
+    return due is not None and _aware(due) <= now
+
+
 def claimable_transactions(db: Session, merchant_id: int) -> list[Transaction]:
-    """Paid transactions of delivered orders that no payout batch holds yet.
+    """Paid transactions of delivered, payable orders that no payout batch
+    holds yet (delivery_payable).
 
     A failed batch keeps its transactions (it is resent, not rebuilt), so any
     batch, whatever its status, claims them.
     """
     batched_ids = db.query(PayoutBatchItem.transaction_id).scalar_subquery()
-    return (
-        db.query(Transaction)
+    rows = (
+        db.query(Transaction, Order)
         .join(Order, Order.id == Transaction.order_id)
         .filter(
             Transaction.merchant_id == merchant_id,
@@ -218,6 +268,25 @@ def claimable_transactions(db: Session, merchant_id: int) -> list[Transaction]:
         )
         .all()
     )
+    merchant_set = [
+        order.id for _, order in rows if order.delivery_confirmed_by == "merchant"
+    ]
+    flags_by_order = (
+        dict(
+            db.query(OrderProofPhoto.order_id, OrderProofPhoto.flags).filter(
+                OrderProofPhoto.order_id.in_(merchant_set),
+                OrderProofPhoto.kind == "dropoff",
+            )
+        )
+        if merchant_set
+        else {}
+    )
+    now = datetime.now(UTC)
+    return [
+        txn
+        for txn, order in rows
+        if delivery_payable(order, flags_by_order.get(order.id), now)
+    ]
 
 
 def fit_to_transfer_limit(

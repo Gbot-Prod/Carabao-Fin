@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -33,6 +33,9 @@ SELLER_TYPES: tuple[str, ...] = (
 SubmitMode = Literal["now", "later"]
 VatStatus = Literal["vat_registered", "non_vat"]
 NameSuffix = Literal["Jr.", "Sr.", "II", "III", "IV", "V"]
+# As on the government ID. The DA RSBSA Finder searches by name, sex and
+# birthday, so the admin can look up an individual seller.
+Sex = Literal["male", "female"]
 # Old rows may still hold "LGU"; new submissions only ever derive these.
 RegistrationType = Literal["DTI", "SEC", "CDA", "LGU"]
 
@@ -147,6 +150,8 @@ SECTION_FIELDS: dict[str, tuple[str, ...]] = {
         "first_name",
         "middle_name",
         "suffix",
+        "sex",
+        "birth_date",
         "rep_last_name",
         "rep_first_name",
         "rep_middle_name",
@@ -215,6 +220,8 @@ class MerchantOnboardingPayload(AreaCodes):
     first_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
     middle_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
     suffix: NameSuffix | None = None
+    sex: Sex | None = None
+    birth_date: date | None = None
     rep_last_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
     rep_first_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
     rep_middle_name: str | None = Field(default=None, max_length=PERSON_NAME_MAX)
@@ -251,6 +258,8 @@ class MerchantOnboardingPayload(AreaCodes):
         "first_name",
         "middle_name",
         "suffix",
+        "sex",
+        "birth_date",
         "rep_last_name",
         "rep_first_name",
         "rep_middle_name",
@@ -300,6 +309,8 @@ BUSINESS_FIELDS = (
     "first_name",
     "middle_name",
     "suffix",
+    "sex",
+    "birth_date",
     "rep_last_name",
     "rep_first_name",
     "rep_middle_name",
@@ -334,11 +345,32 @@ class _SubmitNowCommon(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+# The age range a seller's birth date must give (an adult signs the terms).
+MIN_SELLER_AGE = 18
+MAX_SELLER_AGE = 120
+
+
+def age_on(born: date, today: date) -> int:
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
+
 class _Person(BaseModel):
     last_name: PersonName
     first_name: PersonName
     middle_name: str | None = None
     suffix: NameSuffix | None = None
+    sex: Sex
+    birth_date: date
+
+    @field_validator("birth_date")
+    @classmethod
+    def adult_birth_date(cls, value: date) -> date:
+        age = age_on(value, date.today())
+        if age < MIN_SELLER_AGE:
+            raise ValueError(f"You must be at least {MIN_SELLER_AGE} years old")
+        if age > MAX_SELLER_AGE:
+            raise ValueError("Enter the birth date on your government ID")
+        return value
 
 
 class _Registered(BaseModel):
@@ -400,6 +432,9 @@ class MerchantApplicationResponse(BaseModel):
     first_name: str | None = None
     middle_name: str | None = None
     suffix: str | None = None
+    sex: str | None = None
+    # ISO date (YYYY-MM-DD), stored encrypted.
+    birth_date: str | None = None
     rep_last_name: str | None = None
     rep_first_name: str | None = None
     rep_middle_name: str | None = None

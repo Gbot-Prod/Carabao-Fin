@@ -56,7 +56,12 @@ COMMON_NOW = {
     "terms_accepted": True,
     "terms_version": "May 21, 2026",
 }
-PERSON = {"last_name": "Dela Cruz", "first_name": "Juan"}
+PERSON = {
+    "last_name": "Dela Cruz",
+    "first_name": "Juan",
+    "sex": "male",
+    "birth_date": "1980-05-01",
+}
 REGISTERED = {
     "registration_number": "DTI-12345",
     "tin": "123-456-789-000",
@@ -202,6 +207,8 @@ def test_each_seller_type_submits(db, applicant, seller_type):  # noqa: F811
     [
         ("individual_farmer", "last_name", "Last name is required."),
         ("individual_farmer", "first_name", "First name is required."),
+        ("individual_farmer", "sex", "Sex is required."),
+        ("individual_farmer", "birth_date", "Birth date is required."),
         ("sole_proprietor", "trade_name", "Business / trade name is required."),
         ("sole_proprietor", "tin", "TIN is required."),
         ("sole_proprietor", "vat_status", "VAT registration status is required."),
@@ -696,3 +703,13 @@ def test_migration_backfills_seller_type(db):  # noqa: F811
         # Approved merchants are not sent back into onboarding.
         assert status == "approved"
     db.rollback()
+
+
+def test_sex_and_birth_date_are_saved_and_minors_refused(db, applicant):  # noqa: F811
+    resp = _submit(db, applicant, birth_date="2015-01-01")
+    assert resp.status_code == 400
+    assert set(resp.json()["errors"]) == {"birth_date"}
+
+    assert _submit(db, applicant).status_code == 200
+    application = db.query(MerchantApplication).one()
+    assert (application.sex, application.birth_date) == ("male", "1980-05-01")

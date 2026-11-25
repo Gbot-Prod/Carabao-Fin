@@ -41,6 +41,8 @@ const REQUEST_TIMEOUT_MS = 20000;
 // S18: the onboarding upload carries up to three 10 MB documents; on a slow mobile link that
 // takes longer than a JSON call, so it gets its own wait.
 const UPLOAD_TIMEOUT_MS = 120000;
+// One camera photo (proof photos, ORDER_PROOF_PHOTOS_PLAN.md) on a slow phone network.
+const PROOF_UPLOAD_TIMEOUT_MS = 60000;
 
 export class ApiError extends Error {
   // CF-0123: message per form field from the server (src/lib/apiErrors.ts), {} when none.
@@ -292,6 +294,9 @@ export type ApiMerchantApplication = {
   first_name: string | null;
   middle_name: string | null;
   suffix: string | null;
+  sex: string | null;
+  /** YYYY-MM-DD. */
+  birth_date: string | null;
   rep_last_name: string | null;
   rep_first_name: string | null;
   rep_middle_name: string | null;
@@ -449,7 +454,29 @@ export type ApiMerchantOrder = {
   cancel_reason?: string | null;
   // Set once the order is on a route (ready-to-ship orders have none yet).
   shipment_id: number | null;
+  // Proof photos the order has (ORDER_PROOF_PHOTOS_PLAN.md). A packing photo is needed
+  // before it ships, alone or on a route.
+  packing_photo?: boolean;
+  dropoff_photo?: boolean;
+  attempt_photo?: boolean;
+  // buyer | auto | merchant (drop-off photo)
+  delivery_confirmed_by?: string | null;
 };
+
+/** The phone position sent with a drop-off photo; the server keeps only the distance. */
+export type ProofPosition = { lat: number; lng: number };
+
+function proofForm(photo: FilePart, position: ProofPosition | null, extra: Record<string, string> = {}) {
+  const form = new FormData();
+  // React Native's FormData takes { uri, name, type } as the file part.
+  form.append('photo', photo as unknown as Blob);
+  if (position) {
+    form.append('lat', String(position.lat));
+    form.append('lng', String(position.lng));
+  }
+  for (const [key, value] of Object.entries(extra)) form.append(key, value);
+  return form;
+}
 
 // S11 (plan §5.4, part 1): one route made from ready orders. Copied from the web
 // util/api/merchants.ts (MerchantShipmentTracking and MerchantShipmentSummary); the route
@@ -955,9 +982,43 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ status: 'cancelled', cancel_reason: reason, cancel_note: note.trim() || null }),
       }),
+    // ORDER_PROOF_PHOTOS_PLAN.md: the moves that need a live camera photo. The status changes
+    // only when the upload succeeds (no offline queue). A 429 is the `proof_upload` limit.
+    // The packing photo of an order for a route; the order stays processing.
+    packingPhoto: (token: string | null, orderId: number, photo: FilePart) =>
+      request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/packing-photo`, token, {
+        method: 'POST',
+        body: proofForm(photo, null),
+      }, 'json', PROOF_UPLOAD_TIMEOUT_MS),
+    // Packing photo, then shipped (one order, not on a route).
+    shipOrder: (token: string | null, orderId: number, photo: FilePart) =>
+      request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/ship`, token, {
+        method: 'POST',
+        body: proofForm(photo, null),
+      }, 'json', PROOF_UPLOAD_TIMEOUT_MS),
+    // Drop-off photo and the phone position (null: no GPS, which the server flags).
+    deliverOrder: (token: string | null, orderId: number, photo: FilePart, position: ProofPosition | null) =>
+      request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/deliver`, token, {
+        method: 'POST',
+        body: proofForm(photo, position),
+      }, 'json', PROOF_UPLOAD_TIMEOUT_MS),
+    // Failed drop-off: a photo at the address, then cancel with a reason.
+    attemptCancel: (
+      token: string | null,
+      orderId: number,
+      photo: FilePart,
+      position: ProofPosition | null,
+      reason: string,
+      note: string,
+    ) =>
+      request<ApiMerchantOrder>(`/merchants/me/orders/${orderId}/attempt-cancel`, token, {
+        method: 'POST',
+        body: proofForm(photo, position, note.trim() ? { reason, note: note.trim() } : { reason }),
+      }, 'json', PROOF_UPLOAD_TIMEOUT_MS),
     // S11: one route from ready orders (backend POST /merchants/me/shipments, the web
     // createMerchantShipment). The server leaves out the stops it cannot route and names them
-    // in `skipped_orders`; a 400 names the orders it refused. A 429 is the `shipment_create`
+    // in `skipped_orders`; a 400 names the orders it refused, a 409 the orders with no packing
+    // photo. A 429 is the `shipment_create`
     // limit (30 an hour per farm) and its message is the one the screen shows.
     createShipment: (token: string | null, orderIds: number[]) =>
       request<MerchantShipmentTracking>('/merchants/me/shipments', token, {

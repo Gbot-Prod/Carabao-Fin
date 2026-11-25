@@ -52,7 +52,13 @@
         "expo-image-picker",
         {
           "photosPermission": "Carabao Merchant uses your photos for produce and shop pictures.",
-          "cameraPermission": "Carabao Merchant uses your camera to take photos of produce and your shop."
+          "cameraPermission": "Carabao Merchant uses your camera to take photos of produce, your shop, and proof photos of packed and delivered orders."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Carabao Merchant checks that a delivery photo is taken at the buyer's address. Only the distance to the address is kept."
         }
       ],
       "react-native-maps"

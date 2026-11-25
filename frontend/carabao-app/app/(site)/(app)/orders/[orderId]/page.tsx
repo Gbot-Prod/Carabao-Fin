@@ -6,12 +6,15 @@ import { useEffect, useState } from "react";
 import styles from "./page.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import OrderChat from "@/components/OrderChat/OrderChat";
+import ProofPhoto from "@/components/ProofPhoto/ProofPhoto";
 import { hasReceipt } from "@/lib/receipt";
 import {
   cancelMyOrder,
   confirmOrderReceived,
   createOrderReview,
+  disputeOrderDelivery,
   fetchOrder,
+  fetchOrderProofPhoto,
   isClosed,
   isInTransit,
   ORDER_STATUS_LABELS,
@@ -249,6 +252,143 @@ function ReviewSection({
   );
 }
 
+// ── Delivery proof (ORDER_PROOF_PHOTOS_PLAN.md) ─────────────────────────────
+
+const PROOF_CAPTIONS = { packing: "Packed at the farm", dropoff: "Left at your address" } as const;
+
+/** "21 h left" or "35 min left" until ``iso``. */
+const timeLeft = (iso: string) => {
+  const minutes = Math.max(0, Math.round((new Date(iso).getTime() - Date.now()) / 60000));
+  return minutes >= 60 ? `${Math.floor(minutes / 60)} h left` : `${minutes} min left`;
+};
+
+function DeliveryProofSection({
+  order,
+  onChanged,
+}: {
+  order: OrderDetail;
+  onChanged: (order: OrderDetail) => void;
+}) {
+  const [step, setStep] = useState<"idle" | "confirm" | "dispute">("idle");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const photos = order.proof_photos ?? [];
+  const merchantSet = order.status === "delivered" && order.delivery_confirmed_by === "merchant";
+  if (photos.length === 0 && !merchantSet) return null;
+
+  const run = async (action: () => Promise<unknown>, failMessage: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      onChanged(await fetchOrder(order.order_id));
+      setStep("idle");
+    } catch {
+      setError(failMessage);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  let status: React.ReactNode = null;
+  if (merchantSet) {
+    if (order.dispute_resolution === "refund") {
+      status = <p className={styles.muted}>Carabao checked your report. Your payment will be refunded.</p>;
+    } else if (order.dispute_resolution === "release") {
+      status = (
+        <p className={styles.muted}>
+          Carabao checked your report and the photos. The order counts as delivered. For more help, use the chat below.
+        </p>
+      );
+    } else if (order.delivery_disputed_at) {
+      status = <p className={styles.muted}>You reported that you did not get this order. Carabao is checking it.</p>;
+    } else if (order.delivery_buyer_confirmed_at) {
+      status = <p className={styles.muted}>You confirmed that you received this order.</p>;
+    } else if (order.can_dispute && order.dispute_until) {
+      status = (
+        <>
+          <p className={styles.muted}>
+            The farm marked this order delivered with a photo. If you did not get it, tell us before{" "}
+            {formatDateTime(order.dispute_until)} ({timeLeft(order.dispute_until)}).
+          </p>
+          {step === "idle" && (
+            <div className={styles.actions}>
+              <button type="button" className={styles.primaryBtn} onClick={() => setStep("confirm")}>
+                Confirm received
+              </button>
+              <button type="button" className={styles.secondaryBtn} onClick={() => setStep("dispute")}>
+                I did not get this
+              </button>
+            </div>
+          )}
+          {step === "confirm" && (
+            <div className={styles.confirmRow}>
+              <span>Confirm you received this order? This releases payment to the seller.</span>
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                disabled={busy}
+                onClick={() => void run(() => confirmOrderReceived(order.order_id), "Could not confirm this order. Please try again.")}
+              >
+                {busy ? "Confirming…" : "Yes, I received it"}
+              </button>
+              <button type="button" className={styles.secondaryBtn} onClick={() => setStep("idle")} disabled={busy}>
+                Back
+              </button>
+            </div>
+          )}
+          {step === "dispute" && (
+            <div className={styles.confirmRow}>
+              <span>Report that you did not get this order? The payment to the farm stops until Carabao checks it.</span>
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                disabled={busy}
+                onClick={() => void run(() => disputeOrderDelivery(order.order_id), "Could not send your report. Please try again.")}
+              >
+                {busy ? "Sending…" : "Yes, report it"}
+              </button>
+              <button type="button" className={styles.secondaryBtn} onClick={() => setStep("idle")} disabled={busy}>
+                Back
+              </button>
+            </div>
+          )}
+        </>
+      );
+    } else {
+      status = (
+        <p className={styles.muted}>
+          The time to report this delivery here has ended. If you did not get it, contact the farm or support in the chat below.
+        </p>
+      );
+    }
+  }
+
+  return (
+    <section className={styles.card}>
+      <h2 className={styles.cardTitle}>Delivery photos</h2>
+      {photos.length > 0 ? (
+        <div className={styles.proofPhotos}>
+          {photos.map((kind) => (
+            <ProofPhoto
+              key={kind}
+              orderId={order.order_id}
+              kind={kind}
+              load={fetchOrderProofPhoto}
+              alt={PROOF_CAPTIONS[kind]}
+              caption={PROOF_CAPTIONS[kind]}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className={styles.muted}>The photos of this order are no longer kept.</p>
+      )}
+      {status}
+      {error && <p className={styles.error}>{error}</p>}
+    </section>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function OrderDetailPage() {
@@ -461,12 +601,15 @@ export default function OrderDetailPage() {
                 <dd>
                   {formatDateTime(order.delivered_at)}
                   {order.delivery_confirmed_by === "auto" && <span className={styles.faint}> (auto-confirmed)</span>}
+                  {order.delivery_confirmed_by === "merchant" && <span className={styles.faint}> (marked by the farm)</span>}
                 </dd>
               </>
             )}
           </dl>
         </section>
       </div>
+
+      <DeliveryProofSection order={order} onChanged={setOrder} />
 
       <div id="review">
         <ReviewSection key={order.review?.id ?? "new"} order={order} onSaved={handleReviewSaved} />

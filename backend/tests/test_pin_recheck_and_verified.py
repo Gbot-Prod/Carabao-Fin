@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import shipments, user_addresses
 from app.models.order import Order
+from app.models.order_proof_photo import OrderProofPhoto
 from app.models.statuses import OrderStatus
 from app.models.user import User
 from app.models.user_address import UserAddress
@@ -136,6 +137,18 @@ def test_shipment_rechecks_outage_pins_and_warns_on_no_road(
     merchant.lat, merchant.lng = MALOLOS
     good = _order(db, merchant, user)
     bad = _order(db, merchant, user, pin=FAR)
+    # A route takes only orders with a packing photo (order_proof).
+    for order in (good, bad):
+        db.add(
+            OrderProofPhoto(
+                order_id=order.id,
+                kind="packing",
+                sha256=f"{order.id:064x}",
+                content_type="image/jpeg",
+                flags=[],
+            )
+        )
+    db.commit()
     monkeypatch.setattr(shipments, "_get_leg_durations", lambda coords: None)
     monkeypatch.setattr(
         shipments,

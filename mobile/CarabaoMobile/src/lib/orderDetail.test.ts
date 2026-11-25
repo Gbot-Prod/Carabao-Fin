@@ -2,7 +2,9 @@
 // Run with `npm test`. CF-0105.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chatTitle, isOrderRef, orderActions, orderRef, parseOrderId, voucherLine } from './orderDetail.ts';
+import {
+  chatTitle, deliveryProofState, isOrderRef, orderActions, orderRef, parseOrderId, voucherLine,
+} from './orderDetail.ts';
 
 test('cancel only while preparing, confirm only in transit (as the backend)', () => {
   const none = { canCancel: false, canCancelUnpaid: false, canConfirm: false, canTrack: false };
@@ -56,4 +58,16 @@ test('CF-0128 voucher line comes from the server values only (M61)', () => {
   // The rows add up to the server total for a voucher order.
   const items = 300, fee = 80, discount = 50, total = 330;
   assert.equal(items + fee - (voucherLine(discount, 'X')?.amount ?? 0), total);
+});
+
+test('delivery photos card: dispute states of a farm-marked delivery', () => {
+  const base = { status: 'delivered', delivery_confirmed_by: 'merchant', can_dispute: true };
+  assert.equal(deliveryProofState(base), 'open');
+  assert.equal(deliveryProofState({ ...base, can_dispute: false }), 'closed');
+  assert.equal(deliveryProofState({ ...base, delivery_buyer_confirmed_at: 'x' }), 'confirmed');
+  assert.equal(deliveryProofState({ ...base, delivery_disputed_at: 'x' }), 'disputed');
+  assert.equal(deliveryProofState({ ...base, delivery_disputed_at: 'x', dispute_resolution: 'refund' }), 'refund');
+  // Not a farm-marked delivery: no dispute card.
+  assert.equal(deliveryProofState({ ...base, delivery_confirmed_by: 'buyer' }), null);
+  assert.equal(deliveryProofState({ ...base, status: 'shipped' }), null);
 });

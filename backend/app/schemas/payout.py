@@ -44,6 +44,12 @@ class MerchantOrderResponse(BaseModel):
     notes: str | None = None
     # Why it was cancelled, as the buyer was told; None otherwise.
     cancel_reason: str | None = None
+    # Proof photos the order has (ORDER_PROOF_PHOTOS_PLAN.md): a packing photo
+    # is needed before it ships, alone or on a route.
+    packing_photo: bool = False
+    dropoff_photo: bool = False
+    attempt_photo: bool = False
+    delivery_confirmed_by: str | None = None
 
     model_config = {"from_attributes": True}
 

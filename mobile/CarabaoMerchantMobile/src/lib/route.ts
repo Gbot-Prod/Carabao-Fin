@@ -28,6 +28,14 @@ export const REPORT_SEND = 'Send report';
 export const REPORT_CANCEL = 'Cancel';
 export const REPORTED = 'Pin reported';
 export const REPORTED_NOTE = 'You reported this pin. We told the buyer to move it.';
+// ORDER_PROOF_PHOTOS_PLAN.md: the stop card's proof photo buttons (merchant app only; the web
+// route page has none). A live camera photo; the server keeps the distance to the pin.
+export const DELIVERED_PHOTO = 'Delivered – take photo';
+export const NOT_HOME_PHOTO = 'Buyer not home – take photo';
+export const PROOF_SENDING = 'Sending photo…';
+export const PROOF_ERROR = 'The photo could not be sent, so the stop did not change. Try again.';
+export const NOT_HOME_CONFIRM =
+  'Take a photo at the address. The order is then cancelled and the buyer is refunded.';
 export const APPROXIMATE = 'Approximate pin';
 export const APPROXIMATE_NOTE =
   'The buyer did not place this pin; it is where their typed address points. Check the address, or message the buyer if you cannot find the place.';

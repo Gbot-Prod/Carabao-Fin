@@ -50,6 +50,8 @@ REVIEW_UNHIDE = "review.unhide"
 ORDER_CANCEL = "order.cancel"  # CF-0045
 REFERENCE_PRICES_IMPORT = "reference_prices.import"  # guardrails Phase 4
 REFERENCE_PRICES_SYNC = "reference_prices.sync_da"
+# Release or refund a disputed merchant-set delivery (ORDER_PROOF_PHOTOS_PLAN.md).
+ORDER_DISPUTE_DECISION = "order.dispute_decision"
 
 ACTIONS = (
     ROLE_CHANGE,
@@ -81,6 +83,7 @@ ACTIONS = (
     ORDER_CANCEL,
     REFERENCE_PRICES_IMPORT,
     REFERENCE_PRICES_SYNC,
+    ORDER_DISPUTE_DECISION,
 )
 
 

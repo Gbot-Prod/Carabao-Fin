@@ -28,6 +28,7 @@ import {
   verifyEmailOtp,
   GOV_ID_TYPES,
   NAME_SUFFIXES,
+  type Sex,
   MerchantOnboardingPayload,
   MerchantApplication,
   type GovIdType,
@@ -61,6 +62,9 @@ type FormState = {
   first_name: string;
   middle_name: string;
   suffix: NameSuffix | "";
+  sex: Sex | "";
+  /** YYYY-MM-DD, from the date input. */
+  birth_date: string;
   rep_last_name: string;
   rep_first_name: string;
   rep_middle_name: string;
@@ -102,7 +106,7 @@ const SHOWN_FIELDS = new Set<string>([
   "address", "available_days", "barangay", "city", "contact_email", "contact_number", "pin", "postal_code",
   "province", "region",
   "submit_mode", "seller_type", "merchant_name", "last_name", "first_name", "middle_name", "suffix",
-  "rep_last_name", "rep_first_name", "rep_middle_name", "rep_suffix", "company_name", "trade_name",
+  "sex", "birth_date", "rep_last_name", "rep_first_name", "rep_middle_name", "rep_suffix", "company_name", "trade_name",
   "registration_number", "tin", "vat_status", "small_agri_producer", "rsbsa_number", "gov_id_type",
   "terms_accepted", "rsbsa_file", "gov_id_file", "bir_cert_file", "selfie_file",
 ]);
@@ -208,6 +212,8 @@ const INITIAL_FORM: FormState = {
   first_name: "",
   middle_name: "",
   suffix: "",
+  sex: "",
+  birth_date: "",
   rep_last_name: "",
   rep_first_name: "",
   rep_middle_name: "",
@@ -257,6 +263,29 @@ function SectionLock({ open, flagged, children }: { open: boolean; flagged: bool
   );
 }
 
+const SEXES: { value: Sex; label: string }[] = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+];
+const MIN_SELLER_AGE = 18;
+
+/** The latest birth date of an adult seller, as YYYY-MM-DD (local date). */
+function latestBirthDate(): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - MIN_SELLER_AGE);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** The same rule as the server (schemas/merchant_application.py _Person). */
+function birthDateError(value: string): string | null {
+  if (!value) return "Birth date is required.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number(value.slice(0, 4)) < new Date().getFullYear() - 120)
+    return "Enter the birth date on your government ID.";
+  if (value > latestBirthDate()) return `You must be at least ${MIN_SELLER_AGE} years old.`;
+  return null;
+}
+
 /** The saved application as form values. The TIN comes back masked, so it is entered again. */
 function formFromApplication(app: MerchantApplication): Partial<FormState> {
   const text = (value: string | null | undefined) => value ?? "";
@@ -285,6 +314,8 @@ function formFromApplication(app: MerchantApplication): Partial<FormState> {
     first_name: text(app.first_name),
     middle_name: text(app.middle_name),
     suffix: suffix(app.suffix),
+    sex: app.sex === "male" || app.sex === "female" ? app.sex : "",
+    birth_date: text(app.birth_date),
     rep_last_name: text(app.rep_last_name),
     rep_first_name: text(app.rep_first_name),
     rep_middle_name: text(app.rep_middle_name),
@@ -313,6 +344,8 @@ function businessPayload(form: FormState): Partial<MerchantOnboardingPayload> {
     first_name: form.first_name.trim(),
     middle_name: form.middle_name.trim(),
     suffix: form.suffix,
+    sex: form.sex,
+    birth_date: form.birth_date,
   };
   const registered = {
     registration_number: form.registration_number,
@@ -674,6 +707,9 @@ export default function MerchantOnboardingPage() {
     if (isIndividual(sellerType)) {
       required("last_name", "Last name is required.");
       required("first_name", "First name is required.");
+      if (!form.sex) errors.sex = "Sex is required.";
+      const birthError = birthDateError(form.birth_date);
+      if (birthError) errors.birth_date = birthError;
       if (form.small_agri_producer === null)
         errors.small_agri_producer = "Choose Yes or No for the small agricultural producer declaration.";
     }
@@ -824,6 +860,7 @@ export default function MerchantOnboardingPage() {
 
   const govIdLabel = sellerType === "corporation" ? "Authorized representative's government ID" : "Government ID";
   const nameHelp = "Your full legal name as written on your government-issued ID.";
+  const sexBirthHelp = "Your full legal name, sex and birth date as written on your government-issued ID.";
 
   const personFields = (prefix: "" | "rep_", heading?: string) => {
     const key = <K extends "last_name" | "first_name" | "middle_name" | "suffix">(k: K) =>
@@ -844,7 +881,24 @@ export default function MerchantOnboardingPage() {
           </select>
           <FieldError id={idOf("suffix")} message={fieldErrors[suffixKey]} />
         </div>
-        <p className={`${styles.helper} ${styles.fieldFull}`}>{nameHelp}</p>
+        {prefix === "" && (
+          <>
+            <div className={`${styles.field}${invalidClass(fieldErrors.sex)}`}>
+              <label htmlFor={idOf("sex")} className={styles.label}>Sex</label>
+              <select {...invalidProps(idOf("sex"), fieldErrors.sex)} id={idOf("sex")} className={styles.select} value={form.sex} onChange={setField("sex")}>
+                <option value="">Select</option>
+                {SEXES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+              <FieldError id={idOf("sex")} message={fieldErrors.sex} />
+            </div>
+            <div className={`${styles.field}${invalidClass(fieldErrors.birth_date)}`}>
+              <label htmlFor={idOf("birth_date")} className={styles.label}>Birth date</label>
+              <input {...invalidProps(idOf("birth_date"), fieldErrors.birth_date)} id={idOf("birth_date")} type="date" className={styles.input} value={form.birth_date} max={latestBirthDate()} onChange={setField("birth_date")} />
+              <FieldError id={idOf("birth_date")} message={fieldErrors.birth_date} />
+            </div>
+          </>
+        )}
+        <p className={`${styles.helper} ${styles.fieldFull}`}>{prefix === "" ? sexBirthHelp : nameHelp}</p>
       </>
     );
   };

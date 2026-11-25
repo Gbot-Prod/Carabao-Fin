@@ -41,6 +41,8 @@ LISTING_PENALTY_REVOKED = "listing_penalty_revoked"
 MERCHANT_ACCOUNT_REVIEW = "merchant_account_review"  # to admins
 # Guardrails Phase 3 (services/listing_reports.py).
 LISTING_REPORTED = "listing_reported"  # to admins: first open report
+# A buyer disputes a merchant-set delivery (services/delivery_dispute.py).
+DELIVERY_DISPUTED = "delivery_disputed"
 
 
 # Who a notification is for, on an account that is both buyer and farm owner.

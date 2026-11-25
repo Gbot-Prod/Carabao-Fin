@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import type { ApiMerchantApplication } from './api.ts';
 import {
   addressErrorsOf,
+  birthDateError,
+  formatBirthDate,
   buildPayload,
   businessPayload,
   contactState,
@@ -130,7 +132,8 @@ test('step 2 per seller type, as the web validateStep', () => {
   const now = { ...INITIAL_FORM, submit_mode: 'now' as const };
   const farmer = validateStep('legal', { ...now, seller_type: 'individual_farmer' }, NO_PROOF);
   assert.deepEqual(Object.keys(farmer).sort(), [
-    'first_name', 'gov_id_file', 'last_name', 'rsbsa_file', 'selfie_file', 'small_agri_producer', 'terms_accepted',
+    'birth_date', 'first_name', 'gov_id_file', 'last_name', 'rsbsa_file', 'selfie_file', 'sex', 'small_agri_producer',
+    'terms_accepted',
   ]);
   assert.equal(farmer.rsbsa_file, 'Please upload your RSBSA document (photo or PDF).');
   assert.equal(farmer.selfie_file, 'Take a selfie while you hold your government ID.');
@@ -286,4 +289,13 @@ test('prefill: profile fills empty boxes; an application overrides with what was
   assert.equal(filled.rep_suffix, '');
   assert.equal(filled.gov_id_type, 'PhilSys National ID');
   assert.equal(filled.tin, '', 'the masked TIN is entered again');
+});
+
+test('birth date: format, adult only', () => {
+  const today = new Date(2026, 10, 26);
+  assert.equal(formatBirthDate('19800501'), '1980-05-01');
+  assert.equal(birthDateError('', today), 'Birth date is required.');
+  assert.equal(birthDateError('1980-02-30', today), 'Enter the birth date on your government ID.');
+  assert.equal(birthDateError('2008-11-27', today), 'You must be at least 18 years old.');
+  assert.equal(birthDateError('2008-11-26', today), null);
 });

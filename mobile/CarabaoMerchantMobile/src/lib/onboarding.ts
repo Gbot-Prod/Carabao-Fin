@@ -44,6 +44,13 @@ export type SubmitMode = 'now' | 'later';
 export type VatStatus = 'vat_registered' | 'non_vat';
 export const NAME_SUFFIXES = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V'] as const;
 export type NameSuffix = (typeof NAME_SUFFIXES)[number];
+/** As on the government ID (individual seller types). */
+export type Sex = 'male' | 'female';
+export const SEX_OPTIONS: { value: Sex; label: string }[] = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+];
+export const MIN_SELLER_AGE = 18;
 /** Valid government IDs (backend GovIdType). RSBSA is a separate upload. */
 export const GOV_ID_TYPES = [
   'PhilSys National ID',
@@ -185,6 +192,9 @@ export type OnboardingForm = {
   first_name: string;
   middle_name: string;
   suffix: NameSuffix | '';
+  sex: Sex | '';
+  /** YYYY-MM-DD. */
+  birth_date: string;
   rep_last_name: string;
   rep_first_name: string;
   rep_middle_name: string;
@@ -226,6 +236,8 @@ export const INITIAL_FORM: OnboardingForm = {
   first_name: '',
   middle_name: '',
   suffix: '',
+  sex: '',
+  birth_date: '',
   rep_last_name: '',
   rep_first_name: '',
   rep_middle_name: '',
@@ -311,6 +323,27 @@ export const codeDigits = (raw: string): string => raw.replace(/\D/g, '').slice(
 
 // ── Validation (web validateStep, message for message) ────────────────────────
 
+/** Digits typed into the birth date field as YYYY-MM-DD (the dashes are added). */
+export function formatBirthDate(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 8);
+  return [d.slice(0, 4), d.slice(4, 6), d.slice(6, 8)].filter(Boolean).join('-');
+}
+
+/** The same rule as the server (schemas/merchant_application.py _Person). */
+export function birthDateError(value: string, today: Date = new Date()): string | null {
+  if (!value) return MESSAGES.birthDateRequired;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const born = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+  if (!m || !born || born.getMonth() !== Number(m[2]) - 1 || born.getDate() !== Number(m[3]))
+    return MESSAGES.birthDateFormat;
+  let age = today.getFullYear() - born.getFullYear();
+  if (today.getMonth() < born.getMonth() || (today.getMonth() === born.getMonth() && today.getDate() < born.getDate()))
+    age -= 1;
+  if (age < MIN_SELLER_AGE) return MESSAGES.birthDateMinor;
+  if (age > 120) return MESSAGES.birthDateFormat;
+  return null;
+}
+
 export const MESSAGES = {
   merchantNameRequired: 'Merchant name is required.',
   merchantNameShort: 'Merchant name must be at least 3 characters.',
@@ -322,6 +355,10 @@ export const MESSAGES = {
   sellerType: 'Select your seller type.',
   lastName: 'Last name is required.',
   firstName: 'First name is required.',
+  sexRequired: 'Sex is required.',
+  birthDateRequired: 'Birth date is required.',
+  birthDateFormat: 'Enter the birth date on your government ID.',
+  birthDateMinor: `You must be at least ${MIN_SELLER_AGE} years old.`,
   smallProducer: 'Choose Yes or No for the small agricultural producer declaration.',
   tradeName: 'Business / trade name is required.',
   companyName: 'Company registered name is required.',
@@ -393,6 +430,9 @@ export function validateStep(
   if (isIndividual(sellerType)) {
     required('last_name', MESSAGES.lastName);
     required('first_name', MESSAGES.firstName);
+    if (!form.sex) errors.sex = MESSAGES.sexRequired;
+    const birthError = birthDateError(form.birth_date);
+    if (birthError) errors.birth_date = birthError;
     if (form.small_agri_producer === null) errors.small_agri_producer = MESSAGES.smallProducer;
   }
   if (sellerType === 'sole_proprietor') required('trade_name', MESSAGES.tradeName);
@@ -463,7 +503,7 @@ export const SHOWN_FIELDS = new Set<string>([
   'address', 'available_days', 'barangay', 'city', 'contact_email', 'contact_number', 'pin', 'postal_code',
   'province', 'region',
   'submit_mode', 'seller_type', 'merchant_name', 'last_name', 'first_name', 'middle_name', 'suffix',
-  'rep_last_name', 'rep_first_name', 'rep_middle_name', 'rep_suffix', 'company_name', 'trade_name',
+  'sex', 'birth_date', 'rep_last_name', 'rep_first_name', 'rep_middle_name', 'rep_suffix', 'company_name', 'trade_name',
   'registration_number', 'tin', 'vat_status', 'small_agri_producer', 'rsbsa_number', 'gov_id_type',
   'terms_accepted', 'rsbsa_file', 'gov_id_file', 'bir_cert_file', 'selfie_file',
 ]);
@@ -512,6 +552,8 @@ export type OnboardingPayload = {
   first_name?: string;
   middle_name?: string;
   suffix?: NameSuffix | '';
+  sex?: Sex | '';
+  birth_date?: string;
   rep_last_name?: string;
   rep_first_name?: string;
   rep_middle_name?: string;
@@ -556,6 +598,8 @@ export function businessPayload(form: OnboardingForm): Partial<OnboardingPayload
     first_name: form.first_name.trim(),
     middle_name: form.middle_name.trim(),
     suffix: form.suffix,
+    sex: form.sex,
+    birth_date: form.birth_date,
   };
   const registered = {
     registration_number: form.registration_number,
@@ -661,6 +705,8 @@ export function formFromApplication(app: ApiMerchantApplication, current: Onboar
     first_name: text(app.first_name),
     middle_name: text(app.middle_name),
     suffix: suffix(app.suffix),
+    sex: app.sex === 'male' || app.sex === 'female' ? app.sex : '',
+    birth_date: text(app.birth_date),
     rep_last_name: text(app.rep_last_name),
     rep_first_name: text(app.rep_first_name),
     rep_middle_name: text(app.rep_middle_name),
@@ -724,6 +770,8 @@ export const LEGAL_WORDS = {
   middleName: 'Middle name (optional)',
   suffix: 'Suffix (optional)',
   suffixNone: 'None',
+  sex: 'Sex',
+  birthDate: 'Birth date',
   nameHelp: 'Your full legal name as written on your government-issued ID.',
   representative: 'Authorized representative',
   companyName: 'Company registered name',

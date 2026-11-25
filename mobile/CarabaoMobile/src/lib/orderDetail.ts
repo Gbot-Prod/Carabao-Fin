@@ -68,3 +68,26 @@ export function voucherLine(
 export const HIDDEN_REVIEW_NOTICE =
   'After a check by Carabao, this review is not shown on the farm page and does not count in its rating. ' +
   'Contact support if you think this is a mistake.';
+
+/**
+ * ORDER_PROOF_PHOTOS_PLAN.md: what the "Delivery photos" card says for a delivery the farm
+ * marked with a drop-off photo, or null for any other order. Same order of checks as web
+ * orders/[orderId] DeliveryProofSection; the server checks the dispute again.
+ */
+export type DeliveryProofState = 'refund' | 'release' | 'disputed' | 'confirmed' | 'open' | 'closed';
+
+export function deliveryProofState(order: {
+  status: string;
+  delivery_confirmed_by: string | null;
+  can_dispute?: boolean;
+  delivery_buyer_confirmed_at?: string | null;
+  delivery_disputed_at?: string | null;
+  dispute_resolution?: string | null;
+}): DeliveryProofState | null {
+  if (order.status !== 'delivered' || order.delivery_confirmed_by !== 'merchant') return null;
+  if (order.dispute_resolution === 'refund') return 'refund';
+  if (order.dispute_resolution === 'release') return 'release';
+  if (order.delivery_disputed_at) return 'disputed';
+  if (order.delivery_buyer_confirmed_at) return 'confirmed';
+  return order.can_dispute ? 'open' : 'closed';
+}

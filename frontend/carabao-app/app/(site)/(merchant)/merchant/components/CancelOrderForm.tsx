@@ -2,7 +2,7 @@ import { useState } from "react";
 import styles from "../page.module.css";
 import s from "./orders.module.css";
 import FieldError, { focusFirstInvalid, invalidClass, invalidProps, type FieldErrors } from "@/components/FieldError/FieldError";
-import { MERCHANT_CANCEL_NOTE_MAX, MERCHANT_CANCEL_REASONS, type MerchantCancelReason } from "@/util/api";
+import { MERCHANT_CANCEL_NOTE_MAX, WEB_CANCEL_REASONS, type MerchantCancelReason } from "@/util/api";
 import getApiErrorMessage from "@/util/errorHelper";
 
 type Props = {
@@ -50,7 +50,7 @@ export default function CancelOrderForm({ orderId, onSubmit, onClose }: Props) {
 
       <fieldset className={`${s.cancelReasons}${invalidClass(errors.reason)}`} {...invalidProps(reasonId, errors.reason)}>
         <legend className={styles.formLabel}>Why are you cancelling?</legend>
-        {MERCHANT_CANCEL_REASONS.map((r) => (
+        {WEB_CANCEL_REASONS.map((r) => (
           <label key={r.key} className={s.cancelReason}>
             <input
               type="radio"

@@ -329,3 +329,51 @@
   opacity: 0.6;
   cursor: wait;
 }
+
+/* Proof photos and disputes (ORDER_PROOF_PHOTOS_PLAN.md) */
+.flag {
+  margin-left: 4px;
+  background: #fdecea;
+  color: #b42318;
+}
+
+.proofGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.flagList {
+  display: block;
+  margin-top: 2px;
+  color: #b42318;
+  font-weight: 600;
+}
+
+.decisionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.releaseButton {
+  padding: 8px 14px;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.releaseButton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.releaseButton:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}

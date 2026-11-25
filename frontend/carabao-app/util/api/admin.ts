@@ -31,6 +31,9 @@ export type MerchantApplication = {
   first_name: string | null;
   middle_name: string | null;
   suffix: string | null;
+  sex: string | null;
+  /** YYYY-MM-DD. */
+  birth_date: string | null;
   rep_last_name: string | null;
   rep_first_name: string | null;
   rep_middle_name: string | null;
@@ -428,6 +431,22 @@ export type AdminOrderSummary = {
   buyer_name: string | null;
   buyer_email: string | null;
   shipment_id: number | null;
+  /** ORDER_PROOF_PHOTOS_PLAN.md: a drop-off or failed drop-off photo has a flag. */
+  delivery_flagged?: boolean;
+  /** The buyer disputes the delivery and no admin decided yet. */
+  dispute_open?: boolean;
+};
+
+export type AdminProofKind = 'packing' | 'dropoff' | 'attempt';
+
+export type AdminProofPhoto = {
+  kind: AdminProofKind;
+  received_at: string;
+  /** Metres from the phone to the buyer pin; null without GPS (and for packing). */
+  distance_m: number | null;
+  flags: string[];
+  /** The retention sweep deleted the image; the record stays. */
+  deleted: boolean;
 };
 
 export type AdminOrderDetail = AdminOrderSummary & {
@@ -456,7 +475,13 @@ export type AdminOrderDetail = AdminOrderSummary & {
     delivered_at: string | null;
     delivery_confirmed_by: string | null;
     cancel_reason?: string | null;
+    delivery_buyer_confirmed_at?: string | null;
+    dispute_until?: string | null;
+    delivery_disputed_at?: string | null;
+    dispute_resolution?: 'release' | 'refund' | null;
+    dispute_resolved_at?: string | null;
   };
+  proof_photos?: AdminProofPhoto[];
 };
 
 export type AdminOrderFilters = {
@@ -465,6 +490,7 @@ export type AdminOrderFilters = {
   payment_status?: AdminPaymentStatus;
   date_from?: string; // YYYY-MM-DD
   date_to?: string; // YYYY-MM-DD, inclusive
+  delivery?: 'flagged' | 'disputed';
 };
 
 export const fetchAdminOrders = async (
@@ -486,6 +512,24 @@ export const fetchAdminOrder = async (orderId: number): Promise<AdminOrderDetail
 // CF-0045: cancel an order the farm cannot complete; a paid order goes to the refund queue.
 export const cancelAdminOrder = async (orderId: number, reason: string): Promise<AdminOrderDetail> => {
   const res = await apiClient.post<AdminOrderDetail>(`/admin/orders/${orderId}/cancel`, { reason });
+  return res.data;
+};
+
+export const fetchAdminProofPhoto = async (orderId: number, kind: AdminProofKind): Promise<Blob> => {
+  const res = await apiClient.get<Blob>(`/admin/orders/${orderId}/proof/${kind}`, { responseType: 'blob' });
+  return res.data;
+};
+
+/** Decide a disputed merchant-set delivery: release pays the farm, refund sends it to the refund queue. */
+export const decideAdminDispute = async (
+  orderId: number,
+  decision: 'release' | 'refund',
+  note?: string,
+): Promise<AdminOrderDetail> => {
+  const res = await apiClient.post<AdminOrderDetail>(`/admin/orders/${orderId}/dispute`, {
+    decision,
+    note: note || null,
+  });
   return res.data;
 };
 

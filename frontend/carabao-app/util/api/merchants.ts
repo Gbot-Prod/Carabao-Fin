@@ -59,6 +59,8 @@ export const SELLER_TYPE_LABELS: Record<SellerType, string> = {
 };
 export const NAME_SUFFIXES = ["Jr.", "Sr.", "II", "III", "IV", "V"] as const;
 export type NameSuffix = (typeof NAME_SUFFIXES)[number];
+/** As on the government ID (individual seller types). */
+export type Sex = "male" | "female";
 export type VatStatus = "vat_registered" | "non_vat";
 /** "now": the business information comes with this submit. "later": step 1 and the seller type only. */
 export type SubmitMode = "now" | "later";
@@ -77,6 +79,9 @@ export type MerchantOnboardingPayload = {
   first_name?: string;
   middle_name?: string;
   suffix?: NameSuffix | "";
+  sex?: Sex | "";
+  /** YYYY-MM-DD. */
+  birth_date?: string;
   rep_last_name?: string;
   rep_first_name?: string;
   rep_middle_name?: string;
@@ -569,6 +574,11 @@ export type MerchantOrder = {
   notes: string | null;
   /** Why it was cancelled, as the buyer was told. */
   cancel_reason?: string | null;
+  /**
+   * ORDER_PROOF_PHOTOS_PLAN.md: a packing photo (taken in the merchant app) is needed before
+   * an order ships, alone or on a route.
+   */
+  packing_photo?: boolean;
 };
 
 export const fetchMyMerchantOrders = async (): Promise<MerchantOrder[]> => {
@@ -587,9 +597,13 @@ export const MERCHANT_CANCEL_REASONS = [
   { key: "quality", label: "Produce didn't meet quality standards" },
   { key: "cannot_deliver", label: "Can't deliver to this address or date" },
   { key: "buyer_request", label: "The buyer asked to cancel" },
+  { key: "buyer_not_home", label: "The buyer was not at the address" },
   { key: "other", label: "Other" },
 ] as const;
 export type MerchantCancelReason = (typeof MERCHANT_CANCEL_REASONS)[number]["key"];
+// Backend ATTEMPT_ONLY_CANCEL_REASONS: only the merchant app sends these, with a failed
+// drop-off photo (ORDER_PROOF_PHOTOS_PLAN.md). The web cancel form does not offer them.
+export const WEB_CANCEL_REASONS = MERCHANT_CANCEL_REASONS.filter((r) => r.key !== "buyer_not_home");
 export const MERCHANT_CANCEL_NOTE_MAX = 300;
 
 /** Cancel with the reason the buyer is told; "other" needs a note. */

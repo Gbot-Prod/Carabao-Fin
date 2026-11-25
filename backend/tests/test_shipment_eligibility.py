@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import shipments
 from app.models.order import Order
+from app.models.order_proof_photo import OrderProofPhoto
 from app.models.shipment import Shipment
 from app.models.user import User
 
@@ -19,7 +20,7 @@ def _client(db, merchant) -> TestClient:
     return TestClient(app)
 
 
-def _order(db, merchant, buyer, status, shipment_id=None):
+def _order(db, merchant, buyer, status, shipment_id=None, packed=True):
     user, _ = buyer
     order = Order(
         user_id=user.id,
@@ -31,6 +32,19 @@ def _order(db, merchant, buyer, status, shipment_id=None):
         shipment_id=shipment_id,
     )
     db.add(order)
+    db.flush()
+    if packed:
+        # A route takes only orders with a packing photo (order_proof).
+        db.add(
+            OrderProofPhoto(
+                order_id=order.id,
+                kind="packing",
+                object_key=f"proof/{order.id}/packing/x.jpg",
+                sha256=f"{order.id:064x}",
+                content_type="image/jpeg",
+                flags=[],
+            )
+        )
     db.commit()
     return order
 

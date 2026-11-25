@@ -82,6 +82,11 @@ class MerchantApplication(Base):
     first_name = Column(String(80), nullable=True)
     middle_name = Column(String(80), nullable=True)
     suffix = Column(String(10), nullable=True)
+    # male | female, and the ISO birth date (encrypted), as on the government
+    # ID. Individual seller types only; the admin uses them in the DA RSBSA
+    # Finder.
+    sex = Column(String(10), nullable=True)
+    birth_date = Column(EncryptedString("birth_date"), nullable=True)
     # A corporation's authorized representative (their government ID).
     rep_last_name = Column(String(80), nullable=True)
     rep_first_name = Column(String(80), nullable=True)

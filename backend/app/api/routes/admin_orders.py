@@ -1,14 +1,16 @@
 """Admin view of every order (A1) and the refund queue (A2)."""
 
 from datetime import date, timedelta
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import and_, exists, not_
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import String, and_, cast, exists, not_
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_db
 from app.api.routes.admin import _require_admin
 from app.models.order import Order
+from app.models.order_proof_photo import PROOF_KINDS, OrderProofPhoto
 from app.models.statuses import OrderStatus, PaymentStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
@@ -18,12 +20,14 @@ from app.schemas.admin_order import (
     AdminOrderShipment,
     AdminOrderSummary,
     AdminOrderTransaction,
+    AdminProofPhoto,
     AdminRefund,
     CancelOrderPayload,
+    DisputeDecisionPayload,
     RecordRefundPayload,
 )
 from app.schemas.pagination import MAX_ID, MAX_PAGE, Page
-from app.services import audit_log
+from app.services import audit_log, delivery_dispute, order_proof, rate_limit
 from app.services.order_status import (
     ACTIVE_ORDER_STATUSES,
     PaymentInProgress,
@@ -59,11 +63,33 @@ def _payment_status_clause(wanted: PaymentStatus):
     return and_(none_landed, Order.status != OrderStatus.PENDING)
 
 
+# A drop-off or failed drop-off photo with at least one flag. ``flags`` is a
+# JSON list, stored as "[]" when empty (SQLite and Postgres alike).
+_FLAGGED_PHOTO = exists().where(
+    OrderProofPhoto.order_id == Order.id,
+    OrderProofPhoto.kind.in_((order_proof.DROPOFF, order_proof.ATTEMPT)),
+    cast(OrderProofPhoto.flags, String) != "[]",
+)
+_DISPUTE_OPEN = and_(
+    Order.delivery_disputed_at.isnot(None), Order.dispute_resolution.is_(None)
+)
+
+
+def _flagged_ids(db: Session, order_ids: list[int]) -> set[int]:
+    if not order_ids:
+        return set()
+    rows = db.query(OrderProofPhoto.order_id, OrderProofPhoto.flags).filter(
+        OrderProofPhoto.order_id.in_(order_ids),
+        OrderProofPhoto.kind.in_((order_proof.DROPOFF, order_proof.ATTEMPT)),
+    )
+    return {order_id for order_id, flags in rows if flags}
+
+
 def _buyer_name(user: User | None) -> str | None:
     return (user.name or None) if user is not None else None
 
 
-def _summary_fields(order: Order) -> dict:
+def _summary_fields(order: Order, flagged: bool = False) -> dict:
     return {
         "id": order.id,
         "status": order.status,
@@ -79,6 +105,8 @@ def _summary_fields(order: Order) -> dict:
         "buyer_name": _buyer_name(order.user),
         "buyer_email": order.user.email if order.user else None,
         "shipment_id": order.shipment_id,
+        "delivery_flagged": flagged,
+        "dispute_open": delivery_dispute.is_open(order),
     }
 
 
@@ -89,6 +117,9 @@ def list_all_orders(
     payment: PaymentStatus | None = Query(None, alias="payment_status"),
     date_from: date | None = None,
     date_to: date | None = None,
+    # ORDER_PROOF_PHOTOS_PLAN.md: "flagged" (a drop-off or failed drop-off
+    # photo has a flag) or "disputed" (the buyer disputes it; no decision yet).
+    delivery: Literal["flagged", "disputed"] | None = None,
     page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -106,6 +137,10 @@ def list_all_orders(
         q = q.filter(Order.ordered_at >= ph_day_start(date_from))
     if date_to is not None:
         q = q.filter(Order.ordered_at < ph_day_start(date_to + timedelta(days=1)))
+    if delivery == "flagged":
+        q = q.filter(_FLAGGED_PHOTO)
+    elif delivery == "disputed":
+        q = q.filter(_DISPUTE_OPEN)
 
     total = q.count()
     orders = (
@@ -119,7 +154,8 @@ def list_all_orders(
         .limit(page_size)
         .all()
     )
-    items = [AdminOrderSummary(**_summary_fields(o)) for o in orders]
+    flagged = _flagged_ids(db, [o.id for o in orders])
+    items = [AdminOrderSummary(**_summary_fields(o, o.id in flagged)) for o in orders]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
@@ -132,7 +168,50 @@ def get_order_detail(
     order = db.get(Order, order_id)
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
-    return _detail_view(order)
+    return _detail_view(db, order)
+
+
+@router.get("/admin/orders/{order_id}/proof/{kind}")
+def get_order_proof_photo(
+    order_id: int,
+    kind: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """A proof photo of any order (image bytes)."""
+    if kind not in PROOF_KINDS:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    rate_limit.enforce_action(db, "proof_view", str(admin.id))
+    row = order_proof.get_photo(db, order_id, kind)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    return Response(
+        content=order_proof.read_photo(row),
+        media_type=row.content_type,
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+@router.post("/admin/orders/{order_id}/dispute", response_model=AdminOrderDetail)
+def decide_delivery_dispute(
+    order_id: int,
+    payload: DisputeDecisionPayload,
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """Decide a disputed merchant-set delivery: ``release`` pays the merchant,
+    ``refund`` moves the paid money to the refund queue (/admin/refunds)."""
+    order = db.query(Order).filter(Order.id == order_id).with_for_update().first()
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    note = (payload.note or "").strip() or None
+    try:
+        delivery_dispute.resolve_dispute(db, order, admin, payload.decision, note)
+    except delivery_dispute.DisputeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    db.commit()
+    db.refresh(order)
+    return _detail_view(db, order)
 
 
 @router.post("/admin/orders/{order_id}/cancel", response_model=AdminOrderDetail)
@@ -169,13 +248,35 @@ def cancel_order_as_admin(
     )
     db.commit()
     db.refresh(order)
-    return _detail_view(order)
+    return _detail_view(db, order)
 
 
-def _detail_view(order: Order) -> AdminOrderDetail:
+def _proof_photos(db: Session, order_id: int) -> list[AdminProofPhoto]:
+    rows = (
+        db.query(OrderProofPhoto)
+        .filter(OrderProofPhoto.order_id == order_id)
+        .order_by(OrderProofPhoto.received_at, OrderProofPhoto.id)
+        .all()
+    )
+    return [
+        AdminProofPhoto(
+            kind=row.kind,
+            received_at=row.received_at,
+            distance_m=row.distance_m,
+            flags=list(row.flags or []),
+            deleted=row.object_key is None,
+        )
+        for row in rows
+    ]
+
+
+def _detail_view(db: Session, order: Order) -> AdminOrderDetail:
     shipment = order.shipment
+    photos = _proof_photos(db, order.id)
+    flagged = any(p.flags for p in photos if p.kind != order_proof.PACKING)
     return AdminOrderDetail(
-        **_summary_fields(order),
+        **_summary_fields(order, flagged),
+        proof_photos=photos,
         items=[i for i in (order.items or []) if isinstance(i, dict)],
         notes=order.notes,
         transactions=[
@@ -213,6 +314,11 @@ def _detail_view(order: Order) -> AdminOrderDetail:
             delivered_at=order.delivered_at,
             delivery_confirmed_by=order.delivery_confirmed_by,
             cancel_reason=order.cancel_reason,
+            delivery_buyer_confirmed_at=order.delivery_buyer_confirmed_at,
+            dispute_until=delivery_dispute.dispute_until(order),
+            delivery_disputed_at=order.delivery_disputed_at,
+            dispute_resolution=order.dispute_resolution,
+            dispute_resolved_at=order.dispute_resolved_at,
         ),
     )
 

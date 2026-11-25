@@ -78,6 +78,16 @@ class OrderDetailResponse(CurrentOrderResponse):
     review: ReviewResponse | None = None
     can_review: bool = False
     review_deadline: datetime | None = None
+    # ORDER_PROOF_PHOTOS_PLAN.md: the proof photos the buyer may see
+    # (packing, dropoff); GET /orders/me/{id}/proof/{kind} serves each one.
+    proof_photos: list[str] = []
+    # A merchant-set delivery: the buyer can tap "I did not get this" until
+    # dispute_until, if they did not confirm it.
+    dispute_until: datetime | None = None
+    can_dispute: bool = False
+    delivery_buyer_confirmed_at: datetime | None = None
+    delivery_disputed_at: datetime | None = None
+    dispute_resolution: str | None = None
 
 
 class PlaceOrderRequest(BaseModel):
@@ -112,9 +122,9 @@ class PlaceOrderRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # Item 6: no control, zero-width or bidi characters; one space between words.
-    _one_line = field_validator(
-        "delivery_address", "delivery_region", mode="before"
-    )(one_line)
+    _one_line = field_validator("delivery_address", "delivery_region", mode="before")(
+        one_line
+    )
 
 
 class VoucherPreviewRequest(BaseModel):

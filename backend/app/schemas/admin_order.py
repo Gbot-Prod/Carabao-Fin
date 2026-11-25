@@ -22,6 +22,10 @@ class AdminOrderSummary(BaseModel):
     buyer_name: str | None
     buyer_email: str | None
     shipment_id: int | None
+    # ORDER_PROOF_PHOTOS_PLAN.md: a drop-off or failed drop-off photo has a
+    # flag; the buyer disputes the delivery and no admin decided yet.
+    delivery_flagged: bool = False
+    dispute_open: bool = False
 
 
 class AdminOrderTransaction(BaseModel):
@@ -52,10 +56,29 @@ class AdminOrderDelivery(BaseModel):
     time_of_arrival: datetime | None
     shipped_at: datetime | None
     delivered_at: datetime | None
-    # Who confirmed delivery: buyer | auto | legacy (None while undelivered).
+    # Who confirmed delivery: buyer | auto | merchant (drop-off photo) | legacy
+    # (None while undelivered).
     delivery_confirmed_by: str | None
     # Why it was cancelled, as the buyer was told; None otherwise.
     cancel_reason: str | None = None
+    # A merchant-set delivery (ORDER_PROOF_PHOTOS_PLAN.md).
+    delivery_buyer_confirmed_at: datetime | None = None
+    dispute_until: datetime | None = None
+    delivery_disputed_at: datetime | None = None
+    dispute_resolution: str | None = None
+    dispute_resolved_at: datetime | None = None
+
+
+class AdminProofPhoto(BaseModel):
+    """One proof photo; GET /admin/orders/{id}/proof/{kind} serves the image."""
+
+    kind: str
+    received_at: datetime
+    # Metres from the phone to the buyer pin; None without GPS (and packing).
+    distance_m: int | None
+    flags: list[str]
+    # The retention sweep deleted the image; the record stays.
+    deleted: bool
 
 
 class AdminOrderDetail(AdminOrderSummary):
@@ -64,6 +87,7 @@ class AdminOrderDetail(AdminOrderSummary):
     transactions: list[AdminOrderTransaction]
     shipment: AdminOrderShipment | None
     delivery: AdminOrderDelivery
+    proof_photos: list[AdminProofPhoto] = []
 
 
 class CancelOrderPayload(BaseModel):
@@ -72,6 +96,15 @@ class CancelOrderPayload(BaseModel):
     model_config = {"extra": "forbid"}
 
     reason: str = Field(min_length=3, max_length=300)
+
+
+class DisputeDecisionPayload(BaseModel):
+    """The admin decision on a disputed merchant-set delivery."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    decision: Literal["release", "refund"]
+    note: str | None = Field(default=None, max_length=500)
 
 
 RefundMethod = Literal["paymongo", "gcash", "maya", "bank_transfer", "cash"]

@@ -17,6 +17,7 @@ import getApiErrorMessage from "@/util/errorHelper";
 import styles from "./page.module.css";
 import ReviewChecklist, { initialTicks, itemsToConfirm, type DocumentKind } from "./ReviewChecklist";
 import SelfieCompare from "./SelfieCompare";
+import RsbsaFinder from "./RsbsaFinder";
 import { ADMIN_LIST_LIMIT, ADMIN_LIST_MAX, mayHaveMore, mergeById } from "@/lib/admin-window";
 
 // CF-0067: always load every application waiting for a decision, and the
@@ -268,7 +269,11 @@ function ApplicationCard({
           <div className={styles.grid}>
             <Field label="Seller Type" value={app.seller_type ? SELLER_TYPE_LABELS[app.seller_type] ?? app.seller_type : null} />
             {(app.seller_type === "individual_farmer" || app.seller_type === "sole_proprietor") && (
-              <Field label="Legal Name" value={personName(app.first_name, app.middle_name, app.last_name, app.suffix)} />
+              <>
+                <Field label="Legal Name" value={personName(app.first_name, app.middle_name, app.last_name, app.suffix)} />
+                <Field label="Sex" value={app.sex ? app.sex[0].toUpperCase() + app.sex.slice(1) : null} />
+                <Field label="Birth Date" value={app.birth_date} />
+              </>
             )}
             {(app.seller_type === "corporation" || app.seller_type === "cooperative") && (
               <Field label="Registered Name" value={app.company_name} />
@@ -326,6 +331,8 @@ function ApplicationCard({
               <span className={styles.actionError}>{documentError}</span>
             )}
           </div>
+
+          <RsbsaFinder app={app} />
 
           <SelfieCompare app={app} onOpenGovId={() => void handleViewDocument("govId")} />
 

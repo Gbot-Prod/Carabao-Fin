@@ -66,8 +66,9 @@ def test_cancel_processing_order_restores_stock(db, merchant, buyer):
 @pytest.mark.parametrize("status", ["shipped", "out_for_delivery"])
 def test_cancel_after_shipping_does_not_restore_stock(db, merchant, buyer, status):
     order, produce, txn = _setup(db, merchant, buyer, status)
+    # From out_for_delivery the attempt-cancel endpoint stores the photo first.
     order_status.apply_merchant_transition(
-        order, "cancelled", db, cancel_reason="Out of stock"
+        order, "cancelled", db, cancel_reason="Out of stock", photo_checked=True
     )
     db.commit()
     db.refresh(produce)

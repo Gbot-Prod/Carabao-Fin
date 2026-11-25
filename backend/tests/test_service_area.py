@@ -136,6 +136,8 @@ def test_onboarding_outside_luzon_is_rejected(db, buyer):  # noqa: F811
         "merchant_name": "Cebu Farm",
         "last_name": "Dela Cruz",
         "first_name": "Juan",
+        "sex": "male",
+        "birth_date": "1980-05-01",
         "small_agri_producer": True,
         "terms_accepted": True,
         "terms_version": "May 21, 2026",
