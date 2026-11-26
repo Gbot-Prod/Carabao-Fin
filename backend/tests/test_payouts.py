@@ -8,9 +8,11 @@ PayMongo reports back, and a failed batch is resent rather than rebuilt.
 import hashlib
 import hmac
 import json
+import re
 import time
 from datetime import UTC, datetime
 from typing import Any
+from unittest.mock import ANY
 
 import pytest
 from fastapi import FastAPI
@@ -246,11 +248,14 @@ def test_send_makes_one_transfer_of_net_amount(db, merchant, buyer, transfers): 
             },
             # GCash refuses InstaPay from PayMongo wallets (AC06).
             "provider": "pesonet",
-            "reference_number": f"CARABAO-PAYOUT-{batch['id']}-1",
+            "reference_number": ANY,
             "description": f"Carabao payout #{batch['id']}",
             "metadata": {"payout_batch_id": str(batch["id"])},
         }
     ]
+
+    reference = transfers.calls[0]["reference_number"]
+    assert re.fullmatch(rf"CARABAO-PAYOUT-{batch['id']}-1-[0-9A-F]{{8}}", reference)
 
     # A second click while the transfer is in flight must not send again.
     again = client.patch(f"/admin/batches/{batch['id']}/release")
@@ -276,7 +281,9 @@ def test_rejected_transfer_fails_and_can_be_resent(db, merchant, buyer, transfer
     assert resent["status"] == PayoutStatus.PROCESSING
     assert resent["attempts"] == 2
     assert resent["failure_reason"] is None
-    assert transfers.calls[-1]["reference_number"].endswith("-2")
+    first, second = (c["reference_number"] for c in transfers.calls)
+    assert second.startswith(f"CARABAO-PAYOUT-{batch['id']}-2-")
+    assert first != second
 
 
 def test_unknown_outcome_stays_processing(db, merchant, buyer, transfers):  # noqa: F811
@@ -318,6 +325,19 @@ def _post_event(client, event_type: str, transfer: dict):
     )
 
 
+def test_older_transfer_for_reused_reference_fails(db, merchant, buyer, transfers):  # noqa: F811
+    batch = _requested_batch(db, merchant, buyer)
+    transfers.result = {"id": "tr_old", "status": "succeeded", "created_at": 1762905600}
+
+    resp = _admin_client(db).patch(f"/admin/batches/{batch['id']}/release")
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == PayoutStatus.FAILED
+    stored = db.get(PayoutBatch, batch["id"])
+    assert stored.released_at is None
+    assert stored.paymongo_transfer_id is None
+
+
 def test_webhook_releases_batch_by_reference(db, merchant, buyer, transfers):  # noqa: F811
     batch = _requested_batch(db, merchant, buyer)
     transfers.result = paymongo.TransferOutcomeUnknown("timeout")  # no transfer id
@@ -332,7 +352,9 @@ def test_webhook_releases_batch_by_reference(db, merchant, buyer, transfers):  #
             "attributes": {
                 "transfer_id": "tr_9",
                 "status": "succeeded",
-                "reference_number": f"CARABAO-PAYOUT-{batch['id']}-1",
+                "reference_number": db.get(
+                    PayoutBatch, batch["id"]
+                ).paymongo_reference,
                 "provider_reference_number": "INSTAPAY123",
             },
         },

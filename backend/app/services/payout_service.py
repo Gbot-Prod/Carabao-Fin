@@ -18,6 +18,7 @@ SCA-0027). Revisit if the ruling is reversed on appeal.
 import logging
 import os
 import re
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -359,14 +360,20 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
     # Claim the batch before any money moves, so a second click (or a crash
     # mid-call) can never send it twice.
     batch.attempts = (batch.attempts or 0) + 1
-    batch.paymongo_reference = f"CARABAO-PAYOUT-{batch.id}-{batch.attempts}"
+    # The random part keeps the reference unique even when batch ids start
+    # again (a database reset). PayMongo returns its earlier transfer for a
+    # reused reference instead of sending a new one.
+    batch.paymongo_reference = (
+        f"CARABAO-PAYOUT-{batch.id}-{batch.attempts}-{secrets.token_hex(4).upper()}"
+    )
     batch.paymongo_transfer_id = None
     batch.provider_reference = None
     batch.failure_reason = None
     batch.transfer_fee = fee
     batch.net_amount = net
     batch.transfer_provider = provider
-    batch.sent_at = datetime.now(UTC)
+    sent_at = datetime.now(UTC)
+    batch.sent_at = sent_at
     batch.status = PayoutStatus.PROCESSING
     if notes:
         batch.notes = notes
@@ -399,6 +406,20 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
         db.commit()
         return batch
 
+    created = _transfer_created_at(transfer)
+    if created is not None and created < sent_at - _OLD_TRANSFER_SLACK:
+        # Backstop: an old transfer came back, so nothing new was sent.
+        logger.error(
+            "Payout batch %s got back older transfer %s", batch.id, transfer.get("id")
+        )
+        _mark_failed(
+            batch,
+            "PayMongo returned an older transfer for this reference. No money "
+            "moved; send it again.",
+        )
+        db.commit()
+        return batch
+
     batch.paymongo_transfer_id = transfer.get("id")
     apply_transfer_status(
         batch,
@@ -413,6 +434,23 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
         transfer.get("status"),
     )
     return batch
+
+
+_OLD_TRANSFER_SLACK = timedelta(minutes=10)  # allows for clock difference
+
+
+def _transfer_created_at(transfer: dict[str, Any]) -> datetime | None:
+    """PayMongo's created_at as an aware datetime (Unix seconds or ISO 8601)."""
+    value = transfer.get("created_at")
+    try:
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            return datetime.fromtimestamp(value, UTC)
+        if isinstance(value, str) and value:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    except (ValueError, OverflowError, OSError):
+        return None
+    return None
 
 
 def apply_transfer_status(
