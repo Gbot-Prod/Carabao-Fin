@@ -1336,6 +1336,8 @@ export default function MerchantOnboardingPage() {
                         <a href={helpUrl("/terms")} target="_blank" rel="noopener">Terms of Service</a>{" "}
                         and the{" "}
                         <a href={helpUrl("/privacy")} target="_blank" rel="noopener">Data Privacy Policy</a>.
+                        {" "}I agree that my RSBSA document, government ID, and BIR Form 2303 are sent to
+                        Google Cloud Vision to read the text on them for the review of this application.
                       </span>
                     </label>
                     <FieldError id="merchantonboarding-terms" message={fieldErrors.terms_accepted} />

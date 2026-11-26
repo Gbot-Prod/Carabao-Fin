@@ -2,11 +2,11 @@ import styles from '../page.module.css';
 import { SUPPORT_EMAIL } from '../sections';
 
 // DRAFT privacy policy written from what the app actually collects and which
-// processors it uses (PayMongo, Resend, Semaphore, Mapbox). Have it reviewed
+// processors it uses (PayMongo, Resend, Semaphore, Mapbox, Google Cloud Vision). Have it reviewed
 // for Data Privacy Act (RA 10173) compliance before relying on it.
 // If it grows or is needed at sign-up too, move it to components/ like TermsOfServiceContent.
 
-export const PRIVACY_EFFECTIVE_DATE = 'May 21, 2026';
+export const PRIVACY_EFFECTIVE_DATE = 'November 26, 2026';
 
 export default function PrivacyPolicyPanel() {
   return (
@@ -25,6 +25,11 @@ export default function PrivacyPolicyPanel() {
         <li><strong>Delivery details:</strong> address, barangay, city, province, postal code, and an optional map pin.</li>
         <li><strong>Orders:</strong> items purchased, order history, reviews, and messages with merchants.</li>
         <li><strong>Merchants:</strong> store details and payout information needed to send earnings.</li>
+        <li>
+          <strong>Merchant applications:</strong> your RSBSA document, government ID, selfie
+          with your ID, and (for registered businesses) BIR Form 2303, with the numbers you
+          enter on the form (such as your TIN and registration number).
+        </li>
         <li><strong>Technical data:</strong> sign-in sessions and basic logs used to keep the service secure.</li>
       </ul>
 
@@ -34,6 +39,11 @@ export default function PrivacyPolicyPanel() {
         <li>To process orders, payments, deliveries, and merchant payouts.</li>
         <li>To send order updates and account notices by email or SMS.</li>
         <li>To handle support requests, disputes, and refunds.</li>
+        <li>
+          To review merchant applications. We read the name and numbers on your documents and
+          compare them with what you entered, and we look for the same documents on other
+          applications. These checks only help our staff, who make every decision.
+        </li>
       </ul>
 
       <h3>4. Who we share it with</h3>
@@ -43,6 +53,12 @@ export default function PrivacyPolicyPanel() {
         <li>PayMongo, to process payments and payouts.</li>
         <li>Email and SMS providers, to deliver notifications and verification codes.</li>
         <li>Mapping providers, to show maps and plan delivery routes.</li>
+        <li>
+          Google Cloud Vision, to read the text on merchant application documents that are
+          photos or scans (RSBSA document, government ID, and BIR Form 2303). Your selfie is
+          not sent. We keep only the name and numbers we need for the checks, not the full
+          text that Google reads.
+        </li>
         <li>Authorities, when required by law.</li>
       </ul>
 
