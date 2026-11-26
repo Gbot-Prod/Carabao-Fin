@@ -6,7 +6,7 @@ The checker reads the table through a one-minute cache
 (``listing_checks.active_terms``); a change here clears this worker's cache.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
 from app.api.routes.admin import _require_admin
-from app.core.sql import ilike_contains
+from app.core.sql import SortOrder, ilike_contains, sort_clauses
 from app.models.prohibited_term import ProhibitedTerm
 from app.models.user import User
 from app.schemas.pagination import MAX_PAGE, Page
@@ -66,12 +66,28 @@ def _state(term: ProhibitedTerm) -> dict:
     }
 
 
+TermSort = Literal["term", "category", "severity", "language", "active", "added"]
+
+
+def _term_sort_column(sort: TermSort) -> Any:
+    return {
+        "term": ProhibitedTerm.term,
+        "category": ProhibitedTerm.category,
+        "severity": ProhibitedTerm.severity,
+        "language": ProhibitedTerm.language,
+        "active": ProhibitedTerm.is_active,
+        "added": ProhibitedTerm.created_at,
+    }[sort]
+
+
 @router.get("/admin/prohibited-terms", response_model=Page[TermResponse])
 def list_terms(
     category: Category | None = None,
     severity: Severity | None = None,
     active: bool | None = None,
     q: str | None = Query(None, max_length=120),
+    sort: TermSort = "term",
+    order: SortOrder = "asc",
     page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -88,7 +104,7 @@ def list_terms(
         query = query.filter(ilike_contains(ProhibitedTerm.term, q.strip()))
     total = query.count()
     rows = (
-        query.order_by(ProhibitedTerm.term)
+        query.order_by(*sort_clauses(_term_sort_column(sort), order, ProhibitedTerm.id))
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

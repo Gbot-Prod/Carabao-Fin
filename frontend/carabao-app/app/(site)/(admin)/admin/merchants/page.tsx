@@ -10,7 +10,6 @@ import {
   type AdminMerchantSort,
 } from "@/util/api/admin";
 import { SELLER_TYPE_LABELS } from "@/util/api/merchants";
-import Pagination from "@/components/Pagination/Pagination";
 import { appUrl } from "@/lib/urls";
 import SuspendControl from "../../SuspendControl";
 import styles from "./page.module.css";
@@ -19,8 +18,18 @@ import PageLoader from "@/components/PageLoader/PageLoader";
 import ExpandToggle, { formatDate, formatDateTime } from "../../ExpandToggle";
 import details from "../../details.module.css";
 import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
+import TablePanel, { TablePage, TableSearch, TableSort, type SortOption } from "../../TablePanel";
 
 const SORT_KEYS = ["id", "name", "location", "rating", "products", "delivery", "approved"] as const;
+const SORT_OPTIONS: SortOption<AdminMerchantSort>[] = [
+  { key: "id", label: "ID" },
+  { key: "name", label: "Name" },
+  { key: "location", label: "Location" },
+  { key: "delivery", label: "Delivery" },
+  { key: "rating", label: "Rating", firstOrder: "desc" },
+  { key: "products", label: "Products", firstOrder: "desc" },
+  { key: "approved", label: "Approval date", firstOrder: "desc" },
+];
 const COLUMNS = 11;
 
 /** Products shown in the shop preview before the "see all" link. */
@@ -47,9 +56,10 @@ function AdminMerchantsContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const q = searchParams.get("q")?.trim() ?? "";
   const { sort, order } = readSort<AdminMerchantSort>(searchParams, SORT_KEYS);
   const current: SortState<AdminMerchantSort> = { sort, order };
-  const key = `${sort ?? ""}|${order}|${page}`;
+  const key = `${q}|${sort ?? ""}|${order}|${page}`;
 
   const [merchants, setMerchants] = useState<AdminMerchant[]>([]);
   const [total, setTotal] = useState(0);
@@ -58,20 +68,22 @@ function AdminMerchantsContent() {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
-    fetchAdminMerchantsPage(page, sort ? { sort, order } : {})
+    fetchAdminMerchantsPage(page, { q: q || undefined, ...(sort ? { sort, order } : {}) })
       .then((res) => {
         setMerchants(res.items);
         setTotal(res.total);
         setError(null);
       })
       .catch(() => setError("Failed to load merchants."))
-      .finally(() => setLoadedKey(`${sort ?? ""}|${order}|${page}`));
-  }, [sort, order, page]);
+      .finally(() => setLoadedKey(`${q}|${sort ?? ""}|${order}|${page}`));
+  }, [q, sort, order, page]);
 
   const loading = loadedKey !== key;
 
-  const go = (next: { sort?: SortState<AdminMerchantSort>; page?: number }) => {
+  const go = (next: { q?: string; sort?: SortState<AdminMerchantSort>; page?: number }) => {
     const params = new URLSearchParams();
+    const nextQ = next.q ?? q;
+    if (nextQ) params.set("q", nextQ);
     writeSort(params, next.sort ?? current);
     if (next.page && next.page > 1) params.set("page", String(next.page));
     const qs = params.toString();
@@ -87,14 +99,24 @@ function AdminMerchantsContent() {
       return next;
     });
 
-  if (loading && merchants.length === 0) return <PageLoader label="Loading merchants…" />;
-  if (error) return <div className={styles.stateError}>{error}</div>;
+  const firstLoad = loading && merchants.length === 0 && !error;
 
   return (
-    <div className={styles.page}>
+    <TablePage>
       <PageHeader eyebrow="People" title="Merchants" count={total} description="Approved stores selling on Carabao." />
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
+      <TablePanel
+        sort={<TableSort options={SORT_OPTIONS} current={current} onSort={onSort} />}
+        search={<TableSearch applied={q} onSearch={(v) => go({ q: v, page: 1 })} placeholder="Store, city, owner email or #id" label="Search merchants" />}
+        message={
+          firstLoad
+            ? "Loading merchants…"
+            : (error ?? (merchants.length === 0 ? (q ? "No merchants match this search." : "No merchants yet.") : null))
+        }
+        messageTone={error ? "error" : undefined}
+        loading={loading}
+        pagination={{ page, pageSize: ADMIN_PAGE_SIZE, total, onPageChange: (p) => go({ page: p }) }}
+      >
+        <table>
           <thead>
             <tr>
               <th className={details.toggleCell} aria-label="Details" />
@@ -164,9 +186,8 @@ function AdminMerchantsContent() {
             })}
           </tbody>
         </table>
-      </div>
-      <Pagination page={page} pageSize={ADMIN_PAGE_SIZE} total={total} disabled={loading} onPageChange={(p) => go({ page: p })} />
-    </div>
+      </TablePanel>
+    </TablePage>
   );
 }
 

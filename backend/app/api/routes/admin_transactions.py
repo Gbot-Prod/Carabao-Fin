@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_db
 from app.api.routes.admin import _require_admin
 from app.core.csv_export import csv_lines
-from app.core.sql import ilike_contains
+from app.core.sql import SortOrder, ilike_contains, sort_clauses
 from app.models.merchant import Merchant
 from app.models.statuses import TransactionStatus
 from app.models.transaction import Transaction
@@ -50,6 +51,20 @@ CSV_COLUMNS = [
 ]
 
 
+TransactionSort = Literal[
+    "id",
+    "created",
+    "paid",
+    "order",
+    "buyer",
+    "merchant",
+    "status",
+    "amount",
+    "fee",
+    "share",
+]
+
+
 class TransactionFilters:
     """Query params shared by the list and the CSV export."""
 
@@ -60,12 +75,16 @@ class TransactionFilters:
         date_from: date | None = None,
         date_to: date | None = None,
         q: str | None = Query(None, max_length=200),
+        sort: TransactionSort = "created",
+        order: SortOrder = "desc",
     ):
         self.status = status
         self.merchant_id = merchant_id
         self.date_from = date_from
         self.date_to = date_to
         self.q = (q or "").strip() or None
+        self.sort = sort
+        self.order = order
 
 
 def _filtered(db: Session, f: TransactionFilters) -> SAQuery:
@@ -91,9 +110,11 @@ def _filtered(db: Session, f: TransactionFilters) -> SAQuery:
             ilike_contains(Transaction.paymongo_session_id, f.q),
             ilike_contains(Transaction.refund_reference, f.q),
             ilike_contains(User.email, f.q),
+            ilike_contains(User.name, f.q),
+            ilike_contains(Merchant.merchant_name, f.q),
         ]
         term = f.q.lstrip("#")
-        if term.isdigit():
+        if term.isdigit() and int(term) <= 2**31 - 1:
             clauses += [Transaction.id == int(term), Transaction.order_id == int(term)]
         q = q.filter(or_(*clauses))
     return q
@@ -129,8 +150,23 @@ def _row(
     )
 
 
-def _ordered(q: SAQuery) -> SAQuery:
-    return q.order_by(Transaction.created_at.desc(), Transaction.id.desc())
+def _sort_column(sort: TransactionSort) -> Any:
+    return {
+        "id": Transaction.id,
+        "created": Transaction.created_at,
+        "paid": Transaction.paid_at,
+        "order": Transaction.order_id,
+        "buyer": func.lower(func.coalesce(User.name, User.email)),
+        "merchant": func.lower(Merchant.merchant_name),
+        "status": Transaction.status,
+        "amount": Transaction.amount,
+        "fee": Transaction.platform_fee,
+        "share": Transaction.merchant_amount,
+    }[sort]
+
+
+def _ordered(q: SAQuery, f: TransactionFilters) -> SAQuery:
+    return q.order_by(*sort_clauses(_sort_column(f.sort), f.order, Transaction.id))
 
 
 @router.get("/admin/transactions", response_model=AdminTransactionPage)
@@ -148,7 +184,7 @@ def list_transactions(
         func.coalesce(func.sum(Transaction.platform_fee), 0),
         func.coalesce(func.sum(Transaction.merchant_amount), 0),
     ).one()
-    rows = _ordered(q).offset((page - 1) * page_size).limit(page_size).all()
+    rows = _ordered(q, filters).offset((page - 1) * page_size).limit(page_size).all()
     return AdminTransactionPage(
         items=[_row(*r) for r in rows],
         total=count,
@@ -196,7 +232,7 @@ def export_transactions(
 ):
     # Load everything before streaming: the request's DB session may close
     # before a lazily-consumed generator would finish reading from it.
-    rows = [_row(*r) for r in _ordered(_filtered(db, filters)).all()]
+    rows = [_row(*r) for r in _ordered(_filtered(db, filters), filters).all()]
     stamp = datetime.now(UTC).astimezone(PH_TZ).strftime("%Y%m%d-%H%M")
     return StreamingResponse(
         csv_lines(CSV_COLUMNS, _csv_rows(rows)),

@@ -10,6 +10,9 @@ admins and the merchant. An admin then decides:
   queue (/admin/refunds) lists it. The order stays delivered; its payment
   status shows the refund.
 
+While the dispute is open the farm can add its side (``set_merchant_note``),
+which the admin reads before deciding.
+
 A dispute after the window goes to support chat.
 """
 
@@ -26,6 +29,8 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.services import audit_log, notifications
 from app.services.payout_service import dispute_hours
+
+MERCHANT_NOTE_MAX = 1000
 
 RELEASE = "release"
 REFUND = "refund"
@@ -100,6 +105,29 @@ def open_dispute(db: Session, order: Order) -> None:
         "Payout for this order is on hold until Carabao checks the photos.",
         "/merchantDashboard",
     )
+
+
+def set_merchant_note(db: Session, order: Order, note: str) -> None:
+    """The farm's side of an open dispute; the caller commits. It can be
+    changed until an admin decides."""
+    note = note.strip()
+    if not note:
+        raise DisputeError(422, "Write what happened with this delivery.")
+    if len(note) > MERCHANT_NOTE_MAX:
+        raise DisputeError(422, f"Keep it under {MERCHANT_NOTE_MAX} characters.")
+    if not is_open(order):
+        raise DisputeError(409, "This dispute is already decided.")
+    first = order.dispute_merchant_note is None
+    order.dispute_merchant_note = note
+    order.dispute_merchant_noted_at = datetime.now(UTC)
+    if first:
+        notifications.notify_admins(
+            db,
+            notifications.DELIVERY_DISPUTED,
+            f"Farm responded: order {notifications.order_ref(order)}",
+            "The farm added its side of the disputed delivery.",
+            "/admin/disputes",
+        )
 
 
 def _paid_transactions(db: Session, order: Order) -> list[Transaction]:

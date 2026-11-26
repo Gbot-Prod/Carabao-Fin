@@ -45,7 +45,7 @@ test('every merchant page is served on merchant.<root>, not sent to the apex', (
 
 test('notification pages are merchant pages', () => {
   const pages = new Set<string>(Object.values(MERCHANT_PAGES));
-  for (const kind of ['new_order', 'chat_message', 'review_received', 'payout_released', 'payout_destination_changed']) {
+  for (const kind of ['new_order', 'chat_message', 'review_received', 'payout_released', 'payout_destination_changed', 'delivery_disputed']) {
     assert.ok(pages.has(merchantPageForNotification('/merchantDashboard', kind)!), kind);
   }
 });

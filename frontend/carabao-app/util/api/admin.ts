@@ -191,7 +191,7 @@ export type AdminUserRole = 'user' | 'admin';
 
 export const fetchAdminUsers = async (
   page = 1,
-  filters: { role?: AdminUserRole } & AdminSort<AdminUserSort> = {},
+  filters: { role?: AdminUserRole; q?: string } & AdminSort<AdminUserSort> = {},
   pageSize = ADMIN_PAGE_SIZE,
 ): Promise<Paginated<UserProfile>> => {
   const res = await apiClient.get<Paginated<UserProfile>>('/admin/users', {
@@ -232,7 +232,7 @@ export type AdminMerchantSort = 'id' | 'name' | 'location' | 'rating' | 'product
 
 export const fetchAdminMerchantsPage = async (
   page = 1,
-  sort: AdminSort<AdminMerchantSort> = {},
+  sort: { q?: string } & AdminSort<AdminMerchantSort> = {},
   pageSize = ADMIN_PAGE_SIZE,
 ): Promise<Paginated<AdminMerchant>> => {
   const res = await apiClient.get<Paginated<AdminMerchant>>('/admin/merchants', {
@@ -265,6 +265,24 @@ export const fetchAdminStats = async (): Promise<AdminStats> => {
 };
 
 /** Newest first, one window (CF-0067). */
+export type AdminPayoutSort = 'requested' | 'merchant' | 'orders' | 'amount' | 'status';
+/** "pending" covers requested and approved batches. */
+export type AdminPayoutFilter = 'pending' | 'processing' | 'released' | 'failed';
+export type AdminPayoutFilters = { status?: AdminPayoutFilter; q?: string } & AdminSort<AdminPayoutSort>;
+/** Totals over every batch (the KPI strip), whatever the table's filter. */
+export type AdminPayoutSummary = { waiting: number; owed: number; released: number };
+
+export const fetchAdminPayoutBatchesPage = async (
+  filters: AdminPayoutFilters,
+  page = 1,
+  pageSize = ADMIN_PAGE_SIZE,
+): Promise<Paginated<PayoutBatch> & { summary: AdminPayoutSummary }> => {
+  const res = await apiClient.get<Paginated<PayoutBatch> & { summary: AdminPayoutSummary }>('/admin/batches/page', {
+    params: { ...filters, page, page_size: pageSize },
+  });
+  return res.data;
+};
+
 export const fetchAdminPayoutBatches = async (status?: string, window: AdminListWindow = {}): Promise<PayoutBatch[]> => {
   const res = await apiClient.get<PayoutBatch[]>('/admin/batches', { params: { ...window, ...(status ? { status } : {}) } });
   return res.data;
@@ -475,11 +493,17 @@ export type AdminOrderDetail = AdminOrderSummary & {
     delivery_disputed_at?: string | null;
     dispute_resolution?: 'release' | 'refund' | null;
     dispute_resolved_at?: string | null;
+    /** The farm's side of the dispute. */
+    dispute_merchant_note?: string | null;
+    dispute_merchant_noted_at?: string | null;
   };
   proof_photos?: AdminProofPhoto[];
 };
 
-export type AdminOrderFilters = {
+export type AdminOrderSort = 'id' | 'placed' | 'buyer' | 'merchant' | 'status' | 'total';
+
+export type AdminOrderFilters = AdminSort<AdminOrderSort> & {
+  q?: string; // #order ID, buyer name or email, merchant name
   status?: AdminOrderStatus;
   merchant_id?: number;
   payment_status?: AdminPaymentStatus;
@@ -559,12 +583,24 @@ export type AdminTransactionTotals = {
   merchant_amount: number;
 };
 
-export type AdminTransactionFilters = {
+export type AdminTransactionSort =
+  | 'id'
+  | 'created'
+  | 'paid'
+  | 'order'
+  | 'buyer'
+  | 'merchant'
+  | 'status'
+  | 'amount'
+  | 'fee'
+  | 'share';
+
+export type AdminTransactionFilters = AdminSort<AdminTransactionSort> & {
   status?: TransactionStatus;
   merchant_id?: number;
   date_from?: string; // YYYY-MM-DD, on created_at
   date_to?: string; // YYYY-MM-DD, inclusive
-  q?: string; // PayMongo ID, #order/transaction ID, buyer email, refund ref
+  q?: string; // PayMongo ID, #order/transaction ID, buyer, merchant, refund ref
 };
 
 export const fetchAdminTransactions = async (
@@ -625,12 +661,21 @@ export type AdminRefund = {
   refund_reference: string | null;
   refund_notes: string | null;
   refunded_at: string | null;
+  /** A refund sent through PayMongo: processing, unknown (no answer: check the dashboard) or failed. */
+  paymongo_refund_id?: string | null;
+  paymongo_refund_status?: 'processing' | 'unknown' | 'failed' | null;
+  refund_failure_reason?: string | null;
+  can_send_paymongo?: boolean;
 };
 
+export type AdminRefundSort = 'id' | 'order' | 'buyer' | 'merchant' | 'amount' | 'paid' | 'refunded';
+
+/** No sort: the queue oldest first, the refunded list newest refund first. */
 export const fetchAdminRefunds = async (
   status: 'refund_pending' | 'refunded' = 'refund_pending',
+  filters: { q?: string } & AdminSort<AdminRefundSort> = {},
 ): Promise<AdminRefund[]> => {
-  const res = await apiClient.get<AdminRefund[]>('/admin/refunds', { params: { status } });
+  const res = await apiClient.get<AdminRefund[]>('/admin/refunds', { params: { status, ...filters } });
   return res.data;
 };
 
@@ -639,6 +684,53 @@ export const recordRefund = async (
   payload: { method: RefundMethod; reference: string; notes?: string },
 ): Promise<AdminRefund> => {
   const res = await apiClient.post<AdminRefund>(`/admin/refunds/${transactionId}`, payload);
+  return res.data;
+};
+
+/** Refund the whole payment through PayMongo. Comes back processing, refunded or failed. */
+export const sendPaymongoRefund = async (transactionId: number): Promise<AdminRefund> => {
+  const res = await apiClient.post<AdminRefund>(`/admin/refunds/${transactionId}/paymongo`);
+  return res.data;
+};
+
+/** Ask PayMongo for a sent refund's status. */
+export const refreshPaymongoRefund = async (transactionId: number): Promise<AdminRefund> => {
+  const res = await apiClient.post<AdminRefund>(`/admin/refunds/${transactionId}/refresh`);
+  return res.data;
+};
+
+// ── Delivery disputes ────────────────────────────────────────────────────────
+
+export type AdminDispute = {
+  order_id: number;
+  order_ref: string;
+  order_status: string;
+  total_price: number;
+  buyer_name: string | null;
+  buyer_email: string | null;
+  merchant_id: number | null;
+  merchant_name: string | null;
+  delivered_at: string | null;
+  disputed_at: string;
+  merchant_note: string | null;
+  merchant_noted_at: string | null;
+  delivery_flagged: boolean;
+  resolution: 'release' | 'refund' | null;
+  resolved_at: string | null;
+};
+
+export type AdminDisputeSort = 'order' | 'buyer' | 'farm' | 'amount' | 'delivered' | 'disputed' | 'decided';
+
+/** No sort: open ones oldest first, decided ones newest decision first. */
+export const fetchAdminDisputes = async (
+  state: 'open' | 'decided',
+  page = 1,
+  pageSize = ADMIN_PAGE_SIZE,
+  filters: { q?: string } & AdminSort<AdminDisputeSort> = {},
+): Promise<Paginated<AdminDispute>> => {
+  const res = await apiClient.get<Paginated<AdminDispute>>('/admin/disputes', {
+    params: { state, page, page_size: pageSize, ...filters },
+  });
   return res.data;
 };
 
@@ -670,8 +762,10 @@ export type AuditLogEntry = {
 
 export const AUDIT_PAGE_SIZE = 50;
 
+export type AuditSort = 'when' | 'admin' | 'action' | 'target';
+
 export const fetchAuditLog = async (
-  filters: { action?: string },
+  filters: { action?: string; q?: string } & AdminSort<AuditSort>,
   page = 1,
   pageSize = AUDIT_PAGE_SIZE,
 ): Promise<Paginated<AuditLogEntry>> => {
@@ -771,15 +865,21 @@ export type PenaltyAccount = {
   owner_suspended: boolean;
 };
 
-export const fetchPenaltyAccounts = async (minPoints = 1): Promise<PenaltyAccount[]> => {
+export type PenaltyAccountSort = 'farm' | 'points' | 'listings' | 'state';
+export type PenaltySort = 'date' | 'farm' | 'listing' | 'reason' | 'points';
+
+export const fetchPenaltyAccounts = async (
+  filters: { q?: string } & AdminSort<PenaltyAccountSort> = {},
+  minPoints = 1,
+): Promise<PenaltyAccount[]> => {
   const res = await apiClient.get<PenaltyAccount[]>('/admin/penalties/accounts', {
-    params: { min_points: minPoints },
+    params: { min_points: minPoints, ...filters },
   });
   return res.data;
 };
 
 export const fetchPenalties = async (
-  filters: { merchant_id?: number; active?: boolean },
+  filters: { merchant_id?: number; active?: boolean; q?: string } & AdminSort<PenaltySort>,
   page = 1,
   pageSize = ADMIN_PAGE_SIZE,
 ): Promise<Paginated<AdminPenalty>> => {
@@ -808,8 +908,10 @@ export type ProhibitedTerm = {
   is_active: boolean;
 };
 
+export type TermSort = 'term' | 'category' | 'severity' | 'language' | 'active' | 'added';
+
 export const fetchProhibitedTerms = async (
-  filters: { category?: TermCategory; severity?: TermSeverity; active?: boolean; q?: string },
+  filters: { category?: TermCategory; severity?: TermSeverity; active?: boolean; q?: string } & AdminSort<TermSort>,
   page = 1,
   pageSize = 50,
 ): Promise<Paginated<ProhibitedTerm>> => {

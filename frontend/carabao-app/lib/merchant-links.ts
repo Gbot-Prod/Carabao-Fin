@@ -15,6 +15,8 @@ const PAGE_BY_KIND: Record<string, string> = {
   // Guardrails Phase 2: penalty points (services/listing_trust.py).
   listing_blocked: "/produce",
   listing_penalty_revoked: "/produce",
+  // A buyer disputes a delivery, or Carabao decided it (delivery_dispute.py).
+  delivery_disputed: "/disputes",
   // Submit later: "finish your business information" (backend setup_reminders.py).
   setup_reminder: "/onboarding?step=business",
 };
@@ -57,6 +59,7 @@ export const MERCHANT_PAGES = {
   routing: "/routing",
   earnings: "/earnings",
   reviews: "/reviews",
+  disputes: "/disputes",
   produce: "/produce",
   inventory: "/inventory",
   // The shop page and the store settings are one page (the old /settings

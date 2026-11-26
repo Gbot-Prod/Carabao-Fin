@@ -1,173 +1,49 @@
-.page {
-  padding: 28px 32px 40px;
-}
-
-/* ── KPI row ─────────────────────────────────── */
-
-.kpiRow {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-@media (max-width: 1024px) {
-  .kpiRow {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.kpiCard {
-  padding: 16px 20px;
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-md);
-  background: var(--bg-white);
-  box-shadow: var(--admin-card-shadow);
-}
-
-.kpiCardAlert {
-  border-color: #f5d48a;
-  background: #fffbf0;
-}
-
-.kpiLabel {
-  display: block;
-  margin: 0 0 4px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-subtle);
-}
-
-.kpiValue {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text-strong);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Table card ──────────────────────────────── */
-
-.tableCard {
-  background: var(--bg-white);
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--admin-card-shadow);
-  overflow: hidden;
-}
-
-.tableHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--green-border);
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.tableTitle {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-strong);
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.filterRow {
-  display: inline-flex;
-  padding: 3px;
-  gap: 2px;
-  border-radius: var(--radius-sm);
-  background: #e1e7e2;
-}
-
-.filterBtn {
-  padding: 5px 12px;
-  border: none;
-  border-radius: 6px;
-  background: none;
-  color: var(--text-subtle);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.filterBtnActive {
-  background: var(--bg-white);
-  color: var(--text-strong);
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgba(19, 46, 29, 0.12);
-}
-
 .table {
-  width: 100%;
-  border-collapse: collapse;
   min-width: 680px;
-}
-
-.table th {
-  text-align: left;
-  padding: 11px 20px;
-  background: #f4f7f5;
-  color: var(--text-subtle);
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  border-bottom: 1px solid var(--green-border);
-  white-space: nowrap;
-}
-
-.table td {
-  padding: 14px 20px;
-  color: var(--text-strong);
-  border-bottom: 1px solid #edf1ee;
-  vertical-align: middle;
-  font-size: 13px;
-}
-
-.table tr:last-child td {
-  border-bottom: none;
-}
-
-.table tr:hover td {
-  background: #f6f9f7;
 }
 
 .merchantName {
   font-weight: 500;
 }
 
-.merchantId {
+.merchantName,
+.amount {
+  margin: 0;
+}
+
+/* IDs keep a monospace face; other second lines (fee, account name) don't. */
+.merchantId,
+.subText {
+  margin: 3px 0 0;
   font-size: 11px;
+  line-height: 1.35;
   color: var(--text-faint);
-  font-family: monospace;
+}
+
+.merchantId {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.subText {
+  font-variant-numeric: tabular-nums;
+}
+
+.numCol {
+  text-align: right;
+}
+
+.table th.numCol {
+  text-align: right;
+}
+
+.nowrap,
+.actionCol {
+  white-space: nowrap;
 }
 
 .amount {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 640px) {
-  .page {
-    padding: 24px 16px;
-  }
-
-  .kpiRow {
-    grid-template-columns: 1fr;
-  }
-
-  .tableCard {
-    overflow-x: auto;
-  }
 }
 
 /* ── Status badges ───────────────────────────── */
@@ -244,37 +120,6 @@
   text-align: center;
   color: var(--text-faint);
   padding: 32px;
-}
-
-.state {
-  padding: 40px 24px;
-  border: 1px dashed #cdd8d0;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.55);
-  color: var(--text-subtle);
-  font-size: 14px;
-  text-align: center;
-}
-
-.stateError {
-  margin: 28px 32px;
-  padding: 16px 20px;
-  border: 1px solid #f5c2c2;
-  border-radius: var(--radius-md);
-  background: #fdf2f2;
-  color: var(--danger);
-  font-size: 14px;
-}
-
-.alertBadge {
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: var(--radius-pill);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-  background: #fdf1df;
-  color: #92400e;
 }
 
 .toast {
@@ -420,12 +265,6 @@
   gap: 10px;
 }
 
-.kpiHint {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin: 4px 0 0;
-}
-
 .linkBtn {
   background: none;
   border: none;
@@ -436,23 +275,13 @@
   cursor: pointer;
 }
 
-.filterBtn:hover {
-  color: var(--text-strong);
-}
-
 .releaseBtn:hover:not(:disabled) {
   background: var(--green-900);
 }
 
-.filterBtn:focus-visible,
 .releaseBtn:focus-visible,
 .secondaryBtn:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
 
-@media (max-width: 640px) {
-  .filterRow {
-    flex-wrap: wrap;
-  }
-}

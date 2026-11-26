@@ -1,20 +1,23 @@
-"""Admin view of every order (A1) and the refund queue (A2)."""
+"""Admin view of every order (A1), the refund queue (A2) and delivery disputes."""
 
 from datetime import date, timedelta
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import String, and_, cast, exists, not_
+from sqlalchemy import String, and_, cast, exists, func, not_, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.dependencies import get_db
-from app.api.routes.admin import _require_admin
+from app.api.routes.admin import _id_term, _require_admin
+from app.core.sql import SortOrder, ilike_contains, sort_clauses
+from app.models.merchant import Merchant
 from app.models.order import Order
 from app.models.order_proof_photo import PROOF_KINDS, OrderProofPhoto
 from app.models.statuses import OrderStatus, PaymentStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.schemas.admin_order import (
+    AdminDispute,
     AdminOrderDelivery,
     AdminOrderDetail,
     AdminOrderShipment,
@@ -26,8 +29,14 @@ from app.schemas.admin_order import (
     DisputeDecisionPayload,
     RecordRefundPayload,
 )
-from app.schemas.pagination import MAX_ID, MAX_PAGE, Page
-from app.services import audit_log, delivery_dispute, order_proof, rate_limit
+from app.schemas.pagination import MAX_FILTER_TEXT, MAX_ID, MAX_PAGE, Page
+from app.services import (
+    audit_log,
+    delivery_dispute,
+    notifications,
+    order_proof,
+    rate_limit,
+)
 from app.services.order_status import (
     ACTIVE_ORDER_STATUSES,
     PaymentInProgress,
@@ -35,7 +44,13 @@ from app.services.order_status import (
     payment_status,
 )
 from app.services.produce_freshness import ph_day_start
-from app.services.refund_service import RefundError, record_refund
+from app.services.refund_service import (
+    RefundError,
+    can_send_paymongo,
+    record_refund,
+    refresh_paymongo_refund,
+    send_paymongo_refund,
+)
 
 router = APIRouter(tags=["admin"])
 
@@ -73,6 +88,52 @@ _FLAGGED_PHOTO = exists().where(
 _DISPUTE_OPEN = and_(
     Order.delivery_disputed_at.isnot(None), Order.dispute_resolution.is_(None)
 )
+
+
+OrderSort = Literal["id", "placed", "buyer", "merchant", "status", "total"]
+
+
+def _buyer_col(column: Any) -> Any:
+    return (
+        select(column)
+        .where(User.id == Order.user_id)
+        .correlate(Order)
+        .scalar_subquery()
+    )
+
+
+def _merchant_name_of(owner: Any, merchant_id: Any) -> Any:
+    return (
+        select(Merchant.merchant_name)
+        .where(Merchant.id == merchant_id)
+        .correlate(owner)
+        .scalar_subquery()
+    )
+
+
+def _order_sort_column(sort: OrderSort) -> Any:
+    return {
+        "id": Order.id,
+        "placed": Order.ordered_at,
+        "buyer": func.lower(
+            func.coalesce(_buyer_col(User.name), _buyer_col(User.email))
+        ),
+        "merchant": func.lower(_merchant_name_of(Order, Order.merchant_id)),
+        "status": Order.status,
+        "total": Order.total_price,
+    }[sort]
+
+
+def _order_search(term: str) -> Any:
+    """#id, buyer name or email, or merchant name."""
+    matches = [
+        ilike_contains(_buyer_col(User.name), term),
+        ilike_contains(_buyer_col(User.email), term),
+        ilike_contains(_merchant_name_of(Order, Order.merchant_id), term),
+    ]
+    if (order_id := _id_term(term)) is not None:
+        matches.append(Order.id == order_id)
+    return or_(*matches)
 
 
 def _flagged_ids(db: Session, order_ids: list[int]) -> set[int]:
@@ -118,12 +179,18 @@ def list_all_orders(
     # ORDER_PROOF_PHOTOS_PLAN.md: "flagged" (a drop-off or failed drop-off
     # photo has a flag) or "disputed" (the buyer disputes it; no decision yet).
     delivery: Literal["flagged", "disputed"] | None = None,
+    search: str | None = Query(None, alias="q", max_length=MAX_FILTER_TEXT),
+    sort: OrderSort = "placed",
+    order: SortOrder = "desc",
     page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
     q = db.query(Order)
+    term = (search or "").strip()
+    if term:
+        q = q.filter(_order_search(term))
     if status is not None:
         q = q.filter(Order.status == status)
     if merchant_id is not None:
@@ -147,7 +214,7 @@ def list_all_orders(
             joinedload(Order.user),
             joinedload(Order.transactions),
         )
-        .order_by(Order.ordered_at.desc(), Order.id.desc())
+        .order_by(*sort_clauses(_order_sort_column(sort), order, Order.id))
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -315,6 +382,8 @@ def _detail_view(db: Session, order: Order) -> AdminOrderDetail:
             delivery_disputed_at=order.delivery_disputed_at,
             dispute_resolution=order.dispute_resolution,
             dispute_resolved_at=order.dispute_resolved_at,
+            dispute_merchant_note=order.dispute_merchant_note,
+            dispute_merchant_noted_at=order.dispute_merchant_noted_at,
         ),
     )
 
@@ -337,12 +406,46 @@ def _refund_view(txn: Transaction) -> AdminRefund:
         refund_reference=txn.refund_reference,
         refund_notes=txn.refund_notes,
         refunded_at=txn.refunded_at,
+        paymongo_refund_id=txn.paymongo_refund_id,
+        paymongo_refund_status=txn.paymongo_refund_status,
+        refund_failure_reason=txn.refund_failure_reason,
+        can_send_paymongo=can_send_paymongo(txn),
     )
+
+
+RefundSort = Literal["id", "order", "buyer", "merchant", "amount", "paid", "refunded"]
+
+
+def _txn_buyer_col(column: Any) -> Any:
+    return (
+        select(column)
+        .where(User.id == Transaction.user_id)
+        .correlate(Transaction)
+        .scalar_subquery()
+    )
+
+
+def _refund_sort_column(sort: RefundSort) -> Any:
+    return {
+        "id": Transaction.id,
+        "order": Transaction.order_id,
+        "buyer": func.lower(
+            func.coalesce(_txn_buyer_col(User.name), _txn_buyer_col(User.email))
+        ),
+        "merchant": func.lower(_merchant_name_of(Transaction, Transaction.merchant_id)),
+        "amount": Transaction.amount,
+        "paid": Transaction.paid_at,
+        "refunded": Transaction.refunded_at,
+    }[sort]
 
 
 @router.get("/admin/refunds", response_model=list[AdminRefund])
 def list_refunds(
     status: TransactionStatus = TransactionStatus.REFUND_PENDING,
+    search: str | None = Query(None, alias="q", max_length=MAX_FILTER_TEXT),
+    # No sort: the queue oldest first, the refunded list newest refund first.
+    sort: RefundSort | None = None,
+    order: SortOrder = "asc",
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
@@ -350,12 +453,13 @@ def list_refunds(
         raise HTTPException(
             status_code=422, detail="status must be refund_pending or refunded"
         )
-    order_by = (
-        Transaction.refunded_at.desc()
-        if status == TransactionStatus.REFUNDED
-        else Transaction.created_at.asc()
-    )
-    txns = (
+    if sort is not None:
+        order_by = sort_clauses(_refund_sort_column(sort), order, Transaction.id)
+    elif status == TransactionStatus.REFUNDED:
+        order_by = (Transaction.refunded_at.desc(), Transaction.id.asc())
+    else:
+        order_by = (Transaction.created_at.asc(), Transaction.id.asc())
+    query = (
         db.query(Transaction)
         .options(
             joinedload(Transaction.order),
@@ -363,9 +467,22 @@ def list_refunds(
             joinedload(Transaction.merchant),
         )
         .filter(Transaction.status == status)
-        .order_by(order_by, Transaction.id.asc())
-        .all()
     )
+    term = (search or "").strip()
+    if term:
+        matches = [
+            ilike_contains(_txn_buyer_col(User.name), term),
+            ilike_contains(_txn_buyer_col(User.email), term),
+            ilike_contains(
+                _merchant_name_of(Transaction, Transaction.merchant_id), term
+            ),
+            ilike_contains(Transaction.paymongo_payment_id, term),
+            ilike_contains(Transaction.refund_reference, term),
+        ]
+        if (number := _id_term(term)) is not None:
+            matches += [Transaction.id == number, Transaction.order_id == number]
+        query = query.filter(or_(*matches))
+    txns = query.order_by(*order_by).all()
     return [_refund_view(t) for t in txns]
 
 
@@ -388,3 +505,112 @@ def record_transaction_refund(
     except RefundError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     return _refund_view(txn)
+
+
+@router.post("/admin/refunds/{transaction_id}/paymongo", response_model=AdminRefund)
+def send_transaction_refund(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """Refund the whole payment through PayMongo. The row comes back
+    processing, refunded, or failed with PayMongo's reason."""
+    try:
+        txn = send_paymongo_refund(db, transaction_id=transaction_id, admin=admin)
+    except RefundError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return _refund_view(txn)
+
+
+@router.post("/admin/refunds/{transaction_id}/refresh", response_model=AdminRefund)
+def refresh_transaction_refund(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """Ask PayMongo for a sent refund's status (when the webhook is late)."""
+    try:
+        txn = refresh_paymongo_refund(db, transaction_id=transaction_id, admin=admin)
+    except RefundError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return _refund_view(txn)
+
+
+def _dispute_view(order: Order, flagged: bool) -> AdminDispute:
+    return AdminDispute(
+        order_id=order.id,
+        order_ref=notifications.order_ref(order),
+        order_status=order.status,
+        total_price=order.total_price,
+        buyer_name=_buyer_name(order.user),
+        buyer_email=order.user.email if order.user else None,
+        merchant_id=order.merchant_id,
+        merchant_name=order.merchant.merchant_name if order.merchant else None,
+        delivered_at=order.delivered_at,
+        disputed_at=order.delivery_disputed_at,
+        merchant_note=order.dispute_merchant_note,
+        merchant_noted_at=order.dispute_merchant_noted_at,
+        delivery_flagged=flagged,
+        resolution=order.dispute_resolution,
+        resolved_at=order.dispute_resolved_at,
+    )
+
+
+DisputeSort = Literal[
+    "order", "buyer", "farm", "amount", "delivered", "disputed", "decided"
+]
+
+
+def _dispute_sort_column(sort: DisputeSort) -> Any:
+    return {
+        "order": Order.id,
+        "buyer": _order_sort_column("buyer"),
+        "farm": _order_sort_column("merchant"),
+        "amount": Order.total_price,
+        "delivered": Order.delivered_at,
+        "disputed": Order.delivery_disputed_at,
+        "decided": Order.dispute_resolved_at,
+    }[sort]
+
+
+@router.get("/admin/disputes", response_model=Page[AdminDispute])
+def list_disputes(
+    state: Literal["open", "decided"] = "open",
+    search: str | None = Query(None, alias="q", max_length=MAX_FILTER_TEXT),
+    # No sort: open ones oldest first, decided ones newest decision first.
+    sort: DisputeSort | None = None,
+    order: SortOrder = "asc",
+    page: int = Query(1, ge=1, le=MAX_PAGE),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: User = Depends(_require_admin),
+):
+    """Disputed deliveries: open ones oldest first (they hold a payout),
+    decided ones newest decision first."""
+    q = db.query(Order).filter(Order.delivery_disputed_at.isnot(None))
+    if state == "open":
+        q = q.filter(Order.dispute_resolution.is_(None))
+        default = (Order.delivery_disputed_at.asc(), Order.id.asc())
+    else:
+        q = q.filter(Order.dispute_resolution.isnot(None))
+        default = (Order.dispute_resolved_at.desc(), Order.id.desc())
+    term = (search or "").strip()
+    if term:
+        q = q.filter(_order_search(term))
+    q = q.order_by(
+        *(
+            sort_clauses(_dispute_sort_column(sort), order, Order.id)
+            if sort
+            else default
+        )
+    )
+    total = q.count()
+    orders = (
+        q.options(joinedload(Order.merchant), joinedload(Order.user))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    flagged = _flagged_ids(db, [o.id for o in orders])
+    items = [_dispute_view(o, o.id in flagged) for o in orders]
+    return {"items": items, "total": total, "page": page, "page_size": page_size}

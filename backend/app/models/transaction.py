@@ -19,6 +19,12 @@ class Transaction(Base):
     # CF-0009; the migration is c5e9a2d7f4b1.
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_transactions_amount_positive"),
+        # Migration a7c9e1b3d5f8.
+        CheckConstraint(
+            "paymongo_refund_status IS NULL OR "
+            "paymongo_refund_status IN ('processing', 'unknown', 'failed')",
+            name="ck_transactions_paymongo_refund_status",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -69,6 +75,12 @@ class Transaction(Base):
         Integer, ForeignKey("backend_users.id", ondelete="SET NULL"), nullable=True
     )
     refund_notes = Column(Text, nullable=True)
+    # A refund sent through the PayMongo Refunds API (refund_service). It stays
+    # refund_pending until PayMongo says it succeeded. Status: processing (sent),
+    # unknown (timeout: check the PayMongo dashboard), failed (safe to resend).
+    paymongo_refund_id = Column(String, nullable=True, unique=True, index=True)
+    paymongo_refund_status = Column(String(16), nullable=True)
+    refund_failure_reason = Column(Text, nullable=True)
 
     order = relationship("Order", back_populates="transactions")
     merchant = relationship("Merchant")

@@ -82,6 +82,29 @@ class OrderDetailResponse(CurrentOrderResponse):
     dispute_resolution: str | None = None
 
 
+class MerchantDispute(BaseModel):
+    """A disputed delivery of the farm's (GET /orders/merchant/disputes)."""
+
+    order_id: int
+    order_ref: str
+    total_amount: int
+    item_summary: str
+    delivered_at: datetime | None
+    disputed_at: datetime
+    # Open: payout on hold until an admin decides (release | refund).
+    open: bool
+    resolution: str | None
+    resolved_at: datetime | None
+    merchant_note: str | None
+    merchant_noted_at: datetime | None
+
+
+class DisputeNotePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str = Field(min_length=1, max_length=1000)
+
+
 class PlaceOrderRequest(BaseModel):
     """Checkout options. Items, prices and fees come from the cart and the
     produce rows on the server, never from this body (CF-0012)."""

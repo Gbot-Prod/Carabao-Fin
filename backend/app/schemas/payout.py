@@ -198,3 +198,19 @@ class TransactionSummary(BaseModel):
     order_status: OrderStatus | None = None
 
     model_config = {"from_attributes": True}
+
+
+class AdminPayoutSummary(BaseModel):
+    """Totals over every payout batch, whatever the table's filter."""
+
+    waiting: int  # requested, approved or failed: an admin has to send it
+    owed: int  # pesos the merchants still get (every batch not released)
+    released: int  # pesos sent, all time
+
+
+class AdminPayoutBatchPage(BaseModel):
+    items: list[AdminPayoutBatchResponse]
+    total: int
+    page: int
+    page_size: int
+    summary: AdminPayoutSummary

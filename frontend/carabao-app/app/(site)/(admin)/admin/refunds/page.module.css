@@ -1,33 +1,5 @@
-.tabs {
-  display: inline-flex;
-  padding: 3px;
-  gap: 2px;
-  border-radius: var(--radius-sm);
-  background: #e1e7e2;
-  margin-bottom: 16px;
-}
-
-.tab {
-  padding: 6px 14px;
-  border: none;
-  border-radius: 6px;
-  background: none;
-  color: var(--text-subtle);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.tabActive {
-  background: var(--bg-white);
-  color: var(--text-strong);
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgba(19, 46, 29, 0.12);
-}
-
-.tab:focus-visible,
 .primary:focus-visible,
+.secondary:focus-visible,
 .form textarea:focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
@@ -46,9 +18,55 @@
   cursor: pointer;
 }
 
-.primary:disabled {
+.primary:disabled,
+.secondary:disabled {
   opacity: 0.6;
   cursor: wait;
+}
+
+.secondary {
+  padding: 7px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.secondary:hover:not(:disabled) {
+  background: #f3f6f3;
+}
+
+/* The "To refund" row: buttons, PayMongo state and errors. */
+.actionCell {
+  min-width: 220px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.actions p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.processing {
+  background: #e0ecff;
+  color: #1d4ed8;
+}
+
+.rowError {
+  color: var(--danger);
+  font-size: 12px;
+  max-width: 340px;
 }
 
 .summary {
@@ -72,8 +90,4 @@
   font: inherit;
   font-weight: 500;
   resize: vertical;
-}
-
-.tab:hover {
-  color: var(--text-strong);
 }

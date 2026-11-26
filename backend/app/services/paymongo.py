@@ -381,6 +381,79 @@ def get_transfer(transfer_id: str) -> dict:
     return response.json()["data"]
 
 
+# ---------------------------------------------------------------------------
+# Money back: refunds of a paid payment
+# ---------------------------------------------------------------------------
+
+# PayMongo's reason values differ between its pages; "others" is in all of
+# them, and the notes say why.
+REFUND_REASON = "others"
+REFUND_NOTES_MAX = 255
+
+
+class RefundRejected(_TransferError):
+    """PayMongo refused the refund (4xx): nothing was refunded, safe to retry."""
+
+
+class RefundOutcomeUnknown(_TransferError):
+    """Timeout, network error or 5xx: the refund may or may not exist."""
+
+
+def create_refund(
+    *,
+    payment_id: str,
+    amount_centavos: int,
+    notes: str,
+    metadata: dict[str, str] | None = None,
+) -> dict:
+    """Refund a paid payment; returns the refund object (``{id, attributes}``).
+
+    Raises RefundRejected when PayMongo refuses it and RefundOutcomeUnknown
+    when we cannot tell whether it was created.
+    """
+    attributes: dict[str, Any] = {
+        "amount": amount_centavos,
+        "payment_id": payment_id,
+        "reason": REFUND_REASON,
+        "notes": notes[:REFUND_NOTES_MAX],
+    }
+    if metadata:
+        attributes["metadata"] = metadata
+    try:
+        response = requests.post(
+            f"{PAYMONGO_BASE_URL}/refunds",
+            json={"data": {"attributes": attributes}},
+            headers=_auth_header(),
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise RefundOutcomeUnknown(str(exc), codes=type(exc).__name__) from exc
+
+    if response.status_code >= 500:
+        raise RefundOutcomeUnknown(
+            _error_detail(response), codes=_error_codes(response)
+        )
+    if response.status_code >= 400:
+        raise RefundRejected(_error_detail(response), codes=_error_codes(response))
+    try:
+        refund = response.json()["data"]
+    except (ValueError, KeyError, TypeError) as exc:
+        raise RefundOutcomeUnknown("unreadable PayMongo response") from exc
+    if not isinstance(refund, dict) or not refund.get("id"):
+        raise RefundOutcomeUnknown("PayMongo accepted the refund but sent no id")
+    return refund
+
+
+def get_refund(refund_id: str) -> dict:
+    response = requests.get(
+        f"{PAYMONGO_BASE_URL}/refunds/{refund_id}",
+        headers=_auth_header(),
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()["data"]
+
+
 def verify_webhook_signature(raw_body: bytes, signature_header: str) -> bool:
     """
     PayMongo sends: Paymongo-Signature: t=<ts>,te=<test_hmac>,li=<live_hmac>

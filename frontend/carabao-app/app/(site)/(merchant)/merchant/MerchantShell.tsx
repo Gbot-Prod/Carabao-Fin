@@ -11,6 +11,7 @@ import {
   LifeBuoy,
   LogOut,
   Menu,
+  MessageSquareWarning,
   MessagesSquare,
   Package,
   ShoppingBag,
@@ -146,6 +147,7 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
         { path: P.shipments, label: "Shipments", icon: Truck, count: readyCount || undefined, countTone: "alert", also: [P.routing] },
         { path: P.earnings, label: "Earnings", icon: Banknote },
         { path: P.reviews, label: "Reviews", icon: Star },
+        { path: P.disputes, label: "Disputes", icon: MessageSquareWarning },
       ],
     },
     {

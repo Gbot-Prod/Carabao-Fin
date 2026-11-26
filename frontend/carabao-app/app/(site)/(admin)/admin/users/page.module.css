@@ -1,49 +1,3 @@
-.page {
-  padding: 28px 32px 40px;
-}
-
-.tableWrap {
-  overflow-x: auto;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--green-border);
-  background: var(--bg-white);
-  box-shadow: var(--admin-card-shadow);
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.table th {
-  text-align: left;
-  padding: 11px 16px;
-  background: #f4f7f5;
-  color: var(--text-subtle);
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  border-bottom: 1px solid var(--green-border);
-  white-space: nowrap;
-}
-
-.table td {
-  padding: 13px 16px;
-  color: var(--text-strong);
-  border-bottom: 1px solid #edf1ee;
-  vertical-align: middle;
-}
-
-.table tr:last-child td {
-  border-bottom: none;
-}
-
-.table tr:hover td {
-  background: #f6f9f7;
-}
-
 .mono {
   font-variant-numeric: tabular-nums;
   color: var(--text-subtle);
@@ -51,42 +5,6 @@
 
 .empty {
   color: var(--text-faint);
-}
-
-.state {
-  padding: 40px 24px;
-  border: 1px dashed #cdd8d0;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.55);
-  color: var(--text-subtle);
-  font-size: 14px;
-  text-align: center;
-}
-
-.stateError {
-  margin: 28px 32px;
-  padding: 16px 20px;
-  border: 1px solid #f5c2c2;
-  border-radius: var(--radius-md);
-  background: #fdf2f2;
-  color: var(--danger);
-  font-size: 14px;
-}
-
-.notice {
-  margin: 0 0 16px;
-  padding: 12px 16px;
-  border: 1px solid #cfe3d6;
-  border-radius: var(--radius-md);
-  background: #f2f9f4;
-  color: var(--text);
-  font-size: 14px;
-}
-
-.noticeError {
-  border-color: #f5c2c2;
-  background: #fdf2f2;
-  color: var(--danger);
 }
 
 .roleCell {
@@ -130,57 +48,11 @@
   font-weight: 600;
 }
 
-/* Invite an admin */
-
-.inviteBar {
-  margin: 0 0 16px;
-}
-
-/* All | Users | Admins: which accounts the table shows. */
-.roleToggle {
-  display: inline-flex;
-  margin: 0 0 16px;
-  padding: 3px;
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-white);
-}
-
-.roleOption {
-  min-width: 72px;
-  height: 32px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: none;
-  color: var(--text-subtle);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.roleOption:hover:not(:disabled) {
-  color: var(--text-strong);
-}
-
-.roleOption:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-.roleOption:disabled {
-  cursor: default;
-}
-
-.roleOptionActive,
-.roleOptionActive:hover:not(:disabled) {
-  background: var(--green-900);
-  color: #fff;
-}
-
 .primaryButton {
-  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
   border: none;
   border-radius: var(--radius-md);
   background: var(--green-600);
@@ -193,27 +65,6 @@
 .primaryButton:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.inviteForm {
-  margin: 0 0 16px;
-  padding: 18px 20px;
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-md);
-  background: var(--bg-white);
-  box-shadow: var(--admin-card-shadow);
-  max-width: 640px;
-}
-
-.inviteTitle {
-  margin: 0 0 4px;
-  font-size: 15px;
-}
-
-.inviteHelp {
-  margin: 0 0 14px;
-  color: var(--text-subtle);
-  font-size: 13px;
 }
 
 .inviteFields {
@@ -238,26 +89,11 @@
   color: var(--text-strong);
 }
 
-.formError {
-  margin: 14px 0 0;
-}
-
 .inviteActions {
   display: flex;
   align-items: center;
   gap: 16px;
   margin-top: 14px;
-}
-
-/* The invite code, shown once */
-
-.codePanel {
-  margin: 0 0 16px;
-  padding: 18px 20px;
-  border: 1px solid #cfe3d6;
-  border-radius: var(--radius-md);
-  background: #f2f9f4;
-  max-width: 640px;
 }
 
 .codeLead,
@@ -280,4 +116,14 @@
 .codeHelp {
   margin-bottom: 14px;
   color: var(--text-subtle);
+}
+
+.formError {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border: 1px solid #f5c2c2;
+  border-radius: var(--radius-md);
+  background: #fdf2f2;
+  color: var(--danger);
+  font-size: 13px;
 }

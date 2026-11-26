@@ -1,0 +1,22 @@
+.note {
+  max-width: 280px;
+}
+
+/* Two lines of the farm's note; the full text is in the title and on the order. */
+.noteText {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.release {
+  background: #dcfce7;
+  color: var(--success-text);
+}
+
+.refund {
+  background: #fef3c7;
+  color: #92400e;
+}

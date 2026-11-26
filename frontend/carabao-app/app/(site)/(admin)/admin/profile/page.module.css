@@ -1,19 +1,30 @@
 .page {
-  padding: 28px 32px 40px;
-  max-width: 760px;
+  padding: 24px var(--admin-gutter) 48px;
+  max-width: 1040px;
 }
 
+/* Settings layout: each section is a ruled row, its title in a left column
+   and its content on the right. */
 .card {
-  margin: 0 0 16px;
-  padding: 18px 20px;
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-md);
-  background: var(--bg-white);
-  box-shadow: var(--admin-card-shadow);
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  column-gap: 40px;
+  padding: 28px 0;
+  border-top: 1px solid var(--admin-rule);
+}
+
+.card:last-child {
+  border-bottom: 1px solid var(--admin-rule);
+}
+
+.card > :not(.cardTitle) {
+  grid-column: 2;
 }
 
 .cardTitle {
-  margin: 0 0 14px;
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--text-strong);
@@ -115,7 +126,22 @@
 
 @media (max-width: 640px) {
   .page {
-    padding: 20px 16px 32px;
+    padding: 20px var(--admin-gutter) 32px;
+  }
+
+  .card {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 22px 0;
+  }
+
+  .card > :not(.cardTitle),
+  .cardTitle {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .cardTitle {
+    margin-bottom: 14px;
   }
 
   .details {

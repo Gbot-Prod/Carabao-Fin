@@ -22,31 +22,10 @@
   text-overflow: ellipsis;
 }
 
+/* The open conversation: a side panel (orders' .overlay / .panel), wider
+   for the chat. */
 .conversation {
-  margin-top: 16px;
-  background: var(--bg-white);
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--admin-card-shadow);
-  overflow: hidden;
-}
-
-.conversationHeader {
+  width: min(560px, 100%);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--green-border);
-}
-
-.conversationHeader h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-strong);
-}
-
-.conversationBody {
-  padding: 16px 20px 20px;
+  flex-direction: column;
 }
