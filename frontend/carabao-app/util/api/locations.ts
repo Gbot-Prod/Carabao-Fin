@@ -41,6 +41,24 @@ export const geocodePlace = async (query: string): Promise<PlaceFeature | undefi
   return response.data.feature ?? undefined;
 };
 
+/** One row in the dropdown under the street field. `center` is [lng, lat]; null: ask placeById. */
+export type PlaceSuggestion = { id: string; title: string; subtitle: string; center: [number, number] | null };
+
+/** Street suggestions while the person types. `session` groups the typing and the pick (Google billing). */
+export const suggestPlaces = async (query: string, session: string): Promise<PlaceSuggestion[]> => {
+  const response = await apiClient.post<{ suggestions: PlaceSuggestion[] }>('/locations/suggest', {
+    query: query.slice(0, 256),
+    session,
+  });
+  return response.data.suggestions ?? [];
+};
+
+/** The coordinates of a picked suggestion that came without them. */
+export const placeById = async (id: string, session: string): Promise<PlaceFeature | undefined> => {
+  const response = await apiClient.post<PlaceResponse>('/locations/place', { id, session });
+  return response.data.feature ?? undefined;
+};
+
 /** The place at a pin, through the API. */
 export const reverseGeocodePlace = async (pin: { lat: number; lng: number }): Promise<PlaceFeature | undefined> => {
   const response = await apiClient.post<PlaceResponse>('/locations/reverse-geocode', pin);

@@ -30,6 +30,9 @@ const TURNSTILE = "https://challenges.cloudflare.com";
 
 const MAPBOX = ["https://api.mapbox.com", "https://*.tiles.mapbox.com", "https://events.mapbox.com"];
 
+// Google Maps JavaScript API (lib/maps). Its script loads more scripts, tiles and fonts.
+const GOOGLE_MAPS = ["https://maps.googleapis.com", "https://*.googleapis.com", "https://*.gstatic.com"];
+
 // Region/province/city/barangay lists for every address form (util/psgc.ts).
 const PSGC = "https://psgc.cloud";
 
@@ -50,13 +53,15 @@ function buildPolicy(nonce: string | null): string {
       // Turnstile (lib/turnstile.ts). Under 'strict-dynamic' it loads as a script our
       // own code inserts; the host is for browsers without 'strict-dynamic'.
       TURNSTILE,
+      // Google Maps, for browsers without 'strict-dynamic'.
+      ...GOOGLE_MAPS,
     ],
     // CSS modules, Mapbox GL and React style={} props use inline styles.
-    "style-src": ["'self'", "'unsafe-inline'"],
-    // Product photos and avatars come from R2 and Google; map tiles from Mapbox.
+    "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+    // Product photos and avatars come from R2 and Google; map tiles from Google or Mapbox.
     "img-src": ["'self'", "data:", "blob:", "https:"],
-    "font-src": ["'self'", "data:"],
-    "connect-src": ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...MAPBOX, PSGC, ...(isDev ? ["ws:"] : [])],
+    "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
+    "connect-src": ["'self'", ...(apiOrigin ? [apiOrigin] : []), ...MAPBOX, ...GOOGLE_MAPS, PSGC, ...(isDev ? ["ws:"] : [])],
     // Mapbox GL runs its workers from blob: URLs.
     "worker-src": ["'self'", "blob:"],
     "child-src": ["'self'", "blob:"],

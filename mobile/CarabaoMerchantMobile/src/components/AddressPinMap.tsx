@@ -7,17 +7,18 @@
 // Every new pin is checked for a road near it (pin quality, control 5): a second marker shows
 // where the rider stops, and a pin with no road, or with rider reports near it, is reported
 // before the form is saved. Geocoding and the check go through the API (api.locations), so the
-// Mapbox token stays on the server and the app never sees it.
+// map provider's server key stays on the server and the app never sees it.
 // AddressPinMap.web.tsx replaces this file in the browser preview (`npm run web`), where
 // react-native-maps has no implementation.
-// Decision D3: Android draws Google Maps only with a key (app.config.ts passes
-// EXPO_PUBLIC_GOOGLE_MAPS_KEY to the plugin); without one the note stands in for the map.
+// Decision D3: Google Maps (Android, and iOS when EXPO_PUBLIC_MAP_PROVIDER is google) draws only
+// with a key (app.config.ts passes EXPO_PUBLIC_GOOGLE_MAPS_KEY to the plugin); without one the
+// note stands in for the map. src/lib/mapProvider.ts has the switch.
 // The web's "Use my location" button is left out: reading the phone's position needs a location
 // module the app does not ship (expo-location). The map's own location button still shows the
 // person's dot, and a tap or a drag places the pin.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { ApiError, api, type PinCheckResult } from '../lib/api';
 import {
   ADDRESS_DEBOUNCE_MS,
@@ -31,6 +32,7 @@ import {
   PIN_COLOR,
   PIN_WORDS,
   pinAreaMismatch,
+  PIN_MAP_KEY_NOTE,
   pinMismatchText,
   placeHints,
   resolvePinLocation,
@@ -42,12 +44,12 @@ import {
   type Pin,
   type TypedAddress,
 } from '../lib/pinLocation';
-import { ANDROID_MAP_NOTE } from '../lib/route';
+import { isMapAvailable, USE_GOOGLE_MAPS } from '../lib/mapProvider';
 import { Colors, FontSize, Radius, Spacing } from '../lib/theme';
 import { MapUnavailable } from './MapUnavailable';
 
-/** iOS draws Apple Maps and needs no key; Android draws Google Maps and does (decision D3). */
-const MAP_AVAILABLE = Platform.OS !== 'android' || !!process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
+/** Google Maps needs a key; Apple Maps does not (decision D3, src/lib/mapProvider.ts). */
+const MAP_AVAILABLE = isMapAvailable(Platform.OS);
 
 /** Close in on a pin the person placed by hand (about a street's length across). */
 const FOCUS_ZOOM = 16;
@@ -236,7 +238,7 @@ export default function AddressPinMap({
   const unlocked = addressComplete(address);
 
   // Decision D3: no Google Maps key on Android, or a broken answer: say so instead of a blank box.
-  if (!MAP_AVAILABLE) return <MapUnavailable note={ANDROID_MAP_NOTE} />;
+  if (!MAP_AVAILABLE) return <MapUnavailable note={PIN_MAP_KEY_NOTE} />;
 
   if (!unlocked) {
     return (
@@ -298,6 +300,7 @@ export default function AddressPinMap({
       <View style={[styles.mapWrap, error ? styles.mapInvalid : null]}>
         <MapView
           ref={mapRef}
+          provider={USE_GOOGLE_MAPS ? PROVIDER_GOOGLE : undefined}
           style={styles.map}
           initialRegion={regionAround(pin ?? DEFAULT_PIN_CENTER, pin ? FOCUS_ZOOM : DEFAULT_PIN_ZOOM)}
           onMapReady={() => setReady(true)}

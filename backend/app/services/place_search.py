@@ -1,4 +1,7 @@
-"""Mapbox place lookups for the map pin picker, run here instead of the browser.
+"""Place lookups for the map pin picker, run here instead of the browser.
+
+``GEOCODE_PROVIDER`` (or ``MAPS_PROVIDER``) picks Google (``google_maps.py``)
+or Mapbox. Both give the trimmed Mapbox feature shape below.
 
 The picker used to call the Geocoding API with the public browser token, so
 anyone could copy that token and spend it. Now the browser asks these
@@ -14,12 +17,14 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Callable
 from typing import Any
 from urllib.parse import quote
 
 import requests as _requests
 
-from app.services.service_area import in_luzon_bbox
+from app.services import google_maps, maps_provider
+from app.services.service_area import LUZON_BBOX, in_luzon_bbox
 from app.utils.lru import TTLCache
 
 logger = logging.getLogger(__name__)
@@ -34,7 +39,7 @@ _cache: TTLCache[dict[str, Any] | None] = TTLCache(maxsize=2000, ttl_seconds=6 *
 
 
 class PlaceSearchUnavailable(Exception):
-    """Mapbox did not answer (or no token). Not cached; the caller says 503."""
+    """The provider did not answer (or no key). Not cached; the caller says 503."""
 
 
 def _trim(feature: dict[str, Any]) -> dict[str, Any] | None:
@@ -57,6 +62,11 @@ def _trim(feature: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _search(path: str, params: dict[str, str]) -> dict[str, Any] | None:
+    features = _features(path, params)
+    return _trim(features[0]) if features else None
+
+
+def _features(path: str, params: dict[str, str]) -> list[dict[str, Any]]:
     token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
     if not token:
         raise PlaceSearchUnavailable("no token")
@@ -80,9 +90,16 @@ def _search(path: str, params: dict[str, str]) -> dict[str, Any] | None:
         raise PlaceSearchUnavailable
     try:
         features = resp.json().get("features") or []
-        return _trim(features[0]) if features else None
+        return [f for f in features if isinstance(f, dict)]
     except (AttributeError, KeyError, TypeError, ValueError) as exc:
         logger.warning("place search: bad response (%s)", type(exc).__name__)
+        raise PlaceSearchUnavailable from None
+
+
+def _google(lookup: Callable[[], dict[str, Any] | None]) -> dict[str, Any] | None:
+    try:
+        return lookup()
+    except google_maps.GoogleUnavailable:
         raise PlaceSearchUnavailable from None
 
 
@@ -91,11 +108,15 @@ def forward(query: str) -> dict[str, Any] | None:
     cleaned = " ".join(query.split())[:MAX_QUERY_LENGTH]
     if not cleaned:
         return None
-    key = ("fwd", cleaned.lower())
+    google = maps_provider.geocode_provider() == "google"
+    key = ("google" if google else "mapbox", "fwd", cleaned.lower())
     hit = _cache.get(key)
     if hit is not TTLCache.missing():
         return hit  # type: ignore[return-value]
-    result = _search(quote(cleaned, safe=""), {"autocomplete": "false"})
+    if google:
+        result = _google(lambda: google_maps.forward_feature(cleaned))
+    else:
+        result = _search(quote(cleaned, safe=""), {"autocomplete": "false"})
     _cache.put(key, result)
     return result
 
@@ -105,11 +126,77 @@ def reverse(lat: float, lng: float) -> dict[str, Any] | None:
     if not in_luzon_bbox(lat, lng):
         return None
     # ~1 m: a pin dragged back to the same spot uses the first answer.
-    key = ("rev", round(lat, 5), round(lng, 5))
+    google = maps_provider.geocode_provider() == "google"
+    key = ("google" if google else "mapbox", "rev", round(lat, 5), round(lng, 5))
     hit = _cache.get(key)
     if hit is not TTLCache.missing():
         return hit  # type: ignore[return-value]
-    result = _search(f"{lng:.6f},{lat:.6f}", {})
+    if google:
+        result = _google(lambda: google_maps.reverse_feature(lat, lng))
+    else:
+        result = _search(f"{lng:.6f},{lat:.6f}", {})
+    _cache.put(key, result)
+    return result
+
+
+def _mapbox_suggestion(feature: dict[str, Any]) -> dict[str, Any] | None:
+    trimmed = _trim(feature)
+    if not trimmed:
+        return None
+    name = str(trimmed.get("place_name") or trimmed.get("text") or "")
+    title, _, subtitle = name.partition(", ")
+    if not title:
+        return None
+    return {
+        "id": str(trimmed.get("id") or title),
+        "title": title,
+        "subtitle": subtitle,
+        "center": trimmed["center"],
+    }
+
+
+def suggest(query: str, session: str | None = None) -> list[dict[str, Any]]:
+    """Street suggestions for the address forms (dropdown under the street field).
+
+    Mapbox suggestions have their coordinates; Google ones do not, and the
+    client asks ``place`` for the one the person picks.
+    """
+    cleaned = " ".join(query.split())[:MAX_QUERY_LENGTH]
+    if len(cleaned) < 3:
+        return []
+    google = maps_provider.geocode_provider() == "google"
+    key = ("google" if google else "mapbox", "suggest", cleaned.lower())
+    hit = _cache.get(key)
+    if hit is not TTLCache.missing():
+        return hit  # type: ignore[return-value]
+    if google:
+        try:
+            result = google_maps.autocomplete(cleaned, session)
+        except google_maps.GoogleUnavailable:
+            raise PlaceSearchUnavailable from None
+    else:
+        features = _features(
+            quote(cleaned, safe=""),
+            {
+                "autocomplete": "true",
+                "limit": str(google_maps.MAX_SUGGESTIONS),
+                "types": "address,poi,neighborhood,locality",
+                # The service area only (Google: locationRestriction).
+                "bbox": ",".join(str(v) for v in LUZON_BBOX),
+            },
+        )
+        result = [s for s in map(_mapbox_suggestion, features) if s]
+    _cache.put(key, result)  # type: ignore[arg-type]
+    return result
+
+
+def place(place_id: str, session: str | None = None) -> dict[str, Any] | None:
+    """The picked Google suggestion as a feature (with its coordinates), or None."""
+    key = ("google", "place", place_id)
+    hit = _cache.get(key)
+    if hit is not TTLCache.missing():
+        return hit  # type: ignore[return-value]
+    result = _google(lambda: google_maps.place_feature(place_id, session))
     _cache.put(key, result)
     return result
 

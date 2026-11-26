@@ -60,9 +60,9 @@ export const MAP_LEGEND_LABEL = 'Map legend';
 export const PICKUP_LEGEND = 'Pickup';
 export const OTHER_STOPS_LEGEND = 'Other stops';
 export const CLOSED_STOPS_LEGEND = 'Delivered or cancelled';
-/** Decision D3: Android needs a Google Maps key; without one the list stands in for the map. */
-export const ANDROID_MAP_NOTE =
-  'Map not available. Android needs a Google Maps key (EXPO_PUBLIC_GOOGLE_MAPS_KEY) to draw the map; the stops and their numbers are listed below.';
+/** Decision D3: a Google map needs a key (src/lib/mapProvider.ts); without one the list stands in. */
+export const MAP_KEY_NOTE =
+  'Map not available. The app needs a Google Maps key (EXPO_PUBLIC_GOOGLE_MAPS_KEY) to draw the map; the stops and their numbers are listed below.';
 export const WEB_MAP_NOTE =
   'Map not available here. The map is drawn in the Android and iOS apps; the stops and their numbers are listed below.';
 

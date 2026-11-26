@@ -3,6 +3,7 @@ import styles from "../page.module.css";
 import c from "./ShopSettings.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
+import StreetSuggestInput from "@/components/StreetSuggestInput/StreetSuggestInput";
 import { focusFirstInvalid } from "@/components/FieldError/FieldError";
 import { sendOtp, updateMyMerchant, verifyOtp, type Merchant } from "@/util/api";
 import { formatCountdown, useResendCooldown } from "@/hooks/useResendCooldown";
@@ -212,10 +213,12 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
 
           <label className={styles.formLabel}>
             Street / House No.
-            <input
+            <StreetSuggestInput
               className={styles.formInput}
               value={draft.address}
-              onChange={(e) => setDraft((d) => ({ ...d, address: e.target.value }))}
+              onValueChange={(address) => setDraft((d) => ({ ...d, address }))}
+              onPick={(address, pin) => setDraft((d) => ({ ...d, address, lat: pin.lat, lng: pin.lng, pin_confirmed: false }))}
+              area={{ province: draft.province, city: draft.city }}
               placeholder="e.g. 123 Rizal St., Unit 4B"
               maxLength={500}
             />

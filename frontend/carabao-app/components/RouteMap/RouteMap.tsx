@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import mapboxgl from 'mapbox-gl';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createRouteMap, type RouteMapHandle } from '@/lib/maps/routeMap';
+import { mapKey } from '@/lib/maps/provider';
 import type { TrackingData, Waypoint } from '@/util/api';
 import {
   fetchRouteGeoJSON,
@@ -24,8 +25,6 @@ export const OTHER_STOP_COLOR = '#ef4444';
 export const CLOSED_STOP_COLOR = '#6b7280';
 export const POSITION_COLOR = '#22c55e';
 
-const ROUTE_SOURCE = 'shipment-route';
-const ROUTE_LAYER = 'shipment-route-line';
 const ESTIMATED_POSITION = 'Estimated position';
 
 type MarkerSpec = { lng: number; lat: number; color: string; text: string; label: string };
@@ -112,9 +111,8 @@ export default function RouteMap({
   routeFor,
   children,
 }: RouteMapProps) {
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const positionMarkerRef = useRef<mapboxgl.Marker | null>(null);
-  const [styleReady, setStyleReady] = useState(false);
+  // The map (Google Maps or Mapbox: lib/maps/provider.ts), once its library has loaded.
+  const [map, setMap] = useState<RouteMapHandle | null>(null);
   const [mapUnavailable, setMapUnavailable] = useState(false);
   const [routeResult, setRouteResult] = useState<{ key: string; route: RouteGeoJSON | null } | null>(null);
 
@@ -133,36 +131,43 @@ export default function RouteMap({
 
   const containerRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return;
-    mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_API_KEY || '';
-    const map = new mapboxgl.Map({
-      container: node,
-      style: 'mapbox://styles/mapbox/streets-v12',
-      center: [121.013, 14.567],
-      zoom: 12,
-    });
-    map.on('load', () => setStyleReady(true));
-    map.on('error', (event) => {
-      if (event.error) console.error('[route-map] Mapbox map error:', event.error);
+    if (!mapKey()) {
       setMapUnavailable(true);
-    });
-    map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-    mapRef.current = map;
-
-    // The pane is flex/grid-sized, so keep the canvas in sync with its container.
-    const resizeObserver = new ResizeObserver(() => map.resize());
-    resizeObserver.observe(node);
+      return;
+    }
+    let cancelled = false;
+    let created: RouteMapHandle | null = null;
+    createRouteMap({
+      container: node,
+      center: { lat: 14.567, lng: 121.013 },
+      zoom: 12,
+      lineColor: POSITION_COLOR,
+      stopClass: styles.stopMarker,
+      positionClass: styles.positionMarker,
+      onError: () => setMapUnavailable(true),
+    }).then(
+      (handle) => {
+        if (cancelled) {
+          handle.destroy();
+          return;
+        }
+        created = handle;
+        setMap(handle);
+      },
+      (error) => {
+        console.error('[route-map] map did not load:', error);
+        if (!cancelled) setMapUnavailable(true);
+      },
+    );
 
     return () => {
-      resizeObserver.disconnect();
-      positionMarkerRef.current?.remove();
-      positionMarkerRef.current = null;
-      map.remove();
-      mapRef.current = null;
-      setStyleReady(false);
+      cancelled = true;
+      created?.destroy();
+      setMap(null);
     };
   }, []);
 
-  // Road route (Mapbox Directions, asked by the API), fetched once per set of stops.
+  // Road route (asked by the API, Google or Mapbox), fetched once per set of stops.
   const sourceId = routeFor === 'order' ? tracking?.order_id : tracking?.shipment_id;
   useEffect(() => {
     if (routePoints.length < 2 || mapUnavailable || !sourceId) return;
@@ -175,82 +180,35 @@ export default function RouteMap({
     };
   }, [routeKey, routePoints, mapUnavailable, routeFor, sourceId]);
 
-  // Draw (or clear) the route line once the style can take layers.
+  // Draw (or clear) the route line.
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !styleReady) return;
-    const source = map.getSource(ROUTE_SOURCE) as mapboxgl.GeoJSONSource | undefined;
-    if (route) {
-      if (source) {
-        source.setData(route);
-      } else {
-        map.addSource(ROUTE_SOURCE, { type: 'geojson', data: route });
-        map.addLayer({
-          id: ROUTE_LAYER,
-          type: 'line',
-          source: ROUTE_SOURCE,
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': POSITION_COLOR, 'line-width': 4, 'line-opacity': 0.85 },
-        });
-      }
-    } else if (source) {
-      if (map.getLayer(ROUTE_LAYER)) map.removeLayer(ROUTE_LAYER);
-      map.removeSource(ROUTE_SOURCE);
-    }
-  }, [route, styleReady]);
+    map?.setRoute(route);
+  }, [map, route]);
 
   // Numbered stop markers; redrawn only when a stop, its status or the highlight changes.
   useEffect(() => {
-    const map = mapRef.current;
     if (!map) return;
-    const placed = markers.map((spec) => {
-      const el = document.createElement('div');
-      el.className = styles.stopMarker;
-      el.style.backgroundColor = spec.color;
-      el.textContent = spec.text;
-      el.setAttribute('role', 'img');
-      el.setAttribute('aria-label', spec.label);
-      return new mapboxgl.Marker({ element: el })
-        .setLngLat([spec.lng, spec.lat])
-        .setPopup(new mapboxgl.Popup({ offset: 18 }).setText(spec.label))
-        .addTo(map);
-    });
-    return () => placed.forEach((marker) => marker.remove());
-  }, [markers]);
+    map.setStops(markers);
+    return () => map.setStops([]);
+  }, [map, markers]);
 
   // Frame the stops whenever the set of stops changes.
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || routePoints.length === 0) return;
-    const bounds = new mapboxgl.LngLatBounds();
-    routePoints.forEach((p) => bounds.extend([p.lng, p.lat]));
-    map.fitBounds(bounds, { padding: 80, maxZoom: 14 });
-  }, [routePoints]);
+    map?.fitTo(routePoints);
+  }, [map, routePoints]);
 
   // Estimated position along the planned route (not GPS).
   useEffect(() => {
-    const map = mapRef.current;
     if (!map || !origin) return;
     const lngLat: [number, number] = route
       ? getPositionAlongRoute(route, progress)
       : [origin.lng, origin.lat];
-    if (positionMarkerRef.current) {
-      positionMarkerRef.current.setLngLat(lngLat);
-      return;
-    }
-    const el = document.createElement('div');
-    el.className = styles.positionMarker;
-    el.setAttribute('role', 'img');
-    el.setAttribute('aria-label', ESTIMATED_POSITION);
-    positionMarkerRef.current = new mapboxgl.Marker({ element: el })
-      .setLngLat(lngLat)
-      .setPopup(new mapboxgl.Popup({ offset: 14 }).setText(`${ESTIMATED_POSITION} (from the planned schedule, not GPS)`))
-      .addTo(map);
-  }, [route, progress, origin]);
+    map.setPosition(lngLat, ESTIMATED_POSITION, `${ESTIMATED_POSITION} (from the planned schedule, not GPS)`);
+  }, [map, route, progress, origin]);
 
   return (
     <div className={styles.root}>
-      {/* Each Mapbox map is a billed map load: build one only when there are stops to show. */}
+      {/* Each map is a billed map load (Google or Mapbox): build one only when there are stops to show. */}
       {hasStops ? (
         <div className={styles.mapCanvas} ref={containerRef} />
       ) : (

@@ -373,6 +373,8 @@ const en = {
     noticeBody: 'Riders go to your map pin, not to the address text. Make sure that the pin is at your gate or door. If it is not, click the map or drag the pin to move it.',
     useMyLocation: 'Use my location',
     locating: 'Finding you…',
+    suggestions: 'Address suggestions',
+    suggestionsHint: 'Select an address to put the pin there.',
     mapLabel: 'Map: click or drag the pin to your location',
     hint: 'Finding your address on the map…',
     notFound: 'We could not find this exact address on the map. Click the map at your gate or door to place your pin.',

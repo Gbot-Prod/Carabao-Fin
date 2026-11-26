@@ -382,6 +382,8 @@ const fil: Strings = {
     noticeBody: 'Sa pin sa mapa pupunta ang rider, hindi sa nakasulat na address. Siguraduhing nasa gate o pinto mo ang pin. Kung hindi, i-click ang mapa o i-drag ang pin para ilipat ito.',
     useMyLocation: 'Gamitin ang aking lokasyon',
     locating: 'Hinahanap ka…',
+    suggestions: 'Mga mungkahing address',
+    suggestionsHint: 'Pumili ng address para doon ilagay ang pin.',
     mapLabel: 'Mapa: i-click o i-drag ang pin sa iyong lokasyon',
     hint: 'Hinahanap ang iyong address sa mapa…',
     notFound: 'Hindi namin mahanap ang eksaktong address na ito sa mapa. I-click ang mapa sa iyong gate o pinto para ilagay ang pin.',

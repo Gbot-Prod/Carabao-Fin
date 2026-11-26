@@ -4,18 +4,20 @@
 // draws them, so the screen stays testable and the pure rules live in src/lib/routeMap.ts.
 // RouteMapView.web.tsx replaces it in the browser preview (`npm run web`), where
 // react-native-maps has no implementation.
-// Decision D3: Android draws Google Maps only with a key (app.config.ts passes
-// EXPO_PUBLIC_GOOGLE_MAPS_KEY to the plugin); without one the note and the stop list stand in.
+// Decision D3: Google Maps (Android, and iOS when EXPO_PUBLIC_MAP_PROVIDER is google) draws only
+// with a key (app.config.ts passes EXPO_PUBLIC_GOOGLE_MAPS_KEY to the plugin); without one the
+// note and the stop list stand in. src/lib/mapProvider.ts has the switch.
 import React, { useEffect, useRef } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from 'react-native-maps';
 import {
   CLOSED_STOP_COLOR,
   POSITION_COLOR,
   type LatLng,
   type MapRegion,
 } from '../lib/routeMap';
-import { ANDROID_MAP_NOTE } from '../lib/route';
+import { isMapAvailable, USE_GOOGLE_MAPS } from '../lib/mapProvider';
+import { MAP_KEY_NOTE } from '../lib/route';
 import { Colors, FontSize, Radius } from '../lib/theme';
 import { MapUnavailable } from './MapUnavailable';
 
@@ -36,13 +38,12 @@ export type RouteMapViewProps = {
   region: MapRegion | null;
   /** Every pin in route order, the pickup first. */
   points: LatLng[];
-  /** The road line from the API; null when Mapbox had none. */
+  /** The road line from the API; null when the API had none. */
   road: LatLng[] | null;
   markers: RouteMapMarker[];
 };
 
-// iOS draws Apple Maps and needs no key; Android draws Google Maps and does.
-const MAP_AVAILABLE = Platform.OS !== 'android' || !!process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
+const MAP_AVAILABLE = isMapAvailable(Platform.OS);
 
 export default function RouteMapView({ region, points, road, markers }: RouteMapViewProps) {
   const mapRef = useRef<MapView | null>(null);
@@ -62,13 +63,14 @@ export default function RouteMapView({ region, points, road, markers }: RouteMap
     }
   }, [points, region]);
 
-  if (!MAP_AVAILABLE) return <MapUnavailable note={ANDROID_MAP_NOTE} />;
+  if (!MAP_AVAILABLE) return <MapUnavailable note={MAP_KEY_NOTE} />;
   if (!region) return null;
 
   return (
     <View style={styles.wrap}>
       <MapView
         ref={mapRef}
+        provider={USE_GOOGLE_MAPS ? PROVIDER_GOOGLE : undefined}
         style={styles.map}
         initialRegion={region}
         accessibilityLabel="Route map"

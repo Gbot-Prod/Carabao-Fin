@@ -766,6 +766,9 @@ export type ApiInquiryThread = {
 // S13 (plan §5.8): the address form's map pin (web util/api/locations.ts). A Mapbox place,
 // trimmed by the API to what the pin reads; both geocoding calls go through the API so the
 // Mapbox token stays on the server, and `center` is [lng, lat] like Mapbox's own.
+/** One street suggestion. `center` is [lng, lat]; null: ask api.locations.place. */
+export type PlaceSuggestion = { id: string; title: string; subtitle: string; center: [number, number] | null };
+
 export type PlaceFeature = {
   id?: string | null;
   place_type?: string[];
@@ -992,6 +995,17 @@ export const api = {
       request<{ feature: PlaceFeature | null }>('/locations/reverse-geocode', token, {
         method: 'POST',
         body: JSON.stringify(pin),
+      }).then((res) => res.feature),
+    // The dropdown under the street field (web util/api/locations.ts suggestPlaces / placeById).
+    suggest: (token: string | null, query: string, session: string) =>
+      request<{ suggestions: PlaceSuggestion[] }>('/locations/suggest', token, {
+        method: 'POST',
+        body: JSON.stringify({ query: query.slice(0, 256), session }),
+      }).then((res) => res.suggestions ?? []),
+    place: (token: string | null, id: string, session: string) =>
+      request<{ feature: PlaceFeature | null }>('/locations/place', token, {
+        method: 'POST',
+        body: JSON.stringify({ id, session }),
       }).then((res) => res.feature),
     pinCheck: (token: string | null, pin: { lat: number; lng: number }) =>
       request<PinCheckResult>('/locations/pin-check', token, {

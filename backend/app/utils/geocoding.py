@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 import requests as _requests
 
+from app.services import google_maps, maps_provider
 from app.services.service_area import LUZON_BBOX, in_luzon_bbox
 
 # Carabao serves the Luzon island group only (B2).
@@ -30,7 +31,35 @@ def _normalise_address(address: str) -> str:
     return cleaned
 
 
+def _geocode_google(address: str) -> tuple[float, float] | None:
+    for attempt in range(1, _GEOCODE_ATTEMPTS + 1):
+        try:
+            feature = google_maps.forward_feature(_normalise_address(address))
+            break
+        except google_maps.GoogleUnavailable:
+            if attempt == _GEOCODE_ATTEMPTS:
+                logger.warning(
+                    "geocode: Google unavailable after %s attempts",
+                    _GEOCODE_ATTEMPTS,
+                )
+                return None
+            time.sleep(0.5 * attempt)
+            logger.info("geocode: retry %s/%s", attempt + 1, _GEOCODE_ATTEMPTS)
+    if not feature:
+        logger.info("geocode: no result")
+        return None
+    lng, lat = feature["center"]
+    if not in_luzon_bbox(lat, lng):
+        logger.info("geocode: result outside Luzon")
+        return None
+    return (lat, lng)
+
+
 def _geocode_sync(address: str) -> tuple[float, float] | None:
+    if not address.strip():
+        return None
+    if maps_provider.geocode_provider() == "google":
+        return _geocode_google(address)
     token = os.getenv("MAPBOX_ACCESS_TOKEN", "")
     if not token or not address.strip():
         return None
@@ -99,7 +128,7 @@ def _geocode_sync(address: str) -> tuple[float, float] | None:
 
 
 def _geocode(address: str) -> tuple[float, float] | None:
-    key = address.strip().lower()
+    key = f"{maps_provider.geocode_provider()}:{address.strip().lower()}"
     if key in _geocode_cache:
         return _geocode_cache[key]
     result = _geocode_sync(address)
