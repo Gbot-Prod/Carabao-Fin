@@ -2,7 +2,7 @@
 
 Unverified merchants keep the Merchant Centre: they edit the shop draft, add
 produce (private), set up payout details. Publishing, public produce, cart and
-checkout, payout requests and live vouchers are refused or empty until
+checkout and payout requests are refused or empty until
 verified. A suspension takes the shop offline; placed orders still complete.
 """
 
@@ -29,8 +29,8 @@ from app.services.merchant_verification import (
     merchant_can_request_payout,
     merchant_can_sell,
 )
+from tests.checkout_helpers import ADDRESS, _cart
 from tests.payout_codes import save_payout_info
-from tests.test_vouchers import ADDRESS, _cart
 
 UNVERIFIED = ("setup", "under_review", "needs_changes", "suspended")
 GCASH = {
@@ -185,23 +185,6 @@ def test_suspended_merchant_may_still_request_earned_payouts(
     res = owner.post("/merchants/me/payouts/request")
     # Not the verification refusal: there is simply nothing to cash out.
     assert res.status_code == 400, res.text
-
-
-def test_vouchers_stay_off_until_verified(db: Session, merchant: Any) -> None:
-    _set(db, merchant, "under_review")
-    owner = _owner(db, merchant)
-    body = {"code": "SAVE10", "kind": "percent", "value": 10}
-
-    assert owner.post("/merchants/me/vouchers", json=body).status_code == 403
-    res = owner.post("/merchants/me/vouchers", json={**body, "active": False})
-    assert res.status_code == 201, res.text
-    voucher_id = res.json()["id"]
-    res = owner.patch(f"/merchants/me/vouchers/{voucher_id}", json={"active": True})
-    assert res.status_code == 403
-
-    _set(db, merchant, "verified")
-    res = owner.patch(f"/merchants/me/vouchers/{voucher_id}", json={"active": True})
-    assert res.status_code == 200, res.text
 
 
 def test_unverified_merchant_adds_produce_privately(db: Session, merchant: Any) -> None:

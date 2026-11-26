@@ -45,9 +45,8 @@ test('fil keeps the same placeholders as en', () => {
 });
 
 test('merchant confirm texts are in both languages (CF-0086)', () => {
-  for (const key of ['deleteProduce', 'deleteReply', 'discardDraft', 'unpublishShop', 'deleteVoucher']) {
+  for (const key of ['deleteProduce', 'deleteReply', 'discardDraft', 'unpublishShop']) {
     assert.ok(enLeaves.has(`merchantConfirm.${key}`), key);
     assert.ok(filLeaves.has(`merchantConfirm.${key}`), key);
   }
-  assert.deepEqual(placeholders(fil.merchantConfirm.deleteVoucher), ['code']);
 });

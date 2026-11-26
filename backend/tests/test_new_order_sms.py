@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import date, datetime
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -55,8 +55,6 @@ def _order(status="pending", phone="09171234567"):
             {"produce": "Okra", "quantity": 1},
         ],
         total_price=1540,
-        requested_delivery_date=date(2026, 11, 14),
-        delivery_window="08:00 – 10:00",
         merchant=SimpleNamespace(contact_number=phone),
     )
 
@@ -151,7 +149,7 @@ def test_test_mode_payment_sends_farmer_one_sms(test_mode, sent):
             "number": "09171234567",
             "message": (
                 "New Carabao order CB-2026-0042: 3 item(s), PHP 1,540. "
-                "Deliver Nov 14, 08:00 - 10:00. Open your dashboard for details."
+                "Open your dashboard for details."
             ),
         }
     ]

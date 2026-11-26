@@ -3,7 +3,7 @@
 // Run with `npm test`. CF-0111, plus the web merchant lib/format.ts helpers (S4).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatDate, formatPeso, formatRequestedDate, ratingLabel } from './format.ts';
+import { formatDate, formatPeso, ratingLabel } from './format.ts';
 
 test('a farm without reviews is "New", not 0 stars', () => {
   assert.equal(ratingLabel(4.25), '4.3');
@@ -22,10 +22,6 @@ test('money and dates read as on the web merchant dashboard', () => {
   assert.equal(formatDate(''), '—');
   assert.equal(formatDate('not a date'), 'not a date');
   assert.equal(formatDate('2026-11-24T12:00:00'), 'Nov 24, 2026');
-
-  // A YYYY-MM-DD is a calendar date, so no timezone can shift the day.
-  assert.equal(formatRequestedDate('2026-11-24'), 'Tue, Nov 24, 2026');
-  assert.equal(formatRequestedDate('garbage'), 'garbage');
 });
 
 test('dashboard dates read as on the web home (S19)', async () => {

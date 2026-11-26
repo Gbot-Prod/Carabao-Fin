@@ -86,16 +86,9 @@ def notify_merchant_new_order(*, order: Order) -> None:
         for item in order.items or []
         if isinstance(item, dict)
     )
-    schedule = ""
-    if order.requested_delivery_date:
-        schedule = f" Deliver {order.requested_delivery_date.strftime('%b %d')}"
-        if order.delivery_window:
-            # Keep the SMS in the GSM charset; an en dash forces UCS-2 (70 chars).
-            schedule += f", {order.delivery_window.replace('–', '-')}"
-        schedule += "."
     message = (
         f"New Carabao order {order_ref}: {item_count} item(s), "
-        f"PHP {order.total_price:,}.{schedule} Open your dashboard for details."
+        f"PHP {order.total_price:,}. Open your dashboard for details."
     )
 
     try:

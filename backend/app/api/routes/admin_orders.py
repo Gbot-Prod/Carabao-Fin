@@ -96,8 +96,6 @@ def _summary_fields(order: Order, flagged: bool = False) -> dict:
         "payment_status": payment_status(order),
         "total_price": order.total_price,
         "delivery_fee": order.delivery_fee or 0,
-        "discount": order.discount or 0,
-        "voucher_code": order.voucher_code,
         "ordered_at": order.ordered_at,
         "merchant_id": order.merchant_id,
         "merchant_name": order.merchant.merchant_name if order.merchant else None,
@@ -307,8 +305,6 @@ def _detail_view(db: Session, order: Order) -> AdminOrderDetail:
         ),
         delivery=AdminOrderDelivery(
             delivery_address=order.delivery_address,
-            requested_delivery_date=order.requested_delivery_date,
-            delivery_window=order.delivery_window,
             time_of_arrival=order.time_of_arrival,
             shipped_at=order.shipped_at,
             delivered_at=order.delivered_at,

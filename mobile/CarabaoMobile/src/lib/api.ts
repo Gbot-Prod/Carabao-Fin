@@ -8,7 +8,6 @@ import { historyQueryString, type HistoryQuery } from './orderHistory';
 import type { ServerCartLine } from './cartSync';
 import type { AddressPayload } from './addresses';
 import type { MerchantReviews } from './reviews';
-import type { VoucherPreview } from './vouchers';
 import type { NotificationPrefs } from './notificationPrefs';
 import { UNREAD_COUNT_QUERY } from './polling';
 
@@ -207,13 +206,8 @@ export type ApiOrderDetail = {
   status: string;
   payment_status: string;
   items: ApiCartItem[];
-  total_amount: number; // already net of the discount
-  // CF-0128 (M61): farm voucher on this order (backend CF-0064).
-  discount?: number;
-  voucher_code?: string | null;
+  total_amount: number;
   delivery_address: string | null;
-  requested_delivery_date: string | null;
-  delivery_window: string | null;
   notes: string | null;
   delivered_at: string | null;
   delivery_confirmed_by: string | null;
@@ -256,13 +250,9 @@ export type ApiReceipt = {
   farm_town: string | null;
   farm_contact_number: string | null;
   delivery_address: string | null;
-  requested_delivery_date: string | null;
-  delivery_window: string | null;
   lines: ApiReceiptLine[];
   subtotal: number;
   delivery_fee: number;
-  discount?: number;
-  voucher_code?: string | null;
   total: number;
 };
 
@@ -328,20 +318,13 @@ export function merchantLocation(m: Pick<ApiMerchant, 'city' | 'province'>): str
 }
 
 export type PlaceOrderPayload = {
-  // YYYY-MM-DD, today .. +30 days (CF-0115); shown to the farm as the requested day.
-  delivery_date?: string | null;
   delivery_address?: string | null;
   // From a saved address (CF-0110): the server checks the region is in Luzon.
   delivery_region?: string;
   delivery_lat?: number;
   delivery_lng?: number;
-  delivery_time?: string | null;
   notes?: string | null;
-  // CF-0131: one farm voucher code (≤ 40); the server works out the discount.
-  voucher_code?: string | null;
 };
-
-export type { VoucherPreview };
 
 export type PlacedOrder = {
   order_id: number;
@@ -489,12 +472,6 @@ export const api = {
     // "I did not get this": only in the hold after a delivery the farm marked; 409 after it.
     disputeDelivery: (token: string | null, orderId: number) =>
       request<ApiOrderDetail>(`/orders/me/${orderId}/dispute-delivery`, token, { method: 'POST' }),
-    // CF-0131: what a farm voucher code takes off the server cart now (no hold).
-    previewVoucher: (token: string | null, voucherCode: string) =>
-      request<VoucherPreview>('/orders/me/voucher-preview', token, {
-        method: 'POST',
-        body: JSON.stringify({ voucher_code: voucherCode }),
-      }),
     place: (token: string | null, payload: PlaceOrderPayload) =>
       request<PlaceOrderResponse>('/orders/me/place', token, {
         method: 'POST',

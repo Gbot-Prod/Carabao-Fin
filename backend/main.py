@@ -41,7 +41,6 @@ from app.models import (  # noqa: F401
     transaction,
     user,
     user_address,
-    voucher,
 )
 from app.services import (
     address_log,

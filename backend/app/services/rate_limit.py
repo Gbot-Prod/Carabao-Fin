@@ -98,8 +98,6 @@ ACTION_LIMITS: dict[str, Limit] = {
     # CF-0060 (B67): avatar, shop logo/banner and produce photos together.
     # Each upload decodes and re-encodes an image and writes to R2.
     "image_upload": Limit(60, 3600),
-    # CF-0064: checking a voucher code before checkout. Bounds code guessing.
-    "voucher_preview": Limit(30, 3600),
     # CF-0069: a data export reads every order, message and review of a person.
     "data_export": Limit(5, 3600),
     # CF-0077: each merchant application submit scans two documents of up to

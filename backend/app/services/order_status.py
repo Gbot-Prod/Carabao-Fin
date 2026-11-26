@@ -10,7 +10,7 @@ A merchant-set delivery is not payable at once: see
 """
 
 import os
-from datetime import UTC, datetime, time, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import exists
 from sqlalchemy.orm import Session, object_session
@@ -283,17 +283,9 @@ def auto_confirm_days() -> int:
     return int(os.getenv("ORDER_AUTO_CONFIRM_DAYS", "7"))
 
 
-# Requested delivery dates are Philippine calendar days (UTC+8, no DST).
-_PH_TZ = timezone(timedelta(hours=8))
-
-
 def auto_confirm_at(order: Order, days: int | None = None) -> datetime | None:
-    """When an in-transit order will auto-confirm, or None if it won't.
-
-    The window starts at shipping or at the start of the requested delivery
-    day, whichever is later, so an order shipped early cannot confirm (and
-    become payable) before the buyer could get it (CF-0050).
-    """
+    """When an in-transit order will auto-confirm (from shipping), or None if
+    it won't."""
     if order.status not in IN_TRANSIT_STATUSES:
         return None
     return auto_confirm_due(order, days)
@@ -307,10 +299,6 @@ def auto_confirm_due(order: Order, days: int | None = None) -> datetime | None:
     start = order.shipped_at
     if start.tzinfo is None:  # SQLite drops the zone
         start = start.replace(tzinfo=UTC)
-    requested = getattr(order, "requested_delivery_date", None)
-    if requested is not None:
-        delivery_day = datetime.combine(requested, time.min, tzinfo=_PH_TZ)
-        start = max(start, delivery_day)
     return start + timedelta(days=auto_confirm_days() if days is None else days)
 
 
@@ -405,7 +393,7 @@ def auto_confirm_delivered_orders(db: Session, days: int) -> int:
             continue
         due_at = auto_confirm_at(order, days)
         if due_at is None or due_at > datetime.now(UTC):
-            continue  # waits for its requested delivery day (CF-0050)
+            continue
         mark_delivered(order, confirmed_by="auto")
         confirmed += 1
 

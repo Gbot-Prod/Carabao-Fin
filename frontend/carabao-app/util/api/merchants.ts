@@ -555,8 +555,6 @@ export type MerchantOrder = {
   total_price: number;
   /** CF-0065: why the total can be lower than lines + delivery fee. */
   delivery_fee?: number;
-  discount?: number;
-  voucher_code?: string | null;
   items: Array<{ id?: string; produce?: string; quantity?: number; price?: number; unit?: string; farm?: string }>;
   delivery_address: string | null;
   ordered_at: string;
@@ -568,9 +566,6 @@ export type MerchantOrder = {
   shipment_id?: number | null;
   shipped_at?: string | null;
   auto_confirm_at?: string | null;
-  // What the buyer asked for at checkout; null on orders placed before scheduling.
-  requested_delivery_date: string | null; // YYYY-MM-DD
-  delivery_window: string | null; // e.g. "08:00 – 10:00"
   notes: string | null;
   /** Why it was cancelled, as the buyer was told. */
   cancel_reason?: string | null;

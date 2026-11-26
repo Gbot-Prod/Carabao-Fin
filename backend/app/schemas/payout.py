@@ -23,10 +23,7 @@ class MerchantOrderResponse(BaseModel):
     status: OrderStatus
     payment_status: PaymentStatus
     total_price: int
-    # CF-0065 (B72): why a total can be lower than its lines + delivery fee.
     delivery_fee: int = 0
-    discount: int = 0
-    voucher_code: str | None = None
     items: list[Any]
     delivery_address: str | None = None
     ordered_at: datetime
@@ -38,9 +35,6 @@ class MerchantOrderResponse(BaseModel):
     shipment_id: int | None = None
     shipped_at: datetime | None = None
     auto_confirm_at: datetime | None = None
-    # What the buyer asked for at checkout; NULL on orders placed before it.
-    requested_delivery_date: date | None = None
-    delivery_window: str | None = None
     notes: str | None = None
     # Why it was cancelled, as the buyer was told; None otherwise.
     cancel_reason: str | None = None

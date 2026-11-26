@@ -3,7 +3,6 @@ import styles from "../page.module.css";
 import s from "./orders.module.css";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import { ORDER_STATUS_LABELS, cancelMerchantOrder, type MerchantCancelReason } from "@/util/api";
-import { todayInManila } from "../lib/format";
 import type { MerchantOrdersState } from "../hooks/useMerchantOrders";
 import OrderCard from "./OrderCard";
 
@@ -21,7 +20,6 @@ type Props = {
 
 export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOpenShipments }: Props) {
   const { orders, readyToShip, loaded, loading, error, replaceOrder } = ordersState;
-  const today = useMemo(() => todayInManila(), []);
 
   const [filter, setFilter] = useState<OrderFilter>("all");
 
@@ -89,7 +87,6 @@ export default function OrdersTab({ ordersState, focusOrderId, onFocusDone, onOp
               <OrderCard
                 key={order.id}
                 order={order}
-                today={today}
                 focused={focusOrderId === order.id}
                 onCancel={(reason, note) => handleCancel(order.id, reason, note)}
               />

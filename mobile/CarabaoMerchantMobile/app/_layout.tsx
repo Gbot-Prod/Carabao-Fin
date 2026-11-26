@@ -79,7 +79,6 @@ function RootGate() {
         <Stack.Screen name="earnings" options={{ headerShown: false }} />
         <Stack.Screen name="inventory" options={{ headerShown: false }} />
         <Stack.Screen name="shop" options={{ headerShown: false }} />
-        <Stack.Screen name="vouchers" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
       </Stack.Protected>
       {/* S18: applying and its status are for an account without a farm (`forbidden`) and for a

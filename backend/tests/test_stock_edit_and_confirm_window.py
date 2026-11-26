@@ -1,4 +1,4 @@
-"""CF-0049: stock edits vs checkout. CF-0050: auto-confirm waits for the date."""
+"""CF-0049: stock edits vs checkout. Auto-confirm counts from shipping."""
 
 from datetime import UTC, date, datetime, timedelta
 
@@ -64,10 +64,10 @@ def test_stock_edit_without_expected_value_still_works(db, merchant):
     assert res.json()["stock_quantity"] == 4
 
 
-# CF-0050 ---------------------------------------------------------------------
+# Auto-confirm window ---------------------------------------------------------
 
 
-def _shipped(db, merchant, buyer, shipped_days_ago, requested):
+def _shipped(db, merchant, buyer, shipped_days_ago):
     order = Order(
         user_id=buyer[0].id,
         merchant_id=merchant.id,
@@ -75,35 +75,32 @@ def _shipped(db, merchant, buyer, shipped_days_ago, requested):
         total_price=100,
         items=[],
         shipped_at=datetime.now(UTC) - timedelta(days=shipped_days_ago),
-        requested_delivery_date=requested,
     )
     db.add(order)
     db.commit()
     return order
 
 
-def test_early_shipping_does_not_confirm_before_delivery_day(db, merchant, buyer):
-    today = date.today()
-    early = _shipped(db, merchant, buyer, 8, today + timedelta(days=2))
-    normal = _shipped(db, merchant, buyer, 8, today - timedelta(days=8))
+def test_auto_confirm_counts_from_shipping(db, merchant, buyer):
+    recent = _shipped(db, merchant, buyer, 3)
+    old = _shipped(db, merchant, buyer, 8)
 
     assert order_status.cancel_unshipped_orders(db, 5) == 0
     assert order_status.auto_confirm_delivered_orders(db, 7) == 1
     db.commit()
 
-    assert early.status == "shipped"
-    assert normal.status == "delivered"
-    due = order_status.auto_confirm_at(early, 7)
-    assert due.date() >= today + timedelta(days=8)
+    assert recent.status == "shipped"
+    assert old.status == "delivered"
 
 
-def test_delivery_date_more_than_30_days_ahead_is_refused(db, merchant, buyer):
+def test_buyer_cannot_send_a_delivery_date(db, merchant, buyer):
+    """The farm decides when to deliver; checkout takes no date or window."""
     talong = _produce(db, merchant)
     client = _buyer_client(db, buyer[0])
     client.put("/carts/me", json={"items": [{"produce_id": talong.id, "quantity": 1}]})
 
-    far = (date.today() + timedelta(days=40)).isoformat()
-    res = client.post("/orders/me/place", json={**ADDRESS, "delivery_date": far})
+    res = client.post(
+        "/orders/me/place", json={**ADDRESS, "delivery_date": date.today().isoformat()}
+    )
 
-    assert res.status_code == 400
-    assert "30 days" in res.json()["detail"]
+    assert res.status_code == 422

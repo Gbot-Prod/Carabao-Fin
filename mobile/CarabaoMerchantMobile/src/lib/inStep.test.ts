@@ -1,7 +1,6 @@
 // Merchant copy of mobile/CarabaoMobile/src/lib/inStep.test.ts. The checks for files this app
-// does not have are left out: orderHistory and orderDetail (CF-0128 x2), checkoutOptions and
-// vouchers (CF-0131). The CF-0133 reply check imports ./myReviews.ts. S15's voucher rules are
-// here (the app now has the screen the CF-0131 check was left out for).
+// does not have are left out: orderHistory and orderDetail (CF-0128 x2) and checkoutOptions
+// (CF-0131). The CF-0133 reply check imports ./myReviews.ts.
 /// <reference types="node" />
 // Run with `npm test`. CF-0106: values that must stay in step (SYSTEM_REFERENCE §3).
 // Reads the web and backend source files in this repo, so a change made on one side only
@@ -389,51 +388,6 @@ test('S14 shop page limits, slug rules and image parts = backend shopPage.py = w
   ]) {
     assert.ok(client.includes(path), `api.ts is missing ${path}`);
   }
-});
-
-test('S15 voucher code and percent cap = backend vouchers.py = web lib/vouchers.ts', async () => {
-  const { CODE_MESSAGE, CODE_PATTERN, MAX_PERCENT, deleteConfirmText } = await import('./vouchers.ts');
-
-  // The service's expression, which runs on the code after normalize_code upper-cases it.
-  const service = read('backend/app/services/vouchers.py');
-  const servicePattern = /^CODE_PATTERN = re\.compile\(r"(.+)"\)$/m.exec(service)?.[1] ?? '';
-  assert.ok(servicePattern.length > 0, 'CODE_PATTERN not found in backend/app/services/vouchers.py');
-  assert.equal(CODE_PATTERN.source, servicePattern);
-  assert.match(service, new RegExp(`^MAX_PERCENT = ${MAX_PERCENT}$`, 'm'));
-  // The schema takes either case and spaces around it, at the same 3-32 length.
-  assert.match(
-    read('backend/app/schemas/voucher.py'),
-    /^CODE_FIELD_PATTERN = r"\^\\s\*\[A-Za-z0-9\]\[A-Za-z0-9-\]\{2,31\}\\s\*\$"$/m,
-  );
-
-  // The web merchant form's own copies, in step with this app's.
-  const web = read('frontend/carabao-app/lib/vouchers.ts');
-  assert.ok(web.includes(`export const CODE_PATTERN = ${CODE_PATTERN.toString()};`), 'the web code pattern differs');
-  assert.ok(web.includes(`export const MAX_PERCENT = ${MAX_PERCENT};`), 'the web percent cap differs');
-  assert.ok(web.includes(CODE_MESSAGE), 'the web code message differs');
-
-  // The confirm is the web's merchantConfirm.deleteVoucher.
-  assert.match(read('frontend/carabao-app/lib/i18n/strings/en.ts'), /deleteVoucher: 'Delete voucher \{code\}\?'/);
-  assert.equal(deleteConfirmText('SAVE10'), 'Delete voucher SAVE10?');
-});
-
-test('S15 voucher calls and screen are wired like the web Vouchers tab', () => {
-  const client = read('mobile/CarabaoMerchantMobile/src/lib/api.ts');
-  // The list, create, edit (on/off) and delete the web page calls.
-  for (const call of [
-    "'/merchants/me/vouchers'",
-    '`/merchants/me/vouchers/${voucherId}`',
-    'createVoucher',
-    'updateVoucher',
-    'deleteVoucher',
-  ]) {
-    assert.ok(client.includes(call), `api.ts is missing ${call}`);
-  }
-  // app/vouchers.tsx renders the screen rather than the S3 placeholder.
-  assert.match(
-    read('mobile/CarabaoMerchantMobile/app/vouchers.tsx'),
-    /export \{ default \} from '\.\.\/src\/screens\/VouchersScreen';/,
-  );
 });
 
 // ── S17: onboarding (plan §5.12) ──────────────────────────────────────────────

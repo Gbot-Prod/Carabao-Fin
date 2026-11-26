@@ -64,7 +64,6 @@ SMALL_PRODUCER_LABEL = "Acknowledgement receipt — not a BIR invoice"
 def build_receipt(order: Order, payment: Transaction) -> ReceiptResponse:
     delivery_fee = _int(order.delivery_fee)
     total = _int(order.total_price)
-    discount = _int(getattr(order, "discount", 0))
     merchant = order.merchant
     buyer = order.user
     town = ""
@@ -90,16 +89,11 @@ def build_receipt(order: Order, payment: Transaction) -> ReceiptResponse:
         "farm_town": town or None,
         "farm_contact_number": merchant.contact_number if merchant else None,
         "delivery_address": order.delivery_address,
-        "requested_delivery_date": order.requested_delivery_date,
-        "delivery_window": order.delivery_window,
         "lines": receipt_lines(order.items),
         # The total charged is the stored order total; the subtotal is what is
-        # left after the delivery fee, with a voucher discount added back
-        # (CF-0058), so subtotal + delivery fee - discount = total.
-        "subtotal": total - delivery_fee + discount,
+        # left after the delivery fee.
+        "subtotal": total - delivery_fee,
         "delivery_fee": delivery_fee,
-        "discount": discount,
-        "voucher_code": order.voucher_code,
         "total": total,
     }
     return ReceiptResponse(**data)

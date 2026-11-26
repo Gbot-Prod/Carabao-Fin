@@ -13,33 +13,13 @@ import {
 } from "@/util/api";
 import getApiErrorMessage from "@/util/errorHelper";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
-import { addDays, formatPeso, formatRequestedDate, todayInManila } from "../lib/format";
+import { formatDate, formatPeso } from "../lib/format";
 import type { MerchantOrdersState } from "../hooks/useMerchantOrders";
 import type { ShipmentSelection } from "../hooks/useShipmentSelection";
 
-type GroupKey = "overdue" | "today" | "tomorrow" | "later" | "none";
-
-const GROUPS: { key: GroupKey; label: string }[] = [
-  { key: "overdue", label: "Past requested date" },
-  { key: "today", label: "Deliver today" },
-  { key: "tomorrow", label: "Deliver tomorrow" },
-  { key: "later", label: "Later" },
-  { key: "none", label: "No date requested" },
-];
-
-const groupOf = (order: MerchantOrder, today: string): GroupKey => {
-  const date = order.requested_delivery_date;
-  if (!date) return "none";
-  if (date < today) return "overdue";
-  if (date === today) return "today";
-  if (date === addDays(today, 1)) return "tomorrow";
-  return "later";
-};
-
-const bySchedule = (a: MerchantOrder, b: MerchantOrder) =>
-  (a.requested_delivery_date ?? "").localeCompare(b.requested_delivery_date ?? "") ||
-  (a.delivery_window ?? "").localeCompare(b.delivery_window ?? "") ||
-  a.id - b.id;
+// The farm decides when to deliver: oldest paid order first.
+const oldestFirst = (a: MerchantOrder, b: MerchantOrder) =>
+  a.ordered_at.localeCompare(b.ordered_at) || a.id - b.id;
 
 const PAST_PAGE = 10;
 // ORDER_PROOF_PHOTOS_PLAN.md: the web cannot take the packing photo; the merchant app does.
@@ -56,7 +36,6 @@ type Props = {
 export default function ShipmentsTab({ ordersState, selection, onOpenOrders }: Props) {
   const { t } = useLanguage();
   const { readyToShip, loaded, loading, error, reload } = ordersState;
-  const today = useMemo(() => todayInManila(), []);
 
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
@@ -80,16 +59,7 @@ export default function ShipmentsTab({ ordersState, selection, onOpenOrders }: P
 
   useEffect(() => { void reloadShipments(); }, [reloadShipments]);
 
-  const groups = useMemo(() => {
-    const buckets = new Map<GroupKey, MerchantOrder[]>();
-    for (const order of readyToShip) {
-      const key = groupOf(order, today);
-      buckets.set(key, [...(buckets.get(key) ?? []), order]);
-    }
-    return GROUPS
-      .filter((g) => buckets.has(g.key))
-      .map((g) => ({ ...g, orders: buckets.get(g.key)!.sort(bySchedule) }));
-  }, [readyToShip, today]);
+  const ready = useMemo(() => [...readyToShip].sort(oldestFirst), [readyToShip]);
 
   const active = shipments.filter((sh) => sh.completed_stop_count < sh.stop_count);
   const past = shipments.filter((sh) => sh.completed_stop_count >= sh.stop_count);
@@ -161,15 +131,9 @@ export default function ShipmentsTab({ ordersState, selection, onOpenOrders }: P
           </div>
         )}
 
-        {groups.map((group) => (
-          <ReadyGroup
-            key={group.key}
-            label={group.label}
-            urgent={group.key === "overdue" || group.key === "today"}
-            orders={group.orders}
-            selection={selection}
-          />
-        ))}
+        {ready.length > 0 && (
+          <ReadyGroup label="Oldest order first" orders={ready} selection={selection} />
+        )}
       </section>
 
       {/* Sticky action bar: only while something is selected. */}
@@ -225,9 +189,8 @@ export default function ShipmentsTab({ ordersState, selection, onOpenOrders }: P
   );
 }
 
-function ReadyGroup({ label, urgent, orders, selection }: {
+function ReadyGroup({ label, orders, selection }: {
   label: string;
-  urgent: boolean;
   orders: MerchantOrder[];
   selection: ShipmentSelection;
 }) {
@@ -251,7 +214,7 @@ function ReadyGroup({ label, urgent, orders, selection }: {
           onChange={() => selection.setSelected(ids, !all)}
           aria-label={`Select all ${ids.length} orders with a packing photo: ${label}`}
         />
-        <span className={`${s.groupLabel} ${urgent ? s.groupLabelUrgent : ""}`}>{label}</span>
+        <span className={s.groupLabel}>{label}</span>
         <span className={s.groupCount}>{orders.length}</span>
       </label>
 
@@ -280,8 +243,7 @@ function ReadyGroup({ label, urgent, orders, selection }: {
                   {order.delivery_address ?? "No address"}
                 </span>
                 <span className={s.readyWhen}>
-                  {order.requested_delivery_date ? formatRequestedDate(order.requested_delivery_date) : "Any day"}
-                  {order.delivery_window && ` · ${order.delivery_window}`}
+                  Ordered {formatDate(order.ordered_at)}
                 </span>
                 <span className={s.readyItems}>{itemCount} item{itemCount === 1 ? "" : "s"}</span>
                 <span className={s.readyTotal}>{formatPeso(order.total_price)}</span>

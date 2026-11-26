@@ -45,9 +45,6 @@ EXPORT_COLUMNS = [
     "unit_price",
     "line_total",
     "order_delivery_fee",
-    # CF-0065 (B71): a farm voucher; lines + delivery fee - discount = total.
-    "order_discount",
-    "order_voucher_code",
     "order_total",
 ]
 
@@ -261,8 +258,6 @@ def sales_export_rows(
         ]
         tail: list[object] = [
             order.delivery_fee or 0,
-            order.discount or 0,
-            order.voucher_code or "",
             order.total_price or 0,
         ]
         rows.extend(head + line + tail for line in lines)

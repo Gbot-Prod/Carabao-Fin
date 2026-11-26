@@ -14,7 +14,6 @@ import type {
   MerchantShipmentTracking,
   ShipmentSkipReason,
 } from './api.ts';
-import { addDays } from './format.ts';
 
 /** Same as MAX_SHIPMENT_ORDERS in backend/app/schemas/shipment.py and W/util/api/merchants.ts. */
 export const MAX_SHIPMENT_ORDERS = 20;
@@ -47,7 +46,6 @@ export const MAKE_ROUTE_LABEL = 'Make route';
 export const MAKING_ROUTE_LABEL = 'Making route…';
 export const CLEAR_LABEL = 'Clear';
 /** The web's per-row words (ShipmentsTab.tsx ReadyGroup). */
-export const ANY_DAY = 'Any day';
 export const NO_ADDRESS = 'No address';
 export const itemsLabel = (count: number) => `${count} item${count === 1 ? '' : 's'}`;
 export const selectAllLabel = (count: number, label: string) =>
@@ -90,63 +88,28 @@ export function readyToShipOrders<
   );
 }
 
-/** The web's GROUPS, in its order: the soonest delivery first, undated orders last. */
-export type ReadyGroupKey = 'overdue' | 'today' | 'tomorrow' | 'later' | 'none';
+/** The web's one ready group label (ShipmentsTab.tsx): the farm decides when to deliver. */
+export const READY_GROUP_LABEL = 'Oldest order first';
 
-export const READY_GROUPS: readonly { key: ReadyGroupKey; label: string }[] = [
-  { key: 'overdue', label: 'Past requested date' },
-  { key: 'today', label: 'Deliver today' },
-  { key: 'tomorrow', label: 'Deliver tomorrow' },
-  { key: 'later', label: 'Later' },
-  { key: 'none', label: 'No date requested' },
-];
-
-/** Which group an order falls in, against today's date in the Philippines (YYYY-MM-DD). */
-export function readyGroupOf(
-  order: Pick<ApiMerchantOrder, 'requested_delivery_date'>,
-  today: string,
-): ReadyGroupKey {
-  const date = order.requested_delivery_date;
-  if (!date) return 'none';
-  if (date < today) return 'overdue';
-  if (date === today) return 'today';
-  if (date === addDays(today, 1)) return 'tomorrow';
-  return 'later';
-}
-
-/** The web's bySchedule: requested date, then delivery window, then the older order first. */
-export function bySchedule(a: ApiMerchantOrder, b: ApiMerchantOrder): number {
-  return (
-    (a.requested_delivery_date ?? '').localeCompare(b.requested_delivery_date ?? '') ||
-    (a.delivery_window ?? '').localeCompare(b.delivery_window ?? '') ||
-    a.id - b.id
-  );
+/** The web's oldestFirst: the older order first, then the lower id. */
+export function oldestFirst(
+  a: Pick<ApiMerchantOrder, 'id' | 'ordered_at'>,
+  b: Pick<ApiMerchantOrder, 'id' | 'ordered_at'>,
+): number {
+  return a.ordered_at.localeCompare(b.ordered_at) || a.id - b.id;
 }
 
 export type ReadyGroup = {
-  key: ReadyGroupKey;
+  key: 'all';
   label: string;
-  /** The web paints "overdue" and "today" in the alert colour. */
   urgent: boolean;
   orders: ApiMerchantOrder[];
 };
 
-/** The ready orders bucketed and sorted as the web draws them; empty groups are dropped. */
-export function readyGroups(
-  orders: readonly ApiMerchantOrder[],
-  today: string,
-): ReadyGroup[] {
-  const buckets = new Map<ReadyGroupKey, ApiMerchantOrder[]>();
-  for (const order of orders) {
-    const key = readyGroupOf(order, today);
-    buckets.set(key, [...(buckets.get(key) ?? []), order]);
-  }
-  return READY_GROUPS.filter((g) => buckets.has(g.key)).map((g) => ({
-    key: g.key,
-    label: g.label,
-    urgent: g.key === 'overdue' || g.key === 'today',
-    orders: [...(buckets.get(g.key) ?? [])].sort(bySchedule),
-  }));
+/** The ready orders as the web draws them: one group, oldest first; none when empty. */
+export function readyGroups(orders: readonly ApiMerchantOrder[]): ReadyGroup[] {
+  if (orders.length === 0) return [];
+  return [{ key: 'all', label: READY_GROUP_LABEL, urgent: false, orders: [...orders].sort(oldestFirst) }];
 }
 
 // ── Selection ─────────────────────────────────────────────────────────────────

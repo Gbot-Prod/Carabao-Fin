@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_current_user, get_db
 from app.api.routes import sms
+from app.core.errors import FieldErrors
 from app.models.otp import OtpCode
 from app.services import otp as otp_service
 from app.services.phone_verification import read_token
@@ -22,6 +23,10 @@ _db = None
 def _env(monkeypatch, otp_db):
     global _db
     monkeypatch.setenv("AUTH_SYNC_SHARED_SECRET", "test-secret")
+    # otp_db has no merchants table; the taken-number test patches this.
+    monkeypatch.setattr(
+        sms.merchant_verification, "check_contact_number_free", lambda *_: None
+    )
     _db = otp_db
 
 
@@ -66,6 +71,20 @@ def test_otp_send_requires_auth(sent):
 def test_otp_send_rejects_non_ph_number(sent):
     resp = _client().post("/sms/otp/send", json={"number": "+1 555 123 4567"})
     assert resp.status_code == 400
+    assert sent == []
+
+
+def test_otp_send_refuses_a_number_another_shop_holds(sent, monkeypatch):
+    checked = []
+
+    def taken(_db, user_id, number):
+        checked.append((user_id, number))
+        raise FieldErrors({"contact_number": "taken"}, status_code=409)
+
+    monkeypatch.setattr(sms.merchant_verification, "check_contact_number_free", taken)
+    resp = _client().post("/sms/otp/send", json={"number": NUMBER})
+    assert resp.status_code == 409
+    assert checked == [(1, f"+{NORMALIZED}")]
     assert sent == []
 
 

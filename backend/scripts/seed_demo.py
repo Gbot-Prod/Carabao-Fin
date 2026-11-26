@@ -187,7 +187,6 @@ REVIEW_TEXT = [
 
 OPERATING_HOURS = "6:00 AM – 5:00 PM"
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-WINDOWS = ["08:00 – 10:00", "10:00 – 12:00", "13:00 – 15:00", "15:00 – 17:00"]
 
 
 def demo_email(local: str) -> str:
@@ -395,8 +394,6 @@ def make_order(db, buyer, merchant, produce_list, status, ordered_at, *, address
         delivery_address=address or saved.address,
         delivery_lat=(pin or (saved.lat, saved.lng))[0],
         delivery_lng=(pin or (saved.lat, saved.lng))[1],
-        requested_delivery_date=(ordered_at + timedelta(days=1)).date(),
-        delivery_window=RNG.choice(WINDOWS),
         notes="Please call upon arrival.",
         ordered_at=ordered_at,
         delivery_fee=fee,

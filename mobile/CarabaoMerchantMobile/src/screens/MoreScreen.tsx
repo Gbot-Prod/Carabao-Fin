@@ -157,7 +157,6 @@ export default function MoreScreen() {
           <Row icon="star-outline" label="Reviews" onPress={() => router.push('/reviews')} />
           <Row icon="layers-outline" label="Inventory" onPress={() => router.push('/inventory')} />
           <Row icon="storefront-outline" label="Shop page" onPress={() => router.push('/shop')} />
-          <Row icon="pricetag-outline" label="Vouchers" onPress={() => router.push('/vouchers')} />
           <Row icon="settings-outline" label="Store settings" onPress={() => router.push('/settings')} />
           <Row icon="notifications-outline" label="Notifications" onPress={() => router.push('/notifications')} />
         </View>

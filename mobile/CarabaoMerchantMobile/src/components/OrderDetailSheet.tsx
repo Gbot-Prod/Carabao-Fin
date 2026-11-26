@@ -1,6 +1,6 @@
 // src/components/OrderDetailSheet.tsx
 // S4 (plan §5.2): one order as the web merchant OrderCard shows it when expanded —
-// buyer, delivery, buyer note, items, voucher, the in-transit line and the actions.
+// buyer, delivery, buyer note, items, the in-transit line and the actions.
 // The status buttons come from src/lib/orderActions.ts (nextStatuses), so only the
 // moves the web and the API allow are offered. A farm cannot see whether a stop's
 // pin is approximate from an order (the API tells the route screen, S11), so no such
@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ApiMerchantOrder, MerchantOrderStatus } from '../lib/api';
 import { canCancel, nextStatuses } from '../lib/orderActions';
 import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
-import { formatDate, formatPeso, formatRequestedDate } from '../lib/format';
+import { formatDate, formatPeso } from '../lib/format';
 import { Colors, Spacing, Radius, FontSize } from '../lib/theme';
 import { Badge } from './UI';
 
@@ -56,16 +56,6 @@ export function OrderDetailSheet({ order, busy, onClose, onChat, onAdvance, onCa
   const canCancelNow = order ? canCancel(order.status) : false;
   const refund = order ? REFUND_LABELS[order.payment_status] : undefined;
   const inTransit = order?.status === 'shipped' || order?.status === 'out_for_delivery';
-  const discount = order?.discount ?? 0;
-  const requested = order
-    ? order.requested_delivery_date
-      ? formatRequestedDate(order.requested_delivery_date)
-      : order.delivery_window
-        ? 'Any day'
-        : null
-    : null;
-  const requestedLine =
-    requested && order?.delivery_window ? `${requested} · ${order.delivery_window}` : requested;
 
   return (
     <Modal visible={order != null} animationType="slide" transparent onRequestClose={onClose}>
@@ -100,10 +90,6 @@ export function OrderDetailSheet({ order, busy, onClose, onChat, onAdvance, onCa
                   </Field>
                 ) : null}
 
-                <Field label="Requested">
-                  <Text style={styles.value}>{requestedLine ?? 'No date requested'}</Text>
-                </Field>
-
                 <Field label="Ordered">
                   <Text style={styles.value}>{formatDate(order.ordered_at)}</Text>
                 </Field>
@@ -129,15 +115,6 @@ export function OrderDetailSheet({ order, busy, onClose, onChat, onAdvance, onCa
                     <Text style={styles.total}>{formatPeso(order.total_price)}</Text>
                   </View>
                 </View>
-
-                {discount > 0 ? (
-                  <Field label="Voucher">
-                    <Text style={styles.value}>
-                      {order.voucher_code ?? 'Voucher'}: −{formatPeso(discount)} (your farm pays it; the total and
-                      your payout already include it)
-                    </Text>
-                  </Field>
-                ) : null}
 
                 {inTransit ? (
                   <Text style={styles.awaiting}>

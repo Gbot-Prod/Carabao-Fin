@@ -50,20 +50,6 @@ export function parseOrderId(raw: string | string[] | undefined): number | null 
   return Number.isSafeInteger(id) ? id : null;
 }
 
-/**
- * CF-0128 (M61): the voucher row of the totals card, from the server's values only
- * (`total_amount` is already net of it; web orders/[orderId] "Voucher (CODE) −₱n").
- * Null when the order has no discount.
- */
-export function voucherLine(
-  discount: number | null | undefined,
-  code: string | null | undefined,
-): { label: string; amount: number } | null {
-  if (typeof discount !== 'number' || !Number.isFinite(discount) || discount <= 0) return null;
-  const c = (code ?? '').trim();
-  return { label: c ? `Voucher (${c})` : 'Voucher', amount: discount };
-}
-
 /** CF-0128 (M62): same text as the web order page for a review an admin hid (CF-0078). */
 export const HIDDEN_REVIEW_NOTICE =
   'After a check by Carabao, this review is not shown on the farm page and does not count in its rating. ' +

@@ -380,7 +380,7 @@ a.farmGroupName:hover {
   padding: 1.25rem;
 }
 
-/* Empty cart: the card fills the rest of the screen. */
+/* Empty cart: no card frame; the message fills the rest of the screen. */
 .page:has(.emptyState) {
   min-height: 100%;
   grid-template-rows: auto 1fr;
@@ -388,12 +388,18 @@ a.farmGroupName:hover {
 
 .card:has(> .emptyState) {
   display: grid;
+  background: none;
+  border: none;
+  box-shadow: none;
 }
 
+/* Flex column keeps the text grouped in the center (grid rows spread it out). */
 .emptyState {
   min-height: 300px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   gap: 0.65rem;
   padding: 1.25rem;

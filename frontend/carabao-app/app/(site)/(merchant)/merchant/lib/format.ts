@@ -16,13 +16,8 @@ export const formatRequestedDate = (ymd: string) => {
     : date.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 };
 
-// Today's date in the Philippines as YYYY-MM-DD, comparable with requested_delivery_date.
+// Today's date in the Philippines as YYYY-MM-DD, comparable with harvest and best-before dates.
 export const todayInManila = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date());
-
-export const addDays = (ymd: string, days: number) => {
-  const [y, m, d] = ymd.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
-};
 
 // Local PH mobile digits → "912 345 6789".
 export function formatLocalPhone(raw: string): string {

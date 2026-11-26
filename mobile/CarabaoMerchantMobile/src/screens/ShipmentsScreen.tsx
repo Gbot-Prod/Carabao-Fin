@@ -20,10 +20,9 @@ import {
   type MerchantShipmentSummary,
   type MerchantShipmentTracking,
 } from '../lib/api';
-import { formatDate, formatPeso, formatRequestedDate, todayInManila } from '../lib/format';
+import { formatDate, formatPeso } from '../lib/format';
 import {
   ACTIVE_SHIPMENTS_TITLE,
-  ANY_DAY,
   CLEAR_LABEL,
   COMPLETED_SHIPMENTS_TITLE,
   GO_TO_ORDERS,
@@ -112,8 +111,7 @@ function ReadyRow({
           {order.delivery_address ?? NO_ADDRESS}
         </Text>
         <Text style={styles.readyWhen}>
-          {order.requested_delivery_date ? formatRequestedDate(order.requested_delivery_date) : ANY_DAY}
-          {order.delivery_window ? ` · ${order.delivery_window}` : ''} · {itemsLabel(itemCount)}
+          Ordered {formatDate(order.ordered_at)} · {itemsLabel(itemCount)}
         </Text>
         <TouchableOpacity
           style={[styles.photoBtn, order.packing_photo && styles.photoBtnDone, photoBusy && styles.readyRowBlocked]}
@@ -200,8 +198,7 @@ export default function ShipmentsScreen() {
   // The order whose packing photo is uploading (one at a time).
   const [photoBusyId, setPhotoBusyId] = useState<number | null>(null);
 
-  const today = useMemo(() => todayInManila(), []);
-  const ready = useMemo(() => readyToShipOrders(orders ?? []), [orders]);
+  const ready =useMemo(() => readyToShipOrders(orders ?? []), [orders]);
   const readyIds = useMemo(() => new Set(ready.map((o) => o.id)), [ready]);
   // The web keeps the raw picks and filters them to what is still ready; count and post the
   // filtered set only, so an order that shipped elsewhere can never be sent again.
@@ -209,7 +206,7 @@ export default function ShipmentsScreen() {
     () => new Set([...selected].filter((id) => readyIds.has(id))),
     [selected, readyIds],
   );
-  const groups = useMemo(() => readyGroups(ready, today), [ready, today]);
+  const groups = useMemo(() => readyGroups(ready), [ready]);
   const { active, past } = useMemo(() => splitShipments(shipments), [shipments]);
   const skipped = created?.skipped_orders ?? [];
   const notes = skipNotes(skipped);

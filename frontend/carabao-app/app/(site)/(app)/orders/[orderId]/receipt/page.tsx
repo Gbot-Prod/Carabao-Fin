@@ -120,9 +120,6 @@ export default function OrderReceiptPage() {
             <h2>Billed to</h2>
             <p>{r.buyer_name ?? "—"}</p>
             {r.delivery_address && <p>{r.delivery_address}</p>}
-            {r.requested_delivery_date && (
-              <p>Delivery: {r.requested_delivery_date}{r.delivery_window ? `, ${r.delivery_window}` : ""}</p>
-            )}
           </section>
         </div>
 
@@ -155,14 +152,6 @@ export default function OrderReceiptPage() {
                 <th scope="row" colSpan={3}>Delivery</th>
                 <td className={styles.num}>{receiptPeso(r.delivery_fee)}</td>
               </tr>
-              {r.discount ? (
-                <tr>
-                  <th scope="row" colSpan={3}>
-                    Voucher{r.voucher_code ? ` (${r.voucher_code})` : ''}
-                  </th>
-                  <td className={styles.num}>−{receiptPeso(r.discount)}</td>
-                </tr>
-              ) : null}
               <tr className={styles.totalRow}>
                 <th scope="row" colSpan={3}>Total paid</th>
                 <td className={styles.num}>{receiptPeso(r.total)}</td>

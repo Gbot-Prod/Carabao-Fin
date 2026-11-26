@@ -265,7 +265,7 @@ function OrderDetailPanel({ orderId, onClose }: { orderId: number; onClose: () =
                 <dt>Buyer</dt><dd>{d.buyer_name ?? "—"}{d.buyer_email ? ` · ${d.buyer_email}` : ""}</dd>
                 <dt>Merchant</dt><dd>{d.merchant_name ?? "—"}</dd>
                 <dt>Placed</dt><dd>{when(d.ordered_at)}</dd>
-                <dt>Total</dt><dd>{peso(d.total_price)} (delivery fee {peso(d.delivery_fee)}{(d.discount ?? 0) > 0 ? `, voucher ${d.voucher_code ?? ""} −${peso(d.discount ?? 0)}` : ""})</dd>
+                <dt>Total</dt><dd>{peso(d.total_price)} (delivery fee {peso(d.delivery_fee)})</dd>
                 {d.notes && (<><dt>Notes</dt><dd>{d.notes}</dd></>)}
               </dl>
             </section>
@@ -321,7 +321,6 @@ function OrderDetailPanel({ orderId, onClose }: { orderId: number; onClose: () =
               <h3>Delivery</h3>
               <dl className={styles.grid}>
                 <dt>Address</dt><dd>{d.delivery.delivery_address ?? "—"}</dd>
-                <dt>Requested</dt><dd>{d.delivery.requested_delivery_date ?? "—"}{d.delivery.delivery_window ? ` · ${d.delivery.delivery_window}` : ""}</dd>
                 <dt>Est. arrival</dt><dd>{when(d.delivery.time_of_arrival)}</dd>
                 <dt>Shipped</dt><dd>{when(d.delivery.shipped_at)}</dd>
                 <dt>Delivered</dt><dd>{when(d.delivery.delivered_at)}</dd>

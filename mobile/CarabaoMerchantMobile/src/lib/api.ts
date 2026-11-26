@@ -442,12 +442,7 @@ export type ApiMerchantOrder = {
   buyer_phone: string | null;
   shipped: boolean;
   time_of_arrival: string | null;
-  requested_delivery_date: string | null;
-  delivery_window: string | null;
   notes: string | null;
-  // CF-0065: why a total can be lower than its lines + delivery fee.
-  discount?: number;
-  voucher_code?: string | null;
   // Set while the order is in transit: when the buyer's window closes (web OrderCard).
   auto_confirm_at?: string | null;
   // Why it was cancelled, as the buyer was told.
@@ -600,52 +595,6 @@ export type ShopPageUpdatePayload = {
   slug?: string;
   description?: string | null;
 };
-
-// S15 (plan §5.10): the farm's voucher codes (CF-0061, backend schemas/voucher.py, the web
-// util/api/vouchers.ts). `uses` counts the orders that were not cancelled, which is what the
-// caps count. `expires_at` is the first moment the code stops working, so the list shows the
-// day before (src/lib/vouchers.ts lastDay).
-export type VoucherKind = 'percent' | 'fixed';
-
-export type ApiVoucher = {
-  id: number;
-  code: string;
-  kind: VoucherKind;
-  /** Percent (1-90) for a percent voucher, pesos for a fixed one. */
-  value: number;
-  /** The least a basket must hold for the code to work; 0 for none. */
-  min_subtotal: number;
-  /** The most a percent voucher takes off; null for none. */
-  max_discount: number | null;
-  /** null for no cap. */
-  usage_limit: number | null;
-  per_user_limit: number;
-  starts_at: string | null;
-  expires_at: string | null;
-  active: boolean;
-  created_at: string | null;
-  uses: number;
-};
-
-// A new voucher (backend VoucherCreate). The form builds it (src/lib/vouchers.ts
-// buildVoucherInput): the code upper-cased, whole pesos, and a last day that works through the
-// whole day in Manila.
-export type VoucherCreatePayload = {
-  code: string;
-  kind: VoucherKind;
-  value: number;
-  min_subtotal: number;
-  max_discount: number | null;
-  usage_limit: number | null;
-  per_user_limit: number;
-  starts_at: string | null;
-  expires_at: string | null;
-  active: boolean;
-};
-
-// A change to a voucher (backend VoucherUpdate). `code` cannot change: buyers may already have
-// it, and the server refuses the field (extra="forbid").
-export type VoucherUpdatePayload = Partial<Omit<VoucherCreatePayload, 'code'>>;
 
 // S9 (plan §5.5, part 1): the payout destination, copied from the web util/api/merchants.ts.
 // A change is saved only with the SMS code sent for exactly that destination (CF-0004).
@@ -920,23 +869,6 @@ export const api = {
       form.append('banner', file as unknown as Blob);
       return request<ApiShopPage>('/merchants/me/shoppage/banner', token, { method: 'POST', body: form });
     },
-    // S15 (plan §5.10): the farm's voucher codes (backend api/routes/merchant_vouchers.py).
-    // Deleting works only on a code no order used (409 with the server's words otherwise): a
-    // redemption is the record of the discount each order got, so turn the code off instead.
-    // A voucher's code cannot change; PATCH sends the fields that do.
-    vouchers: (token: string | null) => request<ApiVoucher[]>('/merchants/me/vouchers', token),
-    createVoucher: (token: string | null, payload: VoucherCreatePayload) =>
-      request<ApiVoucher>('/merchants/me/vouchers', token, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }),
-    updateVoucher: (token: string | null, voucherId: number, payload: VoucherUpdatePayload) =>
-      request<ApiVoucher>(`/merchants/me/vouchers/${voucherId}`, token, {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-      }),
-    deleteVoucher: (token: string | null, voucherId: number) =>
-      request<null>(`/merchants/me/vouchers/${voucherId}`, token, { method: 'DELETE' }),
     // CF-0127: the farm's order chats, newest message first.
     chats: (token: string | null) => request<ChatSummary[]>('/merchants/me/chats', token),
     // S5: buyers' pre-order questions (backend GET /merchants/me/inquiries, web

@@ -1,6 +1,6 @@
 """A buyer's receipt for one paid order (CF-0049, B09)."""
 
-from datetime import date, datetime
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -34,13 +34,8 @@ class ReceiptResponse(BaseModel):
     farm_contact_number: str | None = None
 
     delivery_address: str | None = None
-    requested_delivery_date: date | None = None
-    delivery_window: str | None = None
 
     lines: list[ReceiptLine]
     subtotal: int
     delivery_fee: int
-    # CF-0058: farm voucher, 0 / None when none was used.
-    discount: int = 0
-    voucher_code: str | None = None
     total: int

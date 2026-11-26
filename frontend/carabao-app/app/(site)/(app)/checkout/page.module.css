@@ -47,10 +47,11 @@
   margin-bottom: 0.75rem;
 }
 
-.gridTwo {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.8rem;
+.scheduleNote {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-subtle);
 }
 
 .locationGrid {
@@ -212,56 +213,6 @@
   font-weight: 600;
 }
 
-/* CF-0064: farm voucher code */
-.voucherBlock {
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border-strong);
-}
-
-.voucherForm label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 0.35rem;
-}
-
-.voucherRow {
-  display: flex;
-  gap: 0.5rem;
-  align-items: stretch;
-}
-
-.voucherRow input {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-transform: uppercase;
-}
-
-.voucherRow .secondaryButton {
-  width: auto;
-  margin-top: 0;
-  flex: 0 0 auto;
-}
-
-.voucherApplied {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: space-between;
-  align-items: baseline;
-  color: #057a2d;
-  font-weight: 600;
-  margin: 0;
-}
-
-.linkButton {
-  background: none;
-  border: none;
-  padding: 0;
-  color: inherit;
-  text-decoration: underline;
-  cursor: pointer;
-  font: inherit;
-}
 
 @media (max-width: 980px) {
   .layout {
@@ -278,7 +229,6 @@
     padding: 1rem;
   }
 
-  .gridTwo,
   .locationGrid {
     grid-template-columns: 1fr;
   }

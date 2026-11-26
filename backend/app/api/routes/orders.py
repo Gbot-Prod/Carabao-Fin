@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -18,7 +18,6 @@ from app.models.review import Review
 from app.models.statuses import OrderStatus, TransactionStatus
 from app.models.user import User
 from app.models.user_address import UserAddress
-from app.models.voucher import Voucher
 from app.schemas.order import (
     CurrentOrderResponse,
     OrderDetailResponse,
@@ -26,8 +25,6 @@ from app.schemas.order import (
     PlacedOrder,
     PlaceOrderRequest,
     PlaceOrderResponse,
-    VoucherPreviewRequest,
-    VoucherPreviewResponse,
 )
 from app.schemas.pagination import MAX_PAGE, Page
 from app.schemas.receipt import ReceiptResponse
@@ -37,7 +34,6 @@ from app.services import (
     order_proof,
     rate_limit,
     store_pause,
-    vouchers,
 )
 from app.services.merchant_service import get_active_merchant
 from app.services.order_reservations import (
@@ -92,11 +88,6 @@ from ._order_helpers import (
 )
 
 router = APIRouter(tags=["orders"])
-
-# Buyers pick delivery dates on the Philippine calendar (UTC+8, no DST).
-_PH_TZ = timezone(timedelta(hours=8))
-# Furthest a buyer may schedule delivery (CF-0050).
-MAX_DELIVERY_DAYS_AHEAD = 30
 
 
 def _order_produce_ids(items: list[Any] | None) -> set[int]:
@@ -261,20 +252,6 @@ def place_order_from_cart(
             raise HTTPException(
                 status_code=400, detail="None of the selected items are in your cart"
             )
-    requested_day = payload.delivery_date
-    if requested_day is not None and requested_day < datetime.now(_PH_TZ).date():
-        raise HTTPException(
-            status_code=400, detail="Delivery date cannot be in the past"
-        )
-    if payload.delivery_date is not None and payload.delivery_date > datetime.now(
-        _PH_TZ
-    ).date() + timedelta(days=MAX_DELIVERY_DAYS_AHEAD):
-        # CF-0050: bounds how long payout can wait on the requested date.
-        raise HTTPException(
-            status_code=400,
-            detail=f"Delivery date must be within {MAX_DELIVERY_DAYS_AHEAD} days",
-        )
-
     release_superseded_orders(db, current_user.id, _order_produce_ids(cart_items))
 
     today = ph_today()
@@ -373,17 +350,6 @@ def place_order_from_cart(
             subtotal_by_merchant.get(produce.merchant_id, 0) + unit_price * quantity
         )
 
-    # CF-0058: a farm voucher lowers that farm's produce subtotal only (not
-    # the delivery fee). Checked after the stock lines, so its minimum spend
-    # is measured on the prices this checkout really uses.
-    voucher: Voucher | None = None
-    discount_by_merchant: dict[int, int] = {}
-    if payload.voucher_code and payload.voucher_code.strip():
-        voucher, voucher_discount = vouchers.claim(
-            db, payload.voucher_code, subtotal_by_merchant, cast(int, current_user.id)
-        )
-        discount_by_merchant[cast(int, voucher.merchant_id)] = voucher_discount
-
     # One order per merchant (C1); all of them or none (single commit below).
     # Shared locks, in id order: checkouts don't block each other, but a
     # concurrent merchant deletion either waits for these orders or is seen here.
@@ -408,14 +374,11 @@ def place_order_from_cart(
                 "from your cart to continue.",
             )
         service_fee = merchant.delivery_price or 0
-        discount = discount_by_merchant.get(merchant_id, 0)
         order = Order(
             user_id=current_user.id,
             merchant_id=merchant.id,
             status=OrderStatus.PENDING,
-            total_price=subtotal_by_merchant[merchant_id] + service_fee - discount,
-            discount=discount,
-            voucher_code=voucher.code if discount and voucher is not None else None,
+            total_price=subtotal_by_merchant[merchant_id] + service_fee,
             items=items_by_merchant[merchant_id],
             delivery_address=delivery_address,
             delivery_lat=delivery_pin.pin[0] if delivery_pin else None,
@@ -423,8 +386,6 @@ def place_order_from_cart(
             delivery_road_lat=road[0] if road else None,
             delivery_road_lng=road[1] if road else None,
             delivery_pin_confirmed=pin_confirmed,
-            requested_delivery_date=payload.delivery_date,
-            delivery_window=(payload.delivery_time or "").strip() or None,
             notes=(payload.notes or "").strip() or None,
             delivery_fee=service_fee,
             image=items_by_merchant[merchant_id][0].get("image"),
@@ -434,9 +395,6 @@ def place_order_from_cart(
 
     db.flush()  # ids for the notifications below
     for order, merchant in orders:
-        if voucher is not None and order.discount:
-            buyer_id = cast(int, current_user.id)
-            vouchers.record(db, voucher, order, buyer_id, cast(int, order.discount))
         notifications.notify(
             db,
             current_user.id,
@@ -459,8 +417,6 @@ def place_order_from_cart(
                 merchant_name=merchant.merchant_name,
                 total_price=order.total_price,
                 delivery_fee=order.delivery_fee,
-                discount=order.discount or 0,
-                voucher_code=order.voucher_code,
             )
         )
 
@@ -471,74 +427,6 @@ def place_order_from_cart(
         status=first.status,
         orders=placed,
     )
-
-
-@router.post("/orders/me/voucher-preview", response_model=VoucherPreviewResponse)
-def preview_voucher(
-    payload: VoucherPreviewRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> VoucherPreviewResponse:
-    """CF-0064: the discount a code would give on the buyer's cart now.
-
-    Reads the cart and listings like place-order but holds no stock and
-    records nothing. Lines place-order would refuse (hidden, expired, own
-    farm, unknown) are left out of the subtotal; place-order still refuses
-    them. Limited per buyer, since each call tests a code.
-    """
-    rate_limit.enforce_action(db, "voucher_preview", str(current_user.id))
-    cart = get_or_create_cart(db, cast(int, current_user.id))
-    own_merchant_id = (
-        db.query(Merchant.id).filter(Merchant.user_id == current_user.id).scalar()
-    )
-    today = ph_today()
-    lines: dict[int, int] = {}
-    cart_items: list[Any] = list(cast(Any, cart.items) or [])
-    for item in cart_items:
-        if not isinstance(item, dict):
-            continue
-        produce_id = _extract_item_int(item, "produce_id", "produceId", "id")
-        quantity = max(_to_int(item.get("quantity"), 0), 0)
-        if produce_id is not None and quantity > 0:
-            lines[produce_id] = lines.get(produce_id, 0) + quantity
-    subtotal_by_merchant: dict[int, int] = {}
-    if lines:
-        preview_rows = (
-            db.query(Produce)
-            .options(selectinload(Produce.merchant))
-            .filter(Produce.id.in_(list(lines)))
-            .all()
-        )
-        for produce in preview_rows:
-            merchant_id = cast(int, produce.merchant_id)
-            if (
-                is_withdrawn(produce)
-                or is_expired(produce, today)
-                or merchant_id == own_merchant_id
-                # CF-0072 (B83): checkout refuses a paused farm's lines; and
-                # any farm that is not verified to sell.
-                or not merchant_takes_orders(produce.merchant)
-            ):
-                continue
-            quantity = lines[cast(int, produce.id)]
-            subtotal_by_merchant[merchant_id] = (
-                subtotal_by_merchant.get(merchant_id, 0)
-                + unit_price_for(produce, quantity) * quantity
-            )
-    if not subtotal_by_merchant:
-        raise HTTPException(status_code=400, detail="Cart is empty")
-    voucher, discount = vouchers.claim(
-        db, payload.voucher_code, subtotal_by_merchant, cast(int, current_user.id)
-    )
-    merchant = db.get(Merchant, voucher.merchant_id)
-    response = VoucherPreviewResponse(
-        code=cast(str, voucher.code),
-        merchant_id=cast(int, voucher.merchant_id),
-        merchant_name=merchant.merchant_name if merchant is not None else "",
-        discount=discount,
-    )
-    db.rollback()  # release the voucher row lock; nothing was changed
-    return response
 
 
 @router.get("/orders/me/history", response_model=list[OrderItemResponse])

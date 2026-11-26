@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.models.order import Order
 from app.services import data_export
+from tests.checkout_helpers import _client
 from tests.test_admin_orders import _admin, _order
 from tests.test_admin_orders import _client as _admin_client
-from tests.test_vouchers import _client
 
 
 def test_hidden_order_leaves_only_the_buyer_lists(

@@ -16,7 +16,7 @@ import { ProtectedScreen } from '../components/ProtectedScreen';
 import { SkeletonList, LoadError } from '../components/Skeleton';
 import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
 import {
-  HIDDEN_REVIEW_NOTICE, deliveryProofState, orderActions, orderRef, parseOrderId, voucherLine,
+  HIDDEN_REVIEW_NOTICE, deliveryProofState, orderActions, orderRef, parseOrderId,
 } from '../lib/orderDetail';
 import { canEditReview } from '../lib/reviewForm';
 import { hasReceipt } from '../lib/receipt';
@@ -165,8 +165,6 @@ function OrderDetailContent() {
   const order = load.order;
   const actions = orderActions(order.status);
   const ref = orderRef(order.order_id, order.date_bought);
-  const schedule = [order.requested_delivery_date, order.delivery_window].filter(Boolean).join(' · ');
-  const voucher = voucherLine(order.discount, order.voucher_code);
   const proofState = deliveryProofState(order);
 
   return (
@@ -225,18 +223,16 @@ function OrderDetailContent() {
           ))}
           <View style={styles.divider} />
           <Row label="Delivery fee" value={peso(order.delivery_fee)} />
-          {voucher ? <Row label={voucher.label} value={`−${peso(voucher.amount)}`} /> : null}
           <View style={styles.row}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{peso(order.total_amount)}</Text>
           </View>
         </View>
 
-        {(order.delivery_address || schedule || order.notes) && (
+        {(order.delivery_address || order.notes) && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Delivery</Text>
             {order.delivery_address ? <Row label="Address" value={order.delivery_address} /> : null}
-            {schedule ? <Row label="Requested" value={schedule} /> : null}
             {order.notes ? <Row label="Notes" value={order.notes} /> : null}
           </View>
         )}

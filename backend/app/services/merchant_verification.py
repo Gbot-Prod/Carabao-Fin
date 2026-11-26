@@ -8,8 +8,7 @@ sets. Selling means:
 * publishing the shop page (merchant_shop.publish_my_shoppage);
 * produce and the shop appearing to buyers (account_suspension.merchant_is_public);
 * taking orders (_order_helpers.merchant_takes_orders);
-* requesting payouts (merchant_payouts / payout_service);
-* vouchers buyers can use (merchant_vouchers).
+* requesting payouts (merchant_payouts / payout_service).
 
 Before verification a merchant may draft the shop page, add produce (it
 stays private), set up payout details and look at every dashboard page.
@@ -47,10 +46,6 @@ PUBLISH_NOT_VERIFIED_DETAIL = (
 )
 PAYOUT_NOT_VERIFIED_DETAIL = (
     "Payouts start once Carabao approves your business documents."
-)
-VOUCHER_NOT_VERIFIED_DETAIL = (
-    "Vouchers can be turned on once Carabao approves your business documents. "
-    "You can save this one turned off for now."
 )
 
 # A suspended merchant may still be paid what it already earned (CF-0054).
@@ -167,7 +162,7 @@ _REVIEWED_FIELDS = (
 CONTACT_NUMBER_TAKEN = "This number is already used by another shop."
 
 
-def _check_contact_number_free(
+def check_contact_number_free(
     db: Session, user_id: int, contact_number: str | None
 ) -> None:
     """merchants.contact_number is unique: name the field instead of a 400."""
@@ -192,7 +187,7 @@ def ensure_merchant_for_application(db: Session, application: Any) -> Merchant:
     save, for Submit now and Submit later. Step 1 fields are refreshed on every
     save; the merchant's status is set by sync_verification_status.
     """
-    _check_contact_number_free(db, application.user_id, application.contact_number)
+    check_contact_number_free(db, application.user_id, application.contact_number)
     merchant = (
         db.query(Merchant).filter(Merchant.user_id == application.user_id).first()
     )

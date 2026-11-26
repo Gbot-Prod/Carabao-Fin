@@ -1,7 +1,5 @@
 """The merchant's orders tab sees what the buyer asked for at checkout."""
 
-from datetime import date
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -49,38 +47,24 @@ def _scheduled_order(db, merchant, buyer, **schedule):
     return order
 
 
-def test_order_list_includes_schedule_and_notes(db, merchant, buyer):  # noqa: F811
-    scheduled = _scheduled_order(
-        db,
-        merchant,
-        buyer,
-        requested_delivery_date=date(2026, 11, 20),
-        delivery_window="08:00 – 10:00",
-        notes="Leave at the gate",
-    )
-    legacy = _scheduled_order(db, merchant, buyer)
+def test_order_list_includes_notes(db, merchant, buyer):  # noqa: F811
+    with_notes = _scheduled_order(db, merchant, buyer, notes="Leave at the gate")
+    without = _scheduled_order(db, merchant, buyer)
 
     rows = {
         o["id"]: o
         for o in _merchant_client(db, merchant).get("/merchants/me/orders").json()
     }
 
-    assert rows[scheduled.id]["requested_delivery_date"] == "2026-11-20"
-    assert rows[scheduled.id]["delivery_window"] == "08:00 – 10:00"
-    assert rows[scheduled.id]["notes"] == "Leave at the gate"
-    assert rows[legacy.id]["requested_delivery_date"] is None
-    assert rows[legacy.id]["notes"] is None
+    assert rows[with_notes.id]["notes"] == "Leave at the gate"
+    assert rows[without.id]["notes"] is None
+    # The farm decides when to deliver; the buyer sends no date or window.
+    assert "requested_delivery_date" not in rows[with_notes.id]
+    assert "delivery_window" not in rows[with_notes.id]
 
 
-def test_status_update_keeps_schedule_and_notes(db, merchant, buyer):  # noqa: F811
-    order = _scheduled_order(
-        db,
-        merchant,
-        buyer,
-        requested_delivery_date=date(2026, 11, 20),
-        delivery_window="14:00 – 16:00",
-        notes="Call on arrival",
-    )
+def test_status_update_keeps_notes(db, merchant, buyer):  # noqa: F811
+    order = _scheduled_order(db, merchant, buyer, notes="Call on arrival")
 
     resp = _merchant_client(db, merchant).patch(
         f"/merchants/me/orders/{order.id}/status",
@@ -91,8 +75,6 @@ def test_status_update_keeps_schedule_and_notes(db, merchant, buyer):  # noqa: F
     body = resp.json()
     assert body["status"] == "cancelled"
     assert body["payment_status"] == "refund_pending"
-    assert body["requested_delivery_date"] == "2026-11-20"
-    assert body["delivery_window"] == "14:00 – 16:00"
     assert body["notes"] == "Call on arrival"
     assert body["cancel_reason"] == "Out of stock"
 

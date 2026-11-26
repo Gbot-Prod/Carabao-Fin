@@ -17,9 +17,9 @@ from app.models.order import Order
 from app.models.produce import Produce
 from app.services import store_pause
 from app.services.produce_freshness import ph_today
+from tests.checkout_helpers import _cart, _place
 from tests.shared_fixtures import _buyer
 from tests.test_merchant_orders import _merchant_client
-from tests.test_vouchers import _cart, _place
 
 URL = "/merchants/me/pause"
 
@@ -91,7 +91,7 @@ def test_checkout_refuses_a_paused_farm_until_the_day_after(
     merchant.paused_until = ph_today()  # paused through today
     db.commit()
 
-    res = _place(db, user, None)
+    res = _place(db, user)
     assert res.status_code == 400
     assert "on a break" in res.json()["detail"]
     db.rollback()
@@ -100,7 +100,7 @@ def test_checkout_refuses_a_paused_farm_until_the_day_after(
 
     merchant.paused_until = ph_today() - timedelta(days=1)  # the break is over
     db.commit()
-    assert _place(db, user, None).status_code == 200
+    assert _place(db, user).status_code == 200
 
 
 def test_takes_orders_and_reorder_follow_the_pause(

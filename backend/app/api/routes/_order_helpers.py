@@ -270,8 +270,6 @@ def _schedule_fields(order: Order) -> dict[str, Any]:
     """What the buyer chose at checkout, shared by every order serializer."""
     return {
         "delivery_address": order.delivery_address,
-        "requested_delivery_date": order.requested_delivery_date,
-        "delivery_window": order.delivery_window,
         "notes": order.notes,
     }
 
@@ -300,7 +298,6 @@ def to_order_history_item(order: Order, reviewed: bool = False) -> dict[str, Any
         # Orders placed before delivery_fee existed kept it on the item.
         "delivery_fee": order.delivery_fee
         or _to_int(first_item.get("deliveryFee", 0)),
-        "discount": order.discount or 0,
         "time_of_arrival": order.time_of_arrival,
         "auto_confirm_at": auto_confirm_at(order),
         "delivered_at": order.delivered_at,
@@ -340,8 +337,6 @@ def to_current_order_item(order: Order) -> dict[str, Any]:
         "payment_status": payment_status(order),
         "items": items,
         "total_amount": order.total_price,
-        "discount": order.discount or 0,
-        "voucher_code": order.voucher_code,
         **_schedule_fields(order),
     }
 

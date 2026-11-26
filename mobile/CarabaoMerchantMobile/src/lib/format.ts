@@ -23,28 +23,6 @@ export const formatDate = (v?: string | null) => {
     : d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' });
 };
 
-// "YYYY-MM-DD" → "Tue, Nov 24, 2026", read as a calendar date so no timezone shifts
-// the day (the web's requested-delivery date).
-export const formatRequestedDate = (ymd: string) => {
-  const [y, m, d] = ymd.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  return Number.isNaN(date.getTime())
-    ? ymd
-    : date.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-};
-
-// Today in the Philippines as "YYYY-MM-DD", comparable with `requested_delivery_date` and
-// `shipment.created_at.slice(0, 10)` (the web's `todayInManila`, S11's ready groups).
-export const todayInManila = () =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date());
-
-// "YYYY-MM-DD" plus days, as "YYYY-MM-DD", read in UTC so no timezone shifts the day
-// (the web's `addDays`, used for the "Deliver tomorrow" group).
-export const addDays = (ymd: string, days: number) => {
-  const [y, m, d] = ymd.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
-};
-
 // S19: the web dashboard's dates (M/(shell)/page.tsx `shortDate`, `orderDate`).
 /** "Nov 24" for "YYYY-MM-DD", read as a calendar date so no timezone shifts the day. */
 export const shortDate = (d: unknown) => {

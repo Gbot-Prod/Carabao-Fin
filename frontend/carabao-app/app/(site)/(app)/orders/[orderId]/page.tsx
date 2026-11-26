@@ -35,14 +35,6 @@ const formatDateTime = (value: string) =>
     year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
 
-// "2026-11-14" parsed as local midnight; new Date("YYYY-MM-DD") would be UTC and can shift a day.
-const formatCalendarDate = (value: string) => {
-  const [y, m, d] = value.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-PH", {
-    weekday: "short", year: "numeric", month: "short", day: "numeric",
-  });
-};
-
 const peso = (value: number) => `₱${value.toLocaleString()}`;
 
 // ── Status progress ───────────────────────────────────────────────────────────
@@ -429,14 +421,9 @@ export default function OrderDetailPage() {
 
   const awaitingConfirmation = isInTransit(order.status);
   const subtotal = order.items.reduce((sum, item) => sum + item.quantity * item.price, 0);
-  const discount = order.discount ?? 0;
   const total = order.total_amount ?? subtotal;
-  // CF-0064: the stored fee; total − subtotal is wrong once a voucher took
-  // something off. Old rows without the field fall back to that difference.
-  const deliveryFee = order.delivery_fee ?? Math.max(total - subtotal + discount, 0);
-  const schedule = order.requested_delivery_date
-    ? [formatCalendarDate(order.requested_delivery_date), order.delivery_window].filter(Boolean).join(", ")
-    : order.delivery_window ?? null;
+  // The stored fee. Old rows without the field fall back to total − subtotal.
+  const deliveryFee = order.delivery_fee ?? Math.max(total - subtotal, 0);
 
   const handleConfirmReceived = async () => {
     setSubmitting(true);
@@ -568,12 +555,6 @@ export default function OrderDetailPage() {
           <dl className={styles.totals}>
             <dt>Subtotal</dt><dd>{peso(subtotal)}</dd>
             <dt>Delivery</dt><dd>{peso(deliveryFee)}</dd>
-            {discount > 0 && (
-              <>
-                <dt>Voucher{order.voucher_code ? ` (${order.voucher_code})` : ""}</dt>
-                <dd>−{peso(discount)}</dd>
-              </>
-            )}
             <dt className={styles.totalRow}>Total</dt><dd className={styles.totalRow}>{peso(total)}</dd>
             <dt>Payment</dt><dd>{PAYMENT_STATUS_LABELS[order.payment_status]}</dd>
           </dl>
@@ -589,8 +570,6 @@ export default function OrderDetailPage() {
         <section className={styles.card}>
           <h2 className={styles.cardTitle}>Delivery</h2>
           <dl className={styles.info}>
-            <dt>Requested</dt>
-            <dd>{schedule ?? <span className={styles.faint}>Not specified</span>}</dd>
             <dt>Address</dt>
             <dd>{order.delivery_address || <span className={styles.faint}>Not specified</span>}</dd>
             <dt>Notes</dt>

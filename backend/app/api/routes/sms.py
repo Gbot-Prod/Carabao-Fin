@@ -14,7 +14,7 @@ from app.core.errors import upstream_error
 from app.integrations.sms.semaphore import SemaphoreError
 from app.integrations.sms.semaphore import send_otp as semaphore_send_otp
 from app.models.user import User
-from app.services import otp, rate_limit
+from app.services import merchant_verification, otp, rate_limit
 from app.services.phone_verification import (
     CONTACT_VERIFICATION_TTL,
     normalize_ph_mobile,
@@ -97,6 +97,9 @@ def send_otp_code(
 ):
     number = _normalize_phone_number(body.number)
     rate_limit.enforce(db, request, "otp_send", number)
+    # A number another shop holds is refused at save, so refuse it before the
+    # SMS credit is spent (stored as +639XXXXXXXXX).
+    merchant_verification.check_contact_number_free(db, current_user.id, f"+{number}")
     key = _merchant_otp_key(current_user.id, number)
     try:
         # Checks the secret and the cooldown before any SMS credit is spent.

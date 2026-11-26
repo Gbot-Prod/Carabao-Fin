@@ -37,14 +37,10 @@ test('CF-0135 failures map like the web page (404, 409, else retry)', () => {
   assert.equal(receiptFailure(undefined), 'error');
 });
 
-test('CF-0135 summary rows show the server amounts, voucher only when used', () => {
-  const plain = receiptSummaryRows({ subtotal: 500, delivery_fee: 80, discount: 0, voucher_code: null, total: 580 });
-  assert.deepEqual(plain.map((r) => r.label), ['Subtotal', 'Delivery', 'Total paid']);
-  const withVoucher = receiptSummaryRows({ subtotal: 1500, delivery_fee: 80, discount: 50, voucher_code: 'SAVE10', total: 1530 });
-  assert.deepEqual(withVoucher.map((r) => [r.label, r.value]), [
-    ['Subtotal', '₱1,500'], ['Delivery', '₱80'], ['Voucher (SAVE10)', '−₱50'], ['Total paid', '₱1,530'],
-  ]);
-  assert.equal(withVoucher.at(-1)?.total, true);
+test('CF-0135 summary rows show the server amounts', () => {
+  const rows = receiptSummaryRows({ subtotal: 500, delivery_fee: 80, total: 580 });
+  assert.deepEqual(rows.map((r) => [r.label, r.value]), [['Subtotal', '₱500'], ['Delivery', '₱80'], ['Total paid', '₱580']]);
+  assert.equal(rows.at(-1)?.total, true);
 });
 
 test('CF-0135 share text has the lines and totals but no address or phone', () => {
@@ -52,7 +48,7 @@ test('CF-0135 share text has the lines and totals but no address or phone', () =
     {
       receipt_number: 'CB-2026-0042', order_id: 42, payment_status: 'refunded', farm_name: 'Mang Ben Farm',
       lines: [{ name: 'Kale', unit: 'kg', quantity: 2, unit_price: 250, line_total: 500 }],
-      subtotal: 500, delivery_fee: 80, discount: 0, total: 580,
+      subtotal: 500, delivery_fee: 80, total: 580,
     },
     'Nov 20, 2026',
   );
@@ -86,7 +82,7 @@ test('CF-0135 in step with web and backend', () => {
 test('BIR RR 12-2023: a small producer receipt says it is not an invoice', () => {
   const base = {
     receipt_number: 'CB-2026-0043', order_id: 43, payment_status: 'paid', farm_name: 'Mang Ben Farm',
-    lines: [], subtotal: 0, delivery_fee: 0, discount: 0, total: 0,
+    lines: [], subtotal: 0, delivery_fee: 0, total: 0,
   };
   const label = 'Acknowledgement receipt — not a BIR invoice';
   assert.match(receiptShareText({ ...base, document_label: label }, 'Nov 21, 2026'), new RegExp(label));

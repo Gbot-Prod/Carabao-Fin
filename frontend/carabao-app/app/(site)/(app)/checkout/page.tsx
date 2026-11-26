@@ -4,7 +4,7 @@ import axios from "axios";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
-import { cancelPaymentCheckout, createPaymentCheckout, defaultAddress, fetchMyAddresses, fetchMyCart, placeOrderFromCart, previewVoucher, type CartItem, type UserAddress, type VoucherPreview } from "@/util/api";
+import { cancelPaymentCheckout, createPaymentCheckout, defaultAddress, fetchMyAddresses, fetchMyCart, placeOrderFromCart, type CartItem, type UserAddress } from "@/util/api";
 import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { clearPendingPayments, loadPendingPayments, savePendingPayments } from "@/util/pendingPayments";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
@@ -14,20 +14,9 @@ import { focusFirstInvalid } from "@/components/FieldError/FieldError";
 import { isLuzonRegion } from "@/util/serviceArea";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { fmt } from "@/lib/i18n/format";
-import getApiErrorMessage, { getApiErrorStatus, isPhoneVerificationRequired } from "@/util/errorHelper";
-import { normalizeBuyerCode } from "@/lib/vouchers";
+import { getApiErrorStatus, isPhoneVerificationRequired } from "@/util/errorHelper";
 import PhoneVerifyDialog from "@/components/PhoneVerifyDialog/PhoneVerifyDialog";
 import PageLoader from "@/components/PageLoader/PageLoader";
-
-// Same windows the mobile app offers, so both clients store comparable values.
-const TIME_WINDOWS = ["08:00 – 10:00", "10:00 – 12:00", "13:00 – 15:00", "16:00 – 18:00"];
-
-// YYYY-MM-DD in the buyer's local calendar (en-CA formats as ISO).
-const localIsoDate = (offsetDays = 0) => {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  return d.toLocaleDateString("en-CA");
-};
 
 export default function CheckoutPage() {
   const { t } = useLanguage();
@@ -44,12 +33,6 @@ export default function CheckoutPage() {
   const [street, setStreet] = useState("");
   const [postal, setPostal] = useState("");
   const [notes, setNotes] = useState("");
-  const [voucherInput, setVoucherInput] = useState("");
-  const [voucher, setVoucher] = useState<VoucherPreview | null>(null);
-  const [voucherError, setVoucherError] = useState<string | null>(null);
-  const [checkingVoucher, setCheckingVoucher] = useState(false);
-  const [deliveryDate, setDeliveryDate] = useState(() => localIsoDate(1));
-  const [deliveryWindow, setDeliveryWindow] = useState(TIME_WINDOWS[0]);
   // Delivery pin (U1b): starts at the saved address's pin, if any.
   const [pin, setPin] = useState<Pin | null>(null);
   // Whether the buyer placed the pin (false: only where the address geocoded to).
@@ -147,28 +130,6 @@ export default function CheckoutPage() {
   // Checkout creates one order per farm (C1), each with its own delivery fee.
   const groups = useMemo(() => groupCartByMerchant(checkoutItems), [checkoutItems]);
   const { itemTotal: subtotal, deliveryTotal, grandTotal } = cartTotals(groups);
-  // CF-0064: an applied farm voucher. The server checks it again at place-order.
-  const discount = voucher?.discount ?? 0;
-  const payable = Math.max(grandTotal - discount, 0);
-
-  const applyVoucher = async () => {
-    const code = normalizeBuyerCode(voucherInput);
-    if (!code) {
-      setVoucherError(t.checkout.voucherBadCode);
-      return;
-    }
-    setCheckingVoucher(true);
-    setVoucherError(null);
-    try {
-      setVoucher(await previewVoucher(code));
-    } catch (err) {
-      setVoucher(null);
-      setVoucherError(getApiErrorMessage(err) ?? t.checkout.voucherError);
-    } finally {
-      setCheckingVoucher(false);
-    }
-  };
-
   const handlePlaceOrder = async () => {
     if (checkoutItems.length === 0 || isPlacingOrder) {
       return;
@@ -191,11 +152,6 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!deliveryDate || deliveryDate < localIsoDate()) {
-      setError(t.checkout.errDate);
-      return;
-    }
-
     setIsPlacingOrder(true);
     setError(null);
     setReturnNotice(null);
@@ -203,15 +159,12 @@ export default function CheckoutPage() {
     try {
       const deliveryAddress = [street, addressForm.barangay, addressForm.city, addressForm.province, postal, 'Philippines'].filter(Boolean).join(', ') || null;
       const result = await placeOrderFromCart({
-        delivery_date: deliveryDate,
-        delivery_time: deliveryWindow,
         delivery_address: deliveryAddress,
         delivery_region: addressForm.region,
         delivery_lat: pin && pinConfirmed ? pin.lat : null,
         delivery_lng: pin && pinConfirmed ? pin.lng : null,
         delivery_pin_confirmed: !!pin && pinConfirmed,
         notes: notes || null,
-        voucher_code: voucher?.code ?? null,
         // Send exactly what this page shows, so unticked lines stay in the cart.
         ...(selectedIds ? { produce_ids: checkoutItems.map((item) => Number(item.id)) } : {}),
       });
@@ -317,31 +270,7 @@ export default function CheckoutPage() {
               error={pinError}
               address={{ street, postalCode: postal, ...addressForm }}
             />
-          </div>
-
-          <div className={styles.block}>
-            <h2>{t.checkout.schedule}</h2>
-            <div className={styles.gridTwo}>
-              <label>
-                {t.checkout.preferredDate}
-                <input
-                  type="date"
-                  value={deliveryDate}
-                  min={localIsoDate()}
-                  max={localIsoDate(30)}
-                  onChange={(event) => setDeliveryDate(event.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                {t.checkout.timeWindow}
-                <select value={deliveryWindow} onChange={(event) => setDeliveryWindow(event.target.value)}>
-                  {TIME_WINDOWS.map((slot) => (
-                    <option key={slot} value={slot}>{slot}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            <p className={styles.scheduleNote}>{t.checkout.scheduleNote}</p>
           </div>
 
           <div className={styles.block}>
@@ -387,61 +316,6 @@ export default function CheckoutPage() {
             ))
           )}
 
-          {checkoutItems.length > 0 && (
-            <div className={styles.voucherBlock}>
-              {voucher ? (
-                <p className={styles.voucherApplied}>
-                  <span>
-                    {fmt(t.checkout.voucherApplied, {
-                      code: voucher.code,
-                      amount: voucher.discount.toFixed(2),
-                      farm: voucher.merchant_name,
-                    })}
-                  </span>
-                  <button
-                    type="button"
-                    className={styles.linkButton}
-                    onClick={() => {
-                      setVoucher(null);
-                      setVoucherInput("");
-                    }}
-                  >
-                    {t.checkout.voucherRemove}
-                  </button>
-                </p>
-              ) : (
-                <form
-                  className={styles.voucherForm}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void applyVoucher();
-                  }}
-                >
-                  <label htmlFor="checkout-voucher">{t.checkout.voucherLabel}</label>
-                  <div className={styles.voucherRow}>
-                    <input
-                      id="checkout-voucher"
-                      value={voucherInput}
-                      maxLength={32}
-                      autoCapitalize="characters"
-                      autoComplete="off"
-                      onChange={(event) => {
-                        setVoucherInput(event.target.value);
-                        setVoucherError(null);
-                      }}
-                    />
-                    <button type="submit" className={styles.secondaryButton} disabled={checkingVoucher || !voucherInput.trim()}>
-                      {checkingVoucher ? t.checkout.voucherChecking : t.checkout.voucherApply}
-                    </button>
-                  </div>
-                </form>
-              )}
-              {voucherError && (
-                <p className={styles.errorMessage} role="alert">{voucherError}</p>
-              )}
-            </div>
-          )}
-
           <div className={styles.totals}>
             <p>
               <span>{t.checkout.subtotal}</span>
@@ -451,15 +325,9 @@ export default function CheckoutPage() {
               <span>{groups.length > 1 ? fmt(t.checkout.deliveryFeesFarms, { count: groups.length }) : t.checkout.deliveryFees}</span>
               <strong>PHP {deliveryTotal.toFixed(2)}</strong>
             </p>
-            {voucher && discount > 0 && (
-              <p>
-                <span>{fmt(t.checkout.voucherDiscount, { code: voucher.code })}</span>
-                <strong>−PHP {discount.toFixed(2)}</strong>
-              </p>
-            )}
             <p className={styles.grandTotal}>
               <span>{t.checkout.total}</span>
-              <strong>PHP {payable.toFixed(2)}</strong>
+              <strong>PHP {grandTotal.toFixed(2)}</strong>
             </p>
           </div>
 

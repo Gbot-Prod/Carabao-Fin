@@ -11,44 +11,24 @@ import {
   type MerchantCancelReason,
   type MerchantOrder,
 } from "@/util/api";
-import { addDays, formatDate, formatPeso, formatRequestedDate } from "../lib/format";
-
-type DeliveryUrgency = "overdue" | "today" | "tomorrow";
-
-// Only orders not yet shipped still need scheduling, so only they get flagged.
-const deliveryUrgency = (order: MerchantOrder, today: string): DeliveryUrgency | null => {
-  const requested = order.requested_delivery_date;
-  if (!requested || order.status !== "processing") return null;
-  if (requested < today) return "overdue";
-  if (requested === today) return "today";
-  if (requested === addDays(today, 1)) return "tomorrow";
-  return null;
-};
+import { formatDate, formatPeso } from "../lib/format";
 
 const USE_MERCHANT_APP = "Use the merchant app: this needs a photo at the address.";
 
-const URGENCY_LABEL: Record<DeliveryUrgency, string> = {
-  overdue: "Past requested date",
-  today: "Deliver today",
-  tomorrow: "Deliver tomorrow",
-};
-
 type Props = {
   order: MerchantOrder;
-  today: string;
   focused: boolean;
   /** Cancels with the farm's reason; rejects with the API error. */
   onCancel: (reason: MerchantCancelReason, note: string) => Promise<void>;
 };
 
 /** Collapsed to one summary line; click to see contact, address, note and items. */
-export default function OrderCard({ order, today, focused, onCancel }: Props) {
+export default function OrderCard({ order, focused, onCancel }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   // An order jumped to from a review opens itself.
   const open = expanded || focused;
 
-  const urgency = deliveryUrgency(order, today);
   const itemCount = order.items.length;
   const isOpenOrder = !isClosed(order.status);
   const photoOnlyCancel = order.status === "out_for_delivery";
@@ -73,13 +53,10 @@ export default function OrderCard({ order, today, focused, onCancel }: Props) {
               {PAYMENT_STATUS_LABELS[order.payment_status]}
             </span>
           )}
-          {urgency && (
-            <span className={`${styles.urgencyBadge} ${styles[`urgency_${urgency}`]}`}>{URGENCY_LABEL[urgency]}</span>
-          )}
           <span className={s.summaryText}>
             {order.buyer_name ?? "—"}
             {" · "}
-            {order.requested_delivery_date ? formatRequestedDate(order.requested_delivery_date) : "Any day"}
+            {formatDate(order.ordered_at)}
             {" · "}
             {itemCount} item{itemCount === 1 ? "" : "s"}
           </span>
@@ -140,18 +117,6 @@ export default function OrderCard({ order, today, focused, onCancel }: Props) {
           )}
 
           <div className={styles.orderAddress}>
-            <span className={styles.orderBuyerLabel}>Requested</span>
-            {order.requested_delivery_date || order.delivery_window ? (
-              <span className={styles.orderSchedule}>
-                {order.requested_delivery_date ? formatRequestedDate(order.requested_delivery_date) : "Any day"}
-                {order.delivery_window && ` · ${order.delivery_window}`}
-              </span>
-            ) : (
-              <span>No date requested</span>
-            )}
-          </div>
-
-          <div className={styles.orderAddress}>
             <span className={styles.orderBuyerLabel}>Ordered</span>
             <span>{formatDate(order.ordered_at)}</span>
           </div>
@@ -172,16 +137,6 @@ export default function OrderCard({ order, today, focused, onCancel }: Props) {
               </div>
             ))}
           </div>
-
-          {(order.discount ?? 0) > 0 && (
-            <div className={styles.orderAddress}>
-              <span className={styles.orderBuyerLabel}>Voucher</span>
-              <span>
-                {order.voucher_code ?? "Voucher"}: −{formatPeso(order.discount ?? 0)} (your farm pays it; the total
-                and your payout already include it)
-              </span>
-            </div>
-          )}
 
           {isInTransit(order.status) && (
             <span className={styles.orderAwaiting}>

@@ -126,7 +126,6 @@ def _delivered(hours_ago: float, **fields):
         delivery_confirmed_by="merchant",
         delivered_at=now - timedelta(hours=hours_ago),
         shipped_at=now - timedelta(hours=hours_ago + 1),
-        requested_delivery_date=None,
         delivery_buyer_confirmed_at=None,
         delivery_disputed_at=None,
         dispute_resolution=None,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -23,12 +23,9 @@ class OrderItemResponse(BaseModel):
     payment_status: PaymentStatus
     items: list[dict[str, Any]]
     delivery_address: str | None = None
-    requested_delivery_date: date | None = None
-    delivery_window: str | None = None
     notes: str | None = None
     # The buyer's tabbed order list shows these on each card.
     delivery_fee: int = 0
-    discount: int = 0
     time_of_arrival: datetime | None = None
     auto_confirm_at: datetime | None = None
     delivered_at: datetime | None = None
@@ -57,12 +54,7 @@ class CurrentOrderResponse(BaseModel):
     payment_status: PaymentStatus
     items: list[dict[str, Any]] = []
     total_amount: int = 0
-    # CF-0064: farm voucher on this order (total_amount is already net of it).
-    discount: int = 0
-    voucher_code: str | None = None
     delivery_address: str | None = None
-    requested_delivery_date: date | None = None
-    delivery_window: str | None = None
     notes: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -94,9 +86,8 @@ class PlaceOrderRequest(BaseModel):
     """Checkout options. Items, prices and fees come from the cart and the
     produce rows on the server, never from this body (CF-0012)."""
 
-    delivery_date: date | None = None
-    # A time window such as "08:00 – 10:00"; stored as Order.delivery_window.
-    delivery_time: str | None = Field(default=None, max_length=50)
+    # The farm picks when to deliver (it ships from Ready to ship); the buyer
+    # sends no date or time window.
     # One of the buyer's saved addresses. The server then takes the address
     # text, the PSGC area and the pin from that row, and the five fields below
     # (delivery_address ... delivery_pin_confirmed) must be left out.
@@ -113,8 +104,6 @@ class PlaceOrderRequest(BaseModel):
     # confirmed when it is a confirmed pin of one of the buyer's saved addresses.
     delivery_pin_confirmed: bool | None = None
     notes: str | None = Field(default=None, max_length=500)
-    # CF-0058: one farm voucher code. The discount is worked out on the server.
-    voucher_code: str | None = Field(default=None, max_length=40)
     # The cart lines the buyer ticked, by produce ID. None means the whole cart.
     # Quantities and prices still come from the saved cart, never from here.
     produce_ids: list[int] | None = Field(default=None, min_length=1, max_length=200)
@@ -127,22 +116,6 @@ class PlaceOrderRequest(BaseModel):
     )
 
 
-class VoucherPreviewRequest(BaseModel):
-    voucher_code: str = Field(min_length=1, max_length=40)
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class VoucherPreviewResponse(BaseModel):
-    """What the code would take off the current cart (CF-0064). Checked
-    again, from stored rows, when the order is placed."""
-
-    code: str
-    merchant_id: int
-    merchant_name: str
-    discount: int
-
-
 class PlacedOrder(BaseModel):
     order_id: int
     order_reference: str
@@ -151,8 +124,6 @@ class PlacedOrder(BaseModel):
     merchant_name: str
     total_price: int
     delivery_fee: int
-    discount: int = 0
-    voucher_code: str | None = None
 
 
 class PlaceOrderResponse(BaseModel):

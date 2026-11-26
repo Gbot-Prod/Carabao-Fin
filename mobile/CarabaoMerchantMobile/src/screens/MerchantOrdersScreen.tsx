@@ -20,7 +20,7 @@ import {
 } from '../lib/orderActions';
 import { takeProofAtAddress, takeProofPhoto } from '../lib/proofCapture';
 import { orderStatusColor, orderStatusLabel } from '../lib/orderStatus';
-import { formatPeso, formatRequestedDate } from '../lib/format';
+import { formatDate, formatPeso } from '../lib/format';
 import { parseOrderId } from '../lib/orderChat';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Badge, EmptyState } from '../components/UI';
@@ -55,10 +55,10 @@ function OrderRow({
         <Text style={styles.total}>{formatPeso(order.total_price)}</Text>
         <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
       </View>
-      {/* The web OrderCard summary line: buyer · requested date · items. */}
+      {/* The web OrderCard summary line: buyer · order date · items. */}
       <Text style={styles.summary}>
         {order.buyer_name ?? '—'} ·{' '}
-        {order.requested_delivery_date ? formatRequestedDate(order.requested_delivery_date) : 'Any day'} ·{' '}
+        {formatDate(order.ordered_at)} ·{' '}
         {itemCount} item{itemCount === 1 ? '' : 's'}
       </Text>
       {order.notes ? (

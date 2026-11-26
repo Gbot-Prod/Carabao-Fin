@@ -121,9 +121,6 @@ function ReceiptContent() {
   const r = load.receipt;
   const note = refundNote(r.payment_status);
   const ref = shortReference(r.payment_reference);
-  const delivery = r.requested_delivery_date
-    ? `Delivery: ${r.requested_delivery_date}${r.delivery_window ? `, ${r.delivery_window}` : ''}`
-    : null;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -147,7 +144,6 @@ function ReceiptContent() {
           <Text style={styles.cardTitle}>Billed to</Text>
           <Text style={styles.text}>{r.buyer_name ?? '—'}</Text>
           {r.delivery_address ? <Text style={styles.muted}>{r.delivery_address}</Text> : null}
-          {delivery ? <Text style={styles.muted}>{delivery}</Text> : null}
         </View>
 
         <View style={styles.card}>

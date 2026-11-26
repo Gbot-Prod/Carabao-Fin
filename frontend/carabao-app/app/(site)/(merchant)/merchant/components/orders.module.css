@@ -179,10 +179,6 @@
   color: var(--green-900);
 }
 
-.groupLabelUrgent {
-  color: #b45309;
-}
-
 .groupCount {
   padding: 1px 8px;
   border-radius: var(--radius-pill);

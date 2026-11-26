@@ -50,23 +50,15 @@ export function receiptFailure(status: number | undefined): ReceiptFailure {
 export type ReceiptSummary = {
   subtotal: number;
   delivery_fee: number;
-  discount?: number;
-  voucher_code?: string | null;
   total: number;
 };
 
-/** The rows under the items, as on the web: Subtotal, Delivery, Voucher (only when used), Total paid. */
+/** The rows under the items, as on the web: Subtotal, Delivery, Total paid. */
 export function receiptSummaryRows(r: ReceiptSummary): { label: string; value: string; total?: boolean }[] {
   const rows: { label: string; value: string; total?: boolean }[] = [
     { label: 'Subtotal', value: receiptPeso(r.subtotal) },
     { label: 'Delivery', value: receiptPeso(r.delivery_fee) },
   ];
-  if (r.discount) {
-    rows.push({
-      label: `Voucher${r.voucher_code ? ` (${r.voucher_code})` : ''}`,
-      value: `−${receiptPeso(r.discount)}`,
-    });
-  }
   rows.push({ label: 'Total paid', value: receiptPeso(r.total), total: true });
   return rows;
 }

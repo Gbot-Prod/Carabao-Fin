@@ -13,7 +13,6 @@ import {
   createdSummary,
   isActiveShipment,
   progressPercent,
-  readyGroupOf,
   readyGroups,
   readyToShipOrders,
   selectedIds,
@@ -33,8 +32,7 @@ const order = (id: number, patch: Record<string, unknown> = {}) =>
     status: 'processing',
     shipped: false,
     shipment_id: null,
-    requested_delivery_date: null,
-    delivery_window: null,
+    ordered_at: '2026-11-24T08:00:00Z',
     ...patch,
   }) as unknown as ApiMerchantOrder;
 
@@ -92,38 +90,16 @@ test('a selection forgets orders that stopped being ready, and never counts them
   assert.equal(applySelection(new Set<number>(), ready, [3], true).selected.size, 0);
 });
 
-test('the ready groups are the web\'s, soonest first with undated orders last', () => {
-  const today = '2026-11-24';
-  assert.equal(readyGroupOf(order(1, { requested_delivery_date: '2026-11-20' }), today), 'overdue');
-  assert.equal(readyGroupOf(order(1, { requested_delivery_date: today }), today), 'today');
-  assert.equal(readyGroupOf(order(1, { requested_delivery_date: '2026-11-25' }), today), 'tomorrow');
-  assert.equal(readyGroupOf(order(1, { requested_delivery_date: '2026-12-30' }), today), 'later');
-  assert.equal(readyGroupOf(order(1), today), 'none');
-
-  const groups = readyGroups(
-    [
-      order(9),
-      order(4, { requested_delivery_date: '2026-11-24', delivery_window: 'PM' }),
-      order(3, { requested_delivery_date: '2026-11-24', delivery_window: 'AM' }),
-      order(2, { requested_delivery_date: '2026-11-20' }),
-      order(5, { requested_delivery_date: '2026-11-25' }),
-      order(7, { requested_delivery_date: '2026-12-30' }),
-    ],
-    today,
-  );
-  assert.deepEqual(groups.map((g) => g.label), [
-    'Past requested date',
-    'Deliver today',
-    'Deliver tomorrow',
-    'Later',
-    'No date requested',
+test('ready orders are one group, oldest order first', () => {
+  const groups = readyGroups([
+    order(9, { ordered_at: '2026-11-24T08:00:00Z' }),
+    order(4, { ordered_at: '2026-11-20T08:00:00Z' }),
+    order(3, { ordered_at: '2026-11-20T08:00:00Z' }),
   ]);
-  assert.deepEqual(groups.map((g) => g.urgent), [true, true, false, false, false]);
-  // Today's two are ordered by delivery window, not by id.
-  assert.deepEqual(ids(groups[1].orders), [3, 4]);
-  // Empty groups are dropped.
-  assert.deepEqual(readyGroups([order(1, { requested_delivery_date: today })], today).map((g) => g.key), ['today']);
-  assert.deepEqual(readyGroups([], today), []);
+  assert.deepEqual(groups.map((g) => g.label), ['Oldest order first']);
+  // The same time: the lower id first.
+  assert.deepEqual(ids(groups[0].orders), [3, 4, 9]);
+  assert.deepEqual(readyGroups([]), []);
 });
 
 test('the stops a shipment left out are named with the web\'s words', () => {

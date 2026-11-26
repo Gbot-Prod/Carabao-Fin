@@ -1,5 +1,5 @@
 // src/screens/CheckoutScreen.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, Alert,
@@ -10,22 +10,11 @@ import { openCheckout } from '../lib/openCheckout';
 import { useCart } from '../lib/CartContext';
 import { useAuth } from '../lib/AuthContext';
 import { api, ApiError, defaultAddress, type ApiUserAddress } from '../lib/api';
-import { defaultDeliveryDate, deliveryDateChoices, deliveryDateError, placeOrderFailure } from '../lib/checkoutOptions';
-import { phToday } from '../lib/dates';
+import { placeOrderFailure } from '../lib/checkoutOptions';
 import { DELIVERY_ADDRESS_MAX, ORDER_NOTES_MAX } from '../lib/inputLimits';
 import { addressLine, addressSummary, deliveryFields } from '../lib/addresses';
 import { cartTotals, groupCartByFarm, type PendingOrder } from '../lib/cartGroups';
 import { blockerText, checkoutBlockers } from '../lib/cartSync';
-import {
-  normalizeBuyerCode,
-  payableAfterVoucher,
-  voucherAppliedText,
-  voucherCartKey,
-  voucherDiscountLabel,
-  VOUCHER_CODE_MAX,
-  VOUCHER_TEXT,
-  type VoucherPreview,
-} from '../lib/vouchers';
 import { Colors, Spacing, Radius, FontSize, Shadow } from '../lib/theme';
 import { Button, Divider, StatRow } from '../components/UI';
 import { ProtectedScreen } from '../components/ProtectedScreen';
@@ -37,19 +26,11 @@ const PAYMENT_METHODS = [
   { id: 'online', label: 'Online payment (GCash, Maya, card via PayMongo)', icon: '💳' },
 ];
 
-const TIME_WINDOWS = [
-  '08:00 – 10:00', '10:00 – 12:00', '13:00 – 15:00', '16:00 – 18:00',
-];
-
 function CheckoutScreenContent() {
   const router = useRouter();
   const { items, reload: reloadCart } = useCart();
   const { token } = useAuth();
   const [payment, setPayment] = useState('online');
-  const [timeWindow, setTimeWindow] = useState(TIME_WINDOWS[0]);
-  // CF-0115: the requested delivery day, as on the web (default tomorrow, PH time).
-  const [today] = useState(phToday);
-  const [deliveryDate, setDeliveryDate] = useState(() => defaultDeliveryDate(phToday()));
   const [address, setAddress] = useState('');
   // CF-0110: saved addresses; the default fills the field. Editing the text unlinks it.
   const [saved, setSaved] = useState<ApiUserAddress[]>([]);
@@ -83,42 +64,6 @@ function CheckoutScreenContent() {
   const groups = groupCartByFarm(items);
   const { itemTotal: total, deliveryTotal, grandTotal } = cartTotals(groups);
 
-  // CF-0131 (M52): one farm voucher. The discount shown is the server preview;
-  // place-order checks the code again. A cart change drops the applied voucher.
-  const [voucherInput, setVoucherInput] = useState('');
-  const [applied, setApplied] = useState<{ key: string; preview: VoucherPreview } | null>(null);
-  const [voucherError, setVoucherError] = useState<string | null>(null);
-  const [checkingVoucher, setCheckingVoucher] = useState(false);
-  const cartKey = useMemo(() => voucherCartKey(items), [items]);
-  const voucher = applied && applied.key === cartKey ? applied.preview : null;
-  const setVoucher = (preview: VoucherPreview | null) =>
-    setApplied(preview ? { key: cartKey, preview } : null);
-  const payable = payableAfterVoucher(grandTotal, voucher);
-
-  const applyVoucher = async () => {
-    const code = normalizeBuyerCode(voucherInput);
-    if (!code) {
-      setVoucherError(VOUCHER_TEXT.badCode);
-      return;
-    }
-    if (!token || items.length === 0) return;
-    setCheckingVoucher(true);
-    setVoucherError(null);
-    try {
-      // The preview reads the server cart, so send the phone's cart first.
-      await api.cart.replace(
-        token,
-        items.map((i) => ({ produce_id: i.produceId, quantity: i.quantity })),
-      );
-      setVoucher(await api.orders.previewVoucher(token, code));
-    } catch (err) {
-      setVoucher(null);
-      setVoucherError(err instanceof ApiError && err.message ? err.message : VOUCHER_TEXT.error);
-    } finally {
-      setCheckingVoucher(false);
-    }
-  };
-
   const handlePlaceOrder = async () => {
     if (!token) {
       Alert.alert('Sign In Required', 'Please sign in to place an order.');
@@ -126,11 +71,6 @@ function CheckoutScreenContent() {
     }
     if (items.length === 0) {
       Alert.alert('Cart Empty', 'Add some produce before checking out.');
-      return;
-    }
-    const dateProblem = deliveryDateError(deliveryDate, phToday());
-    if (dateProblem) {
-      Alert.alert('Delivery date', `${dateProblem}.`);
       return;
     }
     const blocked = checkoutBlockers(items);
@@ -148,10 +88,7 @@ function CheckoutScreenContent() {
       );
       const result = await api.orders.place(token, {
         ...deliveryFields(selected, address),
-        delivery_date: deliveryDate,
-        delivery_time: timeWindow,
         notes: notes.trim() || null,
-        voucher_code: voucher?.code ?? null,
       });
       // PayMongo takes one order per checkout: pay the first here, the
       // confirmation screen lists the other farms' orders to pay in turn.
@@ -261,38 +198,9 @@ function CheckoutScreenContent() {
             </Text>
           </View>
 
-          <Text style={styles.fieldLabel}>Delivery Date</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
-            {deliveryDateChoices(today).map((d) => (
-              <TouchableOpacity
-                key={d.value}
-                style={[styles.timePill, deliveryDate === d.value && styles.timePillActive]}
-                onPress={() => setDeliveryDate(d.value)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: deliveryDate === d.value }}
-                accessibilityLabel={`Deliver ${d.label}`}
-              >
-                <Text style={[styles.timePillText, deliveryDate === d.value && styles.timePillTextActive]}>
-                  {d.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <Text style={styles.fieldLabel}>Time Window</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timeScroll}>
-            {TIME_WINDOWS.map((tw) => (
-              <TouchableOpacity
-                key={tw}
-                style={[styles.timePill, timeWindow === tw && styles.timePillActive]}
-                onPress={() => setTimeWindow(tw)}
-              >
-                <Text style={[styles.timePillText, timeWindow === tw && styles.timePillTextActive]}>
-                  {tw}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <Text style={styles.fieldHint}>
+            The farm sets the delivery day. We tell you when your order ships.
+          </Text>
         </View>
 
         {/* Payment */}
@@ -336,67 +244,6 @@ function CheckoutScreenContent() {
           />
         </View>
 
-        {/* Voucher (CF-0131) */}
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="pricetag-outline" size={16} color={Colors.text} />
-            <Text style={styles.sectionTitle}> Voucher</Text>
-          </View>
-          {voucher ? (
-            <View style={styles.voucherRow}>
-              <Text style={styles.voucherApplied} accessibilityLiveRegion="polite">
-                {voucherAppliedText(voucher)}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setVoucher(null);
-                  setVoucherInput('');
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`${VOUCHER_TEXT.remove} voucher ${voucher.code}`}
-                style={styles.voucherBtn}
-              >
-                <Text style={styles.voucherBtnText}>{VOUCHER_TEXT.remove}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.voucherRow}>
-              <TextInput
-                style={[styles.input, styles.voucherInput]}
-                value={voucherInput}
-                onChangeText={(v) => {
-                  setVoucherInput(v);
-                  setVoucherError(null);
-                }}
-                maxLength={VOUCHER_CODE_MAX}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                placeholder={VOUCHER_TEXT.label}
-                placeholderTextColor={Colors.textLight}
-                accessibilityLabel={VOUCHER_TEXT.label}
-                returnKeyType="done"
-                onSubmitEditing={() => void applyVoucher()}
-              />
-              <TouchableOpacity
-                onPress={() => void applyVoucher()}
-                disabled={checkingVoucher || !voucherInput.trim()}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: checkingVoucher || !voucherInput.trim() }}
-                style={[styles.voucherBtn, (checkingVoucher || !voucherInput.trim()) && styles.voucherBtnOff]}
-              >
-                <Text style={styles.voucherBtnText}>
-                  {checkingVoucher ? VOUCHER_TEXT.checking : VOUCHER_TEXT.apply}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {voucherError && (
-            <Text style={styles.voucherError} accessibilityRole="alert">
-              {voucherError}
-            </Text>
-          )}
-        </View>
-
         {/* Order Summary */}
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
@@ -431,10 +278,7 @@ function CheckoutScreenContent() {
             </Text>
           )}
           <Divider style={{ marginTop: Spacing.sm }} />
-          {voucher && voucher.discount > 0 && (
-            <StatRow label={voucherDiscountLabel(voucher)} value={`−₱${voucher.discount.toLocaleString()}`} />
-          )}
-          <StatRow label="Total" value={`₱${payable.toLocaleString()}`} bold />
+          <StatRow label="Total" value={`₱${grandTotal.toLocaleString()}`} bold />
         </View>
 
         <View style={{ height: 120 }} />
@@ -444,7 +288,7 @@ function CheckoutScreenContent() {
       <View style={styles.footer}>
         <View style={styles.footerTotal}>
           <Text style={styles.footerLabel}>Total to pay</Text>
-          <Text style={styles.footerAmount}>₱{payable.toLocaleString()}</Text>
+          <Text style={styles.footerAmount}>₱{grandTotal.toLocaleString()}</Text>
         </View>
         <Button
           label="Place Order"
@@ -505,22 +349,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm, color: Colors.text, backgroundColor: Colors.surfaceAlt,
   },
   textArea: { textAlignVertical: 'top', minHeight: 72 },
-  voucherRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  voucherInput: { flex: 1 },
-  voucherApplied: { flex: 1, fontSize: FontSize.sm, color: Colors.primaryDark, fontWeight: '600' },
-  voucherBtn: {
-    minHeight: 44,
-    minWidth: 72,
-    paddingHorizontal: Spacing.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  voucherBtnOff: { opacity: 0.5 },
-  voucherBtnText: { fontSize: FontSize.sm, color: Colors.primaryDark, fontWeight: '600' },
-  voucherError: { fontSize: FontSize.xs, color: Colors.error, marginTop: Spacing.xs },
 
   timeScroll: { marginTop: Spacing.sm },
   timePill: {

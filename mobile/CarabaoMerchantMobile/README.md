@@ -54,7 +54,7 @@ Installed with `npx expo install` (SDK 58 versions in `package.json`):
 | `expo-image-picker` | produce photo, shop logo, shop banner |
 | `expo-document-picker` | onboarding documents (RSBSA, government ID, BIR certificate) |
 | `expo-file-system`, `expo-sharing` | sales CSV export |
-| `expo-clipboard` | copy voucher code and shop link |
+| `expo-clipboard` | copy shop link |
 
 `expo-file-system` is now a direct dependency (it was transitive only). `app.json` holds the
 `expo-image-picker` photo/camera permission text and the `react-native-maps` plugin;

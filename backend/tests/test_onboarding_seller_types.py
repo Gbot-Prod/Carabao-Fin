@@ -361,14 +361,10 @@ def test_receipt_of_a_declared_seller_is_not_an_invoice():
             ordered_at=None,
             delivery_fee=50,
             total_price=150,
-            discount=0,
             merchant=merchant,
             user=None,
             delivery_address=None,
-            requested_delivery_date=None,
-            delivery_window=None,
             items=[],
-            voucher_code=None,
         )
         payment = SimpleNamespace(paid_at=None, status="paid", paymongo_payment_id=None)
         return build_receipt(order, payment)

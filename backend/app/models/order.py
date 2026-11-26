@@ -3,7 +3,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
-    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -62,9 +61,6 @@ class Order(Base):
     # A rider reported that the pin could not be reached (pin quality, control 6).
     pin_unreachable_at = Column(DateTime(timezone=True), nullable=True)
     pin_unreachable_note = Column(String(200), nullable=True)
-    # What the buyer asked for at checkout; the route ETA is time_of_arrival.
-    requested_delivery_date = Column(Date, nullable=True, index=True)
-    delivery_window = Column(String, nullable=True)  # e.g. "08:00 – 10:00"
     notes = Column(Text, nullable=True)
     ordered_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -103,10 +99,6 @@ class Order(Base):
     # ETA from the optimised delivery route
     time_of_arrival = Column(DateTime(timezone=True), nullable=True)
     delivery_fee = Column(Integer, nullable=False, default=0, server_default="0")
-    # CF-0058: pesos a farm voucher took off the produce subtotal, and its code.
-    # total_price is already net of it: subtotal + delivery_fee - discount.
-    discount = Column(Integer, nullable=False, default=0, server_default="0")
-    voucher_code = Column(String(32), nullable=True)
     # CF-0070 (B10): the buyer removed it from their history. The row stays
     # for the farm, admins, payments and reviews; only the buyer's lists skip it.
     hidden_by_buyer_at = Column(DateTime(timezone=True), nullable=True)
