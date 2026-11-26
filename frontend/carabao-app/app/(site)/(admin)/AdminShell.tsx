@@ -8,10 +8,11 @@ import {
   Banknote,
   ClipboardCheck,
   Gavel,
+  History,
   LayoutDashboard,
-  LifeBuoy,
   LogOut,
   Menu,
+  MessageSquareWarning,
   Package,
   ShieldAlert,
   Star,
@@ -24,6 +25,8 @@ import {
   X,
 } from "lucide-react";
 import { signOut } from "@/lib/auth-client";
+import SupportIcon from "@/components/SupportIcon";
+import { HeaderSlotContext } from "./headerSlot";
 import styles from "./layout.module.css";
 
 type NavItem = { href: string; label: string; icon: ComponentType<{ size?: number; strokeWidth?: number }> };
@@ -40,6 +43,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/transactions", label: "Transactions", icon: ArrowLeftRight },
       { href: "/admin/payouts", label: "Payouts", icon: Banknote },
       { href: "/admin/refunds", label: "Refunds", icon: Undo2 },
+      { href: "/admin/disputes", label: "Disputes", icon: MessageSquareWarning },
     ],
   },
   {
@@ -49,15 +53,16 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/merchants", label: "Merchants", icon: Store },
       { href: "/admin/review", label: "Applications", icon: ClipboardCheck },
       { href: "/admin/listings", label: "Listings", icon: Package },
-      { href: "/admin/terms", label: "Word list", icon: ShieldAlert },
-      { href: "/admin/penalties", label: "Penalty points", icon: Gavel },
       { href: "/admin/reviews", label: "Reviews", icon: Star },
+      { href: "/admin/support", label: "Support", icon: SupportIcon },
     ],
   },
   {
-    title: "Support",
+    title: "Administration",
     items: [
-      { href: "/admin/support", label: "Support", icon: LifeBuoy },
+      { href: "/admin/terms", label: "Word list", icon: ShieldAlert },
+      { href: "/admin/penalties", label: "Penalties", icon: Gavel },
+      { href: "/admin/penalty-history", label: "Penalty history", icon: History },
       { href: "/admin/audit-log", label: "Audit log", icon: ScrollText },
     ],
   },
@@ -88,6 +93,8 @@ export default function AdminShell({
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  // The topbar element pages render their PageHeader into.
+  const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -191,13 +198,17 @@ export default function AdminShell({
           >
             <Menu size={20} />
           </button>
+          <div ref={setHeaderSlot} className={styles.headerSlot} />
+          {/* Shown only while no PageHeader fills the slot (see layout.module.css). */}
           <span className={styles.topbarTitle}>{current?.label ?? "Admin"}</span>
           <div className={styles.topbarRight}>
             <span className={styles.topbarName}>{displayName}</span>
             <span className={`${styles.avatar} ${styles.avatarSm}`} aria-hidden="true">{avatar}</span>
           </div>
         </header>
-        <main className={styles.main}>{children}</main>
+        <HeaderSlotContext.Provider value={headerSlot}>
+          <main className={styles.main}>{children}</main>
+        </HeaderSlotContext.Provider>
       </div>
     </div>
   );

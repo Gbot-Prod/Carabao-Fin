@@ -10,19 +10,45 @@ import {
   fetchAdminTransactions,
   type AdminTransaction,
   type AdminTransactionFilters,
+  type AdminTransactionSort,
   type AdminTransactionTotals,
   type Merchant,
 } from "@/util/api/admin";
 import type { TransactionStatus } from "@/util/api/statuses";
-import Pagination from "@/components/Pagination/Pagination";
 import base from "../orders/page.module.css";
 import styles from "./page.module.css";
-import PageHeader from "../../PageHeader";
+import PageHeader, { HeaderButton } from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import { Download } from "lucide-react";
+import TablePanel, {
+  TablePage,
+  TableChip,
+  TableDate,
+  TableFilter,
+  TableSearch,
+  TableSort,
+  TableStat,
+  type SortOption,
+} from "../../TablePanel";
+import SortHeader, { readSort, type SortState } from "../../SortHeader";
 
 const TXN_STATUSES: TransactionStatus[] = ["pending", "paid", "failed", "expired", "refund_pending", "refunded"];
 const FILTER_KEYS = ["status", "merchant_id", "date_from", "date_to", "q"] as const;
+const SORT_KEYS = ["id", "created", "paid", "order", "buyer", "merchant", "status", "amount", "fee", "share"] as const;
+/** The server's order when no sort is sent: newest first. */
+const DEFAULT_SORT: SortState<AdminTransactionSort> = { sort: "created", order: "desc" };
+const SORT_OPTIONS: SortOption<AdminTransactionSort>[] = [
+  { key: "created", label: "Created", firstOrder: "desc" },
+  { key: "paid", label: "Paid", firstOrder: "desc" },
+  { key: "id", label: "ID", firstOrder: "desc" },
+  { key: "order", label: "Order", firstOrder: "desc" },
+  { key: "buyer", label: "Buyer" },
+  { key: "merchant", label: "Merchant" },
+  { key: "status", label: "Status" },
+  { key: "amount", label: "Amount", firstOrder: "desc" },
+  { key: "fee", label: "Fee", firstOrder: "desc" },
+  { key: "share", label: "Merchant share", firstOrder: "desc" },
+];
 
 const peso = (n: number) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 }).format(n);
@@ -55,7 +81,11 @@ function AdminTransactionsContent() {
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const query = searchParams.toString();
   const filters = useMemo(() => filtersFrom(new URLSearchParams(query)), [query]);
-  const filterKey = FILTER_KEYS.map((k) => filters[k] ?? "").join("|") + `|${page}`;
+  const current = readSort<AdminTransactionSort>(searchParams, SORT_KEYS, DEFAULT_SORT);
+  const { sort, order } = current;
+  const filterKey = FILTER_KEYS.map((k) => filters[k] ?? "").join("|") + `|${sort}|${order}|${page}`;
+  // The list and the CSV export use the same filters and order.
+  const listQuery = useMemo(() => ({ ...filters, sort: sort ?? undefined, order }), [filters, sort, order]);
 
   const [rows, setRows] = useState<AdminTransaction[]>([]);
   const [total, setTotal] = useState(0);
@@ -63,7 +93,6 @@ function AdminTransactionsContent() {
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [merchants, setMerchants] = useState<Merchant[]>([]);
-  const [search, setSearch] = useState(filters.q ?? "");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -72,7 +101,7 @@ function AdminTransactionsContent() {
   }, []);
 
   useEffect(() => {
-    fetchAdminTransactions(filters, page)
+    fetchAdminTransactions(listQuery, page)
       .then((res) => {
         setRows(res.items);
         setTotal(res.total);
@@ -81,7 +110,7 @@ function AdminTransactionsContent() {
       })
       .catch(() => setError("Failed to load transactions."))
       .finally(() => setLoadedKey(filterKey));
-  }, [filters, page, filterKey]);
+  }, [listQuery, page, filterKey]);
 
   const loading = loadedKey !== filterKey;
 
@@ -96,9 +125,10 @@ function AdminTransactionsContent() {
   };
   const setFilter = (key: (typeof FILTER_KEYS)[number], value: string) =>
     updateParams({ [key]: value || null, page: null });
-  const clearFilters = () => {
-    setSearch("");
-    router.push(pathname);
+  const clearFilters = () => router.push(pathname);
+  const onSort = (next: SortState<AdminTransactionSort>) => {
+    const isDefault = next.sort === DEFAULT_SORT.sort && next.order === DEFAULT_SORT.order;
+    updateParams({ sort: isDefault ? null : next.sort, order: isDefault ? null : next.order, page: null });
   };
   const hasFilters = FILTER_KEYS.some((k) => filters[k] !== undefined);
 
@@ -106,7 +136,7 @@ function AdminTransactionsContent() {
     setExporting(true);
     setExportError(null);
     try {
-      await downloadAdminTransactionsCsv(filters);
+      await downloadAdminTransactionsCsv(listQuery);
     } catch {
       setExportError("Export failed. Try again.");
     } finally {
@@ -114,101 +144,74 @@ function AdminTransactionsContent() {
     }
   };
 
-  if (loading && rows.length === 0 && !error) return <PageLoader label="Loading transactions…" />;
+  const firstLoad = loading && rows.length === 0 && !error;
 
   return (
-    <div className={base.page}>
+    <TablePage>
       <PageHeader eyebrow="Money" title="Transactions" count={total} description="Checkout payments through PayMongo, with fees and each merchant's share.">
-        <button type="button" className={styles.export} onClick={handleExport} disabled={exporting || total === 0}>
-          <Download size={16} strokeWidth={1.9} />
-          {exporting ? "Exporting…" : "Export CSV"}
-        </button>
-      </PageHeader>
-      {exportError && <p className={styles.exportError}>{exportError}</p>}
-
-      <div className={base.filters}>
-        <form
-          className={base.field}
-          onSubmit={(e) => {
-            e.preventDefault();
-            setFilter("q", search.trim());
-          }}
+        <HeaderButton
+          onClick={handleExport}
+          disabled={exporting || total === 0}
+          icon={<Download size={15} strokeWidth={2} aria-hidden="true" />}
         >
-          <span>Search</span>
-          <div className={styles.search}>
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="PayMongo ID, #order, buyer email"
-              aria-label="Search transactions"
-            />
-            <button type="submit">Search</button>
-          </div>
-        </form>
-        <label className={base.field}>
-          <span>Status</span>
-          <select value={filters.status ?? ""} onChange={(e) => setFilter("status", e.target.value)}>
-            <option value="">All</option>
-            {TXN_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
-          </select>
-        </label>
-        <label className={base.field}>
-          <span>Merchant</span>
-          <select value={filters.merchant_id ?? ""} onChange={(e) => setFilter("merchant_id", e.target.value)}>
-            <option value="">All</option>
-            {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-          </select>
-        </label>
-        <label className={base.field}>
-          <span>Created from</span>
-          <input type="date" value={filters.date_from ?? ""} onChange={(e) => setFilter("date_from", e.target.value)} />
-        </label>
-        <label className={base.field}>
-          <span>To</span>
-          <input type="date" value={filters.date_to ?? ""} onChange={(e) => setFilter("date_to", e.target.value)} />
-        </label>
-        {hasFilters && (
-          <button type="button" className={base.clear} onClick={clearFilters}>Clear filters</button>
-        )}
-      </div>
-
-      {totals && !error && (
-        <div className={styles.totals} aria-label="Totals for the current filters">
-          <div className={styles.tile}>
-            <span className={styles.tileLabel}>Gross amount</span>
-            <span className={styles.tileValue}>{peso(totals.amount)}</span>
-          </div>
-          <div className={styles.tile}>
-            <span className={styles.tileLabel}>Platform fees</span>
-            <span className={styles.tileValue}>{peso(totals.platform_fee)}</span>
-          </div>
-          <div className={styles.tile}>
-            <span className={styles.tileLabel}>Merchant share</span>
-            <span className={styles.tileValue}>{peso(totals.merchant_amount)}</span>
-          </div>
-        </div>
-      )}
-
-      {error ? (
-        <div className={base.stateError}>{error}</div>
-      ) : rows.length === 0 ? (
-        <div className={base.state}>No transactions match these filters.</div>
-      ) : (
-        <div className={base.tableWrap}>
-          <table className={base.table}>
+          {exporting ? "Exporting…" : "Export CSV"}
+        </HeaderButton>
+      </PageHeader>
+      <TablePanel
+        activeFilters={FILTER_KEYS.filter((k) => k !== "q" && filters[k] !== undefined).length}
+        summary={
+          totals &&
+          !error && (
+            <>
+              <TableStat label="Gross amount" value={peso(totals.amount)} />
+              <TableStat label="Platform fees" value={peso(totals.platform_fee)} />
+              <TableStat label="Merchant share" value={peso(totals.merchant_amount)} />
+            </>
+          )
+        }
+        notice={exportError ? { text: exportError, tone: "error", onDismiss: () => setExportError(null) } : null}
+        sort={<TableSort options={SORT_OPTIONS} current={current} onSort={onSort} defaultLabel="Newest first" />}
+        filters={
+          <>
+            <TableFilter label="Status" value={filters.status ?? ""} onChange={(v) => setFilter("status", v)}>
+              <option value="">All</option>
+              {TXN_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
+            </TableFilter>
+            <TableFilter label="Merchant" value={String(filters.merchant_id ?? "")} onChange={(v) => setFilter("merchant_id", v)}>
+              <option value="">All</option>
+              {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
+            </TableFilter>
+            <TableDate label="Created from" value={filters.date_from ?? ""} onChange={(v) => setFilter("date_from", v)} />
+            <TableDate label="To" value={filters.date_to ?? ""} onChange={(v) => setFilter("date_to", v)} />
+            {hasFilters && <TableChip onClear={clearFilters}>Clear filters</TableChip>}
+          </>
+        }
+        search={
+          <TableSearch
+            applied={filters.q ?? ""}
+            onSearch={(v) => setFilter("q", v)}
+            placeholder="PayMongo ID, #order or buyer"
+            label="Search transactions"
+          />
+        }
+        message={firstLoad ? "Loading transactions…" : error ?? (rows.length === 0 ? "No transactions match these filters." : null)}
+        messageTone={error ? "error" : undefined}
+        loading={loading}
+        pagination={{ page, pageSize: ADMIN_PAGE_SIZE, total, onPageChange: (next) => updateParams({ page: String(next) }) }}
+      >
+          <table>
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Created</th>
-                <th>Paid</th>
-                <th>Order</th>
-                <th>Buyer</th>
-                <th>Merchant</th>
-                <th>Status</th>
-                <th>Amount</th>
-                <th>Fee</th>
-                <th>Merchant share</th>
+                <SortHeader label="ID" sortKey="id" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Created" sortKey="created" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Paid" sortKey="paid" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Order" sortKey="order" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Buyer" sortKey="buyer" current={current} onSort={onSort} />
+                <SortHeader label="Merchant" sortKey="merchant" current={current} onSort={onSort} />
+                <SortHeader label="Status" sortKey="status" current={current} onSort={onSort} />
+                <SortHeader label="Amount" sortKey="amount" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Fee" sortKey="fee" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Merchant share" sortKey="share" current={current} onSort={onSort} firstOrder="desc" />
                 <th>PayMongo payment</th>
               </tr>
             </thead>
@@ -237,16 +240,7 @@ function AdminTransactionsContent() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      <Pagination
-        page={page}
-        pageSize={ADMIN_PAGE_SIZE}
-        total={total}
-        disabled={loading}
-        onPageChange={(next) => updateParams({ page: String(next) })}
-      />
-    </div>
+      </TablePanel>
+    </TablePage>
   );
 }

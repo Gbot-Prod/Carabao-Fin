@@ -1,19 +1,20 @@
 """Support chat (CH2): any user talks to the admins. Same tables as order chat."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
-from app.api.routes.admin import _require_admin
+from app.api.routes.admin import _id_term, _require_admin
 from app.api.routes.chat import ChatMessageOut, _out
+from app.core.sql import SortOrder, ilike_contains
 from app.models.chat import ChatMessage, Conversation, ConversationRead
 from app.models.user import User
-from app.schemas.pagination import MAX_ID, MAX_OFFSET
+from app.schemas.pagination import MAX_FILTER_TEXT, MAX_ID, MAX_OFFSET
 from app.services import chat, notifications, rate_limit
 
 router = APIRouter(tags=["support"])
@@ -149,11 +150,18 @@ def write_to_support(
 SUPPORT_LIST_DEFAULT = 100
 SUPPORT_LIST_MAX = 200
 
+# "unread": unanswered first, then most recent (the inbox order).
+SupportSort = Literal["unread", "user", "when"]
+
 
 @router.get("/admin/support", response_model=list[SupportConversationSummary])
 def list_support_conversations(
     limit: int = Query(SUPPORT_LIST_DEFAULT, ge=1, le=SUPPORT_LIST_MAX),
     offset: int = Query(0, ge=0, le=MAX_OFFSET),
+    # The user's name or email, or a user id.
+    search: str | None = Query(None, alias="q", max_length=MAX_FILTER_TEXT),
+    sort: SupportSort = "unread",
+    order: SortOrder = "desc",
     db: Session = Depends(get_db),
     admin: User = Depends(_require_admin),
 ) -> list[SupportConversationSummary]:
@@ -187,24 +195,45 @@ def list_support_conversations(
         .correlate(Conversation)
     ).scalar_subquery()
 
-    rows = (
-        db.query(
-            Conversation.id,
-            Conversation.user_id,
-            last_id.label("last_id"),
-            unread.label("unread"),
+    def user_col(column: Any) -> Any:
+        return (
+            select(column)
+            .where(User.id == Conversation.user_id)
+            .correlate(Conversation)
+            .scalar_subquery()
         )
-        .filter(Conversation.kind == "support")
-        # Message ids grow with time, so the last id orders by recency.
-        .order_by(
-            case((unread == 0, 1), else_=0),
-            last_id.desc().nulls_last(),
-            Conversation.id.desc(),
+
+    desc = order == "desc"
+    # Message ids grow with time, so the last id orders by recency.
+    recent = last_id.desc().nulls_last() if desc else last_id.asc().nulls_last()
+    tiebreak = Conversation.id.desc() if desc else Conversation.id.asc()
+    if sort == "user":
+        name = func.lower(func.coalesce(user_col(User.name), user_col(User.email)))
+        order_by: tuple[Any, ...] = (
+            (name.desc() if desc else name.asc()).nulls_last(),
+            tiebreak,
         )
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    elif sort == "when":
+        order_by = (recent, tiebreak)
+    else:
+        order_by = (case((unread == 0, 1), else_=0), recent, tiebreak)
+
+    query = db.query(
+        Conversation.id,
+        Conversation.user_id,
+        last_id.label("last_id"),
+        unread.label("unread"),
+    ).filter(Conversation.kind == "support")
+    term = (search or "").strip()
+    if term:
+        matches = [
+            ilike_contains(user_col(User.name), term),
+            ilike_contains(user_col(User.email), term),
+        ]
+        if (number := _id_term(term)) is not None:
+            matches.append(Conversation.user_id == number)
+        query = query.filter(or_(*matches))
+    rows = query.order_by(*order_by).offset(offset).limit(limit).all()
     message_ids = [r.last_id for r in rows if r.last_id is not None]
     # Two batch reads for the window: its last messages and its users.
     last_messages = {

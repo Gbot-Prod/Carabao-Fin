@@ -17,15 +17,23 @@ import {
 } from "@/util/api/admin";
 import { getApiErrorDetail, getApiErrorStatus } from "@/util/errorHelper";
 import { defaultAddress } from "@/util/api/users";
-import Pagination from "@/components/Pagination/Pagination";
 import SuspendControl from "../../SuspendControl";
 import styles from "./page.module.css";
-import PageHeader from "../../PageHeader";
+import PageHeader, { HeaderButton } from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import FieldError, { focusFirstInvalid, invalidClass, invalidProps } from "@/components/FieldError/FieldError";
 import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
+import TablePanel, { TablePage, TableSearch, TableSegments, TableSort, type SortOption } from "../../TablePanel";
+import AdminDialog from "../../AdminDialog";
+import { UserPlus } from "lucide-react";
 
 const SORT_KEYS = ["id", "name", "email", "joined"] as const;
+const SORT_OPTIONS: SortOption<AdminUserSort>[] = [
+  { key: "id", label: "ID" },
+  { key: "name", label: "Name" },
+  { key: "email", label: "Email" },
+  { key: "joined", label: "Joined", firstOrder: "desc" },
+];
 
 // "" shows every account.
 type RoleView = "" | AdminUserRole;
@@ -57,34 +65,38 @@ function AdminUsersContent() {
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const roleParam = searchParams.get("role");
   const role: RoleView = roleParam === "user" || roleParam === "admin" ? roleParam : "";
+  const q = searchParams.get("q")?.trim() ?? "";
   const { sort, order } = readSort<AdminUserSort>(searchParams, SORT_KEYS);
   const current: SortState<AdminUserSort> = { sort, order };
-  const key = `${role}|${sort ?? ""}|${order}|${page}`;
+  const key = `${role}|${q}|${sort ?? ""}|${order}|${page}`;
 
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [total, setTotal] = useState(0);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const query = () => fetchAdminUsers(page, { role: role || undefined, ...(sort ? { sort, order } : {}) });
+  const query = () =>
+    fetchAdminUsers(page, { role: role || undefined, q: q || undefined, ...(sort ? { sort, order } : {}) });
 
   useEffect(() => {
-    fetchAdminUsers(page, { role: role || undefined, ...(sort ? { sort, order } : {}) })
+    fetchAdminUsers(page, { role: role || undefined, q: q || undefined, ...(sort ? { sort, order } : {}) })
       .then((res) => {
         setUsers(res.items);
         setTotal(res.total);
         setError(null);
       })
       .catch(() => setError("Failed to load users."))
-      .finally(() => setLoadedKey(`${role}|${sort ?? ""}|${order}|${page}`));
-  }, [role, sort, order, page]);
+      .finally(() => setLoadedKey(`${role}|${q}|${sort ?? ""}|${order}|${page}`));
+  }, [role, q, sort, order, page]);
 
   const loading = loadedKey !== key;
 
-  const go = (next: { role?: RoleView; sort?: SortState<AdminUserSort>; page?: number }) => {
+  const go = (next: { role?: RoleView; q?: string; sort?: SortState<AdminUserSort>; page?: number }) => {
     const params = new URLSearchParams();
     const nextRole = next.role ?? role;
+    const nextQ = next.q ?? q;
     if (nextRole) params.set("role", nextRole);
+    if (nextQ) params.set("q", nextQ);
     writeSort(params, next.sort ?? current);
     if (next.page && next.page > 1) params.set("page", String(next.page));
     const qs = params.toString();
@@ -95,6 +107,7 @@ function AdminUsersContent() {
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [issued, setIssued] = useState<IssuedCode | null>(null);
+  const [inviting, setInviting] = useState(false);
 
   const replaceUser = (updated: UserProfile) =>
     setUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)));
@@ -174,49 +187,58 @@ function AdminUsersContent() {
       "Could not reactivate.",
     );
 
-  if (loading && users.length === 0) return <PageLoader label="Loading users…" />;
-  if (error) return <div className={styles.stateError}>{error}</div>;
+  const firstLoad = loading && users.length === 0 && !error;
 
   return (
-    <div className={styles.page}>
+    <TablePage>
       <PageHeader
         eyebrow="People"
         title="Users"
         count={total}
         description="Everyone with a Carabao account. Invite admins, manage their access, or suspend a buyer or merchant account."
-      />
-      <InviteAdminForm
-        onInvited={(invite, email) => {
-          setNotice(null);
-          setIssued({ email, code: invite.code, why: "Invite sent." });
-          // The Users view shows no admins.
-          if (role === "user") return;
-          setUsers((prev) => (prev.some((u) => u.id === invite.user.id) ? prev : [...prev, invite.user]));
-          setTotal((t) => t + 1);
-        }}
-      />
-      {issued && <CodePanel issued={issued} onDone={() => setIssued(null)} />}
-      <div className={styles.roleToggle} role="group" aria-label="Show accounts">
-        {ROLE_VIEWS.map((v) => (
-          <button
-            key={v.value || "all"}
-            type="button"
-            className={`${styles.roleOption} ${role === v.value ? styles.roleOptionActive : ""}`}
-            aria-pressed={role === v.value}
-            disabled={loading}
-            onClick={() => go({ role: v.value, page: 1 })}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
-      {notice && (
-        <p className={`${styles.notice} ${notice.error ? styles.noticeError : ""}`} role={notice.error ? "alert" : "status"}>
-          {notice.text}
-        </p>
+      >
+        <HeaderButton onClick={() => setInviting(true)} icon={<UserPlus size={15} strokeWidth={2} aria-hidden="true" />}>
+          Invite admin
+        </HeaderButton>
+      </PageHeader>
+      {inviting && (
+        <InviteAdminDialog
+          onClose={() => setInviting(false)}
+          onInvited={(invite, email) => {
+            setInviting(false);
+            setNotice(null);
+            setIssued({ email, code: invite.code, why: "Invite sent." });
+            // The Users view shows no admins.
+            if (role === "user") return;
+            setUsers((prev) => (prev.some((u) => u.id === invite.user.id) ? prev : [...prev, invite.user]));
+            setTotal((t) => t + 1);
+          }}
+        />
       )}
-      <div className={styles.tableWrap}>
-        <table className={styles.table}>
+      {issued && <CodeDialog issued={issued} onDone={() => setIssued(null)} />}
+      <TablePanel
+        notice={notice && { text: notice.text, tone: notice.error ? "error" : undefined, onDismiss: () => setNotice(null) }}
+        search={<TableSearch applied={q} onSearch={(v) => go({ q: v, page: 1 })} placeholder="Name, email, phone or #id" label="Search users" />}
+        filters={
+          <TableSegments
+            label="Show accounts"
+            options={ROLE_VIEWS}
+            value={role}
+            disabled={loading}
+            onChange={(v) => go({ role: v, page: 1 })}
+          />
+        }
+        sort={<TableSort options={SORT_OPTIONS} current={current} onSort={onSort} />}
+        message={
+          firstLoad
+            ? "Loading users…"
+            : (error ?? (users.length === 0 ? (q ? "No accounts match this search." : role === "admin" ? "No admin accounts." : "No accounts.") : null))
+        }
+        messageTone={error ? "error" : undefined}
+        loading={loading}
+        pagination={{ page, pageSize: ADMIN_PAGE_SIZE, total, onPageChange: (p) => go({ page: p }) }}
+      >
+        <table>
           <thead>
             <tr>
               <SortHeader label="ID" sortKey="id" current={current} onSort={onSort} />
@@ -231,13 +253,6 @@ function AdminUsersContent() {
             </tr>
           </thead>
           <tbody>
-            {users.length === 0 && (
-              <tr>
-                <td colSpan={9} className={styles.empty}>
-                  {role === "admin" ? "No admin accounts." : "No accounts."}
-                </td>
-              </tr>
-            )}
             {users.map((u) => (
               <tr key={u.id}>
                 <td className={styles.mono}>{u.id}</td>
@@ -303,9 +318,8 @@ function AdminUsersContent() {
             ))}
           </tbody>
         </table>
-      </div>
-      <Pagination page={page} pageSize={ADMIN_PAGE_SIZE} total={total} disabled={loading} onPageChange={(p) => go({ page: p })} />
-    </div>
+      </TablePanel>
+    </TablePage>
   );
 }
 
@@ -317,8 +331,13 @@ function adminStatus(u: UserProfile): string {
 
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function InviteAdminForm({ onInvited }: { onInvited: (invite: Awaited<ReturnType<typeof inviteAdmin>>, email: string) => void }) {
-  const [open, setOpen] = useState(false);
+function InviteAdminDialog({
+  onInvited,
+  onClose,
+}: {
+  onInvited: (invite: Awaited<ReturnType<typeof inviteAdmin>>, email: string) => void;
+  onClose: () => void;
+}) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [errors, setErrors] = useState<{ name?: string; email?: string; form?: string }>({});
@@ -338,9 +357,6 @@ function InviteAdminForm({ onInvited }: { onInvited: (invite: Awaited<ReturnType
     try {
       const invite = await inviteAdmin(email.trim(), name.trim());
       onInvited(invite, email.trim().toLowerCase());
-      setName("");
-      setEmail("");
-      setOpen(false);
     } catch (err) {
       const status = getApiErrorStatus(err);
       const detail = getApiErrorDetail(err) || "Could not send the invite.";
@@ -352,23 +368,14 @@ function InviteAdminForm({ onInvited }: { onInvited: (invite: Awaited<ReturnType
     }
   };
 
-  if (!open) {
-    return (
-      <div className={styles.inviteBar}>
-        <button type="button" className={styles.primaryButton} onClick={() => setOpen(true)}>
-          Invite admin
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <form className={styles.inviteForm} onSubmit={submit} noValidate>
-      <h2 className={styles.inviteTitle}>Invite an admin</h2>
-      <p className={styles.inviteHelp}>
-        Use an email that has no Carabao account yet: admin accounts are separate from buyer and merchant accounts. We
-        email a link; you get a code to give them yourself.
-      </p>
+    <AdminDialog
+      title="Invite an admin"
+      onClose={onClose}
+      locked={busy}
+      description="Use an email that has no Carabao account yet: admin accounts are separate from buyer and merchant accounts. We email a link; you get a code to give them yourself."
+    >
+    <form onSubmit={submit} noValidate>
       <div className={styles.inviteFields}>
         <div className={`${styles.field}${invalidClass(errors.name)}`}>
           <label htmlFor="invite-name">Name</label>
@@ -404,7 +411,7 @@ function InviteAdminForm({ onInvited }: { onInvited: (invite: Awaited<ReturnType
         </div>
       </div>
       {errors.form && (
-        <p className={`${styles.notice} ${styles.noticeError} ${styles.formError}`} role="alert">
+        <p className={styles.formError} role="alert">
           {errors.form}
         </p>
       )}
@@ -412,17 +419,19 @@ function InviteAdminForm({ onInvited }: { onInvited: (invite: Awaited<ReturnType
         <button type="submit" className={styles.primaryButton} disabled={busy}>
           {busy ? "Sending…" : "Send invite"}
         </button>
-        <button type="button" className={styles.linkButton} disabled={busy} onClick={() => setOpen(false)}>
+        <button type="button" className={styles.linkButton} disabled={busy} onClick={onClose}>
           Cancel
         </button>
       </div>
     </form>
+    </AdminDialog>
   );
 }
 
-function CodePanel({ issued, onDone }: { issued: IssuedCode; onDone: () => void }) {
+function CodeDialog({ issued, onDone }: { issued: IssuedCode; onDone: () => void }) {
   return (
-    <div className={styles.codePanel} role="status">
+    <AdminDialog title="Admin invite code" onClose={onDone} locked>
+    <div role="status">
       <p className={styles.codeLead}>
         {issued.why} The link went to <strong>{issued.email}</strong>. Their invite code:
       </p>
@@ -435,5 +444,6 @@ function CodePanel({ issued, onDone }: { issued: IssuedCode; onDone: () => void 
         I&apos;ve noted the code
       </button>
     </div>
+    </AdminDialog>
   );
 }

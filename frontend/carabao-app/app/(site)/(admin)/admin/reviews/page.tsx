@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ADMIN_PAGE_SIZE,
@@ -11,14 +11,19 @@ import {
   type AdminReviewSort,
 } from "@/util/api/admin";
 import getApiErrorMessage from "@/util/errorHelper";
-import Pagination from "@/components/Pagination/Pagination";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import suspend from "../../suspend.module.css";
 import PageHeader from "../../PageHeader";
 import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
+import TablePanel, { TablePage, TableFilter, TableSearch, TableSort, type SortOption } from "../../TablePanel";
 
 const SORT_KEYS = ["date", "farm", "rating"] as const;
+const SORT_OPTIONS: SortOption<AdminReviewSort>[] = [
+  { key: "date", label: "Date", firstOrder: "desc" },
+  { key: "farm", label: "Farm" },
+  { key: "rating", label: "Rating" },
+];
 // The server's own order: newest first.
 const DEFAULT_SORT: SortState<AdminReviewSort> = { sort: "date", order: "desc" };
 
@@ -50,7 +55,6 @@ function ReviewsContent() {
   const [total, setTotal] = useState(0);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState(q);
   const [busy, setBusy] = useState<number | null>(null);
   const [rowError, setRowError] = useState<{ id: number; message: string } | null>(null);
 
@@ -86,11 +90,6 @@ function ReviewsContent() {
     router.push(qs ? `${pathname}?${qs}` : pathname);
   };
   const onSort = (next: SortState<AdminReviewSort>) => go({ sort: next, page: 1 });
-
-  const onSearch = (e: FormEvent) => {
-    e.preventDefault();
-    go({ q: search.trim(), page: 1 });
-  };
 
   const replace = (updated: AdminReview) =>
     setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
@@ -128,10 +127,10 @@ function ReviewsContent() {
     }
   };
 
-  if (loading && rows.length === 0 && !error) return <PageLoader label="Loading reviews…" />;
+  const firstLoad = loading && rows.length === 0 && !error;
 
   return (
-    <div className={styles.page}>
+    <TablePage>
       <PageHeader
         eyebrow="People"
         title="Reviews"
@@ -139,44 +138,31 @@ function ReviewsContent() {
         description="What buyers wrote about farms. Hide abuse, spam or fake reviews; a hidden review leaves the farm page and its rating."
       />
 
-      <div className={styles.filters}>
-        <label className={styles.field}>
-          <span>Show</span>
-          <select value={visibility} onChange={(e) => go({ show: e.target.value as Visibility, page: 1 })}>
-            <option value="">All reviews</option>
-            <option value="visible">Shown to buyers</option>
-            <option value="hidden">Hidden by admin</option>
-          </select>
-        </label>
-        <label className={styles.field}>
-          <span>Rating</span>
-          <select value={stars} onChange={(e) => go({ stars: e.target.value as Stars, page: 1 })}>
-            <option value="">Any</option>
-            <option value="1">1 star</option>
-            <option value="2">2 stars or less</option>
-            <option value="3">3 stars or less</option>
-          </select>
-        </label>
-        <form onSubmit={onSearch} className={styles.field}>
-          <span>Search comments</span>
-          <input
-            type="search"
-            aria-label="Search review comments"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="e.g. fake"
-            maxLength={100}
-          />
-        </form>
-      </div>
-
-      {error ? (
-        <div className={styles.stateError}>{error}</div>
-      ) : rows.length === 0 ? (
-        <div className={styles.state}>No reviews match.</div>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
+      <TablePanel
+        activeFilters={[visibility, stars].filter(Boolean).length}
+        filters={
+          <>
+            <TableFilter label="Show" value={visibility} onChange={(v) => go({ show: v as Visibility, page: 1 })}>
+              <option value="">All reviews</option>
+              <option value="visible">Shown to buyers</option>
+              <option value="hidden">Hidden by admin</option>
+            </TableFilter>
+            <TableFilter label="Rating" value={stars} onChange={(v) => go({ stars: v as Stars, page: 1 })}>
+              <option value="">Any</option>
+              <option value="1">1 star</option>
+              <option value="2">2 stars or less</option>
+              <option value="3">3 stars or less</option>
+            </TableFilter>
+          </>
+        }
+        sort={<TableSort options={SORT_OPTIONS} current={current} onSort={onSort} defaultLabel="Newest first" />}
+        search={<TableSearch applied={q} onSearch={(v) => go({ q: v, page: 1 })} placeholder="Search comments, e.g. fake" label="Search review comments" />}
+        message={firstLoad ? "Loading reviews…" : error ?? (rows.length === 0 ? "No reviews match." : null)}
+        messageTone={error ? "error" : undefined}
+        loading={loading}
+        pagination={{ page, pageSize: ADMIN_PAGE_SIZE, total, onPageChange: (p) => go({ page: p }) }}
+      >
+          <table>
             <thead>
               <tr>
                 <SortHeader label="Date" sortKey="date" current={current} onSort={onSort} firstOrder="desc" />
@@ -241,10 +227,7 @@ function ReviewsContent() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      <Pagination page={page} pageSize={ADMIN_PAGE_SIZE} total={total} disabled={loading} onPageChange={(p) => go({ page: p })} />
-    </div>
+      </TablePanel>
+    </TablePage>
   );
 }

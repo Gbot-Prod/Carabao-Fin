@@ -7,12 +7,24 @@ import {
   fetchAuditActions,
   fetchAuditLog,
   type AuditLogEntry,
+  type AuditSort,
 } from "@/util/api/admin";
-import Pagination from "@/components/Pagination/Pagination";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import own from "./page.module.css";
 import PageHeader from "../../PageHeader";
+import TablePanel, { TablePage, TableFilter, TableSearch, TableSort, type SortOption } from "../../TablePanel";
+import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
+
+const SORT_KEYS = ["when", "admin", "action", "target"] as const;
+/** The server's order when no sort is sent: newest first. */
+const DEFAULT_SORT: SortState<AuditSort> = { sort: "when", order: "desc" };
+const SORT_OPTIONS: SortOption<AuditSort>[] = [
+  { key: "when", label: "When", firstOrder: "desc" },
+  { key: "admin", label: "Admin" },
+  { key: "action", label: "Action" },
+  { key: "target", label: "Target" },
+];
 
 const ACTION_LABELS: Record<string, string> = {
   "user.role_change": "Role change",
@@ -32,6 +44,7 @@ const ACTION_LABELS: Record<string, string> = {
   "merchant_application.review": "Application review",
   "payout.release": "Payout release",
   "transaction.refund": "Refund",
+  "transaction.refund_sent": "Refund sent to PayMongo",
   "produce.hide": "Listing hidden",
   "produce.unhide": "Listing unhidden",
   "produce.approve": "Listing approved",
@@ -88,7 +101,10 @@ function AuditLogContent() {
   const searchParams = useSearchParams();
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const action = searchParams.get("action") || "";
-  const key = `${action}|${page}`;
+  const q = searchParams.get("q")?.trim() ?? "";
+  const current = readSort<AuditSort>(searchParams, SORT_KEYS, DEFAULT_SORT);
+  const { sort, order } = current;
+  const key = `${action}|${q}|${sort}|${order}|${page}`;
 
   const [entries, setEntries] = useState<AuditLogEntry[]>([]);
   const [total, setTotal] = useState(0);
@@ -101,31 +117,36 @@ function AuditLogContent() {
   }, []);
 
   useEffect(() => {
-    fetchAuditLog({ action: action || undefined }, page)
+    fetchAuditLog({ action: action || undefined, q: q || undefined, sort: sort ?? undefined, order }, page)
       .then((res) => {
         setEntries(res.items);
         setTotal(res.total);
         setError(null);
       })
       .catch(() => setError("Failed to load the audit log."))
-      .finally(() => setLoadedKey(`${action}|${page}`));
-  }, [action, page]);
+      .finally(() => setLoadedKey(`${action}|${q}|${sort}|${order}|${page}`));
+  }, [action, q, sort, order, page]);
 
   const loading = loadedKey !== key;
 
-  const go = (next: { action?: string; page?: number }) => {
+  const go = (next: { action?: string; q?: string; sort?: SortState<AuditSort>; page?: number }) => {
     const params = new URLSearchParams();
     const a = next.action ?? action;
+    const nextQ = next.q ?? q;
+    const nextSort = next.sort ?? current;
     if (a) params.set("action", a);
+    if (nextQ) params.set("q", nextQ);
+    if (nextSort.sort !== DEFAULT_SORT.sort || nextSort.order !== DEFAULT_SORT.order) writeSort(params, nextSort);
     if (next.page && next.page > 1) params.set("page", String(next.page));
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   };
+  const onSort = (next: SortState<AuditSort>) => go({ sort: next, page: 1 });
 
-  if (loading && entries.length === 0 && !error) return <PageLoader label="Loading audit log…" />;
+  const firstLoad = loading && entries.length === 0 && !error;
 
   return (
-    <div className={styles.page}>
+    <TablePage>
       <PageHeader
         eyebrow="Support"
         title="Audit log"
@@ -133,29 +154,28 @@ function AuditLogContent() {
         description={<>Every admin action, with who did it, when, and what changed. Entries can&apos;t be edited or deleted.</>}
       />
 
-      <div className={styles.filters}>
-        <label className={styles.field}>
-          <span>Action</span>
-          <select value={action} onChange={(e) => go({ action: e.target.value, page: 1 })}>
+      <TablePanel
+        activeFilters={[action].filter(Boolean).length}
+        filters={
+          <TableFilter label="Action" value={action} onChange={(v) => go({ action: v, page: 1 })}>
             <option value="">All actions</option>
             {actions.map((a) => <option key={a} value={a}>{ACTION_LABELS[a] ?? a}</option>)}
-          </select>
-        </label>
-      </div>
-
-      {error ? (
-        <div className={styles.stateError}>{error}</div>
-      ) : entries.length === 0 ? (
-        <div className={styles.state}>No admin actions recorded{action ? " for this action" : ""} yet.</div>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
+          </TableFilter>
+        }
+        sort={<TableSort options={SORT_OPTIONS} current={current} onSort={onSort} defaultLabel="Newest first" />}
+        search={<TableSearch applied={q} onSearch={(v) => go({ q: v, page: 1 })} placeholder="Admin email, action or #target" label="Search the audit log" />}
+        message={firstLoad ? "Loading audit log…" : error ?? (entries.length === 0 ? `No admin actions recorded${action ? " for this action" : ""} yet.` : null)}
+        messageTone={error ? "error" : undefined}
+        loading={loading}
+        pagination={{ page, pageSize: AUDIT_PAGE_SIZE, total, onPageChange: (p) => go({ page: p }) }}
+      >
+          <table>
             <thead>
               <tr>
-                <th>When</th>
-                <th>Admin</th>
-                <th>Action</th>
-                <th>Target</th>
+                <SortHeader label="When" sortKey="when" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Admin" sortKey="admin" current={current} onSort={onSort} />
+                <SortHeader label="Action" sortKey="action" current={current} onSort={onSort} />
+                <SortHeader label="Target" sortKey="target" current={current} onSort={onSort} />
                 <th>Change</th>
               </tr>
             </thead>
@@ -196,10 +216,7 @@ function AuditLogContent() {
               })}
             </tbody>
           </table>
-        </div>
-      )}
-
-      <Pagination page={page} pageSize={AUDIT_PAGE_SIZE} total={total} disabled={loading} onPageChange={(p) => go({ page: p })} />
-    </div>
+      </TablePanel>
+    </TablePage>
   );
 }

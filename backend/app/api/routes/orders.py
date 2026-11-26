@@ -20,6 +20,8 @@ from app.models.user import User
 from app.models.user_address import UserAddress
 from app.schemas.order import (
     CurrentOrderResponse,
+    DisputeNotePayload,
+    MerchantDispute,
     OrderDetailResponse,
     OrderItemResponse,
     PlacedOrder,
@@ -822,3 +824,87 @@ def get_merchant_current_orders(
         .all()
     )
     return [to_current_order_item(order) for order in orders]
+
+
+# ---------------------------------------------------------------------------
+# Merchant view of disputed deliveries
+# ---------------------------------------------------------------------------
+
+
+def _item_summary(order: Order) -> str:
+    items = [i for i in (order.items or []) if isinstance(i, dict)]
+    if not items:
+        return f"Order #{order.id}"
+    first = str(items[0].get("name") or items[0].get("produce_name") or "Item")
+    return first if len(items) == 1 else f"{first} + {len(items) - 1} more"
+
+
+def _merchant_dispute(order: Order) -> MerchantDispute:
+    return MerchantDispute(
+        order_id=order.id,
+        order_ref=notifications.order_ref(order),
+        total_amount=order.total_price,
+        item_summary=_item_summary(order),
+        delivered_at=order.delivered_at,
+        disputed_at=order.delivery_disputed_at,
+        open=delivery_dispute.is_open(order),
+        resolution=order.dispute_resolution,
+        resolved_at=order.dispute_resolved_at,
+        merchant_note=order.dispute_merchant_note,
+        merchant_noted_at=order.dispute_merchant_noted_at,
+    )
+
+
+@router.get("/orders/merchant/disputes", response_model=list[MerchantDispute])
+def get_merchant_disputes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The farm's disputed deliveries: open ones first, then the last 50
+    decided ones."""
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    base = db.query(Order).filter(
+        Order.merchant_id == merchant.id, Order.delivery_disputed_at.isnot(None)
+    )
+    open_orders = (
+        base.filter(Order.dispute_resolution.is_(None))
+        .order_by(Order.delivery_disputed_at.asc(), Order.id.asc())
+        .all()
+    )
+    decided = (
+        base.filter(Order.dispute_resolution.isnot(None))
+        .order_by(Order.dispute_resolved_at.desc(), Order.id.desc())
+        .limit(50)
+        .all()
+    )
+    return [_merchant_dispute(o) for o in open_orders + decided]
+
+
+@router.put("/orders/merchant/{order_id}/dispute-note", response_model=MerchantDispute)
+def set_merchant_dispute_note(
+    order_id: int,
+    payload: DisputeNotePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """The farm's side of an open dispute, for the admin who decides it."""
+    merchant = get_active_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.merchant_id == merchant.id)
+        .with_for_update()
+        .first()
+    )
+    if order is None or order.delivery_disputed_at is None:
+        raise HTTPException(status_code=404, detail="Dispute not found")
+    try:
+        delivery_dispute.set_merchant_note(db, order, payload.note)
+    except delivery_dispute.DisputeError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    db.commit()
+    db.refresh(order)
+    return _merchant_dispute(order)

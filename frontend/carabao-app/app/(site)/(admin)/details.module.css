@@ -36,14 +36,15 @@
   padding-right: 0 !important;
 }
 
-/* Light green tint so the open row and its panel stand out from the table. */
+/* Light green tint so the open row and its details stand out from the table.
+   The details sit straight on that tint, with no box of their own. */
 .openRow td {
   background: #e6f2e9 !important;
   border-bottom-color: transparent !important;
 }
 
 .detailRow > td {
-  padding: 0 16px 18px !important;
+  padding: 4px var(--admin-gutter) 22px !important;
   background: #e6f2e9;
   cursor: default;
 }
@@ -55,11 +56,9 @@
 .panel {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
-  padding: 18px;
-  border: 1px solid #b7d8c0;
-  border-radius: var(--radius-md);
-  background: var(--bg-white);
+  gap: 24px 32px;
+  padding: 16px 0 0;
+  border-top: 1px solid #cfe5d5;
 }
 
 .section {

@@ -16,7 +16,6 @@ import {
   type RejectionCode,
 } from "@/util/api/admin";
 import getApiErrorMessage from "@/util/errorHelper";
-import Pagination from "@/components/Pagination/Pagination";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import suspend from "../../suspend.module.css";
@@ -24,10 +23,20 @@ import PageHeader from "../../PageHeader";
 import ExpandToggle, { formatDate, formatDateTime } from "../../ExpandToggle";
 import details from "../../details.module.css";
 import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
+import TablePanel, { TablePage, TableChip, TableFilter, TableSearch, TableSort, type SortOption } from "../../TablePanel";
 
 // No sort: newest first, or oldest first for the review queue (server order).
 const SORT_KEYS = ["id", "name", "category", "merchant", "price", "stock", "best_before"] as const;
 const COLUMNS = 9;
+const SORT_OPTIONS: SortOption<AdminProduceSort>[] = [
+  { key: "id", label: "ID", firstOrder: "desc" },
+  { key: "name", label: "Listing" },
+  { key: "category", label: "Category" },
+  { key: "merchant", label: "Merchant" },
+  { key: "price", label: "Price" },
+  { key: "stock", label: "Stock" },
+  { key: "best_before", label: "Best before" },
+];
 
 type Visibility = "" | "visible" | "hidden" | "under_review" | "rejected";
 
@@ -66,7 +75,6 @@ function ListingsContent() {
   const [total, setTotal] = useState(0);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState(q);
   const [busy, setBusy] = useState<number | null>(null);
   const [rowError, setRowError] = useState<{ id: number; message: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
@@ -123,11 +131,6 @@ function ListingsContent() {
     router.push(qs ? `${pathname}?${qs}` : pathname);
   };
   const onSort = (next: SortState<AdminProduceSort>) => go({ sort: next, page: 1 });
-
-  const onSearch = (e: FormEvent) => {
-    e.preventDefault();
-    go({ q: search.trim(), page: 1 });
-  };
 
   const replace = (updated: AdminProduce) =>
     setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
@@ -197,46 +200,38 @@ function ListingsContent() {
     }
   };
 
-  if (loading && rows.length === 0 && !error) return <PageLoader label="Loading listings…" />;
+  const firstLoad = loading && rows.length === 0 && !error;
 
   return (
-    <div className={styles.page}>
+    <TablePage>
       <PageHeader eyebrow="People" title="Listings" count={total} description="Products merchants have posted. Check the listings under review (target: 24 hours), and hide anything that buyers must not see." />
 
-      <div className={styles.filters}>
-        <label className={styles.field}>
-          <span>Show</span>
-          <select value={visibility} onChange={(e) => go({ show: e.target.value as Visibility, page: 1 })}>
-            <option value="">All listings</option>
-            <option value="under_review">Under review (queue, oldest first)</option>
-            <option value="rejected">Rejected</option>
-            <option value="visible">Not hidden</option>
-            <option value="hidden">Hidden by admin</option>
-          </select>
-        </label>
-        <form onSubmit={onSearch} className={styles.field}>
-          <span>Search by name</span>
-          <input type="search" aria-label="Search listings by name" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="e.g. talong" maxLength={100} />
-        </form>
-        {merchantId && (
-          <button type="button" className={styles.clear} onClick={() => go({ merchant: null, page: 1 })}>
-            Merchant #{merchantId} only · Clear
-          </button>
-        )}
-        {sort && (
-          <button type="button" className={styles.clear} onClick={() => go({ sort: { sort: null, order: "asc" }, page: 1 })}>
-            Default order
-          </button>
-        )}
-      </div>
-
-      {error ? (
-        <div className={styles.stateError}>{error}</div>
-      ) : rows.length === 0 ? (
-        <div className={styles.state}>No listings match.</div>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
+      <TablePanel
+        activeFilters={[visibility, merchantId].filter(Boolean).length}
+        filters={
+          <>
+            <TableFilter label="Show" value={visibility} onChange={(v) => go({ show: v as Visibility, page: 1 })}>
+              <option value="">All listings</option>
+              <option value="under_review">Under review (queue, oldest first)</option>
+              <option value="rejected">Rejected</option>
+              <option value="visible">Not hidden</option>
+              <option value="hidden">Hidden by admin</option>
+            </TableFilter>
+            {merchantId && (
+              <TableChip onClear={() => go({ merchant: null, page: 1 })} label="Show every merchant">
+                Merchant #{merchantId} only
+              </TableChip>
+            )}
+          </>
+        }
+        sort={<TableSort options={SORT_OPTIONS} current={current} onSort={onSort} defaultLabel="Newest first" />}
+        search={<TableSearch applied={q} onSearch={(v) => go({ q: v, page: 1 })} placeholder="Search by name, e.g. talong" label="Search listings by name" />}
+        message={firstLoad ? "Loading listings…" : error ?? (rows.length === 0 ? "No listings match." : null)}
+        messageTone={error ? "error" : undefined}
+        loading={loading}
+        pagination={{ page, pageSize: ADMIN_PAGE_SIZE, total, onPageChange: (p) => go({ page: p }) }}
+      >
+          <table>
             <thead>
               <tr>
                 <th className={details.toggleCell} aria-label="Details" />
@@ -354,11 +349,8 @@ function ListingsContent() {
               })}
             </tbody>
           </table>
-        </div>
-      )}
-
-      <Pagination page={page} pageSize={ADMIN_PAGE_SIZE} total={total} disabled={loading} onPageChange={(p) => go({ page: p })} />
-    </div>
+      </TablePanel>
+    </TablePage>
   );
 }
 
@@ -484,8 +476,8 @@ function ListingDetails({ row }: { row: AdminProduce }) {
               <Link href={`/admin/listings?merchant=${row.merchant_id}`} className={details.link}>
                 All listings
               </Link>{" "}
-              <Link href={`/admin/penalties?merchant_id=${row.merchant_id}`} className={details.link}>
-                Penalty points
+              <Link href={`/admin/penalty-history?merchant_id=${row.merchant_id}`} className={details.link}>
+                Penalty history
               </Link>
             </dd>
           </div>

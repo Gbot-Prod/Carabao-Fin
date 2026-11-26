@@ -9,18 +9,20 @@
 """
 
 from datetime import UTC, datetime, timedelta
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
-from app.api.routes.admin import _require_admin
+from app.api.routes.admin import _id_term, _require_admin
+from app.core.sql import SortOrder, ilike_contains, sort_clauses
 from app.models.listing_penalty import ListingPenalty
 from app.models.merchant import Merchant
 from app.models.user import User
-from app.schemas.pagination import MAX_ID, MAX_PAGE, Page
+from app.schemas.pagination import MAX_FILTER_TEXT, MAX_ID, MAX_PAGE, Page
 from app.schemas.produce import ListingPenaltyView
 from app.services import listing_trust
 
@@ -83,13 +85,58 @@ def _names(db: Session, merchant_ids: set[int]) -> dict[int, str]:
     return {row.id: row.merchant_name for row in rows}
 
 
+AccountSort = Literal["farm", "points", "listings", "state"]
+PenaltySort = Literal["date", "farm", "listing", "reason", "points"]
+
+
+def _merchant_name() -> Any:
+    return (
+        select(Merchant.merchant_name)
+        .where(Merchant.id == ListingPenalty.merchant_id)
+        .correlate(ListingPenalty)
+        .scalar_subquery()
+    )
+
+
+def _penalty_sort_column(sort: PenaltySort) -> Any:
+    return {
+        "date": ListingPenalty.created_at,
+        "farm": func.lower(_merchant_name()),
+        "listing": func.lower(ListingPenalty.produce_name),
+        "reason": ListingPenalty.code,
+        "points": ListingPenalty.points,
+    }[sort]
+
+
+def _account_state(a: PenaltyAccount) -> int:
+    """Most urgent first: needs review, blocked, active, suspended."""
+    if a.shop_suspended or a.owner_suspended:
+        return 3
+    if a.needs_account_review:
+        return 0
+    return 1 if not a.can_create_listings else 2
+
+
+def _account_key(sort: AccountSort) -> Any:
+    return {
+        "farm": lambda a: (a.merchant_name or "").lower(),
+        "points": lambda a: a.points,
+        "listings": lambda a: a.can_create_listings,
+        "state": _account_state,
+    }[sort]
+
+
 @router.get("/admin/penalties/accounts", response_model=list[PenaltyAccount])
 def list_penalty_accounts(
     min_points: int = Query(1, ge=1, le=100),
+    search: str | None = Query(None, alias="q", max_length=MAX_FILTER_TEXT),
+    sort: AccountSort = "points",
+    order: SortOrder = "desc",
     db: Session = Depends(get_db),
     _: User = Depends(_require_admin),
 ):
-    """Merchants with at least ``min_points`` active points, the most first."""
+    """Merchants with at least ``min_points`` active points, the most first.
+    At most 200 farms, so the search and sort run on the list itself."""
     totals = (
         db.query(ListingPenalty.merchant_id, func.sum(ListingPenalty.points))
         .filter(
@@ -131,6 +178,18 @@ def list_penalty_accounts(
                 owner_suspended=bool(owner and owner.is_suspended),
             )
         )
+    term = (search or "").strip().lower()
+    if term:
+        number = _id_term(term)
+        accounts = [
+            a
+            for a in accounts
+            if term in (a.merchant_name or "").lower() or a.merchant_id == number
+        ]
+    # Stable sorts: the farm id breaks ties, in the same direction.
+    reverse = order == "desc"
+    accounts.sort(key=lambda a: a.merchant_id, reverse=reverse)
+    accounts.sort(key=_account_key(sort), reverse=reverse)
     return accounts
 
 
@@ -138,6 +197,10 @@ def list_penalty_accounts(
 def list_penalties(
     merchant_id: int | None = Query(None, ge=1, le=MAX_ID),
     active: bool | None = None,
+    # Farm, listing or reason code.
+    search: str | None = Query(None, alias="q", max_length=MAX_FILTER_TEXT),
+    sort: PenaltySort = "date",
+    order: SortOrder = "desc",
     page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -156,9 +219,21 @@ def list_penalties(
             (ListingPenalty.revoked_at.isnot(None))
             | (ListingPenalty.created_at <= _cutoff())
         )
+    term = (search or "").strip()
+    if term:
+        matches = [
+            ilike_contains(_merchant_name(), term),
+            ilike_contains(ListingPenalty.produce_name, term),
+            ilike_contains(ListingPenalty.code, term.replace(" ", "_")),
+        ]
+        if (number := _id_term(term)) is not None:
+            matches.append(ListingPenalty.merchant_id == number)
+        query = query.filter(or_(*matches))
     total = query.count()
     rows = (
-        query.order_by(ListingPenalty.created_at.desc(), ListingPenalty.id.desc())
+        query.order_by(
+            *sort_clauses(_penalty_sort_column(sort), order, ListingPenalty.id)
+        )
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()

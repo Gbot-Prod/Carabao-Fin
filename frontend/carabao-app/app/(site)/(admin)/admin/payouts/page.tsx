@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  fetchAdminPayoutBatches,
+  ADMIN_PAGE_SIZE,
+  fetchAdminPayoutBatchesPage,
   fetchWalletBalance,
   refreshPayoutBatch,
   releasePayoutBatch,
+  type AdminPayoutFilter,
+  type AdminPayoutSort,
+  type AdminPayoutSummary,
   type PayoutBatch,
   type WalletBalance,
 } from "@/util/api/admin";
@@ -16,9 +21,10 @@ import {
   type PayoutType,
 } from "@/util/api/merchants";
 import styles from "./page.module.css";
-import { ADMIN_LIST_LIMIT, mayHaveMore, mergeById } from "@/lib/admin-window";
 import PageHeader from "../../PageHeader";
+import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
+import TablePanel, { TablePage, TableSearch, TableSegments, TableSort, TableStat, type SortOption } from "../../TablePanel";
 
 const peso = (v: number) =>
   new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", maximumFractionDigits: 0 }).format(v);
@@ -31,15 +37,26 @@ const shortDate = (v: string) =>
 
 const METHOD_LABELS: Record<PayoutType, string> = { gcash: "GCash", maya: "Maya", bank: "Bank" };
 
-type Filter = "all" | "pending" | "processing" | "released" | "failed";
-
-const STATUS_FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "All" },
+const STATUS_FILTERS: { key: AdminPayoutFilter | null; label: string }[] = [
+  { key: null, label: "All" },
   { key: "pending", label: "Requested" },
   { key: "processing", label: "Processing" },
   { key: "released", label: "Released" },
   { key: "failed", label: "Failed" },
 ];
+const STATUS_KEYS = STATUS_FILTERS.flatMap((f) => (f.key ? [f.key] : []));
+const STATUS_OPTIONS = STATUS_FILTERS.map((f) => ({ value: (f.key ?? "") as AdminPayoutFilter | "", label: f.label }));
+const SORT_OPTIONS: SortOption<AdminPayoutSort>[] = [
+  { key: "requested", label: "Requested", firstOrder: "desc" },
+  { key: "merchant", label: "Merchant" },
+  { key: "orders", label: "Orders", firstOrder: "desc" },
+  { key: "amount", label: "Amount", firstOrder: "desc" },
+  { key: "status", label: "Status" },
+];
+
+const SORT_KEYS: readonly AdminPayoutSort[] = ["requested", "merchant", "orders", "amount", "status"];
+/** The server's order when no sort is sent: newest request first. */
+const DEFAULT_SORT: SortState<AdminPayoutSort> = { sort: "requested", order: "desc" };
 
 const SENDABLE = new Set(["pending", "approved", "failed"]);
 
@@ -50,12 +67,30 @@ const apiDetail = (e: unknown, fallback: string) =>
 const netOf = (b: PayoutBatch) => b.net_amount ?? b.gross_amount - (b.transfer_fee ?? 0);
 
 export default function PayoutsPage() {
+  return (
+    <Suspense fallback={<PageLoader label="Loading payouts…" />}>
+      <PayoutsContent />
+    </Suspense>
+  );
+}
+
+function PayoutsContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const status = STATUS_KEYS.find((k) => k === searchParams.get("status")) ?? null;
+  const q = searchParams.get("q")?.trim() ?? "";
+  const current = readSort<AdminPayoutSort>(searchParams, SORT_KEYS, DEFAULT_SORT);
+  const { sort, order } = current;
+  const key = `${status ?? ""}|${q}|${sort}|${order}|${page}`;
+
   const [batches, setBatches] = useState<PayoutBatch[]>([]);
-  // CF-0067: newest batches first, a window at a time.
-  const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [filter, setFilter] = useState<Filter>("all");
-  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<AdminPayoutSummary | null>(null);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  // Bumped after a send or status check so the totals and filtered rows catch up.
+  const [reloads, setReloads] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [confirming, setConfirming] = useState<PayoutBatch | null>(null);
@@ -77,28 +112,55 @@ export default function PayoutsPage() {
     setBatches((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
 
   useEffect(() => {
-    fetchAdminPayoutBatches(undefined, { limit: ADMIN_LIST_LIMIT })
-      .then((rows) => {
-        setBatches(rows);
-        setHasMore(mayHaveMore(rows.length));
-      })
-      .catch(() => setError("Failed to load payout data."))
-      .finally(() => setLoading(false));
     void loadWallet();
   }, []);
 
-  const loadMore = async () => {
-    setLoadingMore(true);
-    try {
-      const rows = await fetchAdminPayoutBatches(undefined, { limit: ADMIN_LIST_LIMIT, offset: batches.length });
-      setBatches((prev) => mergeById(prev, rows));
-      setHasMore(mayHaveMore(rows.length));
-    } catch {
-      setError("Failed to load more payout batches.");
-    } finally {
-      setLoadingMore(false);
-    }
+  useEffect(() => {
+    let stale = false;
+    const filters = {
+      ...(status ? { status } : {}),
+      ...(q ? { q } : {}),
+      ...(sort ? { sort, order } : {}),
+    };
+    fetchAdminPayoutBatchesPage(filters, page)
+      .then((res) => {
+        if (stale) return;
+        setBatches(res.items);
+        setTotal(res.total);
+        setSummary(res.summary);
+        setError(null);
+      })
+      .catch(() => {
+        if (!stale) setError("Failed to load payout data.");
+      })
+      .finally(() => {
+        if (!stale) setLoadedKey(`${status ?? ""}|${q}|${sort}|${order}|${page}`);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [status, q, sort, order, page, reloads]);
+
+  const loading = loadedKey !== key;
+
+  const go = (next: {
+    status?: AdminPayoutFilter | null;
+    q?: string;
+    sort?: SortState<AdminPayoutSort>;
+    page?: number;
+  }) => {
+    const params = new URLSearchParams();
+    const nextStatus = next.status !== undefined ? next.status : status;
+    const nextQ = next.q !== undefined ? next.q.trim() : q;
+    const nextSort = next.sort ?? current;
+    if (nextStatus) params.set("status", nextStatus);
+    if (nextQ) params.set("q", nextQ);
+    if (nextSort.sort !== DEFAULT_SORT.sort || nextSort.order !== DEFAULT_SORT.order) writeSort(params, nextSort);
+    if (next.page && next.page > 1) params.set("page", String(next.page));
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
+  const onSort = (next: SortState<AdminPayoutSort>) => go({ sort: next, page: 1 });
 
   const handleSend = async (batch: PayoutBatch) => {
     setConfirming(null);
@@ -106,6 +168,7 @@ export default function PayoutsPage() {
     try {
       const updated = await releasePayoutBatch(batch.id);
       replace(updated);
+      setReloads((n) => n + 1);
       void loadWallet();
       showToast(
         updated.status === "failed"
@@ -128,6 +191,7 @@ export default function PayoutsPage() {
     try {
       const updated = await refreshPayoutBatch(batch.id);
       replace(updated);
+      setReloads((n) => n + 1);
       void loadWallet();
       showToast(`Status: ${PAYOUT_STATUS_LABELS[updated.status]}`);
     } catch (e) {
@@ -137,16 +201,11 @@ export default function PayoutsPage() {
     }
   };
 
-  if (loading) return <PageLoader label="Loading payouts…" />;
-  if (error) return <div className={styles.stateError}>{error}</div>;
-
-  const filtered =
-    filter === "all"
-      ? batches
-      : batches.filter((b) => (filter === "pending" ? b.status === "pending" || b.status === "approved" : b.status === filter));
-  const needsAction = batches.filter((b) => SENDABLE.has(b.status));
-  const owed = batches.filter((b) => b.status !== "released").reduce((sum, b) => sum + netOf(b), 0);
-  const totalReleased = batches.filter((b) => b.status === "released").reduce((sum, b) => sum + netOf(b), 0);
+  const firstLoad = !summary && !error;
+  const waiting = summary?.waiting ?? 0;
+  const owed = summary?.owed ?? 0;
+  const totalReleased = summary?.released ?? 0;
+  const filtering = Boolean(status || q);
 
   const renderAction = (batch: PayoutBatch) => {
     const busy = busyId === batch.id;
@@ -184,7 +243,7 @@ export default function PayoutsPage() {
       return (
         <>
           <p className={styles.merchantName}>{METHOD_LABELS[batch.destination_type]} · {batch.destination_number}</p>
-          <p className={styles.merchantId}>
+          <p className={styles.subText}>
             {batch.destination_name}
             {batch.transfer_provider && ` · ${PAYOUT_PROVIDER_LABELS[batch.transfer_provider]}`}
           </p>
@@ -196,7 +255,7 @@ export default function PayoutsPage() {
     return (
       <>
         <p className={styles.merchantName}>{d.institution ?? METHOD_LABELS[d.type]} · {d.number ?? "—"}</p>
-        <p className={styles.merchantId}>
+        <p className={styles.subText}>
           {d.name ?? "—"}
           {d.provider && ` · ${PAYOUT_PROVIDER_LABELS[d.provider]}`}
         </p>
@@ -211,124 +270,118 @@ export default function PayoutsPage() {
   const cShort = c && wallet ? c.gross_amount > wallet.available : false;
 
   return (
-    <div className={styles.page}>
+    <TablePage>
       {toast && <div className={styles.toast}>{toast}</div>}
 
       <PageHeader
         eyebrow="Money"
         title="Payouts"
+        count={summary ? total : undefined}
         description="Merchants request cash outs; sending one transfers it from the PayMongo wallet (InstaPay, or PESONet for GCash)."
       />
 
-      <div className={styles.kpiRow}>
-        <div className={`${styles.kpiCard} ${needsAction.length > 0 ? styles.kpiCardAlert : ""}`}>
-          <p className={styles.kpiLabel}>Waiting to Send</p>
-          <p className={styles.kpiValue}>{needsAction.length}</p>
-        </div>
-        <div className={`${styles.kpiCard} ${needsAction.length > 0 ? styles.kpiCardAlert : ""}`}>
-          <p className={styles.kpiLabel}>Still Owed to Merchants</p>
-          <p className={styles.kpiValue}>{peso(owed)}</p>
-        </div>
-        <div className={`${styles.kpiCard} ${wallet && wallet.available < owed ? styles.kpiCardAlert : ""}`}>
-          <p className={styles.kpiLabel}>PayMongo Wallet</p>
-          <p className={styles.kpiValue}>
-            {wallet === undefined ? "…" : wallet === null ? "—" : pesoCents(wallet.available)}
-          </p>
-          <p className={styles.kpiHint}>
-            {wallet === null ? (
-              <>
-                Couldn&apos;t reach PayMongo.{" "}
-                <button className={styles.linkBtn} onClick={() => void loadWallet()}>
-                  Retry
-                </button>
-              </>
-            ) : wallet && wallet.available < owed ? (
-              "Not enough to cover every open payout"
-            ) : (
-              "Available to send"
-            )}
-          </p>
-        </div>
-        <div className={styles.kpiCard}>
-          <p className={styles.kpiLabel}>Total Released (All Time)</p>
-          <p className={styles.kpiValue}>{peso(totalReleased)}</p>
-        </div>
-      </div>
-
-      <div className={styles.tableCard}>
-        <div className={styles.tableHeader}>
-          <p className={styles.tableTitle}>
-            Payout Requests
-            {needsAction.length > 0 && <span className={styles.alertBadge}>{needsAction.length} need action</span>}
-          </p>
-          <div className={styles.filterRow}>
-            {STATUS_FILTERS.map(({ key, label }) => (
-              <button
-                key={key}
-                className={`${styles.filterBtn} ${filter === key ? styles.filterBtnActive : ""}`}
-                onClick={() => setFilter(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Requested</th>
-              <th>Merchant</th>
-              <th>Orders</th>
-              <th>Amount</th>
-              <th>Send To</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr className={styles.emptyRow}>
-                <td colSpan={7}>No payouts found.</td>
+      <TablePanel
+        summary={
+          summary && (
+            <>
+              <TableStat label="Waiting to send" value={waiting} alert={waiting > 0} />
+              <TableStat label="Still owed to merchants" value={peso(owed)} alert={waiting > 0} />
+              <TableStat
+                label="PayMongo wallet"
+                value={wallet === undefined ? "…" : wallet === null ? "—" : pesoCents(wallet.available)}
+                alert={Boolean(wallet && wallet.available < owed)}
+                hint={
+                  wallet === null ? (
+                    <>
+                      Couldn&apos;t reach PayMongo.{" "}
+                      <button className={styles.linkBtn} onClick={() => void loadWallet()}>
+                        Retry
+                      </button>
+                    </>
+                  ) : wallet && wallet.available < owed ? (
+                    "Not enough to cover every open payout"
+                  ) : (
+                    "Available to send"
+                  )
+                }
+              />
+              <TableStat label="Released (all time)" value={peso(totalReleased)} />
+            </>
+          )
+        }
+        filters={
+          <TableSegments
+            label="Filter by status"
+            options={STATUS_OPTIONS}
+            value={status ?? ""}
+            onChange={(v) => go({ status: v || null, page: 1 })}
+          />
+        }
+        sort={<TableSort options={SORT_OPTIONS} current={current} onSort={onSort} defaultLabel="Newest first" />}
+        search={<TableSearch applied={q} onSearch={(v) => go({ q: v, page: 1 })} placeholder="Merchant, #batch, account, ref" label="Search payouts" />}
+        message={
+          firstLoad ? "Loading payouts…" : (error ?? (batches.length === 0 ? (filtering ? "No payouts match this search or filter." : "No payout requests yet.") : null))
+        }
+        messageTone={error ? "error" : undefined}
+        loading={loading}
+        pagination={{ page, pageSize: ADMIN_PAGE_SIZE, total, onPageChange: (p) => go({ page: p }) }}
+      >
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <SortHeader label="Requested" sortKey="requested" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Merchant" sortKey="merchant" current={current} onSort={onSort} />
+                <SortHeader
+                  label="Orders"
+                  sortKey="orders"
+                  current={current}
+                  onSort={onSort}
+                  firstOrder="desc"
+                  className={styles.numCol}
+                />
+                <SortHeader
+                  label="Amount"
+                  sortKey="amount"
+                  current={current}
+                  onSort={onSort}
+                  firstOrder="desc"
+                  className={styles.numCol}
+                />
+                <th>Send To</th>
+                <SortHeader label="Status" sortKey="status" current={current} onSort={onSort} />
+                <th className={styles.actionCol}>Action</th>
               </tr>
-            ) : (
-              filtered.map((batch) => (
-                <tr key={batch.id}>
-                  <td>{shortDate(batch.created_at)}</td>
-                  <td>
-                    <p className={styles.merchantName}>{batch.merchant_name ?? "—"}</p>
-                    <p className={styles.merchantId}>ID {batch.merchant_id} · #{batch.id}</p>
-                  </td>
-                  <td>{batch.transaction_count}</td>
-                  <td>
-                    <p className={styles.amount}>{peso(netOf(batch))}</p>
-                    <p className={styles.merchantId}>
-                      {peso(batch.gross_amount)} − {peso(batch.transfer_fee ?? 0)} fee
-                    </p>
-                  </td>
-                  <td>{renderDestination(batch)}</td>
-                  <td>
-                    <span className={`${styles.badge} ${styles[`badge_${batch.status}`]}`}>
-                      {PAYOUT_STATUS_LABELS[batch.status]}
-                    </span>
-                    {batch.status === "failed" && batch.failure_reason && (
-                      <p className={styles.rowNoteError}>{batch.failure_reason}</p>
-                    )}
-                  </td>
-                  <td>{renderAction(batch)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-      {hasMore && (
-        <p>
-          <button type="button" className={styles.secondaryBtn} onClick={() => void loadMore()} disabled={loadingMore}>
-            {loadingMore ? "Loading…" : "Load older batches"}
-          </button>
-        </p>
-      )}
+            </thead>
+            <tbody>
+              {batches.map((batch) => (
+                  <tr key={batch.id}>
+                    <td className={styles.nowrap}>{shortDate(batch.created_at)}</td>
+                    <td>
+                      <p className={styles.merchantName}>{batch.merchant_name ?? "—"}</p>
+                      <p className={styles.merchantId}>ID {batch.merchant_id} · #{batch.id}</p>
+                    </td>
+                    <td className={styles.numCol}>{batch.transaction_count}</td>
+                    <td className={styles.numCol}>
+                      <p className={styles.amount}>{peso(netOf(batch))}</p>
+                      <p className={styles.subText}>
+                        {peso(batch.gross_amount)} − {peso(batch.transfer_fee ?? 0)} fee
+                      </p>
+                    </td>
+                    <td>{renderDestination(batch)}</td>
+                    <td>
+                      <span className={`${styles.badge} ${styles[`badge_${batch.status}`]}`}>
+                        {PAYOUT_STATUS_LABELS[batch.status]}
+                      </span>
+                      {batch.status === "failed" && batch.failure_reason && (
+                        <p className={styles.rowNoteError}>{batch.failure_reason}</p>
+                      )}
+                    </td>
+                    <td className={styles.actionCol}>{renderAction(batch)}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+      </TablePanel>
 
       {c && (
         <div className={styles.modalBackdrop} onClick={() => setConfirming(null)}>
@@ -390,6 +443,6 @@ export default function PayoutsPage() {
           </div>
         </div>
       )}
-    </div>
+    </TablePage>
   );
 }

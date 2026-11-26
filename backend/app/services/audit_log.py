@@ -38,6 +38,8 @@ APPLICATION_REVIEW = "merchant_application.review"
 PAYOUT_RELEASE = "payout.release"
 PAYOUT_REFRESH = "payout.refresh"  # only when the status changed (CF-0054)
 REFUND = "transaction.refund"
+# A refund sent through the PayMongo Refunds API, before PayMongo confirms it.
+REFUND_SENT = "transaction.refund_sent"
 PRODUCE_HIDE = "produce.hide"
 PRODUCE_UNHIDE = "produce.unhide"
 PRODUCE_APPROVE = "produce.approve"  # guardrails Phase 1
@@ -71,6 +73,7 @@ ACTIONS = (
     APPLICATION_REVIEW,
     PAYOUT_RELEASE,
     REFUND,
+    REFUND_SENT,
     PRODUCE_HIDE,
     PRODUCE_UNHIDE,
     PRODUCE_APPROVE,

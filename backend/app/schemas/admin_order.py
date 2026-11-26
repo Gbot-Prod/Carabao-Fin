@@ -62,6 +62,9 @@ class AdminOrderDelivery(BaseModel):
     delivery_disputed_at: datetime | None = None
     dispute_resolution: str | None = None
     dispute_resolved_at: datetime | None = None
+    # The farm's side of the dispute.
+    dispute_merchant_note: str | None = None
+    dispute_merchant_noted_at: datetime | None = None
 
 
 class AdminProofPhoto(BaseModel):
@@ -129,3 +132,30 @@ class AdminRefund(BaseModel):
     refund_reference: str | None
     refund_notes: str | None
     refunded_at: datetime | None
+    # A refund sent through PayMongo: processing | unknown | failed (None:
+    # not sent, or done). can_send_paymongo: the "Refund via PayMongo" button.
+    paymongo_refund_id: str | None = None
+    paymongo_refund_status: str | None = None
+    refund_failure_reason: str | None = None
+    can_send_paymongo: bool = False
+
+
+class AdminDispute(BaseModel):
+    """One disputed merchant-set delivery (GET /admin/disputes)."""
+
+    order_id: int
+    order_ref: str
+    order_status: str
+    total_price: int
+    buyer_name: str | None
+    buyer_email: str | None
+    merchant_id: int | None
+    merchant_name: str | None
+    delivered_at: datetime | None
+    disputed_at: datetime
+    merchant_note: str | None
+    merchant_noted_at: datetime | None
+    # A drop-off or failed drop-off photo has a flag.
+    delivery_flagged: bool
+    resolution: str | None
+    resolved_at: datetime | None

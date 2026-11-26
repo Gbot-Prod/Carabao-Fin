@@ -1,18 +1,10 @@
-.page {
-  padding: 28px 32px 40px;
-}
-
+/* A plain toolbar above the table: no box of its own. */
 .filters {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px;
-  margin-bottom: 16px;
-  padding: 14px 16px;
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-md);
-  background: var(--bg-white);
-  box-shadow: var(--admin-card-shadow);
+  margin-bottom: 20px;
 }
 
 .field {
@@ -33,7 +25,7 @@
   padding: 0 10px;
   border: 1px solid #d3dcd5;
   border-radius: var(--radius-sm);
-  background: #f9fbf9;
+  background: var(--bg-white);
   color: var(--text-strong);
   font: inherit;
   font-size: 13px;
@@ -64,51 +56,8 @@
   cursor: pointer;
 }
 
-.tableWrap {
-  overflow-x: auto;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--green-border);
-  background: var(--bg-white);
-  box-shadow: var(--admin-card-shadow);
-}
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.table th {
-  text-align: left;
-  padding: 11px 16px;
-  background: #f4f7f5;
-  color: var(--text-subtle);
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  border-bottom: 1px solid var(--green-border);
-  white-space: nowrap;
-}
-
-.table td {
-  padding: 13px 16px;
-  color: var(--text-strong);
-  border-bottom: 1px solid #edf1ee;
-  vertical-align: middle;
-}
-
-.table tr:last-child td {
-  border-bottom: none;
-}
-
 .row {
   cursor: pointer;
-}
-
-.row:hover td,
-.rowSelected td {
-  background: #f6f9f7;
 }
 
 .linkButton {
@@ -128,16 +77,6 @@
 
 .empty {
   color: var(--text-faint);
-}
-
-.state {
-  padding: 40px 24px;
-  border: 1px dashed #cdd8d0;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.55);
-  color: var(--text-subtle);
-  font-size: 14px;
-  text-align: center;
 }
 
 .stateError {
@@ -274,10 +213,6 @@
 }
 
 @media (max-width: 640px) {
-  .page {
-    padding: 24px 16px;
-  }
-
   .field {
     flex: 1 1 140px;
   }
@@ -376,4 +311,18 @@
 .releaseButton:disabled {
   opacity: 0.6;
   cursor: wait;
+}
+
+/* A loading or empty line inside the order panel. */
+.state {
+  margin: 0;
+  padding: 24px 0;
+  color: var(--text-subtle);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* The row whose details are open in the side panel. */
+.rowSelected td {
+  background: #eef5f0;
 }

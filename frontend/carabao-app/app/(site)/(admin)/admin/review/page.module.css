@@ -1,9 +1,9 @@
 .page {
-  padding: 28px 32px 40px;
+  padding: 24px var(--admin-gutter) 48px;
 }
 
 .section {
-  margin-bottom: 28px;
+  margin-bottom: 36px;
 }
 
 .toolbar {
@@ -31,7 +31,7 @@
   padding: 0 10px;
   border: 1px solid #d3dcd5;
   border-radius: var(--radius-sm);
-  background: #f9fbf9;
+  background: var(--bg-white);
   color: var(--text-strong);
   font: inherit;
   font-size: 13px;
@@ -54,13 +54,19 @@
   margin: 0 0 10px;
 }
 
+/* Applications are a full-bleed ruled list; each row opens in place. */
 .card {
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-md);
+  margin: 0 calc(-1 * var(--admin-gutter));
+  border-bottom: 1px solid var(--admin-row-rule);
   background: var(--bg-white);
-  box-shadow: var(--admin-card-shadow);
-  margin-bottom: 10px;
-  overflow: hidden;
+}
+
+.sectionTitle + .card {
+  border-top: 1px solid var(--admin-rule);
+}
+
+.card:last-child {
+  border-bottom-color: var(--admin-rule);
 }
 
 .cardHeader {
@@ -68,7 +74,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 16px var(--admin-gutter);
   background: none;
   border: none;
   cursor: pointer;
@@ -82,8 +88,7 @@
 
 /* Light green tint on an open card so it stands out from the list. */
 .cardOpen {
-  border-color: #b7d8c0;
-  background: #eef6f0;
+  background: #f3f8f4;
 }
 
 .cardOpen .cardHeader,
@@ -157,8 +162,8 @@
 }
 
 .cardBody {
-  padding: 16px 20px 20px;
-  border-top: 1px solid #edf1ee;
+  padding: 18px var(--admin-gutter) 24px;
+  border-top: 1px solid var(--admin-row-rule);
 }
 
 .grid {
@@ -192,10 +197,13 @@
 }
 
 .emptyState {
-  padding: 40px 24px;
-  border: 1px dashed #cdd8d0;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.55);
+  margin: 0;
+  padding: 48px 24px;
+  border: none;
+  border-top: 1px solid var(--admin-rule);
+  border-bottom: 1px solid var(--admin-rule);
+  border-radius: 0;
+  background: none;
   color: var(--text-subtle);
   font-size: 14px;
   text-align: center;
@@ -439,10 +447,13 @@
 }
 
 .state {
-  padding: 40px 24px;
-  border: 1px dashed #cdd8d0;
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.55);
+  margin: 0;
+  padding: 48px 24px;
+  border: none;
+  border-top: 1px solid var(--admin-rule);
+  border-bottom: 1px solid var(--admin-rule);
+  border-radius: 0;
+  background: none;
   color: var(--text-subtle);
   font-size: 14px;
   text-align: center;

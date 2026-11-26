@@ -212,3 +212,34 @@ export const reorderOrder = async (orderId: number): Promise<ReorderResult> => {
   const response = await apiClient.post<ReorderResult>(`/orders/me/${orderId}/reorder`);
   return response.data;
 };
+
+// ── Disputed deliveries (merchant) ───────────────────────────────────────────
+
+/** A buyer said "I did not get this" about a delivery the farm marked with a photo. */
+export type MerchantDispute = {
+  order_id: number;
+  order_ref: string;
+  total_amount: number;
+  item_summary: string;
+  delivered_at: string | null;
+  disputed_at: string;
+  /** Open: the payout waits for Carabao's decision. */
+  open: boolean;
+  resolution: 'release' | 'refund' | null;
+  resolved_at: string | null;
+  merchant_note: string | null;
+  merchant_noted_at: string | null;
+};
+
+export const DISPUTE_NOTE_MAX = 1000;
+
+export const fetchMerchantDisputes = async (): Promise<MerchantDispute[]> => {
+  const response = await apiClient.get<MerchantDispute[]>('/orders/merchant/disputes');
+  return response.data;
+};
+
+/** The farm's side of an open dispute; it can be changed until Carabao decides. */
+export const setMerchantDisputeNote = async (orderId: number, note: string): Promise<MerchantDispute> => {
+  const response = await apiClient.put<MerchantDispute>(`/orders/merchant/${orderId}/dispute-note`, { note });
+  return response.data;
+};

@@ -1,20 +1,29 @@
 /* ── Admin tokens ────────────────────────────────
-   Re-scoped for every admin page: a darker pale page with pure-white cards so
-   panels stand off the background. Pages keep using --bg-white/--green-border. */
+   Re-scoped for every admin page. Sections sit directly on one white page and
+   are split by hairline rules instead of floating cards: no shadows, no boxes.
+   --admin-gutter is the page's side padding; full-bleed bands (tables, stat
+   strips) pull out by it so their rules run edge to edge. */
 .shell {
   --bg-primary: #e8ece7;
   --bg-white: #ffffff;
-  --green-border: #d9e1db;
+  --green-border: #e1e7e2;
   --green-50: #f6f8f6;
-  --admin-card-shadow: 0 1px 2px rgba(19, 46, 29, 0.06), 0 4px 12px rgba(19, 46, 29, 0.04);
+  --admin-rule: #e1e7e2;
+  --admin-row-rule: #eef2ef;
+  --admin-head-bg: #f8faf8;
+  --admin-gutter: 32px;
   --sidebar-bg: #133520;
   --sidebar-bg-raised: #1a4129;
   --sidebar-text: #bcd0c2;
   --sidebar-text-faint: #7f9a87;
   --sidebar-accent: #5ccf8a;
 
-  min-height: 100vh;
+  /* The shell is exactly one screen tall; .main scrolls inside it, so table
+     pages can fill the space below the topbar and scroll their table instead
+     of the whole page. */
+  height: 100vh;
   display: flex;
+  overflow: hidden;
   background: var(--bg-primary);
 }
 
@@ -232,34 +241,56 @@
 .content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  background: var(--bg-primary);
 }
 
 .topbar {
   position: sticky;
   top: 0;
   z-index: 10;
-  height: 60px;
+  min-height: 60px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 32px;
+  gap: 12px 16px;
+  padding: 10px var(--admin-gutter);
   background: var(--bg-white);
   border-bottom: 1px solid var(--green-border);
 }
 
+/* PageHeader portals the page's title block in here. */
+.headerSlot {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.headerSlot:empty {
+  display: none;
+}
+
+/* Fallback title for pages without a PageHeader (error states and the like). */
 .topbarTitle {
+  flex: 1;
   font-size: 15px;
   font-weight: 600;
   color: var(--text-strong);
 }
 
+.headerSlot:not(:empty) + .topbarTitle {
+  display: none;
+}
+
 .topbarRight {
   margin-left: auto;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
+  padding-left: 16px;
+  border-left: 1px solid var(--admin-rule);
 }
 
 .topbarName {
@@ -271,6 +302,12 @@
 .main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  /* Column flex so a table page (see .page in orders/page.module.css) can take
+     exactly the visible height. Other pages keep their natural height. */
+  display: flex;
+  flex-direction: column;
 }
 
 .mobileToggle,
@@ -281,15 +318,21 @@
 
 @media (max-width: 768px) {
   .shell {
-    min-height: 100dvh;
+    --admin-gutter: 16px;
+    height: 100dvh;
   }
 
   .topbar {
-    padding: 0 16px;
+    padding: 8px var(--admin-gutter);
   }
 
   .topbarName {
     display: none;
+  }
+
+  .topbarRight {
+    padding-left: 0;
+    border-left: none;
   }
 
   .sidebar {

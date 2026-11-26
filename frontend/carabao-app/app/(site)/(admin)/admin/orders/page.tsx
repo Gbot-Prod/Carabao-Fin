@@ -12,13 +12,15 @@ import {
   fetchAdminProofPhoto,
   type AdminOrderDetail,
   type AdminOrderFilters,
+  type AdminOrderSort,
   type AdminOrderStatus,
   type AdminOrderSummary,
   type AdminPaymentStatus,
   type Merchant,
 } from "@/util/api/admin";
-import Pagination from "@/components/Pagination/Pagination";
 import styles from "./page.module.css";
+import TablePanel, { TablePage, TableChip, TableDate, TableFilter, TableSearch, TableSort, type SortOption } from "../../TablePanel";
+import SortHeader, { readSort, type SortState } from "../../SortHeader";
 import PageHeader from "../../PageHeader";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import OrderChat from "@/components/OrderChat/OrderChat";
@@ -29,7 +31,18 @@ const ORDER_STATUSES: AdminOrderStatus[] = ["pending", "processing", "shipped", 
 const PAYMENT_STATUSES: AdminPaymentStatus[] = ["awaiting_payment", "paid", "refund_pending", "refunded", "unpaid"];
 // Orders an admin may still cancel (mirrors ACTIVE_ORDER_STATUSES in the backend).
 const CANCELLABLE: AdminOrderStatus[] = ["pending", "processing", "shipped", "out_for_delivery"];
-const FILTER_KEYS = ["status", "merchant_id", "payment_status", "date_from", "date_to", "delivery"] as const;
+const FILTER_KEYS = ["status", "merchant_id", "payment_status", "date_from", "date_to", "delivery", "q"] as const;
+const SORT_KEYS = ["id", "placed", "buyer", "merchant", "status", "total"] as const;
+/** The server's order when no sort is sent: newest first. */
+const DEFAULT_SORT: SortState<AdminOrderSort> = { sort: "placed", order: "desc" };
+const SORT_OPTIONS: SortOption<AdminOrderSort>[] = [
+  { key: "placed", label: "Placed", firstOrder: "desc" },
+  { key: "id", label: "ID", firstOrder: "desc" },
+  { key: "buyer", label: "Buyer" },
+  { key: "merchant", label: "Merchant" },
+  { key: "status", label: "Status" },
+  { key: "total", label: "Total", firstOrder: "desc" },
+];
 // ORDER_PROOF_PHOTOS_PLAN.md: proof photo kinds and flags, as admins read them.
 const PROOF_LABELS: Record<string, string> = {
   packing: "Packing",
@@ -58,6 +71,7 @@ function filtersFrom(params: URLSearchParams): AdminOrderFilters {
     date_from: params.get("date_from") || undefined,
     date_to: params.get("date_to") || undefined,
     delivery: (params.get("delivery") as AdminOrderFilters["delivery"]) || undefined,
+    q: params.get("q")?.trim() || undefined,
   };
 }
 
@@ -77,7 +91,9 @@ function AdminOrdersContent() {
   const selectedId = Number(searchParams.get("order")) || null;
   const query = searchParams.toString();
   const filters = useMemo(() => filtersFrom(new URLSearchParams(query)), [query]);
-  const filterKey = FILTER_KEYS.map((k) => filters[k] ?? "").join("|") + `|${page}`;
+  const current = readSort<AdminOrderSort>(searchParams, SORT_KEYS, DEFAULT_SORT);
+  const { sort, order } = current;
+  const filterKey = FILTER_KEYS.map((k) => filters[k] ?? "").join("|") + `|${sort}|${order}|${page}`;
 
   const [orders, setOrders] = useState<AdminOrderSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -90,7 +106,7 @@ function AdminOrdersContent() {
   }, []);
 
   useEffect(() => {
-    fetchAdminOrders(filters, page)
+    fetchAdminOrders({ ...filters, sort: sort ?? undefined, order }, page)
       .then((res) => {
         setOrders(res.items);
         setTotal(res.total);
@@ -98,7 +114,7 @@ function AdminOrdersContent() {
       })
       .catch(() => setError("Failed to load orders."))
       .finally(() => setLoadedKey(filterKey));
-  }, [filters, page, filterKey]);
+  }, [filters, sort, order, page, filterKey]);
 
   const loading = loadedKey !== filterKey;
 
@@ -114,74 +130,66 @@ function AdminOrdersContent() {
   // Changing a filter returns to page 1.
   const setFilter = (key: (typeof FILTER_KEYS)[number], value: string) =>
     updateParams({ [key]: value || null, page: null });
+  const onSort = (next: SortState<AdminOrderSort>) => {
+    const isDefault = next.sort === DEFAULT_SORT.sort && next.order === DEFAULT_SORT.order;
+    updateParams({
+      sort: isDefault ? null : next.sort,
+      order: isDefault ? null : next.order,
+      page: null,
+    });
+  };
   const clearFilters = () => router.push(pathname);
   const hasFilters = FILTER_KEYS.some((k) => filters[k] !== undefined);
 
-  if (loading && orders.length === 0 && !error) return <PageLoader label="Loading orders…" />;
+  const firstLoad = loading && orders.length === 0 && !error;
 
   return (
-    <div className={styles.page}>
+    <TablePage>
       <PageHeader eyebrow="Money" title="Orders" count={total} description="Every order across all merchants. Click a row for details." />
 
-      <div className={styles.filters}>
-        <label className={styles.field}>
-          <span>Status</span>
-          <select value={filters.status ?? ""} onChange={(e) => setFilter("status", e.target.value)}>
-            <option value="">All</option>
-            {ORDER_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
-          </select>
-        </label>
-        <label className={styles.field}>
-          <span>Payment</span>
-          <select value={filters.payment_status ?? ""} onChange={(e) => setFilter("payment_status", e.target.value)}>
-            <option value="">All</option>
-            {PAYMENT_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
-          </select>
-        </label>
-        <label className={styles.field}>
-          <span>Merchant</span>
-          <select value={filters.merchant_id ?? ""} onChange={(e) => setFilter("merchant_id", e.target.value)}>
-            <option value="">All</option>
-            {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
-          </select>
-        </label>
-        <label className={styles.field}>
-          <span>Delivery</span>
-          <select value={filters.delivery ?? ""} onChange={(e) => setFilter("delivery", e.target.value)}>
-            <option value="">All</option>
-            <option value="flagged">Flagged photo</option>
-            <option value="disputed">Disputed, not decided</option>
-          </select>
-        </label>
-        <label className={styles.field}>
-          <span>From</span>
-          <input type="date" value={filters.date_from ?? ""} onChange={(e) => setFilter("date_from", e.target.value)} />
-        </label>
-        <label className={styles.field}>
-          <span>To</span>
-          <input type="date" value={filters.date_to ?? ""} onChange={(e) => setFilter("date_to", e.target.value)} />
-        </label>
-        {hasFilters && (
-          <button type="button" className={styles.clear} onClick={clearFilters}>Clear filters</button>
-        )}
-      </div>
-
-      {error ? (
-        <div className={styles.stateError}>{error}</div>
-      ) : orders.length === 0 ? (
-        <div className={styles.state}>No orders match these filters.</div>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
+      <TablePanel
+        activeFilters={FILTER_KEYS.filter((k) => k !== "q" && filters[k] !== undefined).length}
+        filters={
+          <>
+            <TableFilter label="Status" value={filters.status ?? ""} onChange={(v) => setFilter("status", v)}>
+              <option value="">All</option>
+              {ORDER_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
+            </TableFilter>
+            <TableFilter label="Payment" value={filters.payment_status ?? ""} onChange={(v) => setFilter("payment_status", v)}>
+              <option value="">All</option>
+              {PAYMENT_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
+            </TableFilter>
+            <TableFilter label="Merchant" value={String(filters.merchant_id ?? "")} onChange={(v) => setFilter("merchant_id", v)}>
+              <option value="">All</option>
+              {merchants.map((m) => <option key={m.id} value={m.id}>{m.merchant_name}</option>)}
+            </TableFilter>
+            <TableFilter label="Delivery" value={filters.delivery ?? ""} onChange={(v) => setFilter("delivery", v)}>
+              <option value="">All</option>
+              <option value="flagged">Flagged photo</option>
+              <option value="disputed">Disputed, not decided</option>
+            </TableFilter>
+            <TableDate label="From" value={filters.date_from ?? ""} onChange={(v) => setFilter("date_from", v)} />
+            <TableDate label="To" value={filters.date_to ?? ""} onChange={(v) => setFilter("date_to", v)} />
+            {hasFilters && <TableChip onClear={clearFilters}>Clear filters</TableChip>}
+          </>
+        }
+        sort={<TableSort options={SORT_OPTIONS} current={current} onSort={onSort} defaultLabel="Newest first" />}
+        search={<TableSearch applied={filters.q ?? ""} onSearch={(v) => setFilter("q", v)} placeholder="#order, buyer or merchant" label="Search orders" />}
+        message={firstLoad ? "Loading orders…" : error ?? (orders.length === 0 ? "No orders match these filters." : null)}
+        messageTone={error ? "error" : undefined}
+        loading={loading}
+        pagination={{ page, pageSize: ADMIN_PAGE_SIZE, total, onPageChange: (next) => updateParams({ page: String(next) }) }}
+      >
+          <table>
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Placed</th>
-                <th>Buyer</th>
-                <th>Merchant</th>
-                <th>Status</th>
+                <SortHeader label="ID" sortKey="id" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Placed" sortKey="placed" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="Buyer" sortKey="buyer" current={current} onSort={onSort} />
+                <SortHeader label="Merchant" sortKey="merchant" current={current} onSort={onSort} />
+                <SortHeader label="Status" sortKey="status" current={current} onSort={onSort} />
                 <th>Payment</th>
-                <th>Total</th>
+                <SortHeader label="Total" sortKey="total" current={current} onSort={onSort} firstOrder="desc" />
               </tr>
             </thead>
             <tbody>
@@ -210,19 +218,10 @@ function AdminOrdersContent() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-
-      <Pagination
-        page={page}
-        pageSize={ADMIN_PAGE_SIZE}
-        total={total}
-        disabled={loading}
-        onPageChange={(next) => updateParams({ page: String(next) })}
-      />
+      </TablePanel>
 
       {selectedId && <OrderDetailPanel orderId={selectedId} onClose={() => updateParams({ order: null })} />}
-    </div>
+    </TablePage>
   );
 }
 
@@ -329,6 +328,21 @@ function OrderDetailPanel({ orderId, onClose }: { orderId: number; onClose: () =
                 {d.delivery.dispute_until && (<><dt>Dispute window</dt><dd>until {when(d.delivery.dispute_until)}</dd></>)}
                 {d.delivery.delivery_buyer_confirmed_at && (<><dt>Buyer confirmed</dt><dd>{when(d.delivery.delivery_buyer_confirmed_at)}</dd></>)}
                 {d.delivery.delivery_disputed_at && (<><dt>Buyer disputed</dt><dd>{when(d.delivery.delivery_disputed_at)}</dd></>)}
+                {d.delivery.delivery_disputed_at && (
+                  <>
+                    <dt>Farm&apos;s side</dt>
+                    <dd>
+                      {d.delivery.dispute_merchant_note ? (
+                        <>
+                          {d.delivery.dispute_merchant_note}
+                          <div className={styles.sub}>{when(d.delivery.dispute_merchant_noted_at ?? null)}</div>
+                        </>
+                      ) : (
+                        <span className={styles.sub}>The farm has not replied.</span>
+                      )}
+                    </dd>
+                  </>
+                )}
                 {d.delivery.dispute_resolution && (
                   <><dt>Decision</dt><dd>{d.delivery.dispute_resolution} · {when(d.delivery.dispute_resolved_at ?? null)}</dd></>
                 )}

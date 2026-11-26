@@ -1,39 +1,8 @@
 .page {
-  padding: 28px 32px 40px;
+  padding: 24px var(--admin-gutter) 48px;
 }
 
-/* ── Header ──────────────────────────────────── */
-
-.header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
-}
-
-.eyebrow {
-  margin: 0 0 4px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-subtle);
-}
-
-.heading {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-strong);
-  letter-spacing: -0.01em;
-}
-
-.headerActions {
-  display: flex;
-  gap: 8px;
-}
+/* ── Header actions (rendered in the topbar by PageHeader) ── */
 
 .btnPrimary,
 .btnSecondary {
@@ -63,7 +32,6 @@
   background: var(--bg-white);
   border: 1px solid var(--green-border);
   color: var(--text-strong);
-  box-shadow: var(--admin-card-shadow);
 }
 
 .btnSecondary:hover {
@@ -80,19 +48,17 @@
   box-shadow: var(--focus-ring);
 }
 
-/* ── Cards ───────────────────────────────────── */
+/* ── Sections ────────────────────────────────── */
+/* Sections sit straight on the page. Each row of them is a full-bleed band
+   (see Grids): the 1px gap over the rule colour draws the dividers. */
 
 .card {
   background: var(--bg-white);
-  border: 1px solid var(--green-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--admin-card-shadow);
-  padding: 20px 22px;
+  padding: 24px var(--admin-gutter) 28px;
   min-width: 0;
 }
 
 .cardFlush {
-  padding: 0;
   display: flex;
   flex-direction: column;
 }
@@ -110,8 +76,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--green-border);
+  margin-bottom: 8px;
 }
 
 .cardTitle {
@@ -158,13 +123,16 @@
   letter-spacing: -0.01em;
 }
 
-/* ── Stat cards ──────────────────────────────── */
+/* ── Stat strip ──────────────────────────────── */
 
 .statGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 1px;
+  margin: 0 calc(-1 * var(--admin-gutter));
+  border-top: 1px solid var(--admin-rule);
+  border-bottom: 1px solid var(--admin-rule);
+  background: var(--admin-rule);
 }
 
 .statCard {
@@ -172,21 +140,21 @@
   flex-direction: column;
   justify-content: center;
   gap: 16px;
-  padding: 18px 20px;
+  padding: 22px var(--admin-gutter);
   color: inherit;
   text-decoration: none;
 }
 
 .statCardLink {
-  transition: border-color 0.12s;
+  transition: background 0.12s;
 }
 
 .statCardLink:hover {
-  border-color: #b9c7bd;
+  background: var(--green-50);
 }
 
-.statCardAlert {
-  border-color: #f5d48a;
+.statCardAlert,
+.statCardAlert.statCardLink:hover {
   background: #fffbf0;
 }
 
@@ -338,18 +306,27 @@
 }
 
 /* ── Grids ───────────────────────────────────── */
+/* Full-bleed bands under the stat strip, one rule between each. */
+
+.gridMain,
+.gridHalf {
+  display: grid;
+  gap: 1px;
+  margin: 0 calc(-1 * var(--admin-gutter));
+  border-bottom: 1px solid var(--admin-rule);
+  background: var(--admin-rule);
+}
 
 .gridMain {
-  display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-  gap: 16px;
-  margin-bottom: 16px;
 }
 
 .gridHalf {
-  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+}
+
+.gridHalf:last-child {
+  border-bottom: none;
 }
 
 /* ── Needs attention list ────────────────────── */
@@ -357,14 +334,14 @@
 .attnList {
   display: flex;
   flex-direction: column;
-  padding: 6px 10px;
+  margin: 0 -10px;
 }
 
 .attnRow {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 12px 10px;
   border-radius: var(--radius-sm);
   color: inherit;
   text-decoration: none;
@@ -432,7 +409,7 @@
 }
 
 .allClear {
-  margin: auto 22px 18px;
+  margin: 12px 0 0;
   font-size: 13px;
   color: var(--text-subtle);
 }
@@ -442,16 +419,18 @@
 .payoutList {
   display: flex;
   flex-direction: column;
-  gap: 6px;
 }
 
 .payoutRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  background: #f4f7f5;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--admin-row-rule);
+}
+
+.payoutRow:last-child {
+  border-bottom: none;
 }
 
 .payoutLeft {
@@ -528,7 +507,7 @@
 
 @media (max-width: 640px) {
   .page {
-    padding: 20px 16px 32px;
+    padding: 20px var(--admin-gutter) 32px;
   }
 
   .statGrid {
@@ -536,11 +515,7 @@
   }
 
   .card {
-    padding: 16px;
-  }
-
-  .cardFlush {
-    padding: 0;
+    padding: 20px var(--admin-gutter) 24px;
   }
 
   .cardHead {

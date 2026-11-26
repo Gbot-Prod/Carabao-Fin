@@ -87,6 +87,9 @@ class Order(Base):
         ),
         nullable=True,
     )
+    # The farm's side of a disputed delivery, for the admin who decides it.
+    dispute_merchant_note = Column(Text, nullable=True)
+    dispute_merchant_noted_at = Column(DateTime(timezone=True), nullable=True)
     # When the order became delivered, cancelled or payment_mismatch. The
     # retention sweep starts its clock here (CF-0044; migration d2a6f8c4e1b7).
     closed_at = Column(DateTime(timezone=True), nullable=True, index=True)

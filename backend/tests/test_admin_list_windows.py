@@ -84,6 +84,50 @@ def test_payout_batches_window_newest_first(db: Session, merchant: Any) -> None:
         assert client.get("/admin/batches", params=params).status_code == 422, params
 
 
+def test_payout_batches_page_filters_sorts_and_totals(
+    db: Session, merchant: Any
+) -> None:
+    # gross 100..104; released at 0, 2, 4; pending at 1, 3. No fee recorded,
+    # so each net is gross minus today's fee.
+    ids = _batches(db, merchant, 5)
+    fee = admin.transfer_fee()
+    client = _admin_client(db)
+
+    body = client.get("/admin/batches/page", params={"page_size": 2}).json()
+    assert body["total"] == 5
+    assert [b["id"] for b in body["items"]] == ids[::-1][:2]  # newest first
+    page3 = client.get("/admin/batches/page", params={"page_size": 2, "page": 3}).json()
+    assert [b["id"] for b in page3["items"]] == [ids[0]]
+    assert body["summary"] == {
+        "waiting": 2,
+        "owed": (101 - fee) + (103 - fee),
+        "released": (100 - fee) + (102 - fee) + (104 - fee),
+    }
+
+    pending = client.get("/admin/batches/page", params={"status": "pending"}).json()
+    assert {b["id"] for b in pending["items"]} == {ids[1], ids[3]}
+    assert pending["summary"] == body["summary"]  # totals ignore the filter
+
+    by_amount = client.get(
+        "/admin/batches/page", params={"sort": "amount", "order": "asc"}
+    ).json()
+    assert [b["id"] for b in by_amount["items"]] == ids
+
+    by_id = client.get("/admin/batches/page", params={"q": f"#{ids[2]}"}).json()
+    assert ids[2] in [b["id"] for b in by_id["items"]]
+    by_name = client.get(
+        "/admin/batches/page", params={"q": merchant.merchant_name[:4].upper()}
+    ).json()
+    assert by_name["total"] == 5
+    none = client.get("/admin/batches/page", params={"q": "zz%no-match"}).json()
+    assert none["total"] == 0 and none["items"] == []
+
+    for params in ({"sort": "bogus"}, {"status": "approved"}, {"page": 0}):
+        assert client.get("/admin/batches/page", params=params).status_code == 422, (
+            params
+        )
+
+
 def test_applications_filter_and_window(db: Session) -> None:
     ids = _applications(
         db, ["approved", "submitted", "rejected", "clarification", "approved"]

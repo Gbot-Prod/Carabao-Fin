@@ -16,6 +16,7 @@ from app.services.paymongo import (
     verify_webhook_signature,
 )
 from app.services.payout_service import handle_transfer_event
+from app.services.refund_service import handle_refund_event
 from app.services.sms_service import notify_merchant_new_order
 
 logger = logging.getLogger(__name__)
@@ -63,6 +64,8 @@ async def paymongo_webhook(request: Request, db: Session = Depends(get_db)):
         await run_in_threadpool(_handle_checkout_paid, payload, db)
     elif event_type in ("transfer.outward.successful", "transfer.outward.failed"):
         await run_in_threadpool(_handle_transfer, event_type, payload, db)
+    elif event_type in ("payment.refund.updated", "payment.refunded"):
+        await run_in_threadpool(_handle_refund, event_type, payload, db)
     else:
         logger.debug("Unhandled PayMongo event: %s", event_type)
 
@@ -77,6 +80,17 @@ def _handle_transfer(event_type: str, payload: dict, db: Session) -> None:
         logger.error("Malformed %s payload: no transfer data", event_type)
         return
     handle_transfer_event(db, event_type, resource)
+
+
+def _handle_refund(event_type: str, payload: dict, db: Session) -> None:
+    """A refund sent from /admin/refunds changed. The data is the refund
+    (payment.refund.updated) or, for payment.refunded, maybe the payment."""
+    attributes = (payload.get("data") or {}).get("attributes") or {}
+    resource = attributes.get("data")
+    if not isinstance(resource, dict):
+        logger.error("Malformed %s payload: no data", event_type)
+        return
+    handle_refund_event(db, resource)
 
 
 def _handle_checkout_paid(payload: dict, db: Session) -> None:

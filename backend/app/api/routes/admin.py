@@ -4,13 +4,13 @@ from typing import Any, Literal, get_args
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import Date, cast, func, or_, select
+from sqlalchemy import Date, case, cast, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.dependencies import get_current_user, get_db
 from app.core.errors import upstream_error
-from app.core.sql import SortOrder, sort_clauses
+from app.core.sql import SortOrder, ilike_contains, sort_clauses
 from app.models.merchant import Merchant
 from app.models.merchant_application import MerchantApplication
 from app.models.order import Order
@@ -24,8 +24,9 @@ from app.schemas.merchant_application import (
     AdminMerchantApplicationResponse,
     ApplicationReviewPayload,
 )
-from app.schemas.pagination import MAX_OFFSET, MAX_PAGE, Page
+from app.schemas.pagination import MAX_FILTER_TEXT, MAX_OFFSET, MAX_PAGE, Page
 from app.schemas.payout import (
+    AdminPayoutBatchPage,
     AdminPayoutBatchResponse,
     PayoutDestinationPreview,
     WalletBalance,
@@ -68,7 +69,6 @@ ADMIN_MFA_SESSION_DETAIL = (
 ADMIN_SURFACE_DETAIL = "Use the admin site to do this."
 
 
-
 def _require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Admins always need two-step verification (E8c, CF-0003), and this
     session must have passed the TOTP step (CF-0017): a Google sign-in or a
@@ -99,6 +99,15 @@ MerchantSort = Literal[
 ]
 
 
+# The search box of the admin tables: one text, matched against a few columns.
+# A number (with or without "#") also matches the row's id.
+def _id_term(term: str) -> int | None:
+    digits = term.lstrip("#")
+    if digits.isdigit() and int(digits) <= 2**31 - 1:
+        return int(digits)
+    return None
+
+
 def _user_sort_column(sort: UserSort) -> Any:
     return {
         "id": User.id,
@@ -114,6 +123,7 @@ def list_all_users(
     page_size: int = Query(20, ge=1, le=100),
     # "admin": admin accounts only; "user": buyer and merchant accounts only.
     role: Literal["user", "admin"] | None = None,
+    search: str | None = Query(None, alias="q", max_length=MAX_FILTER_TEXT),
     sort: UserSort = "id",
     order: SortOrder = "asc",
     db: Session = Depends(get_db),
@@ -124,6 +134,16 @@ def list_all_users(
         q = q.filter(User.is_admin)
     elif role == "user":
         q = q.filter(~User.is_admin)
+    term = (search or "").strip()
+    if term:
+        matches = [
+            ilike_contains(User.name, term),
+            ilike_contains(User.email, term),
+            ilike_contains(User.phone_number, term),
+        ]
+        if (user_id := _id_term(term)) is not None:
+            matches.append(User.id == user_id)
+        q = q.filter(or_(*matches))
     total = q.count()
     users = (
         q.options(selectinload(User.addresses))
@@ -171,6 +191,7 @@ def _merchant_sort_column(sort: MerchantSort) -> Any:
 def list_all_merchants(
     page: int = Query(1, ge=1, le=MAX_PAGE),
     page_size: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, alias="q", max_length=MAX_FILTER_TEXT),
     sort: MerchantSort = "id",
     order: SortOrder = "asc",
     db: Session = Depends(get_db),
@@ -186,6 +207,20 @@ def list_all_merchants(
             )
         )
     )
+    term = (search or "").strip()
+    if term:
+        owner_email = (
+            select(User.email).where(User.id == Merchant.user_id).correlate(Merchant)
+        ).scalar_subquery()
+        matches = [
+            ilike_contains(Merchant.merchant_name, term),
+            ilike_contains(Merchant.city, term),
+            ilike_contains(Merchant.province, term),
+            ilike_contains(owner_email, term),
+        ]
+        if (merchant_id := _id_term(term)) is not None:
+            matches.append(Merchant.id == merchant_id)
+        q = q.filter(or_(*matches))
     total = q.count()
     merchants = (
         q.options(
@@ -205,9 +240,7 @@ def list_all_merchants(
                 "owner_suspension_reason": (
                     m.user.suspension_reason if m.user else None
                 ),
-                "owner_name": ((m.user.name or "").strip() or None)
-                if m.user
-                else None,
+                "owner_name": ((m.user.name or "").strip() or None) if m.user else None,
             }
         )
         for m in merchants
@@ -615,9 +648,8 @@ def list_payout_batches(
     db: Session = Depends(get_db),
     admin: User = Depends(_require_admin),
 ):
-    q = (
-        db.query(PayoutBatch, Merchant.merchant_name)
-        .outerjoin(Merchant, Merchant.id == PayoutBatch.merchant_id)
+    q = db.query(PayoutBatch, Merchant.merchant_name).outerjoin(
+        Merchant, Merchant.id == PayoutBatch.merchant_id
     )
     if status:
         q = q.filter(PayoutBatch.status == status)
@@ -628,6 +660,102 @@ def list_payout_batches(
         .all()
     )
     return [_admin_batch_view(batch, name) for batch, name in rows]
+
+
+PayoutSort = Literal["requested", "merchant", "orders", "amount", "status"]
+# "pending" in the table covers both requested and approved batches.
+PayoutFilter = Literal["pending", "processing", "released", "failed"]
+_WAITING = (PayoutStatus.PENDING, PayoutStatus.APPROVED, PayoutStatus.FAILED)
+
+
+def _batch_net() -> Any:
+    """What the merchant receives: the stored net, else gross minus the fee
+    (a batch requested before fees were recorded gets today's fee)."""
+    return func.coalesce(
+        PayoutBatch.net_amount,
+        PayoutBatch.gross_amount
+        - func.coalesce(PayoutBatch.transfer_fee, transfer_fee()),
+    )
+
+
+def _payout_sort_column(sort: PayoutSort) -> Any:
+    return {
+        "requested": PayoutBatch.created_at,
+        "merchant": func.lower(Merchant.merchant_name),
+        "orders": PayoutBatch.transaction_count,
+        "amount": _batch_net(),
+        # Workflow order: waiting to send, failed, in flight, done.
+        "status": case(
+            (PayoutBatch.status == PayoutStatus.PENDING, 0),
+            (PayoutBatch.status == PayoutStatus.APPROVED, 1),
+            (PayoutBatch.status == PayoutStatus.FAILED, 2),
+            (PayoutBatch.status == PayoutStatus.PROCESSING, 3),
+            else_=4,
+        ),
+    }[sort]
+
+
+@router.get("/admin/batches/page", response_model=AdminPayoutBatchPage)
+def list_payout_batches_page(
+    page: int = Query(1, ge=1, le=MAX_PAGE),
+    page_size: int = Query(20, ge=1, le=100),
+    status: PayoutFilter | None = None,
+    q: str | None = Query(None, max_length=MAX_FILTER_TEXT),
+    sort: PayoutSort = "requested",
+    order: SortOrder = "desc",
+    db: Session = Depends(get_db),
+    _: User = Depends(_require_admin),
+):
+    """The payouts table: a page of batches, filtered, searched and sorted,
+    with totals over every batch for the KPI strip."""
+    query = db.query(PayoutBatch, Merchant.merchant_name).outerjoin(
+        Merchant, Merchant.id == PayoutBatch.merchant_id
+    )
+    if status == "pending":
+        query = query.filter(
+            PayoutBatch.status.in_((PayoutStatus.PENDING, PayoutStatus.APPROVED))
+        )
+    elif status:
+        query = query.filter(PayoutBatch.status == status)
+    term = (q or "").strip().lstrip("#")
+    if term:
+        matches = [
+            ilike_contains(Merchant.merchant_name, term),
+            ilike_contains(PayoutBatch.destination_name, term),
+            ilike_contains(PayoutBatch.destination_number, term),
+            ilike_contains(PayoutBatch.provider_reference, term),
+        ]
+        if term.isdigit() and int(term) <= 2**31 - 1:
+            matches += [
+                PayoutBatch.id == int(term),
+                PayoutBatch.merchant_id == int(term),
+            ]
+        query = query.filter(or_(*matches))
+    total = query.count()
+    rows = (
+        query.order_by(*sort_clauses(_payout_sort_column(sort), order, PayoutBatch.id))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    net = _batch_net()
+    waiting, owed, released = db.query(
+        func.count(PayoutBatch.id).filter(PayoutBatch.status.in_(_WAITING)),
+        func.coalesce(
+            func.sum(net).filter(PayoutBatch.status != PayoutStatus.RELEASED), 0
+        ),
+        func.coalesce(
+            func.sum(net).filter(PayoutBatch.status == PayoutStatus.RELEASED), 0
+        ),
+    ).one()
+    return {
+        "items": [_admin_batch_view(batch, name) for batch, name in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "summary": {"waiting": waiting, "owed": int(owed), "released": int(released)},
+    }
 
 
 @router.patch(
@@ -694,9 +822,7 @@ def refresh_payout_batch(
         db.query(PayoutBatch.status).filter(PayoutBatch.id == batch_id).scalar()
     )
     before_reason: str | None = (
-        db.query(PayoutBatch.failure_reason)
-        .filter(PayoutBatch.id == batch_id)
-        .scalar()
+        db.query(PayoutBatch.failure_reason).filter(PayoutBatch.id == batch_id).scalar()
     )
     try:
         batch = refresh_payout(db, batch_id)

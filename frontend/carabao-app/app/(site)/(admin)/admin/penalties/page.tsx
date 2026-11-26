@@ -1,27 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  ADMIN_PAGE_SIZE,
-  fetchPenalties,
-  fetchPenaltyAccounts,
-  revokePenalty,
-  type AdminPenalty,
-  type PenaltyAccount,
-} from "@/util/api/admin";
-import getApiErrorMessage from "@/util/errorHelper";
-import Pagination from "@/components/Pagination/Pagination";
+import { fetchPenaltyAccounts, type PenaltyAccount, type PenaltyAccountSort } from "@/util/api/admin";
 import PageLoader from "@/components/PageLoader/PageLoader";
 import styles from "../orders/page.module.css";
 import suspend from "../../suspend.module.css";
-import local from "./page.module.css";
 import PageHeader from "../../PageHeader";
+import TablePanel, { TablePage, TableSearch, TableSort, type SortOption } from "../../TablePanel";
+import SortHeader, { readSort, writeSort, type SortState } from "../../SortHeader";
 
-type Show = "" | "active" | "inactive";
-
-const REVOKE_REASON_MIN = 5;
+const SORT_KEYS = ["farm", "points", "listings", "state"] as const;
+/** The server's order when no sort is sent: the most points first. */
+const DEFAULT_SORT: SortState<PenaltyAccountSort> = { sort: "points", order: "desc" };
+const SORT_OPTIONS: SortOption<PenaltyAccountSort>[] = [
+  { key: "points", label: "Points", firstOrder: "desc" },
+  { key: "farm", label: "Farm" },
+  { key: "listings", label: "New listings" },
+  { key: "state", label: "State (most urgent first)" },
+];
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -29,14 +27,15 @@ function formatDate(iso: string | null): string {
 }
 
 /**
- * Guardrails Phase 2: penalty points from rejected listings (backend
- * services/listing_trust.py). Points count for 28 days. At 3 points a farm
- * cannot make new listings; at 6 points an admin reviews the account and
- * decides to suspend it. An admin can remove the points of one rejection.
+ * Guardrails Phase 2: the farms that have penalty points from rejected
+ * listings now (backend services/listing_trust.py). Points count for 28 days.
+ * At 3 points a farm cannot make new listings; at 6 points an admin reviews
+ * the account and decides to suspend it. Each penalty, and removing its
+ * points, is on /admin/penalty-history.
  */
 export default function AdminPenaltiesPage() {
   return (
-    <Suspense fallback={<PageLoader label="Loading penalty points…" />}>
+    <Suspense fallback={<PageLoader label="Loading penalties…" />}>
       <PenaltiesContent />
     </Suspense>
   );
@@ -46,103 +45,74 @@ function PenaltiesContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const page = Math.max(1, Number(searchParams.get("page")) || 1);
-  const merchantId = Number(searchParams.get("merchant_id")) || undefined;
-  const show = (searchParams.get("show") as Show) || "";
-  const key = `${merchantId ?? ""}|${show}|${page}`;
+  const q = searchParams.get("q")?.trim() ?? "";
+  const current = readSort<PenaltyAccountSort>(searchParams, SORT_KEYS, DEFAULT_SORT);
+  const { sort, order } = current;
+  const key = `${q}|${sort}|${order}`;
 
   const [accounts, setAccounts] = useState<PenaltyAccount[]>([]);
-  const [rows, setRows] = useState<AdminPenalty[]>([]);
-  const [total, setTotal] = useState(0);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [revoking, setRevoking] = useState<{ id: number; reason: string } | null>(null);
-  const [busy, setBusy] = useState<number | null>(null);
-  const [rowError, setRowError] = useState<{ id: number; message: string } | null>(null);
-  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
-    fetchPenaltyAccounts()
-      .then(setAccounts)
-      .catch(() => setAccounts([]));
-  }, [reloadTick]);
-
-  useEffect(() => {
-    fetchPenalties(
-      { merchant_id: merchantId, active: show === "active" ? true : show === "inactive" ? false : undefined },
-      page,
-      ADMIN_PAGE_SIZE,
-    )
+    fetchPenaltyAccounts({ q: q || undefined, sort: sort ?? undefined, order })
       .then((res) => {
-        setRows(res.items);
-        setTotal(res.total);
+        setAccounts(res);
         setError(null);
       })
-      .catch(() => setError("Failed to load the penalty points."))
-      .finally(() => setLoadedKey(`${merchantId ?? ""}|${show}|${page}`));
-  }, [merchantId, show, page, reloadTick]);
+      .catch(() => setError("Failed to load the penalties."))
+      .finally(() => setLoadedKey(`${q}|${sort}|${order}`));
+  }, [q, sort, order]);
 
   const loading = loadedKey !== key;
+  const firstLoad = loadedKey === null;
 
-  const go = (next: { merchant_id?: number | null; show?: Show; page?: number }) => {
+  const go = (next: { q?: string; sort?: SortState<PenaltyAccountSort> }) => {
     const params = new URLSearchParams();
-    const m = next.merchant_id === null ? undefined : (next.merchant_id ?? merchantId);
-    const s = next.show ?? show;
-    if (m) params.set("merchant_id", String(m));
-    if (s) params.set("show", s);
-    if (next.page && next.page > 1) params.set("page", String(next.page));
+    const nextQ = next.q ?? q;
+    const nextSort = next.sort ?? current;
+    if (nextQ) params.set("q", nextQ);
+    if (nextSort.sort !== DEFAULT_SORT.sort || nextSort.order !== DEFAULT_SORT.order) writeSort(params, nextSort);
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
   };
-
-  const revoke = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!revoking) return;
-    setBusy(revoking.id);
-    setRowError(null);
-    try {
-      await revokePenalty(revoking.id, revoking.reason);
-      setRevoking(null);
-      setReloadTick((n) => n + 1);
-    } catch (err) {
-      setRowError({ id: revoking.id, message: getApiErrorMessage(err) ?? "Could not remove the points." });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  if (loading && rows.length === 0 && !error) return <PageLoader label="Loading penalty points…" />;
-
-  const selected = merchantId ? accounts.find((a) => a.merchant_id === merchantId) : undefined;
+  const onSort = (next: SortState<PenaltyAccountSort>) => go({ sort: next });
 
   return (
-    <div className={styles.page}>
+    <TablePage>
       <PageHeader
-        eyebrow="People"
-        title="Penalty points"
-        count={total}
-        description="Points from rejected listings, counted for 28 days. At 3 points a farm cannot make new listings. At 6 points, review the account and decide if it must be suspended."
+        eyebrow="Administration"
+        title="Penalties"
+        count={firstLoad ? undefined : accounts.length}
+        description="Farms with points from rejected listings, counted for 28 days. At 3 points a farm cannot make new listings. At 6 points, review the account and decide if it must be suspended."
       />
 
-      <section className={local.section}>
-      <h2 className={local.sectionTitle}>Farms with points</h2>
-      {accounts.length === 0 ? (
-        <div className={styles.state}>No farm has active penalty points.</div>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
+      <TablePanel
+        sort={<TableSort options={SORT_OPTIONS} current={current} onSort={onSort} defaultLabel="Most points first" />}
+        search={<TableSearch applied={q} onSearch={(v) => go({ q: v })} placeholder="Farm name or #id" label="Search farms" />}
+        message={
+          firstLoad
+            ? "Loading penalties…"
+            : (error ??
+              (accounts.length === 0 ? (q ? "No farm matches this search." : "No farm has active penalty points.") : null))
+        }
+        messageTone={error ? "error" : undefined}
+        loading={loading}
+        count={accounts.length}
+      >
+          <table>
             <thead>
               <tr>
-                <th>Farm</th>
-                <th>Points</th>
-                <th>New listings</th>
-                <th>State</th>
+                <SortHeader label="Farm" sortKey="farm" current={current} onSort={onSort} />
+                <SortHeader label="Points" sortKey="points" current={current} onSort={onSort} firstOrder="desc" />
+                <SortHeader label="New listings" sortKey="listings" current={current} onSort={onSort} />
+                <SortHeader label="State" sortKey="state" current={current} onSort={onSort} />
                 <th />
               </tr>
             </thead>
             <tbody>
               {accounts.map((a) => (
-                <tr key={a.merchant_id} className={a.merchant_id === merchantId ? styles.rowSelected : undefined}>
+                <tr key={a.merchant_id}>
                   <td>{a.merchant_name ?? `#${a.merchant_id}`}</td>
                   <td className={styles.mono}>{a.points}</td>
                   <td>{a.can_create_listings ? "Allowed" : `Blocked until ${formatDate(a.blocked_until)}`}</td>
@@ -159,9 +129,9 @@ function PenaltiesContent() {
                   </td>
                   <td>
                     <div className={suspend.wrap}>
-                      <button type="button" className={suspend.action} onClick={() => go({ merchant_id: a.merchant_id, page: 1 })}>
-                        Show points
-                      </button>
+                      <Link href={`/admin/penalty-history?merchant_id=${a.merchant_id}`} className={suspend.action}>
+                        History
+                      </Link>
                       <Link href={`/admin/listings?merchant=${a.merchant_id}`} className={suspend.action}>
                         Listings
                       </Link>
@@ -176,102 +146,7 @@ function PenaltiesContent() {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
-      </section>
-
-      <h2 className={local.sectionTitle}>Penalty history</h2>
-      <div className={styles.filters}>
-        <label className={styles.field}>
-          <span>Show</span>
-          <select value={show} onChange={(e) => go({ show: e.target.value as Show, page: 1 })}>
-            <option value="">All penalties</option>
-            <option value="active">Counting now</option>
-            <option value="inactive">Expired or removed</option>
-          </select>
-        </label>
-        {merchantId && (
-          <button type="button" className={suspend.action} onClick={() => go({ merchant_id: null, page: 1 })}>
-            Farm: {selected?.merchant_name ?? rows[0]?.merchant_name ?? `#${merchantId}`} ✕
-          </button>
-        )}
-      </div>
-
-      {error ? (
-        <div className={styles.stateError}>{error}</div>
-      ) : rows.length === 0 ? (
-        <div className={styles.state}>No penalties match.</div>
-      ) : (
-        <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Farm</th>
-                <th>Listing</th>
-                <th>Reason</th>
-                <th>Points</th>
-                <th>Counts until</th>
-                <th>State</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className={styles.mono}>{formatDate(row.created_at)}</td>
-                  <td>{row.merchant_name ?? `#${row.merchant_id}`}</td>
-                  <td>{row.produce_name}</td>
-                  <td>{row.label}</td>
-                  <td className={styles.mono}>{row.points}</td>
-                  <td className={styles.mono}>{formatDate(row.expires_at)}</td>
-                  <td>
-                    <div className={suspend.wrap}>
-                      {row.revoked_at ? (
-                        <span className={suspend.suspended} title={row.revoke_reason ?? undefined}>
-                          Removed {formatDate(row.revoked_at)}
-                        </span>
-                      ) : row.active ? (
-                        <span className={suspend.review}>Counting</span>
-                      ) : (
-                        <span className={suspend.active}>Expired</span>
-                      )}
-                      {row.active && revoking?.id !== row.id && (
-                        <button type="button" className={suspend.action} disabled={busy === row.id} onClick={() => setRevoking({ id: row.id, reason: "" })}>
-                          Remove points
-                        </button>
-                      )}
-                      {revoking?.id === row.id && (
-                        <form className={suspend.rejectForm} onSubmit={(e) => void revoke(e)}>
-                          <input
-                            aria-label="Reason for the merchant"
-                            placeholder="Reason (required)"
-                            maxLength={500}
-                            value={revoking.reason}
-                            onChange={(e) => setRevoking({ ...revoking, reason: e.target.value })}
-                          />
-                          <button
-                            type="submit"
-                            className={suspend.action}
-                            disabled={busy === row.id || revoking.reason.trim().length < REVOKE_REASON_MIN}
-                          >
-                            Remove
-                          </button>
-                          <button type="button" className={suspend.action} onClick={() => setRevoking(null)}>
-                            Cancel
-                          </button>
-                        </form>
-                      )}
-                      {rowError?.id === row.id && <span className={suspend.error} role="alert">{rowError.message}</span>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <Pagination page={page} pageSize={ADMIN_PAGE_SIZE} total={total} disabled={loading} onPageChange={(p) => go({ page: p })} />
-    </div>
+      </TablePanel>
+    </TablePage>
   );
 }

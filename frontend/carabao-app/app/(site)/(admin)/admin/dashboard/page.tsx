@@ -27,6 +27,7 @@ import {
   type DailyRevenue,
 } from "@/util/api/admin";
 import { ORDER_STATUS_LABELS, PAYOUT_STATUS_LABELS, type OrderStatus } from "@/util/api/statuses";
+import PageHeader from "../../PageHeader";
 import styles from "./page.module.css";
 import SkeletonList, { LoadError } from "@/components/Skeleton/Skeleton";
 
@@ -197,20 +198,14 @@ export default function AdminDashboard() {
   const days = useMemo(() => (stats ? fillDays(stats.daily_revenue) : []), [stats]);
 
   const header = (
-    <div className={styles.header}>
-      <div>
-        <p className={styles.eyebrow}>Overview</p>
-        <h1 className={styles.heading}>Dashboard</h1>
-      </div>
-      <div className={styles.headerActions}>
-        <Link href="/admin/orders" className={styles.btnSecondary}>
-          <ShoppingBag size={16} strokeWidth={1.9} /> View orders
-        </Link>
-        <Link href="/admin/payouts" className={styles.btnPrimary}>
-          <Banknote size={16} strokeWidth={1.9} /> Send payouts
-        </Link>
-      </div>
-    </div>
+    <PageHeader eyebrow="Overview" title="Dashboard">
+      <Link href="/admin/orders" className={styles.btnSecondary}>
+        <ShoppingBag size={16} strokeWidth={1.9} /> View orders
+      </Link>
+      <Link href="/admin/payouts" className={styles.btnPrimary}>
+        <Banknote size={16} strokeWidth={1.9} /> Send payouts
+      </Link>
+    </PageHeader>
   );
 
   if (loading) {

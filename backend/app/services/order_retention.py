@@ -4,8 +4,8 @@ A set number of days after an order closes (default 14), the sweep removes its
 chat, delivery address text, map pin, delivery notes and route. The buyer's
 saved addresses are not touched. Totals, items, dates and payments stay.
 
-An order with a refund still open keeps its details until the refund is done,
-because the admin may need them to settle it.
+An order with a refund or a delivery dispute still open keeps its details until
+it is settled, because the admin may need them to decide it.
 """
 
 import os
@@ -47,6 +47,10 @@ def purge_closed_order_details(db: Session, days: int) -> int:
                     Transaction.order_id == Order.id,
                     Transaction.status == TransactionStatus.REFUND_PENDING,
                 ),
+                ~(
+                    Order.delivery_disputed_at.isnot(None)
+                    & Order.dispute_resolution.is_(None)
+                ),
             )
             .order_by(Order.id)
             .limit(BATCH_SIZE)
@@ -79,6 +83,8 @@ def purge_closed_order_details(db: Session, days: int) -> int:
             Order.delivery_pin_confirmed: False,
             Order.pin_unreachable_note: None,
             Order.notes: None,
+            # The farm's side of a dispute can describe the drop-off.
+            Order.dispute_merchant_note: None,
             Order.route_waypoints: None,
             Order.details_purged_at: now,
         },
