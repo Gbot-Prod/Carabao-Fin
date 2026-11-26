@@ -1,5 +1,4 @@
 import type { ConfigContext, ExpoConfig } from 'expo/config';
-import { chooseMapProvider } from './src/lib/mapProvider';
 
 const MAPS_PLUGIN = 'react-native-maps';
 
@@ -13,7 +12,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   // app.json is the static base and the CLI passes it in here, so name/slug exist at runtime.
   const staticConfig = config as ExpoConfig;
   if (!apiKey) return staticConfig;
-  const provider = chooseMapProvider(process.env.EXPO_PUBLIC_MAP_PROVIDER, true);
+  const provider =
+    process.env.EXPO_PUBLIC_MAP_PROVIDER?.trim().toLowerCase() === 'native' ? 'native' : 'google';
   const keys =
     provider === 'google'
       ? { androidGoogleMapsApiKey: apiKey, iosGoogleMapsApiKey: apiKey }

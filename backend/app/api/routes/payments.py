@@ -1,4 +1,5 @@
 import logging
+import secrets
 from datetime import UTC, datetime
 
 import requests
@@ -182,7 +183,8 @@ def create_payment_checkout(
             merchant_name=merchant.merchant_name,
             success_url=f"{buyer_site}/orders/success?order_id={order_id}",
             cancel_url=f"{buyer_site}/checkout?payment_cancelled=1&order_id={order_id}",
-            reference_number=str(order_id),
+            # Random part: order ids start again after a database reset.
+            reference_number=f"CARABAO-ORDER-{order_id}-{secrets.token_hex(4).upper()}",
         )
     except requests.HTTPError as e:
         release_order_reservation(

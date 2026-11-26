@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AlertTriangle, Columns2, ExternalLink, FileText } from "lucide-react";
 import {
   fetchAdminMerchantApplications,
   fetchBirCertDocumentUrl,
@@ -93,10 +94,10 @@ const DOCUMENTS: Record<
   DocumentKind,
   { label: string; button: string; fetchUrl: typeof fetchRsbsaDocumentUrl }
 > = {
-  rsbsa: { label: "RSBSA document", button: "View RSBSA Document", fetchUrl: fetchRsbsaDocumentUrl },
-  govId: { label: "government ID", button: "View Government ID", fetchUrl: fetchGovIdDocumentUrl },
-  birCert: { label: "BIR Form 2303", button: "View BIR Form 2303", fetchUrl: fetchBirCertDocumentUrl },
-  selfie: { label: "selfie with ID", button: "View Selfie with ID", fetchUrl: fetchSelfieDocumentUrl },
+  rsbsa: { label: "RSBSA Document", button: "Open", fetchUrl: fetchRsbsaDocumentUrl },
+  govId: { label: "Government ID", button: "Open", fetchUrl: fetchGovIdDocumentUrl },
+  birCert: { label: "BIR Form 2303", button: "Open", fetchUrl: fetchBirCertDocumentUrl },
+  selfie: { label: "Selfie with ID", button: "Open", fetchUrl: fetchSelfieDocumentUrl },
 };
 
 const documentName = (app: MerchantApplication, kind: DocumentKind) =>
@@ -133,6 +134,7 @@ function ApplicationCard({
   const [error, setError] = useState<string | null>(null);
   const [documentLoading, setDocumentLoading] = useState<DocumentKind | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
   const allowed = ALLOWED_ACTIONS[app.status] ?? [];
   // The checklist items the admin ticked as reviewed. Accept needs every warn
   // and fail item ticked; the server refuses otherwise.
@@ -262,79 +264,137 @@ function ApplicationCard({
               ticked={ticked}
               onToggle={toggleTick}
               onViewDocument={(kind) => void handleViewDocument(kind)}
+              onCompareSelfie={() => setCompareOpen(true)}
               onUpdate={onUpdate}
               readOnly={!allowed.includes("approved")}
             />
           )}
-          <div className={styles.grid}>
-            <Field label="Seller Type" value={app.seller_type ? SELLER_TYPE_LABELS[app.seller_type] ?? app.seller_type : null} />
-            {(app.seller_type === "individual_farmer" || app.seller_type === "sole_proprietor") && (
-              <>
-                <Field label="Legal Name" value={personName(app.first_name, app.middle_name, app.last_name, app.suffix)} />
-                <Field label="Sex" value={app.sex ? app.sex[0].toUpperCase() + app.sex.slice(1) : null} />
-                <Field label="Birth Date" value={app.birth_date} />
-              </>
-            )}
-            {(app.seller_type === "corporation" || app.seller_type === "cooperative") && (
-              <Field label="Registered Name" value={app.company_name} />
-            )}
-            {app.seller_type !== "individual_farmer" && <Field label="Trade Name" value={app.trade_name} />}
-            {app.seller_type === "corporation" && (
-              <Field
-                label="Authorized Representative"
-                value={personName(app.rep_first_name, app.rep_middle_name, app.rep_last_name, app.rep_suffix)}
-              />
-            )}
-            <Field label="Contact Email" value={app.contact_email} />
-            <Field label="Contact Number" value={app.contact_number} />
-            <Field label="TIN" value={app.tin} />
-            <Field label="VAT Status" value={app.vat_status ? VAT_LABELS[app.vat_status] : null} />
-            <Field label="Small Agri Producer (RR 12-2023)" value={declarationText(app)} />
-            <Field label="Registration Type" value={app.registration_type} />
-            <Field label="Registration No." value={app.registration_number} />
-            <Field label="Address" value={app.address} />
-            <Field label="City / Province" value={`${app.city}, ${app.province}`} />
-            <Field label="Region" value={app.region} />
-            <Field label="Postal Code" value={app.postal_code} />
-            <Field label="Available Days" value={app.available_days.join(", ")} />
-            <Field label="RSBSA No." value={app.rsbsa_number} />
-            <Field label="Government ID" value={app.gov_id_type} />
-            <Field label="Submitted" value={dateTime(app.submitted_at)} />
-            <Field
-              label="Terms Accepted"
-              value={app.terms_accepted_at ? `${dateTime(app.terms_accepted_at)} (version ${app.terms_version ?? "—"})` : null}
-            />
+
+          <div className={styles.infoCards}>
+            <section className={styles.infoCard}>
+              <h4 className={styles.infoCardTitle}>Identity &amp; Contact</h4>
+              <div className={styles.infoCardFields}>
+                {(app.seller_type === "individual_farmer" || app.seller_type === "sole_proprietor") && (
+                  <>
+                    <Field label="Legal Name" value={personName(app.first_name, app.middle_name, app.last_name, app.suffix)} />
+                    <Field label="Sex" value={app.sex ? app.sex[0].toUpperCase() + app.sex.slice(1) : null} />
+                    <Field label="Birth Date" value={app.birth_date} />
+                  </>
+                )}
+                {(app.seller_type === "corporation" || app.seller_type === "cooperative") && (
+                  <Field label="Registered Name" value={app.company_name} />
+                )}
+                {app.seller_type !== "individual_farmer" && <Field label="Trade Name" value={app.trade_name} />}
+                {app.seller_type === "corporation" && (
+                  <Field
+                    label="Authorized Representative"
+                    value={personName(app.rep_first_name, app.rep_middle_name, app.rep_last_name, app.rep_suffix)}
+                  />
+                )}
+                <Field label="Contact Email" value={app.contact_email} />
+                <Field label="Contact Number" value={app.contact_number} />
+                <Field label="Available Days" value={app.available_days.join(", ")} />
+              </div>
+            </section>
+
+            <section className={styles.infoCard}>
+              <h4 className={styles.infoCardTitle}>Location</h4>
+              <div className={styles.infoCardFields}>
+                <Field label="Address" value={app.address} />
+                <Field label="City / Province" value={`${app.city}, ${app.province}`} />
+                <Field label="Region" value={app.region} />
+                <Field label="Postal Code" value={app.postal_code} />
+              </div>
+            </section>
+
+            <section className={styles.infoCard}>
+              <h4 className={styles.infoCardTitle}>Seller &amp; Registration Info</h4>
+              <div className={styles.infoCardFields}>
+                <Field label="Seller Type" value={app.seller_type ? SELLER_TYPE_LABELS[app.seller_type] ?? app.seller_type : null} />
+                <Field label="Small Agri Producer (RR 12-2023)" value={declarationText(app)} />
+                <Field label="Government ID" value={app.gov_id_type} />
+                <Field label="RSBSA No." value={app.rsbsa_number} emptyLabel="Not provided" />
+                <Field label="TIN" value={app.tin} emptyLabel="Not provided" />
+                <Field label="VAT Status" value={app.vat_status ? VAT_LABELS[app.vat_status] : null} emptyLabel="Not provided" />
+                <Field
+                  label="Registration"
+                  value={
+                    app.registration_type || app.registration_number
+                      ? [app.registration_type, app.registration_number].filter(Boolean).join(" · ")
+                      : null
+                  }
+                  emptyLabel="Not provided"
+                />
+              </div>
+            </section>
+
+            <section className={styles.infoCard}>
+              <h4 className={styles.infoCardTitle}>Submission Metadata</h4>
+              <div className={styles.infoCardFields}>
+                <Field label="Submitted" value={dateTime(app.submitted_at)} />
+                <Field
+                  label="Terms Accepted"
+                  value={app.terms_accepted_at ? `${dateTime(app.terms_accepted_at)} (v${app.terms_version ?? "—"})` : null}
+                />
+                {app.reviewed_at && <Field label="Last Reviewed" value={dateTime(app.reviewed_at)} />}
+              </div>
+            </section>
           </div>
 
-          <div className={styles.documentPanel}>
-            {(["rsbsa", "govId", "birCert", "selfie"] as const).map((kind) => {
-              const fileName = documentName(app, kind);
-              // Only the documents this application has (none while incomplete).
-              if (!fileName) return null;
-              return (
-                <div key={kind} className={styles.documentRow}>
-                  <button
-                    type="button"
-                    className={styles.docLink}
-                    onClick={() => handleViewDocument(kind)}
-                    disabled={documentLoading !== null}
-                  >
-                    {documentLoading === kind
-                      ? "Preparing document..."
-                      : DOCUMENTS[kind].button}
-                  </button>
-                  {fileName && <span className={styles.documentName}>{fileName}</span>}
-                </div>
-              );
-            })}
-            {documentError && (
-              <span className={styles.actionError}>{documentError}</span>
-            )}
-          </div>
+          <section className={styles.docsSection}>
+            <h4 className={styles.docsSectionTitle}>Documents &amp; Verification</h4>
+            <div className={styles.docCardsGrid}>
+              {(["rsbsa", "govId", "birCert", "selfie"] as const).map((kind) => {
+                const fileName = documentName(app, kind);
+                // Only the documents this application has (none while incomplete).
+                if (!fileName) return null;
+                return (
+                  <div key={kind} className={styles.docCard}>
+                    <div className={styles.docCardInfo}>
+                      <span className={styles.docCardLabel}>
+                        <FileText size={14} aria-hidden="true" />
+                        <span>{DOCUMENTS[kind].label}</span>
+                      </span>
+                      <span className={styles.docCardFilename} title={fileName}>
+                        {fileName}
+                      </span>
+                    </div>
+                    <div className={styles.docCardActions}>
+                      {kind === "selfie" && (
+                        <button
+                          type="button"
+                          className={styles.docCardBtnPrimary}
+                          onClick={() => setCompareOpen(true)}
+                        >
+                          <Columns2 size={13} aria-hidden="true" />
+                          <span>Compare</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={styles.docCardBtn}
+                        onClick={() => handleViewDocument(kind)}
+                        disabled={documentLoading !== null}
+                      >
+                        <span>{documentLoading === kind ? "Preparing…" : DOCUMENTS[kind].button}</span>
+                        <ExternalLink size={12} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {documentError && <span className={styles.actionError}>{documentError}</span>}
 
-          <RsbsaFinder app={app} />
+            <RsbsaFinder app={app} />
+          </section>
 
-          <SelfieCompare app={app} onOpenGovId={() => void handleViewDocument("govId")} />
+          <SelfieCompare
+            app={app}
+            open={compareOpen}
+            onClose={() => setCompareOpen(false)}
+            onOpenGovId={() => void handleViewDocument("govId")}
+          />
 
           {app.admin_note && (
             <div className={styles.adminNote}>
@@ -361,49 +421,55 @@ function ApplicationCard({
             </p>
           ) : (
           <div className={styles.actionPanel}>
-            <span className={styles.actionLabel}>Review Decision</span>
-            <div className={styles.actionButtons}>
-              {allowed.includes("approved") && (
-              <button
-                className={`${styles.actionBtn} ${styles.actionBtnApprove} ${action === "approved" ? styles.actionBtnSelected : ""}`}
-                onClick={() => selectAction("approved")}
-                disabled={acceptBlocked}
-                title={acceptBlocked ? "Tick every flagged checklist item as reviewed first." : undefined}
-              >
-                Accept
-              </button>
-              )}
-              {allowed.includes("rejected") && (
-              <button
-                className={`${styles.actionBtn} ${styles.actionBtnReject} ${action === "rejected" ? styles.actionBtnSelected : ""}`}
-                onClick={() => selectAction("rejected")}
-              >
-                Reject
-              </button>
-              )}
-              {allowed.includes("clarification") && (
-              <button
-                className={`${styles.actionBtn} ${styles.actionBtnClarify} ${action === "clarification" ? styles.actionBtnSelected : ""}`}
-                onClick={() => selectAction("clarification")}
-              >
-                Request Clarification
-              </button>
-              )}
-              {allowed.includes("suspended") && (
-              <button
-                className={`${styles.actionBtn} ${styles.actionBtnReject} ${action === "suspended" ? styles.actionBtnSelected : ""}`}
-                onClick={() => selectAction("suspended")}
-              >
-                Suspend Merchant
-              </button>
-              )}
+            <div className={styles.decisionBar}>
+              <div className={styles.decisionInfo}>
+                <span className={styles.actionLabel}>Review Decision</span>
+                {allowed.includes("approved") && acceptBlocked && (
+                  <span className={styles.decisionWarning}>
+                    <AlertTriangle size={14} aria-hidden="true" />
+                    <span>
+                      Tick {unreviewed.length === 1 ? "1 flagged check" : `${unreviewed.length} flagged checks`} above before accepting.
+                    </span>
+                  </span>
+                )}
+              </div>
+              <div className={styles.actionButtons}>
+                {allowed.includes("rejected") && (
+                  <button
+                    className={`${styles.actionBtn} ${styles.actionBtnReject} ${action === "rejected" ? styles.actionBtnSelected : ""}`}
+                    onClick={() => selectAction("rejected")}
+                  >
+                    Reject
+                  </button>
+                )}
+                {allowed.includes("clarification") && (
+                  <button
+                    className={`${styles.actionBtn} ${styles.actionBtnClarify} ${action === "clarification" ? styles.actionBtnSelected : ""}`}
+                    onClick={() => selectAction("clarification")}
+                  >
+                    Request Clarification
+                  </button>
+                )}
+                {allowed.includes("approved") && (
+                  <button
+                    className={`${styles.actionBtn} ${styles.actionBtnApprove} ${action === "approved" ? styles.actionBtnSelected : ""}`}
+                    onClick={() => selectAction("approved")}
+                    disabled={acceptBlocked}
+                    title={acceptBlocked ? "Tick every flagged checklist item as reviewed first." : undefined}
+                  >
+                    Accept
+                  </button>
+                )}
+                {allowed.includes("suspended") && (
+                  <button
+                    className={`${styles.actionBtn} ${styles.actionBtnReject} ${action === "suspended" ? styles.actionBtnSelected : ""}`}
+                    onClick={() => selectAction("suspended")}
+                  >
+                    Suspend Merchant
+                  </button>
+                )}
+              </div>
             </div>
-            {allowed.includes("approved") && acceptBlocked && (
-              <p className={styles.adminNoteText}>
-                Accept is available once you tick the {unreviewed.length === 1 ? "flagged item" : `${unreviewed.length} flagged items`} above as
-                reviewed. Reject and Request Clarification do not need the checklist.
-              </p>
-            )}
 
             {action === "clarification" && (
               <fieldset className={styles.sectionPicker}>
@@ -473,15 +539,17 @@ function ApplicationCard({
 function Field({
   label,
   value,
+  emptyLabel = "—",
 }: {
   label: string;
   value: string | null | undefined;
+  emptyLabel?: string;
 }) {
   return (
     <div className={styles.field}>
       <span className={styles.fieldLabel}>{label}</span>
       <span className={styles.fieldValue}>
-        {value || <span className={styles.emptyVal}>—</span>}
+        {value || <span className={styles.emptyVal}>{emptyLabel}</span>}
       </span>
     </div>
   );

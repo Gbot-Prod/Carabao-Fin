@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Copy, ExternalLink } from "lucide-react";
 import type { MerchantApplication } from "@/util/api/admin";
 import styles from "./page.module.css";
 
@@ -14,7 +15,7 @@ const finderDate = (iso: string | null) => {
   return m ? `${m[2]}/${m[3]}/${m[1]}` : null;
 };
 
-/** A link to the DA RSBSA Finder with the applicant's name parts to copy. */
+/** Labeled box of copyable applicant fields alongside the DA RSBSA Finder link. */
 export default function RsbsaFinder({ app }: { app: MerchantApplication }) {
   const [copied, setCopied] = useState<string | null>(null);
   if (!app.rsbsa_number && !app.rsbsa_document_original_name) return null;
@@ -39,33 +40,47 @@ export default function RsbsaFinder({ app }: { app: MerchantApplication }) {
   };
 
   return (
-    <div className={styles.rsbsaFinder}>
-      <a className={styles.docLink} href={FINDER_URL} target="_blank" rel="noopener noreferrer">
-        Open DA RSBSA Finder ↗
-      </a>
+    <div className={styles.rsbsaFinderBox}>
+      <div className={styles.rsbsaFinderHeader}>
+        <div>
+          <span className={styles.rsbsaFinderTitle}>Extracted / Finder Data</span>
+          <span className={styles.rsbsaFinderHint}>Click any field to copy for the DA RSBSA Finder</span>
+        </div>
+        <a className={styles.finderBtn} href={FINDER_URL} target="_blank" rel="noopener noreferrer">
+          <span>Open DA RSBSA Finder</span>
+          <ExternalLink size={13} aria-hidden="true" />
+        </a>
+      </div>
+
       {fields.length > 0 && (
         <div className={styles.rsbsaFinderFields}>
           {fields.map(({ label, value }) => {
             const upper = value.trim().toUpperCase();
+            const isCopied = copied === label;
             return (
               <button
                 key={label}
                 type="button"
-                className={styles.rsbsaFinderChip}
+                className={`${styles.rsbsaFinderChip} ${isCopied ? styles.rsbsaFinderChipCopied : ""}`}
                 onClick={() => void copy(label, upper)}
                 title={`Copy ${label.toLowerCase()}`}
               >
-                <span className={styles.fieldLabel}>{label}</span> {upper}
-                {copied === label ? " ✓" : ""}
+                <span className={styles.fieldLabel}>{label}</span>
+                <span className={styles.rsbsaFinderChipVal}>{upper}</span>
+                {isCopied ? <Check size={12} aria-hidden="true" /> : <Copy size={11} className={styles.copyIcon} aria-hidden="true" />}
               </button>
             );
           })}
         </div>
       )}
-      <span className={styles.documentName}>
-        {!app.sex || !app.birth_date ? "Sex and birthday are not in this application: read them from the government ID. " : ""}
-        Compare the RSBSA No. on the finder card with {app.rsbsa_number ? <strong>{app.rsbsa_number}</strong> : "the RSBSA document"}.
-      </span>
+
+      <p className={styles.rsbsaFinderNote}>
+        {!app.sex || !app.birth_date
+          ? "Sex and birthday are not in this application — read them from the government ID. "
+          : ""}
+        Compare the RSBSA No. on the finder card with{" "}
+        {app.rsbsa_number ? <strong>{app.rsbsa_number}</strong> : "the RSBSA document"}.
+      </p>
     </div>
   );
 }

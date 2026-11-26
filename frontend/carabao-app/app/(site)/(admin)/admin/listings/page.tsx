@@ -27,7 +27,7 @@ import TablePanel, { TablePage, TableChip, TableFilter, TableSearch, TableSort, 
 
 // No sort: newest first, or oldest first for the review queue (server order).
 const SORT_KEYS = ["id", "name", "category", "merchant", "price", "stock", "best_before"] as const;
-const COLUMNS = 9;
+const COLUMNS = 10;
 const SORT_OPTIONS: SortOption<AdminProduceSort>[] = [
   { key: "id", label: "ID", firstOrder: "desc" },
   { key: "name", label: "Listing" },
@@ -242,6 +242,7 @@ function ListingsContent() {
                 <SortHeader label="Price" sortKey="price" current={current} onSort={onSort} />
                 <SortHeader label="Stock" sortKey="stock" current={current} onSort={onSort} />
                 <SortHeader label="Best before" sortKey="best_before" current={current} onSort={onSort} />
+                <th>Status</th>
                 <th>Moderation</th>
               </tr>
             </thead>
@@ -264,11 +265,28 @@ function ListingsContent() {
                   <td className={styles.mono}>{row.best_before ?? "—"}</td>
                   <td>
                     <div className={suspend.wrap}>
-                      {!row.hidden_at && row.status && row.status !== "live" && (
-                        <span className={row.status === "rejected" ? suspend.suspended : suspend.review}>
-                          {STATUS_LABELS[row.status] ?? row.status}
+                      {row.hidden_at ? (
+                        <>
+                          <span className={suspend.suspended}>Hidden</span>
+                          {row.hidden_reason && <span className={suspend.reason}>{row.hidden_reason}</span>}
+                        </>
+                      ) : (
+                        <span
+                          className={
+                            row.status === "rejected"
+                              ? suspend.suspended
+                              : row.status === "under_review"
+                                ? suspend.review
+                                : suspend.active
+                          }
+                        >
+                          {STATUS_LABELS[row.status ?? "live"] ?? row.status}
                         </span>
                       )}
+                    </div>
+                  </td>
+                  <td>
+                    <div className={suspend.wrap}>
                       {!row.hidden_at && row.status === "under_review" && (
                         <button type="button" className={suspend.action} disabled={busy === row.id} onClick={() => void approve(row)}>
                           Approve
@@ -313,25 +331,18 @@ function ListingsContent() {
                         </form>
                       )}
                       {row.hidden_at ? (
-                        <>
-                          <span className={suspend.suspended}>Hidden</span>
-                          <button type="button" className={suspend.action} disabled={busy === row.id} onClick={() => void unhide(row)}>
-                            Unhide
-                          </button>
-                          {row.hidden_reason && <span className={suspend.reason}>{row.hidden_reason}</span>}
-                        </>
+                        <button type="button" className={suspend.action} disabled={busy === row.id} onClick={() => void unhide(row)}>
+                          Unhide
+                        </button>
                       ) : (
-                        <>
-                          {(!row.status || row.status === "live") && <span className={suspend.active}>Visible</span>}
-                          <button
-                            type="button"
-                            className={`${suspend.action} ${suspend.danger}`}
-                            disabled={busy === row.id}
-                            onClick={() => void hide(row)}
-                          >
-                            Hide
-                          </button>
-                        </>
+                        <button
+                          type="button"
+                          className={`${suspend.action} ${suspend.danger}`}
+                          disabled={busy === row.id}
+                          onClick={() => void hide(row)}
+                        >
+                          Hide
+                        </button>
                       )}
                       {rowError?.id === row.id && <span className={suspend.error} role="alert">{rowError.message}</span>}
                     </div>
