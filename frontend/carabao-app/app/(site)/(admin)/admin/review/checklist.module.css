@@ -228,6 +228,34 @@
   color: var(--text-subtle);
 }
 
+.extracted {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.extractedNote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.extractedText {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-white);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-strong);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .rowActions {
   display: flex;
   align-items: center;

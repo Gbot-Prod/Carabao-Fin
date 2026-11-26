@@ -91,11 +91,15 @@ def test_edits_stay_in_draft_until_publish(db, merchant):
     assert live["title"] == live_title
     assert live["description"] is None
     assert merchant.id in _public_ids(buyer)
+    old_name = merchant.merchant_name
+    assert buyer.get(f"/merchants/{merchant.id}").json()["merchant_name"] == old_name
 
     owner.post("/merchants/me/shoppage/publish")
     live = buyer.get(f"/merchants/{merchant.id}/shoppage").json()
     assert live["title"] == "New name"
     assert live["description"] == "New"
+    # Publish makes the title the store name that buyers see.
+    assert buyer.get(f"/merchants/{merchant.id}").json()["merchant_name"] == "New name"
 
 
 def test_discard_restores_the_live_page(db, merchant):

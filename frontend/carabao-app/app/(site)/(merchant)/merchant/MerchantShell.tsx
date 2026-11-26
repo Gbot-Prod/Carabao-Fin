@@ -19,6 +19,7 @@ import {
   Star,
   Store,
   Truck,
+  User,
   X,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell/NotificationBell";
@@ -156,6 +157,7 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
         { path: P.produce, label: "Produce", icon: Package, count: productCount || undefined },
         { path: P.inventory, label: "Inventory", icon: Boxes },
         { path: P.shop, label: "Shop & settings", icon: Store, also: ["/settings"] },
+        { path: P.account, label: "Profile", icon: User },
       ],
     },
   ];
@@ -297,7 +299,7 @@ export default function MerchantShell({ children }: { children: ReactNode }) {
           <span className={styles.topbarTitle}>{current?.label ?? "Merchant"}</span>
           <div className={styles.topbarRight}>
             <NotificationBell placement="down" audience="merchant" />
-            <a className={styles.topbarProfile} href={appUrl("/profile")} title="My profile">
+            <a className={styles.topbarProfile} href={merchantUrl(P.account)} title="My profile">
               <span className={styles.topbarName}>{displayName}</span>
               <span className={`${styles.avatar} ${styles.avatarSm}`} aria-hidden="true">{initials(displayName)}</span>
             </a>

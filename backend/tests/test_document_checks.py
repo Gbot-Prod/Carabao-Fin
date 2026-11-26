@@ -14,6 +14,7 @@ import pytest
 import sqlalchemy as sa
 
 from app.core.field_crypto import blind_index
+from app.models.admin_audit_log import AdminAuditLog
 from app.models.merchant_application import MerchantApplication
 from app.services import document_checks, r2_service
 from tests.better_auth import make_user
@@ -237,10 +238,15 @@ def test_documents_missing_or_unreadable(db, applicant):  # noqa: F811
     application = _app(db, applicant)
     application.rsbsa_document_path = None
     db.commit()
-    _texts(gov="DELA CRUZ JUAN")
+    _texts(gov="Republic of the Philippines\nDELA CRUZ JUAN")
     items = _items(db, application, {"gov_id": GOV})
     assert items["document_rsbsa"]["result"] == "fail"
     assert items["document_gov_id"]["result"] == "pass"
+    assert "REPUBLIC OF THE PHILIPPINES" in items["document_gov_id"]["reason"]
+    # Text, but not from an ID (e.g. a receipt): a warn.
+    _texts(gov="OFFICIAL RECEIPT\nDELA CRUZ JUAN")
+    items = _items(db, application, {"gov_id": GOV})
+    assert items["document_gov_id"]["result"] == "warn"
     _texts()
     items = _items(db, application, {"gov_id": GOV})
     assert items["document_gov_id"]["result"] == "warn"
@@ -323,6 +329,25 @@ def test_admin_can_rerun_the_checks(db, applicant, monkeypatch):  # noqa: F811
     items = {i["id"]: i for i in res.json()["check_checklist"]}
     assert res.json()["check_status"] == "completed"
     assert items["name_matches_id"]["result"] == "pass"
+
+
+def test_admin_reads_document_text_without_storing_it(
+    db, applicant, monkeypatch  # noqa: F811
+):
+    application = _app(db, applicant)
+    monkeypatch.setattr(r2_service, "get_private_document", lambda path: GOV)
+    _texts(gov="REPUBLIC OF THE PHILIPPINES\nDELA CRUZ JUAN")
+    client = _admin_client(db, _staff(db))
+    base = f"/admin/merchant-applications/{application.id}/documents"
+    res = client.post(f"{base}/gov_id/text")
+    assert res.status_code == 200, res.text
+    assert "DELA CRUZ JUAN" in res.json()["text"]
+    assert res.json()["markers"] == ["REPUBLIC OF THE PHILIPPINES"]
+    log = db.query(AdminAuditLog).filter_by(
+        action="merchant_application.document_text"
+    ).one()
+    assert "DELA CRUZ" not in str(log.after)
+    assert client.post(f"{base}/selfie/text").status_code == 422
 
 
 def test_resubmitting_runs_the_checks_again(db, applicant):  # noqa: F811

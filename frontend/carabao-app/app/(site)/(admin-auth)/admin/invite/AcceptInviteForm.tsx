@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { acceptAdminInvite } from "@/util/api/admin";
 import { getApiErrorDetail, getApiErrorStatus } from "@/util/errorHelper";
 import FieldError, { focusFirstInvalid, invalidClass, invalidProps, type FieldErrors } from "@/components/FieldError/FieldError";
@@ -17,6 +18,8 @@ export default function AcceptInviteForm({ invite, token }: { invite: string; to
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
   const [errors, setErrors] = useState<FieldErrors<Field>>({});
   const [formError, setFormError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -91,39 +94,61 @@ export default function AcceptInviteForm({ invite, token }: { invite: string; to
           <FieldError id="invite-code" message={errors.code} />
         </div>
         <div className={invalidClass(errors.password).trim() || undefined}>
-          <input
-            id="invite-password"
-            className="auth-input"
-            type="password"
-            aria-label="New password"
-            placeholder="New password (12+ characters)"
-            autoComplete="new-password"
-            maxLength={MAX_PASSWORD}
-            value={password}
-            {...invalidProps("invite-password", errors.password)}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              clear("password");
-            }}
-          />
+          <div className="admin-invite-password-wrap">
+            <input
+              id="invite-password"
+              className="auth-input"
+              type={passwordVisible ? "text" : "password"}
+              aria-label="New password"
+              placeholder="New password (12+ characters)"
+              autoComplete="new-password"
+              maxLength={MAX_PASSWORD}
+              value={password}
+              {...invalidProps("invite-password", errors.password)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                clear("password");
+              }}
+            />
+            <button
+              type="button"
+              className="admin-invite-password-toggle"
+              onClick={() => setPasswordVisible((visible) => !visible)}
+              aria-label={passwordVisible ? "Hide password" : "Show password"}
+              aria-pressed={passwordVisible}
+            >
+              {passwordVisible ? <EyeOff size={18} strokeWidth={1.75} /> : <Eye size={18} strokeWidth={1.75} />}
+            </button>
+          </div>
           <FieldError id="invite-password" message={errors.password} />
         </div>
         <div className={invalidClass(errors.confirm).trim() || undefined}>
-          <input
-            id="invite-confirm"
-            className="auth-input"
-            type="password"
-            aria-label="New password again"
-            placeholder="New password again"
-            autoComplete="new-password"
-            maxLength={MAX_PASSWORD}
-            value={confirm}
-            {...invalidProps("invite-confirm", errors.confirm)}
-            onChange={(e) => {
-              setConfirm(e.target.value);
-              clear("confirm");
-            }}
-          />
+          <div className="admin-invite-password-wrap">
+            <input
+              id="invite-confirm"
+              className="auth-input"
+              type={confirmVisible ? "text" : "password"}
+              aria-label="New password again"
+              placeholder="New password again"
+              autoComplete="new-password"
+              maxLength={MAX_PASSWORD}
+              value={confirm}
+              {...invalidProps("invite-confirm", errors.confirm)}
+              onChange={(e) => {
+                setConfirm(e.target.value);
+                clear("confirm");
+              }}
+            />
+            <button
+              type="button"
+              className="admin-invite-password-toggle"
+              onClick={() => setConfirmVisible((visible) => !visible)}
+              aria-label={confirmVisible ? "Hide password" : "Show password"}
+              aria-pressed={confirmVisible}
+            >
+              {confirmVisible ? <EyeOff size={18} strokeWidth={1.75} /> : <Eye size={18} strokeWidth={1.75} />}
+            </button>
+          </div>
           <FieldError id="invite-confirm" message={errors.confirm} />
         </div>
       </div>

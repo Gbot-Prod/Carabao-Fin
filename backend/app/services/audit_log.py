@@ -35,6 +35,8 @@ ADMIN_RECOVER = "admin.recover"  # scripts/make_admin.py --recover
 SUSPEND = "user.suspend"
 REINSTATE = "user.reinstate"
 APPLICATION_REVIEW = "merchant_application.review"
+# An admin read the OCR text of an application document (the text is not logged).
+APPLICATION_DOCUMENT_TEXT = "merchant_application.document_text"
 PAYOUT_RELEASE = "payout.release"
 PAYOUT_REFRESH = "payout.refresh"  # only when the status changed (CF-0054)
 REFUND = "transaction.refund"
@@ -71,6 +73,7 @@ ACTIONS = (
     SUSPEND,
     REINSTATE,
     APPLICATION_REVIEW,
+    APPLICATION_DOCUMENT_TEXT,
     PAYOUT_RELEASE,
     REFUND,
     REFUND_SENT,

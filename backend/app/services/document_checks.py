@@ -8,7 +8,8 @@ What is stored (merchant_applications):
 * SHA-256 of each file (duplicate files across applications);
 * the name and numbers read from the documents: names encrypted, numbers as
   blind indexes (HMAC), the BIR TIN encrypted plus a blind index. The full
-  extracted text is never stored;
+  extracted text is never stored (``read_document_text`` reads it again when
+  an admin asks, and only the audit log records that);
 * ``check_checklist``: one item per check, {id, label, result, reason,
   document, related_application_ids}, so the review page does not recompute it;
 * ``check_status``: pending | completed | failed.
@@ -101,6 +102,43 @@ DOCUMENT_LABELS = {
 }
 # Photos with no text to read: only hashed (duplicates) and checked by eye.
 _PHOTO_DOCUMENTS = frozenset({"selfie"})
+
+# Words that show the text is from the expected kind of document. They are
+# compared on folded text (_fold), so write them upper-case, ASCII, no
+# punctuation. One marker is sufficient; none found is only a warn.
+DOCUMENT_MARKERS: dict[str, tuple[str, ...]] = {
+    "rsbsa": (
+        "RSBSA",
+        "REGISTRY SYSTEM FOR BASIC SECTORS",
+        "DEPARTMENT OF AGRICULTURE",
+        "FARMER",
+        "FISHERFOLK",
+    ),
+    "gov_id": (
+        "REPUBLIC OF THE PHILIPPINES",
+        "REPUBLIKA NG PILIPINAS",
+        "PHILIPPINE IDENTIFICATION",
+        "PAMBANSANG PAGKAKAKILANLAN",
+        "PHILSYS",
+        "LAND TRANSPORTATION OFFICE",
+        "DRIVER S LICENSE",
+        "PASSPORT",
+        "PASAPORTE",
+        "UNIFIED MULTI PURPOSE",
+        "UMID",
+        "SOCIAL SECURITY",
+        "PHILHEALTH",
+        "POSTAL IDENTITY",
+        "COMMISSION ON ELECTIONS",
+        "PROFESSIONAL REGULATION COMMISSION",
+        "TAXPAYER IDENTIFICATION",
+    ),
+    "bir_cert": (
+        "BUREAU OF INTERNAL REVENUE",
+        "CERTIFICATE OF REGISTRATION",
+        "2303",
+    ),
+}
 
 
 # --- text extraction ----------------------------------------------------------
@@ -304,6 +342,12 @@ def find_id_number(text: str) -> str | None:
     return None
 
 
+def find_markers(doc: str, text: str) -> list[str]:
+    """The DOCUMENT_MARKERS of ``doc`` that are in ``text`` (whole words)."""
+    folded = f" {_fold(text)} "
+    return [m for m in DOCUMENT_MARKERS.get(doc, ()) if f" {m} " in folded]
+
+
 def normalize_registration(number: str) -> str:
     return re.sub(r"\s+", "", number).upper()
 
@@ -376,9 +420,32 @@ def _check_documents(application: Any, texts: dict[str, str | None]) -> list[Ite
                 )
             )
         else:
-            items.append(
-                Item(item_id, f"{label} readable", "pass", "Text was read.", doc)
-            )
+            found = find_markers(doc, texts[doc] or "")
+            if found:
+                shown = ", ".join(f'"{m}"' for m in found[:3])
+                items.append(
+                    Item(
+                        item_id,
+                        f"{label} recognized",
+                        "pass",
+                        f"Text was read. It contains {shown}.",
+                        doc,
+                    )
+                )
+            else:
+                expected = ", ".join(
+                    f'"{m}"' for m in DOCUMENT_MARKERS[doc][:2]
+                )
+                items.append(
+                    Item(
+                        item_id,
+                        f"{label} recognized",
+                        "warn",
+                        f"Text was read, but no words such as {expected} were "
+                        "found. Make sure that it is the correct document.",
+                        doc,
+                    )
+                )
     return items
 
 
@@ -792,6 +859,33 @@ def load_documents(application: Any, only: set[str] | None = None) -> dict[str, 
                 exc=exc,
             ) from exc
     return documents
+
+
+MAX_TEXT_CHARS = 20_000
+
+
+def read_document_text(application: Any, doc: str) -> dict[str, Any]:
+    """Read one document again and give its text to the admin (not stored).
+
+    An image or scan is sent to OCR again (one Vision call). Raises 404 when
+    the document is not there or is a photo with no text to read, 502 when the
+    file cannot be downloaded.
+    """
+    if doc not in DOCUMENT_LABELS or doc in _PHOTO_DOCUMENTS:
+        raise HTTPException(status_code=404, detail="No text for this document.")
+    if not getattr(application, f"{doc}_document_path"):
+        raise HTTPException(
+            status_code=404, detail=f"{DOCUMENT_LABELS[doc]} not found"
+        )
+    data = load_documents(application, only={doc})[doc]
+    text = get_extractor().extract_text(data)
+    truncated = bool(text) and len(text) > MAX_TEXT_CHARS
+    return {
+        "document": doc,
+        "text": text[:MAX_TEXT_CHARS] if text else None,
+        "truncated": truncated,
+        "markers": find_markers(doc, text) if text else [],
+    }
 
 
 # --- the admin's confirmations ------------------------------------------------

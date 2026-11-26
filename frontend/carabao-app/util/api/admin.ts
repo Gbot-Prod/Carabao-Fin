@@ -366,6 +366,26 @@ export const rerunDocumentChecks = async (id: number): Promise<MerchantApplicati
   return res.data;
 };
 
+export type DocumentText = {
+  document: 'rsbsa' | 'gov_id' | 'bir_cert';
+  /** null: no text could be read. */
+  text: string | null;
+  truncated: boolean;
+  /** The document-type words found in the text. */
+  markers: string[];
+};
+
+/** Reads the document again (one OCR call for images/scans). The text is not stored. */
+export const readDocumentText = async (
+  id: number,
+  document: DocumentText['document'],
+): Promise<DocumentText> => {
+  const res = await apiClient.post<DocumentText>(
+    `/admin/merchant-applications/${id}/documents/${document}/text`,
+  );
+  return res.data;
+};
+
 export const fetchRsbsaDocumentUrl = async (
   applicationId: number,
 ): Promise<RsbsaDocumentUrl> => {

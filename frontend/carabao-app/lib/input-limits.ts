@@ -4,5 +4,5 @@ export const PRODUCE_NAME_MAX = 100;
 export const PRODUCE_DESCRIPTION_MAX = 2000;
 // backend listing_checks.MAX_PRICE_PER_KG (hard block on save).
 export const PRODUCE_PRICE_PER_KG_MAX = 500;
-export const SHOP_TITLE_MAX = 100;
+export const SHOP_TITLE_MAX = 50;
 export const SHOP_DESCRIPTION_MAX = 2000;

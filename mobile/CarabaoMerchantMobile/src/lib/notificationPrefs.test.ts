@@ -36,7 +36,8 @@ test('CF-0132 keys and defaults stay in step with the backend schema and the web
   const schema = read('backend/app/schemas/user.py');
   const block = schema.slice(schema.indexOf('class NotificationPreferences'), schema.indexOf('class UserUpdate'));
   const backendKeys = [...block.matchAll(/^\s+(\w+): StrictBool/gm)].map((m) => m[1]).sort();
-  assert.deepEqual(NOTIFICATION_PREF_ITEMS.map((i) => i.key).sort(), backendKeys);
+  // promotions is stored but not shown (nothing sends promotions).
+  assert.deepEqual(NOTIFICATION_PREF_ITEMS.map((i) => i.key).sort(), backendKeys.filter((k) => k !== 'promotions'));
   const web = read('frontend/carabao-app/app/(site)/(app)/profile/components/NotificationsPanel.tsx');
   assert.match(web, /DEFAULT_NOTIF: NotificationPrefs = \{ order_updates: true, promotions: false, email_alerts: true \}/);
   for (const { label, desc } of NOTIFICATION_PREF_ITEMS) {

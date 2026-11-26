@@ -509,7 +509,9 @@ class ChecklistItem(BaseModel):
 
 class AdminMerchantApplicationResponse(MerchantApplicationResponse):
     """Admins review the full TIN and RSBSA number (CF-0007), and see the
-    automated checklist. The OCR text and numbers are never sent."""
+    automated checklist. The OCR text and numbers are not in this response;
+    an admin reads one document's text on request
+    (POST .../documents/{document}/text, audited, not stored)."""
 
     check_status: str | None = None
     checked_at: datetime | None = None

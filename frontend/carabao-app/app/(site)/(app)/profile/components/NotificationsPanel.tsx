@@ -1,8 +1,8 @@
 'use client'
 
 // Notification switches in the profile page's Settings section.
-// The backend reads order_updates (SMS) and email_alerts (email); promotions
-// is saved but nothing sends promotions yet.
+// The backend reads order_updates (SMS) and email_alerts (email). promotions
+// is kept in the data but not shown: nothing sends promotions.
 
 import { useEffect, useState } from 'react';
 import styles from '../page.module.css';
@@ -13,7 +13,6 @@ const DEFAULT_NOTIF: NotificationPrefs = { order_updates: true, promotions: fals
 
 const NOTIF_ITEMS: { key: keyof NotificationPrefs; label: string; desc: string }[] = [
   { key: 'order_updates', label: 'Order updates', desc: 'Status changes for your active orders' },
-  { key: 'promotions', label: 'Promotions', desc: 'Weekly deals and special offers' },
   { key: 'email_alerts', label: 'Email alerts', desc: 'Transaction receipts and account notices' },
 ];
 

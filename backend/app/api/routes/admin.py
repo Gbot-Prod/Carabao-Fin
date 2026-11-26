@@ -948,6 +948,35 @@ def rerun_document_checks(
     return application
 
 
+@router.post("/admin/merchant-applications/{app_id}/documents/{document}/text")
+def read_application_document_text(
+    app_id: int,
+    document: Literal["rsbsa", "gov_id", "bir_cert"],
+    db: Session = Depends(get_db),
+    admin: User = Depends(_require_admin),
+):
+    """The text the checks read from one document, read again on request.
+
+    POST, because an image or scan costs one OCR call. The text is not stored
+    or logged; the audit log records only who read which document.
+    """
+    application = db.get(MerchantApplication, app_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    result = document_checks.read_document_text(application, document)
+    audit_log.record_admin_action(
+        db,
+        admin=admin,
+        action=audit_log.APPLICATION_DOCUMENT_TEXT,
+        target_type="merchant_application",
+        target_id=application.id,
+        before=None,
+        after={"document": document, "text_found": result["text"] is not None},
+    )
+    db.commit()
+    return result
+
+
 def _document_url_response(db: Session, app_id: int, document: str, label: str) -> dict:
     """A short-lived signed URL for one of an application's private documents."""
     application = (

@@ -233,6 +233,8 @@ def publish_my_shoppage(
         raise HTTPException(status_code=422, detail="Add a title before you publish")
     for field in DRAFT_FIELDS:
         setattr(shop_page, field, getattr(shop_page, f"draft_{field}"))
+    # The live title is the store name that buyers, orders and chats show.
+    merchant.merchant_name = shop_page.title.strip()
     shop_page.published_at = datetime.now(UTC)
     return _save(db, shop_page)
 

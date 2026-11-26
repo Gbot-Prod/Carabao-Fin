@@ -139,6 +139,21 @@
   border-top: 1px solid var(--green-border);
 }
 
+.previewBanner {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 360px;
+  object-fit: cover;
+  display: block;
+}
+
+.previewBannerPlaceholder {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 160px;
+  background: linear-gradient(135deg, #d7e7da 0%, #c0d9c6 100%);
+}
+
 @media (max-width: 600px) {
   .publishActions {
     width: 100%;

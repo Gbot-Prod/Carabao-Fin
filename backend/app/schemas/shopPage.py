@@ -6,7 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # with the web Shop tab (maxLength in merchant/components/ShopTab.tsx). A slug
 # is lowercase words joined by hyphens, e.g. "dela-cruz-farm", so it is safe in
 # a URL and cannot imitate one. The web builds the slug from the title.
-MAX_TITLE = 100
+# Publish copies the title to merchant_name, so it has the same limit.
+MAX_TITLE = 50
 MAX_DESCRIPTION = 2000
 SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 MIN_SLUG, MAX_SLUG = 3, 80

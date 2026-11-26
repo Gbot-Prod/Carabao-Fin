@@ -1,8 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronRight, CircleHelp, ExternalLink, TriangleAlert, XCircle } from "lucide-react";
-import { rerunDocumentChecks, type ChecklistItem, type ChecklistResult, type MerchantApplication } from "@/util/api/admin";
+import { CheckCircle2, ChevronDown, ChevronRight, CircleHelp, ExternalLink, FileText, TriangleAlert, XCircle } from "lucide-react";
+import {
+  readDocumentText,
+  rerunDocumentChecks,
+  type ChecklistItem,
+  type ChecklistResult,
+  type DocumentText,
+  type MerchantApplication,
+} from "@/util/api/admin";
 import getApiErrorMessage from "@/util/errorHelper";
 import styles from "./checklist.module.css";
 
@@ -75,6 +82,29 @@ export default function ReviewChecklist({
   const [rerunning, setRerunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassed, setShowPassed] = useState(false);
+  // The OCR text per document, read on request (not stored on the server).
+  const [docTexts, setDocTexts] = useState<
+    Record<string, { open: boolean; loading: boolean; data?: DocumentText; error?: string }>
+  >({});
+
+  const toggleText = async (document: DocumentText["document"]) => {
+    const key = `${app.id}:${document}`;
+    const current = docTexts[key];
+    if (current?.data || current?.loading) {
+      setDocTexts((s) => ({ ...s, [key]: { ...current, open: !current.open } }));
+      return;
+    }
+    setDocTexts((s) => ({ ...s, [key]: { open: true, loading: true } }));
+    try {
+      const data = await readDocumentText(app.id, document);
+      setDocTexts((s) => ({ ...s, [key]: { open: true, loading: false, data } }));
+    } catch (err) {
+      setDocTexts((s) => ({
+        ...s,
+        [key]: { open: true, loading: false, error: getApiErrorMessage(err, "The text could not be read.") },
+      }));
+    }
+  };
 
   const rerun = async () => {
     setRerunning(true);
@@ -103,6 +133,12 @@ export default function ReviewChecklist({
     const kind = item.document ? DOCUMENT_KIND[item.document] : null;
     const isNameCheck = item.id === "name_matches_id";
     const isSelfieCheck = item.id === "selfie_matches_id";
+    // Only the "recognized"/"readable" items get the extracted text (not "Missing.").
+    const textDoc =
+      item.id.startsWith("document_") && item.document && item.document !== "selfie" && item.result !== "fail"
+        ? item.document
+        : null;
+    const textState = textDoc ? docTexts[`${app.id}:${textDoc}`] : undefined;
 
     return (
       <li
@@ -132,6 +168,27 @@ export default function ReviewChecklist({
               )}
             </div>
           )}
+          {textState?.open && (
+            <div className={styles.extracted}>
+              {textState.loading && <p className={styles.extractedNote}>Reading the document…</p>}
+              {textState.error && <p className={styles.error}>{textState.error}</p>}
+              {textState.data && !textState.data.text && (
+                <p className={styles.extractedNote}>No text could be read from this document.</p>
+              )}
+              {textState.data?.text && (
+                <>
+                  <p className={styles.extractedNote}>
+                    {textState.data.markers.length
+                      ? `Document words found: ${textState.data.markers.join(", ")}.`
+                      : "No document words were found."}{" "}
+                    This text is not saved.
+                    {textState.data.truncated && " Only the first part is shown."}
+                  </p>
+                  <pre className={styles.extractedText}>{textState.data.text}</pre>
+                </>
+              )}
+            </div>
+          )}
           {item.related_application_ids.length > 0 && (
             <div className={styles.relatedList}>
               {item.related_application_ids.map((id) => (
@@ -143,6 +200,17 @@ export default function ReviewChecklist({
           )}
         </div>
         <div className={styles.rowActions}>
+          {textDoc && (
+            <button
+              type="button"
+              className={styles.actionLinkBtn}
+              onClick={() => void toggleText(textDoc)}
+              aria-expanded={!!textState?.open}
+            >
+              <FileText size={12} aria-hidden="true" />
+              <span>{textState?.open ? "Hide text" : "Show text"}</span>
+            </button>
+          )}
           {isSelfieCheck && onCompareSelfie ? (
             <button type="button" className={styles.actionLinkBtn} onClick={onCompareSelfie}>
               Compare Selfie &amp; ID

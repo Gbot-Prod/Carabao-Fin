@@ -53,9 +53,10 @@ const daysText = (merchant: Merchant | null) =>
 type Props = {
   merchant: Merchant | null;
   onSaved: (merchant: Merchant) => void;
+  embedded?: boolean;
 };
 
-export default function StoreDetails({ merchant, onSaved }: Props) {
+export default function StoreDetails({ merchant, onSaved, embedded = false }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<LocationDraft>(() => draftFromMerchant(null));
   const [saving, setSaving] = useState(false);
@@ -183,11 +184,13 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
   const pinned = merchant?.lat != null && merchant?.lng != null;
   const missing = <span className={c.missing}>Not set</span>;
 
-  return (
-    <section className={c.section} aria-labelledby="store-details-title">
-      <div className={c.sectionHead}>
-        <h2 id="store-details-title" className={c.sectionTitle}>Store details</h2>
-      </div>
+  const content = (
+    <>
+      {!embedded && (
+        <div className={c.sectionHead}>
+          <h2 id="store-details-title" className={c.sectionTitle}>Store details</h2>
+        </div>
+      )}
       {editing ? (
         <div className={`${c.fields} ${styles.shopDetailsForm}`}>
           <div className={styles.shopDetailsLocRow}>
@@ -381,6 +384,16 @@ export default function StoreDetails({ merchant, onSaved }: Props) {
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return <div className={c.embeddedDetails}>{content}</div>;
+  }
+
+  return (
+    <section className={c.section} aria-labelledby="store-details-title">
+      {content}
     </section>
   );
 }

@@ -389,6 +389,12 @@ def get_transfer(transfer_id: str) -> dict:
 # them, and the notes say why.
 REFUND_REASON = "others"
 REFUND_NOTES_MAX = 255
+# QR Ph refunds use a different host. api.paymongo.com/v1/refunds refuses
+# them: "Refunds are not allowed for payments with source type qrph".
+# https://docs.paymongo.com/docs/qrph-refunds.md
+# QR Ph is our only payment method, so all refunds go here. The docs do not
+# give the host for GET /refunds/{id}; we use the same host.
+PAYMONGO_REFUNDS_URL = "https://refunds-api.paymongo.com/v1/refunds"
 
 
 class RefundRejected(_TransferError):
@@ -421,7 +427,7 @@ def create_refund(
         attributes["metadata"] = metadata
     try:
         response = requests.post(
-            f"{PAYMONGO_BASE_URL}/refunds",
+            PAYMONGO_REFUNDS_URL,
             json={"data": {"attributes": attributes}},
             headers=_auth_header(),
             timeout=30,
@@ -446,7 +452,7 @@ def create_refund(
 
 def get_refund(refund_id: str) -> dict:
     response = requests.get(
-        f"{PAYMONGO_BASE_URL}/refunds/{refund_id}",
+        f"{PAYMONGO_REFUNDS_URL}/{refund_id}",
         headers=_auth_header(),
         timeout=15,
     )

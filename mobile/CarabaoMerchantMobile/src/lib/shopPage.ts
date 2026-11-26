@@ -6,7 +6,7 @@
 import type { ApiShopPage } from './api';
 
 // backend MAX_TITLE / MAX_DESCRIPTION = web SHOP_TITLE_MAX / SHOP_DESCRIPTION_MAX.
-export const SHOP_TITLE_MAX = 100;
+export const SHOP_TITLE_MAX = 50;
 export const SHOP_DESCRIPTION_MAX = 2000;
 // backend MIN_SLUG / MAX_SLUG / SLUG_PATTERN (CF-0043): lowercase words joined by hyphens,
 // so a slug is safe in /farms/<slug> and cannot imitate one.

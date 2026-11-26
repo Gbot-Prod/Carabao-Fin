@@ -96,7 +96,7 @@ test('S14 the slug check follows the backend rules', () => {
 
 test('S14 the field limits are the backend and web numbers', () => {
   // schemas/shopPage.py MAX_TITLE / MAX_DESCRIPTION; inStep.test.ts checks the files.
-  assert.equal(SHOP_TITLE_MAX, 100);
+  assert.equal(SHOP_TITLE_MAX, 50);
   assert.equal(SHOP_DESCRIPTION_MAX, 2000);
   assert.equal(SHOP_SLUG_MIN, 3);
   assert.equal(SHOP_SLUG_MAX, 80);

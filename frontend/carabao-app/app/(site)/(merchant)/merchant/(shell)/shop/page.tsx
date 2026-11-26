@@ -48,8 +48,17 @@ export default function MerchantShopPage() {
         <div className={s.stack}>
           {shopPage && <PublishStatusBanner shopPage={shopPage} onChange={setShopPage} onPreview={previewDraft} />}
           <div className={c.sheet}>
-            <ShopTab shopPage={shopPage} merchant={merchant} onShopPageChange={setShopPage} view={view} onViewChange={setView} />
-            <StoreDetails merchant={merchant} onSaved={setMerchant} />
+            <ShopTab
+              shopPage={shopPage}
+              merchant={merchant}
+              onShopPageChange={setShopPage}
+              onMerchantSaved={setMerchant}
+              view={view}
+              onViewChange={setView}
+            />
+            {(!shopPage || view !== "edit") && (
+              <StoreDetails merchant={merchant} onSaved={setMerchant} />
+            )}
             {/* CF-0066: was on the old settings page. */}
             <HolidayModePanel merchant={merchant} onSaved={setMerchant} />
             <DangerZone />

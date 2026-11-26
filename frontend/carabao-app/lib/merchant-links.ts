@@ -65,6 +65,9 @@ export const MERCHANT_PAGES = {
   // The shop page and the store settings are one page (the old /settings
   // path opens it).
   shop: "/shop",
+  // The account profile (name, email, notifications, password). Not /profile:
+  // that is the buyer page.
+  account: "/account",
   onboarding: "/onboarding",
   // Same path as the buyer sign-in: each site signs in at /auth.
   login: "/auth",
