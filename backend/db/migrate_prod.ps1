@@ -98,9 +98,22 @@ try {
   } else {
     $ca = "$env:PGSSL_CA".Trim()
   }
-  if ($ca -notmatch '-----BEGIN CERTIFICATE-----') {
+  # Clean a PEM copied from an .env file: surrounding quotes, literal "\n",
+  # "# " comment marks on each line, CRLF. Node (pg) does not accept these.
+  $ca = $ca.Trim().Trim('"').Replace('\n', "`n").Replace("`r", "")
+  $ca = (($ca -split "`n") | ForEach-Object { ($_ -replace '^\s*#\s?', '').Trim() } | Where-Object { $_ }) -join "`n"
+  if ($ca -notmatch '-----BEGIN CERTIFICATE-----' -or $ca -notmatch '-----END CERTIFICATE-----') {
     throw "No PGSSL_CA PEM. Save the Backend service's PGSSL_CA to a file and use -PgsslCaFile."
   }
+  # Parse it now, so a bad PEM stops here and not after the backup.
+  try {
+    $b64 = ($ca -replace '-----(BEGIN|END) CERTIFICATE-----', '') -replace '\s', ''
+    $cert = New-Object Security.Cryptography.X509Certificates.X509Certificate2 (, [Convert]::FromBase64String($b64))
+  } catch {
+    throw "PGSSL_CA is not a valid certificate: $($_.Exception.Message)"
+  }
+  Write-Host "CA:     $($cert.Subject) (expires $($cert.NotAfter.ToString('yyyy-MM-dd')))"
+  $ca += "`n"
 
   $url = $env:MIGRATE_DATABASE_URL
   if (-not $url) {

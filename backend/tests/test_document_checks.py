@@ -341,3 +341,52 @@ def test_resubmitting_runs_the_checks_again(db, applicant):  # noqa: F811
     assert application.check_confirmations is None
     items = {i["id"]: i for i in application.check_checklist}
     assert items["name_matches_id"]["result"] == "pass"
+
+
+# --- Google Cloud Vision OCR --------------------------------------------------
+
+
+class _VisionResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self):
+        return self.payload
+
+
+def test_vision_reads_photos_and_scanned_pdfs(monkeypatch):
+    calls = []
+
+    def post(url, json, headers, timeout):
+        calls.append((url, headers["X-Goog-Api-Key"]))
+        page = {"fullTextAnnotation": {"text": "DELA CRUZ JUAN"}}
+        if url.endswith("files:annotate"):
+            return _VisionResponse({"responses": [{"responses": [page]}]})
+        return _VisionResponse({"responses": [page]})
+
+    monkeypatch.setattr(document_checks.requests, "post", post)
+    monkeypatch.setenv("GOOGLE_CLOUD_VISION", "key")
+    document_checks.set_extractor(None)
+    extractor = document_checks.get_extractor()
+    assert extractor.extract_text(b"\xff\xd8jpeg") == "DELA CRUZ JUAN"
+    # A PDF with no text layer: pypdf gives nothing, so Vision reads it.
+    monkeypatch.setattr(
+        document_checks.PypdfExtractor, "extract_text", lambda self, data: None
+    )
+    assert extractor.extract_text(b"%PDF-scan") == "DELA CRUZ JUAN"
+    assert [url.rsplit("/", 1)[1] for url, _ in calls] == [
+        "images:annotate",
+        "files:annotate",
+    ]
+    assert all(key == "key" for _, key in calls)
+
+
+def test_vision_failure_is_not_checked(monkeypatch):
+    def post(*args, **kwargs):
+        raise document_checks.requests.ConnectionError("down")
+
+    monkeypatch.setattr(document_checks.requests, "post", post)
+    assert document_checks.GoogleVisionExtractor("key").extract_text(b"img") is None

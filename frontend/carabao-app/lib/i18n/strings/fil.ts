@@ -297,7 +297,6 @@ const fil: Strings = {
     vegetables: 'Gulay',
     fruits: 'Prutas',
     unit: 'Yunit',
-    kgOnly: 'Lahat ng listing ay ibinebenta sa kilo (kg). Ilagay ang presyo at dami sa kg. Hindi tinatanggap ang libra (lbs).',
     price: 'Presyo (₱)',
     per: 'bawat',
     quantity: 'Dami',

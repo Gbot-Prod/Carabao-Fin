@@ -13,17 +13,20 @@ What is stored (merchant_applications):
   document, related_application_ids}, so the review page does not recompute it;
 * ``check_status``: pending | completed | failed.
 
-Text extraction is pluggable (``Extractor``). The default reads PDFs that have
-a text layer (pypdf). Photos and scans give no text, and the checks that need
-text say "not checked" / ask the admin to look. A real OCR provider can be set
-with ``set_extractor`` without changing the schema.
+Text extraction is pluggable (``Extractor``). PDFs with a text layer are read
+with pypdf. When pypdf reads no text (photos, scans) and ``GOOGLE_CLOUD_VISION``
+(an API key) is set, the file goes to Google Cloud Vision OCR
+(DOCUMENT_TEXT_DETECTION). The selfie is never sent. If OCR is not set or the
+call fails, the checks that need text say "not checked" / ask the admin to look.
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import logging
+import os
 import re
 import unicodedata
 from collections.abc import Iterable
@@ -32,6 +35,7 @@ from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from typing import Any, Literal, Protocol
 
+import requests
 from fastapi import HTTPException
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -120,16 +124,108 @@ class PypdfExtractor:
         return text if text.strip() else None
 
 
-_extractor: Extractor = PypdfExtractor()
+VISION_ENDPOINT = "https://vision.googleapis.com/v1"
+VISION_TIMEOUT_SECONDS = 30
 
 
-def set_extractor(extractor: Extractor) -> None:
+class GoogleVisionExtractor:
+    """OCR with Google Cloud Vision (DOCUMENT_TEXT_DETECTION).
+
+    Images go to images:annotate. PDFs go to files:annotate, which reads the
+    first 5 pages (each page is billed as one unit). An error gives None, so
+    the check shows "not checked"; the error is logged without the document.
+    """
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def extract_text(self, data: bytes) -> str | None:
+        content = base64.b64encode(data).decode("ascii")
+        feature = [{"type": "DOCUMENT_TEXT_DETECTION"}]
+        is_pdf = data.startswith(b"%PDF-")
+        if is_pdf:
+            url = f"{VISION_ENDPOINT}/files:annotate"
+            body: dict[str, Any] = {
+                "requests": [
+                    {
+                        "inputConfig": {
+                            "content": content,
+                            "mimeType": "application/pdf",
+                        },
+                        "features": feature,
+                        "pages": [1]
+                    }
+                ]
+            }
+        else:
+            url = f"{VISION_ENDPOINT}/images:annotate"
+            body = {
+                "requests": [
+                    {
+                        "image": {"content": content},
+                        "features": feature,
+                        "imageContext": {"languageHints": ["en", "fil"]},
+                    }
+                ]
+            }
+        try:
+            response = requests.post(
+                url,
+                json=body,
+                headers={"X-Goog-Api-Key": self.api_key},
+                timeout=VISION_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            outer = response.json().get("responses") or []
+        except (requests.RequestException, ValueError) as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            logger.warning(
+                "Google Vision OCR failed (%s, HTTP %s)", type(exc).__name__, status
+            )
+            return None
+        pages = (outer[0].get("responses") or []) if (is_pdf and outer) else outer
+        texts = []
+        for page in pages:
+            if page.get("error"):
+                logger.warning("Google Vision OCR error: %s", page["error"].get("code"))
+                continue
+            texts.append((page.get("fullTextAnnotation") or {}).get("text") or "")
+        text = "\n".join(texts)
+        return text if text.strip() else None
+
+
+class ChainExtractor:
+    """The first extractor that reads text wins (pypdf is free and exact)."""
+
+    def __init__(self, *extractors: Extractor):
+        self.extractors = extractors
+
+    def extract_text(self, data: bytes) -> str | None:
+        for extractor in self.extractors:
+            text = extractor.extract_text(data)
+            if text:
+                return text
+        return None
+
+
+def default_extractor() -> Extractor:
+    api_key = os.getenv("GOOGLE_CLOUD_VISION", "").strip()
+    if not api_key:
+        return PypdfExtractor()
+    return ChainExtractor(PypdfExtractor(), GoogleVisionExtractor(api_key))
+
+
+_extractor: Extractor | None = None
+
+
+def set_extractor(extractor: Extractor | None) -> None:
+    """Replace the extractor (tests). None: back to the env default."""
     global _extractor
     _extractor = extractor
 
 
 def get_extractor() -> Extractor:
-    return _extractor
+    return _extractor if _extractor is not None else default_extractor()
 
 
 # --- helpers ------------------------------------------------------------------
@@ -275,7 +371,7 @@ def _check_documents(application: Any, texts: dict[str, str | None]) -> list[Ite
                     item_id,
                     f"{label} readable",
                     "warn",
-                    "No text could be read (a photo or a scan). Check it by eye.",
+                    "No text could be read. Check it by eye.",
                     doc,
                 )
             )
@@ -669,9 +765,7 @@ def run_and_save(
             db.commit()
 
 
-def load_documents(
-    application: Any, only: set[str] | None = None
-) -> dict[str, bytes]:
+def load_documents(application: Any, only: set[str] | None = None) -> dict[str, bytes]:
     """The application's uploaded files from the private bucket (for a re-run).
 
     ``only``: these documents only (rsbsa, gov_id, bir_cert, selfie).

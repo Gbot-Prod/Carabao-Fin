@@ -32,6 +32,7 @@ _DOTENV_LEAKS = (
     "R2_SECRET_ACCESS_KEY",
     "MAPBOX_ACCESS_TOKEN",
     "ANTHROPIC_API_KEY",  # guardrails Phase 4 vision check
+    "GOOGLE_CLOUD_VISION",  # document OCR (document_checks.py)
     "OSRM_URL",
     "ROAD_SNAP_MAX_METERS",
 )

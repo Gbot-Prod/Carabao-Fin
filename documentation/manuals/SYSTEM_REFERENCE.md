@@ -179,6 +179,7 @@ Hard start-up failures:
 | `SEMAPHORE_KEY` (or `SEMAPHORE_API_KEY`), `SEMAPHORE_SENDER_NAME` (or `SEMAPHORE_SENDERNAME`) | SMS | | approved sender |
 | `MAPBOX_ACCESS_TOKEN` | Maps | | |
 | `ANTHROPIC_API_KEY` | Listing photo vision check (Claude Haiku 5.5) | | Not set: the check does not run. `LISTING_VISION_ENABLED=0` also turns it off |
+| `GOOGLE_CLOUD_VISION` | Document OCR for the merchant application checks (Google Cloud Vision API key) | | Used only when pypdf reads no text (photos, scans) on the RSBSA, government ID and BIR 2303. The selfie is never sent. Not set: those checks say "not checked" |
 
 Optional tuning (defaults):
 
