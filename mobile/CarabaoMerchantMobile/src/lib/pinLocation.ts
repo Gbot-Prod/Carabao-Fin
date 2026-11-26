@@ -489,8 +489,8 @@ export function addressPayload(value: AddressValue): AddressPayload {
   };
 }
 
-// Decision D3, for this map: without a key Android cannot draw a map to place the pin on.
-export const ANDROID_PIN_MAP_NOTE =
-  'Map not available. Android needs a Google Maps key (EXPO_PUBLIC_GOOGLE_MAPS_KEY) to place the pin; add the key and rebuild the app, or set the pin on the web.';
+// Decision D3, for this map: without a key a Google map cannot be drawn to place the pin on.
+export const PIN_MAP_KEY_NOTE =
+  'Map not available. The app needs a Google Maps key (EXPO_PUBLIC_GOOGLE_MAPS_KEY) to place the pin; add the key and rebuild the app, or set the pin on the web.';
 export const WEB_PIN_MAP_NOTE =
   'Map not available in the browser preview. Place the pin in the Android or iOS app.';

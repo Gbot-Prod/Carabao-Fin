@@ -12,6 +12,7 @@ import { ADDRESS_LABELS, ADDRESS_MAX, type AddressErrors, type AddressValue } fr
 import { Colors, FontSize, Radius, Spacing } from '../lib/theme';
 import AddressPinMap from './AddressPinMap';
 import LocationSelects from './LocationSelects';
+import StreetSuggestInput from './StreetSuggestInput';
 
 export type AddressFormProps = {
   value: AddressValue;
@@ -64,7 +65,16 @@ export default function AddressForm({ value, onChange, errors = {}, token, disab
 
       <View style={styles.field}>
         <Text style={styles.label}>{ADDRESS_LABELS.street}</Text>
-        <TextInput
+        <StreetSuggestInput
+          token={token}
+          area={{ province: value.province, city: value.city }}
+          onPick={(street, next) => onChange({
+            ...value,
+            street,
+            latitude: next.lat,
+            longitude: next.lng,
+            pin_confirmed: false,
+          })}
           style={[styles.input, errors.address ? styles.inputInvalid : null]}
           value={value.street}
           onChangeText={(street) => onChange({ ...value, street })}

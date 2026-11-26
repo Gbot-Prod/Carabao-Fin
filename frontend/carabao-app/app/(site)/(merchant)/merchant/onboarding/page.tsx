@@ -14,6 +14,7 @@ import { helpUrl, merchantUrl } from "@/lib/urls";
 import styles from "./page.module.css";
 import LocationSelects from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
+import StreetSuggestInput from "@/components/StreetSuggestInput/StreetSuggestInput";
 import ContactCodeField from "./ContactCodeField";
 import DocumentDropzone, { documentError } from "./DocumentDropzone";
 import SelfieCapture, { selfieError } from "./SelfieCapture";
@@ -997,7 +998,19 @@ export default function MerchantOnboardingPage() {
 
               <div className={`${styles.field} ${styles.fieldFull}${invalidClass(fieldErrors.address)}`}>
                 <label htmlFor="merchantonboarding-address" className={styles.label}>Street / House No.</label>
-                <input id="merchantonboarding-address" className={styles.input} value={form.address} onChange={setField("address")} placeholder="123 Rizal Ave, Unit 4B" {...invalidProps("merchantonboarding-address", fieldErrors.address)} />
+                <StreetSuggestInput
+                  id="merchantonboarding-address"
+                  className={styles.input}
+                  value={form.address}
+                  onValueChange={(address) => setValue("address", address)}
+                  onPick={(address, pin) => {
+                    setForm((prev) => ({ ...prev, address, lat: pin.lat, lng: pin.lng, pin_confirmed: false }));
+                    clearErrors("address");
+                  }}
+                  area={{ province: form.province, city: form.city }}
+                  placeholder="123 Rizal Ave, Unit 4B"
+                  {...invalidProps("merchantonboarding-address", fieldErrors.address)}
+                />
                 <FieldError id="merchantonboarding-address" message={fieldErrors.address} />
               </div>
 

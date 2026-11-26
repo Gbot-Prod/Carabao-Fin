@@ -132,6 +132,63 @@ def geocode(
     return _place(lambda: place_search.forward(payload.query))
 
 
+# Street suggestions (dropdown under the street field in the address forms).
+_SESSION = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class SuggestRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=place_search.MAX_QUERY_LENGTH)
+    # Groups the typing and the pick into one Google billing session.
+    session: str | None = _SESSION
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlaceSuggestion(BaseModel):
+    id: str
+    title: str
+    subtitle: str = ""
+    # [lng, lat]; null: ask /locations/place for the coordinates.
+    center: list[float] | None = None
+
+
+class SuggestResponse(BaseModel):
+    suggestions: list[PlaceSuggestion] = []
+
+
+class PlaceRequest(BaseModel):
+    id: str = Field(min_length=1, max_length=512, pattern=r"^[A-Za-z0-9_-]+$")
+    session: str | None = _SESSION
+
+    model_config = ConfigDict(extra="forbid")
+
+
+@router.post("/locations/suggest", response_model=SuggestResponse)
+def suggest(
+    payload: SuggestRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rate_limit.enforce_action(db, "place_suggest", str(current_user.id))
+    try:
+        found = place_search.suggest(payload.query, payload.session)
+    except place_search.PlaceSearchUnavailable:
+        raise HTTPException(
+            status_code=503, detail="Place search is unavailable right now."
+        ) from None
+    return SuggestResponse(suggestions=[PlaceSuggestion(**s) for s in found])
+
+
+@router.post("/locations/place", response_model=PlaceResponse)
+def place(
+    payload: PlaceRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rate_limit.enforce_action(db, "place_search", str(current_user.id))
+    return _place(lambda: place_search.place(payload.id, payload.session))
+
+
 @router.post("/locations/reverse-geocode", response_model=PlaceResponse)
 def reverse_geocode(
     payload: ReverseGeocodeRequest,

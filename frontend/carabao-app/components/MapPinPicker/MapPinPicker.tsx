@@ -2,7 +2,8 @@
 
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type mapboxgl from "mapbox-gl";
+import { createPinMap, type PinMap } from "@/lib/maps/pinMap";
+import { mapKey } from "@/lib/maps/provider";
 import { forwardGeocode, reverseGeocode, type Pin } from "@/util/geocode";
 import { resolvePinLocation } from "@/util/pinLocation";
 import { addressComplete, addressQuery, cityFits, cityQuery, pinAreaMismatch, type LocationValue, type TypedAddress } from "@/lib/pin-area";
@@ -14,7 +15,7 @@ import FieldError, { invalidClass } from "@/components/FieldError/FieldError";
 import styles from "./MapPinPicker.module.css";
 
 // Metro Manila, the default view before anything is pinned.
-const DEFAULT_CENTER: [number, number] = [120.9842, 14.5995];
+const DEFAULT_CENTER: Pin = { lat: 14.5995, lng: 120.9842 };
 // The road marker is shown only when the road point is this far from the pin.
 const ROAD_MARKER_MIN_M = 5;
 // Wait for typing to settle before placing the pin from the address.
@@ -88,9 +89,8 @@ function PinNotice({ title, body }: { title: string; body: string }) {
 export default function MapPinPicker({ value, onChange, confirmed, address, error, strict = false }: Props) {
   const { t } = useLanguage();
   const container = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const markerRef = useRef<mapboxgl.Marker | null>(null);
-  const roadMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  // The map, the pin and the road marker (Google Maps or Mapbox: lib/maps/provider.ts).
+  const mapRef = useRef<PinMap | null>(null);
   const onChangeRef = useRef(onChange);
   const valueRef = useRef(value);
   // A confirmed pin is locked: map clicks do not move it.
@@ -103,12 +103,12 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
   // Only the newest pin's answers are used; a quick second drag wins.
   const seqRef = useRef(0);
   const [ready, setReady] = useState(false);
-  // Mapbox found neither the address nor the barangay: the person places the pin.
+  // Geocoding found neither the address nor the barangay: the person places the pin.
   const [notFound, setNotFound] = useState(false);
   const [area, setArea] = useState<Area | null>(null);
   const [status, setStatus] = useState<"idle" | "locating" | "unavailable">("idle");
   const [check, setCheck] = useState<Check>({ state: "idle" });
-  const token = process.env.NEXT_PUBLIC_MAPBOX_API_KEY;
+  const token = mapKey();
   const unlocked = addressComplete(address);
 
   useEffect(() => {
@@ -119,18 +119,17 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
   const locked = !!value && !!confirmed;
   useEffect(() => {
     lockedRef.current = locked;
-    markerRef.current?.setDraggable(!locked);
+    mapRef.current?.setPinDraggable(!locked);
   }, [locked, ready]);
 
   const showRoad = useCallback((result: PinCheckResult | null) => {
     const map = mapRef.current;
-    const marker = roadMarkerRef.current;
-    if (!map || !marker) return;
+    if (!map) return;
     const far = (result?.road_distance_m ?? 0) >= ROAD_MARKER_MIN_M;
     if (result && result.road_lat != null && result.road_lng != null && far) {
-      marker.setLngLat([result.road_lng, result.road_lat]).addTo(map);
+      map.setRoad({ lat: result.road_lat, lng: result.road_lng });
     } else {
-      marker.remove();
+      map.setRoad(null);
     }
   }, []);
 
@@ -189,49 +188,47 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
     if (ok && seq === seqRef.current) onChangeRef.current(value, true);
   };
 
-  // Create the map once the address is complete; mapbox-gl is loaded only in the browser.
+  // Create the map once the address is complete; the map library is loaded only in the browser.
   useEffect(() => {
     if (!token || !unlocked || !container.current) return;
     let cancelled = false;
-    let map: mapboxgl.Map | null = null;
+    let map: PinMap | null = null;
+    const start = valueRef.current;
 
-    void import("mapbox-gl").then(({ default: mapbox }) => {
-      if (cancelled || !container.current) return;
-      mapbox.accessToken = token;
-      const start = valueRef.current;
-      map = new mapbox.Map({
-        container: container.current,
-        style: "mapbox://styles/mapbox/streets-v12",
-        center: start ? [start.lng, start.lat] : DEFAULT_CENTER,
-        zoom: start ? 16 : 11,
-      });
-      map.addControl(new mapbox.NavigationControl({ showCompass: false }), "top-right");
-      map.on("error", () => setStatus("unavailable"));
-      const marker = new mapbox.Marker({ draggable: !lockedRef.current, color: PIN_COLOR });
-      const roadMarker = new mapbox.Marker({ color: ROAD_COLOR, scale: 0.7 });
-      roadMarker.getElement().setAttribute("aria-label", t.mapPin.roadMarker);
-      roadMarker.getElement().title = t.mapPin.roadMarker;
-      marker.on("dragend", () => {
-        const { lng, lat } = marker.getLngLat();
-        place({ lat, lng });
-      });
-      map.on("click", (e) => {
+    createPinMap({
+      container: container.current,
+      center: start ?? DEFAULT_CENTER,
+      zoom: start ? 16 : 11,
+      draggable: !lockedRef.current,
+      pinColor: PIN_COLOR,
+      roadColor: ROAD_COLOR,
+      roadLabel: t.mapPin.roadMarker,
+      onDragEnd: place,
+      onClick: (pin) => {
         if (lockedRef.current) return;
-        marker.setLngLat(e.lngLat).addTo(map!);
-        place({ lat: e.lngLat.lat, lng: e.lngLat.lng });
-      });
-      mapRef.current = map;
-      markerRef.current = marker;
-      roadMarkerRef.current = roadMarker;
-      setReady(true);
-    });
+        map?.setPin(pin);
+        place(pin);
+      },
+      onError: () => setStatus("unavailable"),
+    }).then(
+      (created) => {
+        if (cancelled) {
+          created.destroy();
+          return;
+        }
+        map = created;
+        mapRef.current = created;
+        setReady(true);
+      },
+      () => {
+        if (!cancelled) setStatus("unavailable");
+      },
+    );
 
     return () => {
       cancelled = true;
-      map?.remove();
+      map?.destroy();
       mapRef.current = null;
-      markerRef.current = null;
-      roadMarkerRef.current = null;
       setReady(false);
     };
     // The initial view only; later pins move the marker without rebuilding the map.
@@ -244,22 +241,19 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
   const lng = value?.lng;
   useEffect(() => {
     const map = mapRef.current;
-    const marker = markerRef.current;
-    if (!ready || !map || !marker) return;
+    if (!ready || !map) return;
     const seq = ++seqRef.current;
     if (lat == null || lng == null) {
-      marker.remove();
+      map.setPin(null);
       showRoad(null);
       return;
     }
     const pin = { lat, lng };
-    const shown = marker.getLngLat?.();
-    const onMap = !!marker.getElement().isConnected;
-    if (!onMap || !shown || !samePin(pin, { lat: shown.lat, lng: shown.lng })) {
-      marker.setLngLat([lng, lat]).addTo(map);
+    if (!samePin(pin, map.pinShownAt())) {
+      map.setPin(pin);
       const auto = autoPinRef.current;
       const zoom = auto && samePin(auto.pin, pin) ? auto.zoom : Math.max(map.getZoom(), 16);
-      map.flyTo({ center: [lng, lat], zoom });
+      map.flyTo(pin, zoom);
     }
     void runCheck(pin, seq);
     void lookUpArea(pin, seq);
@@ -298,7 +292,7 @@ export default function MapPinPicker({ value, onChange, confirmed, address, erro
         setNotFound(true);
         const area = areaQuery ? await forwardGeocode(areaQuery) : null;
         if (!cancelled && area && mapRef.current) {
-          mapRef.current.flyTo({ center: [area.pin.lng, area.pin.lat], zoom: 13 });
+          mapRef.current.flyTo(area.pin, 13);
         }
       } catch {
         // Geocoding is down: no suggestion; the person places the pin.

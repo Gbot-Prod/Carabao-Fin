@@ -10,9 +10,11 @@ can be the far shore of a lake. So the pin is checked when it is saved:
 * the road service is down or not set up -> the pin is accepted without a
   road point (fail open), so an outage never blocks checkout.
 
-Providers (``ROAD_SNAP_PROVIDER``):
-  ``mapbox`` (default when MAPBOX_ACCESS_TOKEN is set) - the Directions API,
-      whose ``radiuses`` parameter limits the snap distance;
+Providers (``ROAD_SNAP_PROVIDER``; empty uses ``MAPS_PROVIDER``):
+  ``google`` (default when MAPS_PLATFORM_API_KEY is set) - the Roads API
+      ``nearestRoads``; the limit is checked here;
+  ``mapbox`` (default when only MAPBOX_ACCESS_TOKEN is set) - the Directions
+      API, whose ``radiuses`` parameter limits the snap distance;
   ``osrm`` - an OSRM ``/nearest`` server (``OSRM_URL``, default the public
       demo server), for networks that block Mapbox;
   ``off`` (default with no token) - no check.
@@ -30,6 +32,8 @@ from dataclasses import dataclass
 from threading import Lock
 
 import requests as _requests
+
+from app.services import google_maps, maps_provider
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +79,29 @@ def max_meters() -> float:
 
 def provider() -> str:
     chosen = os.getenv("ROAD_SNAP_PROVIDER", "").strip().lower()
-    if chosen in ("mapbox", "osrm", "off"):
+    if chosen in ("google", "mapbox", "osrm", "off"):
         return chosen
-    return "mapbox" if os.getenv("MAPBOX_ACCESS_TOKEN") else "off"
+    # MAPS_PROVIDER, or the provider that has a key; "off" without its key.
+    default = maps_provider.default_provider()
+    key = (
+        maps_provider.google_key()
+        if default == "google"
+        else maps_provider.mapbox_token()
+    )
+    return default if key else "off"
+
+
+def _google(lat: float, lng: float, limit: float) -> SnapResult:
+    try:
+        found = google_maps.nearest_road(lat, lng)
+    except google_maps.GoogleUnavailable:
+        return None
+    if found is None:
+        return NO_ROAD
+    road, distance = found
+    if distance > limit:
+        return NO_ROAD
+    return Snap(road=road, distance_m=distance)
 
 
 def _mapbox(lat: float, lng: float, limit: float) -> SnapResult:
@@ -155,9 +179,8 @@ def snap_to_road(lat: float, lng: float) -> SnapResult:
             _cache.move_to_end(key)
             return _cache[key]
     try:
-        result = (
-            _mapbox(lat, lng, limit) if name == "mapbox" else _osrm(lat, lng, limit)
-        )
+        snap = {"google": _google, "mapbox": _mapbox}.get(name, _osrm)
+        result = snap(lat, lng, limit)
     except Exception as exc:
         logger.warning("road snap failed: %s", type(exc).__name__)
         return None

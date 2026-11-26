@@ -9,6 +9,7 @@ import { cartTotals, groupCartByMerchant } from "@/util/cartGroups";
 import { clearPendingPayments, loadPendingPayments, savePendingPayments } from "@/util/pendingPayments";
 import LocationSelects, { type LocationSelectsValue } from "@/components/LocationSelects/LocationSelects";
 import MapPinPicker from "@/components/MapPinPicker/MapPinPicker";
+import StreetSuggestInput from "@/components/StreetSuggestInput/StreetSuggestInput";
 import type { Pin } from "@/util/geocode";
 import { focusFirstInvalid } from "@/components/FieldError/FieldError";
 import { isLuzonRegion } from "@/util/serviceArea";
@@ -251,10 +252,16 @@ export default function CheckoutPage() {
 
             <label>
               {t.checkout.street}
-              <input
+              <StreetSuggestInput
                 type="text"
                 value={street}
-                onChange={(e) => setStreet(e.target.value)}
+                onValueChange={setStreet}
+                onPick={(text, next) => {
+                  setStreet(text);
+                  setPin(next);
+                  setPinConfirmed(false);
+                }}
+                area={addressForm}
                 placeholder="123 Rizal Ave, Unit 4B"
               />
             </label>

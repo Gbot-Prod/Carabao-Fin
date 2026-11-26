@@ -31,6 +31,10 @@ _DOTENV_LEAKS = (
     "R2_ACCESS_KEY_ID",
     "R2_SECRET_ACCESS_KEY",
     "MAPBOX_ACCESS_TOKEN",
+    "MAPS_PLATFORM_API_KEY",  # Google Maps Platform (google_maps.py)
+    "MAPS_PROVIDER",
+    "ROUTING_PROVIDER",
+    "GEOCODE_PROVIDER",
     "ANTHROPIC_API_KEY",  # guardrails Phase 4 vision check
     "GOOGLE_CLOUD_VISION",  # document OCR (document_checks.py)
     "OSRM_URL",
@@ -136,9 +140,7 @@ def _payout_sms(monkeypatch):
         os.environ.get("AUTH_SYNC_SHARED_SECRET") or "test-secret",
     )
     monkeypatch.setattr(payout_otp, "send_otp", payout_codes.fake_send_otp)
-    monkeypatch.setattr(
-        account_deletion_otp, "send_otp", payout_codes.fake_send_otp
-    )
+    monkeypatch.setattr(account_deletion_otp, "send_otp", payout_codes.fake_send_otp)
     monkeypatch.setattr(payout_otp, "send_sms", payout_codes.fake_send_sms)
     monkeypatch.setattr(
         payout_otp,

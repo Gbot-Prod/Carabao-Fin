@@ -15,6 +15,7 @@ import {
 } from '@/util/api';
 import LocationSelects from '@/components/LocationSelects/LocationSelects';
 import MapPinPicker from '@/components/MapPinPicker/MapPinPicker';
+import StreetSuggestInput from '@/components/StreetSuggestInput/StreetSuggestInput';
 import type { Pin } from '@/util/geocode';
 import PageLoader from '@/components/PageLoader/PageLoader';
 import TwoFactorSettings from '@/components/TwoFactorSettings/TwoFactorSettings';
@@ -238,7 +239,19 @@ function AddressPanel({ addresses, recipient, onChanged }: {
           </div>
           <div className={styles.panelFormField}>
             <label htmlFor="profile-address" className={styles.formLabel}>Street / House No.</label>
-            <input id="profile-address" className={styles.formInput} value={form.address} onChange={setField('address')} placeholder="123 Rizal Ave, Unit 4B" />
+            <StreetSuggestInput
+              id="profile-address"
+              className={styles.formInput}
+              value={form.address}
+              onValueChange={(address) => setForm(p => ({ ...p, address }))}
+              onPick={(address, next) => {
+                setForm(p => ({ ...p, address }));
+                setPin(next);
+                setPinConfirmed(false);
+              }}
+              area={{ province: form.province, city: form.city }}
+              placeholder="123 Rizal Ave, Unit 4B"
+            />
           </div>
           <div className={`${styles.panelFormField} ${styles.fieldFull}`}>
             <MapPinPicker

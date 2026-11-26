@@ -123,6 +123,8 @@ ACTION_LIMITS: dict[str, Limit] = {
     # geocoding together, billed per request. Each pin move asks once, each
     # address edit up to three times; repeats are answered from a cache.
     "place_search": Limit(240, 3600),
+    # Street suggestions while typing (debounced; repeats come from a cache).
+    "place_suggest": Limit(300, 3600),
     # The road line on the tracking / routing map (Mapbox Directions). Asked
     # once per page view and set of stops; repeats come from a cache.
     "route_view": Limit(120, 3600),
