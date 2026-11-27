@@ -31,6 +31,7 @@ NOT_NULL = {
         "id",
         "merchant_id",
         "payout_type",
+        "verification_status",
         "created_at",
         "updated_at",
     },

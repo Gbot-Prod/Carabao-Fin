@@ -6,6 +6,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.models.statuses import (
+    PayoutDestinationVerificationStatus,
+    PayoutVerificationAttemptStatus,
+    status_type,
+)
 
 
 class MerchantPayoutInfo(Base):
@@ -27,6 +32,21 @@ class MerchantPayoutInfo(Base):
     # mobile number for GCash/Maya
     ewallet_number: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    verification_status: Mapped[str] = mapped_column(
+        status_type(
+            PayoutDestinationVerificationStatus,
+            "payout_destination_verification_status",
+        ),
+        nullable=False,
+        default=PayoutDestinationVerificationStatus.UNVERIFIED,
+        server_default=PayoutDestinationVerificationStatus.UNVERIFIED,
+    )
+    verification_method: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    verification_error: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -38,6 +58,47 @@ class MerchantPayoutInfo(Base):
     )
 
     merchant = relationship("Merchant")
+
+
+class PayoutVerificationAttempt(Base):
+    """One penny-drop micro-transfer sent to verify a payout destination."""
+
+    __tablename__ = "payout_verification_attempts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    merchant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("merchants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    destination_fingerprint: Mapped[str] = mapped_column(
+        String(64), nullable=False, index=True
+    )
+    amount_centavos: Mapped[int] = mapped_column(Integer, nullable=False)
+    paymongo_reference: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True
+    )
+    paymongo_transfer_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    provider_reference: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(
+        status_type(
+            PayoutVerificationAttemptStatus,
+            "payout_verification_attempt_status",
+        ),
+        nullable=False,
+        default=PayoutVerificationAttemptStatus.SENDING,
+    )
+    failure_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    attempts_remaining: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class PayoutDestinationChange(Base):

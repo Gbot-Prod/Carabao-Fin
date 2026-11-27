@@ -13,7 +13,7 @@ from app.services import rate_limit
 from app.services.phone_verification import normalize_ph_mobile
 from tests import payout_codes
 from tests.better_auth import set_identity
-from tests.payout_codes import last_code, save_payout_info
+from tests.payout_codes import last_code, mark_payout_verified, save_payout_info
 from tests.test_merchant_orders import _merchant_client
 from tests.test_payouts import (  # noqa: F401 - fixtures
     GCASH,
@@ -94,12 +94,14 @@ def test_change_is_audited_and_alerts_old_contacts(db, merchant, _payout_sms):  
 def test_requested_payout_keeps_its_destination(db, merchant, buyer, transfers):  # noqa: F811
     client = _merchant_client(db, merchant)
     save_payout_info(client, GCASH)
+    mark_payout_verified(db, merchant.id)
     _delivered_sale(db, merchant, buyer)
     batch = client.post("/merchants/me/payouts/request").json()
     assert batch["destination_number"] == "09171234567"
 
-    # A later (even code-confirmed) change does not redirect the pending payout.
+    # A later (even code-confirmed & verified) change does not redirect the pending payout.
     assert save_payout_info(client, MAYA).status_code == 200
+    mark_payout_verified(db, merchant.id)
     admin = _admin_client(db)
     assert admin.get("/admin/batches").json()[0]["destination"]["number"] == (
         "09171234567"
@@ -113,6 +115,7 @@ def test_failed_payout_moves_to_the_confirmed_destination(
 ):
     client = _merchant_client(db, merchant)
     save_payout_info(client, GCASH)
+    mark_payout_verified(db, merchant.id)
     _delivered_sale(db, merchant, buyer)
     batch_id = client.post("/merchants/me/payouts/request").json()["id"]
     row = db.get(PayoutBatch, batch_id)
@@ -120,6 +123,11 @@ def test_failed_payout_moves_to_the_confirmed_destination(
     db.commit()
 
     save_payout_info(client, MAYA)
+    client.post("/merchants/me/payout-info/verify")
+    client.post(
+        "/merchants/me/payout-info/verify/confirm",
+        json={"amount_pesos": transfers.calls[-1]["amount_centavos"] / 100},
+    )
     _admin_client(db).patch(f"/admin/batches/{batch_id}/release")
     assert transfers.calls[-1]["destination"]["number"] == "09998887777"
 
@@ -127,6 +135,7 @@ def test_failed_payout_moves_to_the_confirmed_destination(
 def test_batch_without_saved_destination_is_not_sent(db, merchant, buyer, transfers):  # noqa: F811
     client = _merchant_client(db, merchant)
     save_payout_info(client, GCASH)
+    mark_payout_verified(db, merchant.id)
     _delivered_sale(db, merchant, buyer)
     batch_id = client.post("/merchants/me/payouts/request").json()["id"]
     row = db.get(PayoutBatch, batch_id)

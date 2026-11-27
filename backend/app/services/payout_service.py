@@ -30,7 +30,12 @@ from app.models.merchant_payout import MerchantPayoutInfo
 from app.models.order import Order
 from app.models.order_proof_photo import OrderProofPhoto
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
-from app.models.statuses import OrderStatus, PayoutStatus, TransactionStatus
+from app.models.statuses import (
+    OrderStatus,
+    PayoutDestinationVerificationStatus,
+    PayoutStatus,
+    TransactionStatus,
+)
 from app.models.transaction import Transaction
 from app.services import money, notifications, paymongo
 from app.services.merchant_verification import merchant_can_request_payout
@@ -336,6 +341,15 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
     if not merchant_can_request_payout(db.get(Merchant, batch.merchant_id)):
         raise PayoutError(403, "This merchant is not verified to receive payouts")
 
+    info = get_payout_info(db, batch.merchant_id)
+    if (
+        info is None
+        or info.verification_status != PayoutDestinationVerificationStatus.VERIFIED
+    ):
+        raise PayoutError(
+            403, "This merchant's payout destination is not verified yet"
+        )
+
     # CF-0004: the destination saved when the payout was requested, never the
     # merchant's current payout method.
     destination = saved_destination(batch)
@@ -525,7 +539,12 @@ def refresh_payout(db: Session, batch_id: int) -> PayoutBatch:
 def handle_transfer_event(
     db: Session, event_type: str, resource: dict[str, Any]
 ) -> None:
-    """Apply a ``transfer.outward.*`` webhook to its payout batch."""
+    """Apply a ``transfer.outward.*`` webhook to its verification attempt or payout batch."""
+    from app.services.payout_verification import handle_verification_transfer_event
+
+    if handle_verification_transfer_event(db, event_type, resource):
+        return
+
     attrs = resource.get("attributes") or resource
     transfer_id = attrs.get("transfer_id") or resource.get("id")
     reference = attrs.get("reference_number")

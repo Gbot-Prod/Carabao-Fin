@@ -423,7 +423,7 @@ The manual steps follow.
    | `scripts/backfill_photo_hashes.py` (`--dry-run` first) | `produces.image_phash` | old photos get no stolen-photo check |
    | `scripts/sync_da_prices.py` | `reference_prices` | no price flags until the API's own sync (every `DA_PRICE_SYNC_HOURS`) |
 
-7. **Roles and guards.** From the repo root: `powershell -ExecutionPolicy Bypass -File backend\db\apply_roles.ps1` (no `-SetPasswords`). Type the database name (`railway`). All checks must be `ok`. **Do this before the deploy.** Until this step runs, the new tables are owned by `postgres` and closed to `carabao_api`. If you see `FAIL carabao_owner is NOLOGIN`, see section 9.
+7. **Roles and guards.** From the repo root: `powershell -ExecutionPolicy Bypass -File backend\db\apply_roles.ps1` (no `-SetPasswords`). Type the database name (`railway`). All checks must be `ok`. The row-count check excludes `rate_limit_hits`, which changes during live API traffic. **Do this before the deploy.** Until this step runs, the new tables are owned by `postgres` and closed to `carabao_api`. If you see `FAIL carabao_owner is NOLOGIN`, see section 9.
 8. **Clean up.** `Remove-Item Env:DATABASE_URL, Env:PGSSL_CA, Env:PGSSL_SERVERNAME`.
 9. **Deploy** the API, then the web app. Set any new env vars first (4.1). Then do the post-deploy checks below.
 

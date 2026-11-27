@@ -4,10 +4,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
+from decimal import ROUND_HALF_UP, Decimal
 from app.models.statuses import (
     OrderStatus,
     PaymentStatus,
+    PayoutDestinationVerificationStatus,
     PayoutStatus,
+    PayoutVerificationAttemptStatus,
     TransactionStatus,
 )
 from app.services.payout_service import (
@@ -57,6 +60,12 @@ class PayoutInfoResponse(BaseModel):
     account_number: str | None = None
     account_name: str | None = None
     ewallet_number: str | None = None
+    verification_status: PayoutDestinationVerificationStatus = (
+        PayoutDestinationVerificationStatus.UNVERIFIED
+    )
+    verification_method: str | None = None
+    verified_at: datetime | None = None
+    verification_error: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -124,6 +133,27 @@ class PayoutInfoChange(PayoutInfoUpdate):
 
 class PayoutCodeSent(BaseModel):
     sent_to: str  # last 4 digits of the number the code went to
+
+
+class PennyDropStartedResponse(BaseModel):
+    status: PayoutVerificationAttemptStatus
+    expires_at: datetime
+    attempts_remaining: int
+    monthly_attempts_used: int
+    monthly_attempts_limit: int
+
+
+class PennyDropConfirmRequest(BaseModel):
+    amount_pesos: float = Field(gt=0, le=100)
+
+    def centavos(self) -> int:
+        return int(
+            (Decimal(str(self.amount_pesos)) * 100).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ReceivingInstitution(BaseModel):

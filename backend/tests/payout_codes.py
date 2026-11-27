@@ -34,3 +34,22 @@ def save_payout_info(client, payload: dict):
     return client.put(
         "/merchants/me/payout-info", json={**payload, "code": last_code()}
     )
+
+
+def mark_payout_verified(db, merchant_id: int) -> None:
+    """Mark a merchant's saved payout info as verified for payout-request tests."""
+    from datetime import UTC, datetime
+
+    from app.models.merchant_payout import MerchantPayoutInfo
+    from app.models.statuses import PayoutDestinationVerificationStatus
+
+    info = (
+        db.query(MerchantPayoutInfo)
+        .filter(MerchantPayoutInfo.merchant_id == merchant_id)
+        .first()
+    )
+    assert info is not None
+    info.verification_status = PayoutDestinationVerificationStatus.VERIFIED
+    info.verification_method = "penny_drop"
+    info.verified_at = datetime.now(UTC)
+    db.commit()

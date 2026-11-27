@@ -289,7 +289,7 @@ The files:
 - `backend/db/roles.sql`: makes the logins, gives every table to `carabao_owner`, and sets the grants. Run it as the superuser.
 - `backend/db/guards.sql`: the trigger and row-level security policies (G1–G3). Run it as the superuser, after `roles.sql`.
 - `backend/tests_pg/test_db_roles.py`: checks both files on a throwaway Postgres ([LOCAL_DATABASE.md](LOCAL_DATABASE.md) section 11).
-- `backend/db/apply_roles.ps1`: runs both files against a database and checks the result (needs Docker only). It asks for the superuser URL at a hidden prompt, shows the target and its current state, and asks you to type the database name before it changes anything. Then it checks ownership, login attributes, RLS, the 20 policies, the trigger, the guard functions, what each web login can reach, and that no row count changed. `-SetPasswords` then opens psql's `\password` prompt for the three service logins.
+- `backend/db/apply_roles.ps1`: runs both files against a database and checks the result (needs Docker only). It asks for the superuser URL at a hidden prompt, shows the target and its current state, and asks you to type the database name before it changes anything. Then it checks ownership, login attributes, RLS, the 20 policies, the trigger, the guard functions, what each web login can reach, and that row counts are unchanged. It excludes `rate_limit_hits`, which changes during live API traffic. `-SetPasswords` then opens psql's `\password` prompt for the three service logins.
 
 Both files can be run again safely. Each one is a single transaction.
 

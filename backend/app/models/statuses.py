@@ -57,6 +57,27 @@ class PayoutStatus(StrEnum):
     FAILED = "failed"
 
 
+class PayoutDestinationVerificationStatus(StrEnum):
+    """Verification state of ``merchant_payout_info``."""
+
+    UNVERIFIED = "unverified"
+    PENDING = "pending"
+    TRANSFER_SENT = "transfer_sent"
+    VERIFIED = "verified"
+    FAILED = "failed"
+
+
+class PayoutVerificationAttemptStatus(StrEnum):
+    """Lifecycle of one penny-drop micro-transfer (``payout_verification_attempts.status``)."""
+
+    SENDING = "sending"
+    SENT = "sent"
+    SETTLED = "settled"
+    CONFIRMED = "confirmed"
+    FAILED = "failed"
+    EXPIRED = "expired"
+
+
 class MerchantVerificationStatus(StrEnum):
     """Whether a merchant may sell (``merchants.verification_status``).
 

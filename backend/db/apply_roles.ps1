@@ -14,7 +14,8 @@
      changes nothing), with ON_ERROR_STOP.
   4. Checks the end state (ownership, login attributes, memberships, CREATE on
      public, RLS, the 20 policies, the trigger, the guard functions, which
-     tables each web login can reach) and that every row count is unchanged.
+     tables each web login can reach) and that row counts are unchanged.
+     rate_limit_hits is excluded because live API traffic changes it.
   5. With -SetPasswords: opens psql's \password prompt for carabao_api,
      carabao_web_public and carabao_web_admin, then checks that each now has a
      password. \password hashes it in psql, so it never appears on a command
@@ -297,13 +298,20 @@ try {
   }
 
   $after = Invoke-Query "count.sql"
-  $diff = Compare-Object @($before) @($after)
+  $volatileTables = @("rate_limit_hits")
+  $stableBefore = @($before | Where-Object {
+    ($_ -split '\|', 2)[0] -notin $volatileTables
+  })
+  $stableAfter = @($after | Where-Object {
+    ($_ -split '\|', 2)[0] -notin $volatileTables
+  })
+  $diff = Compare-Object $stableBefore $stableAfter
   if ($diff) {
     $failed++
     Write-Host "  FAIL  row counts changed:" -ForegroundColor Red
     $diff | Format-Table -AutoSize | Out-String | Write-Host
   } else {
-    Write-Host "  ok    row counts unchanged ($(@($after).Count) tables)"
+    Write-Host "  ok    row counts unchanged ($($stableAfter.Count) tables; excluded $($volatileTables -join ', '))"
   }
   if ($failed -gt 0) {
     throw "$failed check(s) failed. Services still use the postgres login, so nothing is broken; investigate before step 6."

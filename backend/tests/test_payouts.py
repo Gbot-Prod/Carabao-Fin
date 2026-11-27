@@ -32,7 +32,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.services import paymongo, payout_service
 from tests.better_auth import make_user
-from tests.payout_codes import save_payout_info
+from tests.payout_codes import mark_payout_verified, save_payout_info
 from tests.test_merchant_orders import _merchant_client
 
 GCASH = {
@@ -111,6 +111,7 @@ def _admin_client(db) -> TestClient:  # noqa: F811
 def _requested_batch(db, merchant, buyer, **sale) -> dict:  # noqa: F811
     client = _merchant_client(db, merchant)
     assert save_payout_info(client, GCASH).status_code == 200
+    mark_payout_verified(db, merchant.id)
     _delivered_sale(db, merchant, buyer, **sale)
     resp = client.post("/merchants/me/payouts/request")
     assert resp.status_code == 200, resp.text
@@ -184,6 +185,7 @@ def test_legacy_free_text_bank_cannot_cash_out(db, merchant, buyer):  # noqa: F8
 def test_cash_out_shows_and_records_the_transfer_fee(db, merchant, buyer):  # noqa: F811
     client = _merchant_client(db, merchant)
     save_payout_info(client, GCASH)
+    mark_payout_verified(db, merchant.id)
     _delivered_sale(db, merchant, buyer, merchant_amount=490)
 
     available = client.get("/merchants/me/payouts/available").json()
@@ -205,6 +207,7 @@ def test_cash_out_shows_and_records_the_transfer_fee(db, merchant, buyer):  # no
 def test_cash_out_must_cover_the_fee(db, merchant, buyer):  # noqa: F811
     client = _merchant_client(db, merchant)
     save_payout_info(client, GCASH)
+    mark_payout_verified(db, merchant.id)
     # ₱19 less the ₱10 fee is ₱9: below the ₱10 minimum (GCash AC06).
     _delivered_sale(db, merchant, buyer, merchant_amount=19)
 
@@ -446,6 +449,7 @@ def test_maya_and_banks_go_by_instapay(db, merchant, buyer, transfers, monkeypat
     )
     client = _merchant_client(db, merchant)
     save_payout_info(client, {**GCASH, "payout_type": "maya"})
+    mark_payout_verified(db, merchant.id)
     _delivered_sale(db, merchant, buyer)
     maya = client.post("/merchants/me/payouts/request").json()
     admin_client = _admin_client(db)
@@ -467,6 +471,11 @@ def test_maya_and_banks_go_by_instapay(db, merchant, buyer, transfers, monkeypat
             "account_name": "Juan dela Cruz",
         },
     )
+    client.post("/merchants/me/payout-info/verify")
+    client.post(
+        "/merchants/me/payout-info/verify/confirm",
+        json={"amount_pesos": transfers.calls[-1]["amount_centavos"] / 100},
+    )
     admin_client.patch(f"/admin/batches/{maya['id']}/release")
 
     assert transfers.calls[-1]["provider"] == "instapay"
@@ -478,6 +487,7 @@ def test_instapay_cap_is_checked_at_request(db, merchant, buyer, transfers):  # 
     later request, so the request refuses it instead of creating it."""
     client = _merchant_client(db, merchant)
     save_payout_info(client, {**GCASH, "payout_type": "maya"})
+    mark_payout_verified(db, merchant.id)
     _delivered_sale(db, merchant, buyer, merchant_amount=60_000)
 
     resp = client.post("/merchants/me/payouts/request")
@@ -492,6 +502,7 @@ def test_request_takes_only_what_one_transfer_can_send(db, merchant, buyer):  # 
     """CF-0046: earnings above the cap are split over later payouts."""
     client = _merchant_client(db, merchant)
     save_payout_info(client, {**GCASH, "payout_type": "maya"})
+    mark_payout_verified(db, merchant.id)
     for _ in range(3):
         _delivered_sale(db, merchant, buyer, merchant_amount=20_000)
 

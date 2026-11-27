@@ -4,7 +4,7 @@ edit lock)."""
 
 import logging
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import (
@@ -17,11 +17,16 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
 from app.core.errors import upstream_error
-from app.models.merchant_payout import MerchantPayoutInfo, PayoutDestinationChange
+from app.models.merchant_payout import (
+    MerchantPayoutInfo,
+    PayoutDestinationChange,
+    PayoutVerificationAttempt,
+)
 from app.models.order import Order
 from app.models.payout_batch import PayoutBatch, PayoutBatchItem
 from app.models.statuses import (
     OPEN_PAYOUT_STATUSES,
+    PayoutDestinationVerificationStatus,
     PayoutStatus,
 )
 from app.models.transaction import Transaction
@@ -33,6 +38,8 @@ from app.schemas.payout import (
     PayoutInfoChange,
     PayoutInfoResponse,
     PayoutInfoUpdate,
+    PennyDropConfirmRequest,
+    PennyDropStartedResponse,
     ReceivingInstitution,
     TransactionSummary,
 )
@@ -40,6 +47,7 @@ from app.services import (
     notifications,
     paymongo,
     payout_otp,
+    payout_verification,
     rate_limit,
 )
 from app.services.merchant_service import (
@@ -54,10 +62,10 @@ from app.services.payout_service import (
     MIN_TRANSFER_PESOS,
     PROVIDER_LABELS,
     PROVIDER_MAX_PESOS,
+    PayoutError,
     claimable_transactions,
     fit_to_transfer_limit,
     get_payout_info,
-    move_failed_batches,
     payout_info_problem,
     resolve_destination,
     save_destination,
@@ -187,14 +195,14 @@ def update_my_payout_info(
     else:
         for field, value in values.items():
             setattr(info, field, value)
+    payout_verification.reset_verification(db, info)
 
-    moved = move_failed_batches(db, merchant.id, resolve_destination(info))
     db.add(
         PayoutDestinationChange(
             merchant_id=merchant.id,
             user_id=current_user.id,
             before=before,
-            after={**_payout_fields(info), "failed_batches_moved": moved},
+            after=_payout_fields(info),
             confirmed_via=payout_otp.account_number(current_user)[-4:],
             ip_address=rate_limit.client_ip(request),
         )
@@ -215,6 +223,55 @@ def update_my_payout_info(
             current_user, merchant, old=payout_otp.describe(before), new=label
         )
     return info
+
+
+@router.post("/merchants/me/payout-info/verify", response_model=PennyDropStartedResponse)
+def start_payout_verification(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PennyDropStartedResponse:
+    """Send a ₱10.01–₱10.99 penny-drop transfer to verify the saved destination."""
+    merchant = get_editable_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    try:
+        attempt = payout_verification.start_penny_drop(db, merchant.id)
+    except PayoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    month_ago = datetime.now(UTC) - timedelta(days=30)
+    used = (
+        db.query(PayoutVerificationAttempt)
+        .filter(
+            PayoutVerificationAttempt.merchant_id == merchant.id,
+            PayoutVerificationAttempt.created_at >= month_ago,
+        )
+        .count()
+    )
+    return PennyDropStartedResponse(
+        status=attempt.status,
+        expires_at=attempt.expires_at,
+        attempts_remaining=attempt.attempts_remaining,
+        monthly_attempts_used=used,
+        monthly_attempts_limit=payout_verification.PENNY_DROP_MAX_MONTHLY_ATTEMPTS,
+    )
+
+
+@router.post("/merchants/me/payout-info/verify/confirm", response_model=PayoutInfoResponse)
+def confirm_payout_verification(
+    payload: PennyDropConfirmRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MerchantPayoutInfo:
+    """Confirm the exact centavos received from the penny-drop transfer."""
+    merchant = get_editable_merchant(db, current_user.id)
+    if not merchant:
+        raise HTTPException(status_code=404, detail="Merchant profile not found")
+    try:
+        return payout_verification.confirm_penny_drop(
+            db, merchant.id, payload.centavos()
+        )
+    except PayoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @router.get("/merchants/me/payouts", response_model=list[PayoutBatchResponse])
@@ -293,8 +350,13 @@ def request_my_payout(
 
     info = get_payout_info(db, merchant.id)
     problem = payout_info_problem(info)
-    if problem:
-        raise HTTPException(status_code=400, detail=problem)
+    if problem or info is None:
+        raise HTTPException(status_code=400, detail=problem or "Set up your payout method first.")
+    if info.verification_status != PayoutDestinationVerificationStatus.VERIFIED:
+        raise HTTPException(
+            status_code=403,
+            detail="Verify your payout destination with the micro-deposit before requesting a payout.",
+        )
 
     pending = (
         db.query(PayoutBatch)
