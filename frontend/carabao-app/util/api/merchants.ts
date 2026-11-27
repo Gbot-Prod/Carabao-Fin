@@ -436,6 +436,13 @@ export const PAYOUT_PROVIDER_TIMING: Record<PayoutProvider, string> = {
   pesonet: 'arrives on the next PESONet cycle (1 PM, 4 PM or 7 PM on banking days)',
 };
 
+export type PayoutDestinationVerificationStatus =
+  | 'unverified'
+  | 'pending'
+  | 'transfer_sent'
+  | 'verified'
+  | 'failed';
+
 export type PayoutInfo = {
   id: number;
   merchant_id: number;
@@ -446,10 +453,22 @@ export type PayoutInfo = {
   account_number: string | null;
   account_name: string | null;
   ewallet_number: string | null;
+  verification_status: PayoutDestinationVerificationStatus;
+  verification_method: string | null;
+  verified_at: string | null;
+  verification_error: string | null;
   created_at: string;
   updated_at: string;
   /** Why payouts can't be sent here yet; null when the method is complete. */
   problem: string | null;
+};
+
+export type PennyDropStarted = {
+  status: 'sending' | 'sent' | 'settled' | 'confirmed' | 'failed' | 'expired';
+  expires_at: string;
+  attempts_remaining: number;
+  monthly_attempts_used: number;
+  monthly_attempts_limit: number;
 };
 
 export type PayoutInstitution = { code: string; name: string };
@@ -518,6 +537,18 @@ export const sendPayoutInfoCode = async (payload: PayoutInfoPayload): Promise<st
 /** Saves the payout method; `code` is the SMS code sendPayoutInfoCode sent for it. */
 export const updateMyPayoutInfo = async (payload: PayoutInfoPayload & { code: string }): Promise<PayoutInfo> => {
   const response = await apiClient.put<PayoutInfo>('/merchants/me/payout-info', payload);
+  return response.data;
+};
+
+export const startPayoutVerification = async (): Promise<PennyDropStarted> => {
+  const response = await apiClient.post<PennyDropStarted>('/merchants/me/payout-info/verify');
+  return response.data;
+};
+
+export const confirmPayoutVerification = async (amountPesos: number): Promise<PayoutInfo> => {
+  const response = await apiClient.post<PayoutInfo>('/merchants/me/payout-info/verify/confirm', {
+    amount_pesos: amountPesos,
+  });
   return response.data;
 };
 

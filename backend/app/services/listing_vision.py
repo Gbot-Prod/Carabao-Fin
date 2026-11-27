@@ -8,11 +8,11 @@ The result is advisory. It never rejects a listing or makes one live: it only
 adds a soft flag (``VISION_MISMATCH``, ``VISION_CONTACT_TEXT``) to a listing
 that is already in the admin queue, and the admin decides.
 
-To keep the cost low, the check runs only for a listing that is
-``under_review`` (it has flags, or it is one of a new farm's first listings),
-and only once for each (photo, name, category). It runs in the background
-after the save, so the upload stays fast. Without ``ANTHROPIC_API_KEY`` it
-does not run; ``LISTING_VISION_ENABLED=0`` also turns it off.
+To keep the cost low, the check runs only for a buyer-visible listing
+(``live`` or ``under_review``), and only once for each (photo, name, category).
+It runs in the background after the save, so the upload stays fast. Without
+``ANTHROPIC_API_KEY`` it does not run; ``LISTING_VISION_ENABLED=0`` also turns
+it off.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from PIL import Image
 from sqlalchemy.orm import Session
 
 from app.models.produce import Produce
-from app.models.statuses import ProduceStatus
+from app.models.statuses import BUYER_VISIBLE_PRODUCE_STATUSES, ProduceStatus
 from app.services.image_audit import is_own_url
 from app.services.listing_checks import Issue
 from app.services.upload_validation import IMAGE_MAX_BYTES
@@ -114,7 +114,7 @@ def _current(produce: Produce) -> dict[str, Any] | None:
 def needs_check(produce: Produce) -> bool:
     return bool(
         enabled()
-        and produce.status == ProduceStatus.UNDER_REVIEW
+        and produce.status in BUYER_VISIBLE_PRODUCE_STATUSES
         and bool(produce.image_url)
         and _current(produce) is None
     )
@@ -325,19 +325,23 @@ def run_check(db: Session, produce_id: int) -> bool:
     if produce is None or input_key(produce) != key:
         db.rollback()
         return False
-    in_queue = produce.status == ProduceStatus.UNDER_REVIEW
+    visible = produce.status in BUYER_VISIBLE_PRODUCE_STATUSES
     produce.photo_check = {
         **answer,
         "key": key,
         "model": MODEL,
         "checked_at": datetime.now(UTC).isoformat(),
-        # An admin acted before the answer came: keep it for the record only.
-        "cleared": not in_queue,
+        # An admin hid or rejected the listing before the answer came: keep it for the record only.
+        "cleared": not visible,
     }
-    if in_queue:
-        produce.review_flags = with_vision_flags(
-            produce, list(produce.review_flags or [])
-        )
+    if visible:
+        if produce.status == ProduceStatus.LIVE and issues_from(answer):
+            produce.status = ProduceStatus.UNDER_REVIEW
+            produce.submitted_for_review_at = datetime.now(UTC)
+        if produce.status == ProduceStatus.UNDER_REVIEW:
+            produce.review_flags = with_vision_flags(
+                produce, list(produce.review_flags or [])
+            )
     db.commit()
     return True
 

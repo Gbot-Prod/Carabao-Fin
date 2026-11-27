@@ -404,12 +404,50 @@ def test_vision_adds_advisory_flags_to_a_queued_listing(db, merchant, vision_on)
     assert not listing_vision.run_check(db, produce.id)
 
 
-def test_vision_never_touches_a_live_listing(db, merchant, vision_on):
-    produce = _listing(
+CLEAN_MATCH = {
+    "shows_named_produce": "yes",
+    "detected_produce": "eggplant",
+    "has_contact_text": False,
+    "note": "Shows fresh eggplants.",
+}
+
+
+def test_vision_checks_live_listing_and_queues_on_flag(db, merchant, vision_on):
+    clean = _listing(
         db, merchant, image_url=f"{CDN}/merchants/{merchant.id}/produce/1/a.jpg"
     )
-    assert not listing_vision.needs_check(produce)
-    assert not listing_vision.run_check(db, produce.id)
+    assert listing_vision.needs_check(clean)
+    vision_on.append(dict(CLEAN_MATCH))
+    assert listing_vision.run_check(db, clean.id)
+    db.refresh(clean)
+    assert clean.status == ProduceStatus.LIVE
+    assert clean.review_flags == []
+    assert clean.photo_check["cleared"] is False
+
+    flagged = _listing(
+        db, merchant, image_url=f"{CDN}/merchants/{merchant.id}/produce/2/a.jpg"
+    )
+    vision_on.append(dict(MISMATCH))
+    assert listing_vision.run_check(db, flagged.id)
+    db.refresh(flagged)
+    assert flagged.status == ProduceStatus.UNDER_REVIEW
+    assert flagged.submitted_for_review_at is not None
+    assert [f["code"] for f in flagged.review_flags] == [
+        listing_vision.VISION_MISMATCH,
+        listing_vision.VISION_CONTACT_TEXT,
+    ]
+
+
+def test_vision_skips_hidden_or_rejected_listing(db, merchant, vision_on):
+    for status in (ProduceStatus.HIDDEN, ProduceStatus.REJECTED):
+        produce = _listing(
+            db,
+            merchant,
+            status=status,
+            image_url=f"{CDN}/merchants/{merchant.id}/produce/1/a.jpg",
+        )
+        assert not listing_vision.needs_check(produce)
+        assert not listing_vision.run_check(db, produce.id)
 
 
 def test_vision_result_is_dropped_when_the_listing_changed(
@@ -467,12 +505,12 @@ def test_upload_to_a_queued_listing_schedules_the_check(
     assert res.status_code == 200, res.text
     assert scheduled == [produce.id]
 
-    # A live listing gets no check.
+    # A live listing also gets a check on image upload.
     monkeypatch.setattr(listing_trust, "NEW_MERCHANT_REVIEW_COUNT", 0)
     live = _listing(db, merchant, "Okra")
     scheduled.clear()
     assert _upload(_farmer(db, merchant), live.id, _jpeg(_photo(11))).status_code == 200
-    assert scheduled == []
+    assert scheduled == [live.id]
 
 
 # ---------------------------------------------------------------------------

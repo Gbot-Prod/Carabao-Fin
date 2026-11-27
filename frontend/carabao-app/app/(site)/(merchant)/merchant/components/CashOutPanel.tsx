@@ -3,12 +3,15 @@ import styles from "../page.module.css";
 import {
   PAYOUT_PROVIDER_LABELS,
   PAYOUT_PROVIDER_TIMING,
+  confirmPayoutVerification,
   fetchPayoutInstitutions,
   requestPayout,
   sendPayoutInfoCode,
+  startPayoutVerification,
   updateMyPayoutInfo,
   type AvailablePayout,
   type MerchantPayoutBatch,
+  type PayoutDestinationVerificationStatus,
   type PayoutInfo,
   type PayoutInstitution,
   type PayoutType,
@@ -72,6 +75,9 @@ export default function CashOutPanel({
   const [requesting, setRequesting] = useState(false);
   const [banks, setBanks] = useState<PayoutInstitution[] | null>(null);
   const [banksError, setBanksError] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [pennyDropAmount, setPennyDropAmount] = useState("");
+  const [pennyDropSentLocally, setPennyDropSentLocally] = useState(false);
   // Site-wide: a minute between codes for one destination, counted down on the page.
   const resendTimer = useResendCooldown();
 
@@ -152,7 +158,12 @@ export default function CashOutPanel({
       }
       const updated = await updateMyPayoutInfo({ ...payload(), code: code.trim() });
       onPayoutInfoSaved(updated);
-      onMessage({ type: "success", text: "Payout method saved." });
+      setPennyDropSentLocally(false);
+      setPennyDropAmount("");
+      onMessage({
+        type: "success",
+        text: "Payout method saved. Verify it with a micro-deposit below before cashing out.",
+      });
       stopEditing();
     } catch (err) {
       onMessage({ type: "error", text: saveError(err) });
@@ -189,6 +200,47 @@ export default function CashOutPanel({
       onMessage({ type: "error", text: err?.response?.data?.detail ?? "Could not submit cash out request." });
     } finally {
       setRequesting(false);
+    }
+  };
+
+  const handleStartVerification = async () => {
+    setVerifying(true);
+    onMessage(null);
+    try {
+      const res = await startPayoutVerification();
+      setPennyDropSentLocally(true);
+      onMessage({
+        type: "success",
+        text: `Micro-deposit sent (${res.monthly_attempts_used}/${res.monthly_attempts_limit} this month). Check your account and enter the exact amount received.`,
+      });
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      onMessage({ type: "error", text: detail ?? "Could not send verification transfer." });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleConfirmVerification = async (e: FormEvent) => {
+    e.preventDefault();
+    const amount = Number(pennyDropAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      onMessage({ type: "error", text: "Enter the exact amount received (e.g. 10.47)." });
+      return;
+    }
+    setVerifying(true);
+    onMessage(null);
+    try {
+      const updated = await confirmPayoutVerification(amount);
+      onPayoutInfoSaved(updated);
+      setPennyDropSentLocally(false);
+      setPennyDropAmount("");
+      onMessage({ type: "success", text: "Payout account verified. You can now request cash outs." });
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      onMessage({ type: "error", text: detail ?? "Could not verify amount." });
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -355,17 +407,31 @@ export default function CashOutPanel({
     );
   };
 
+  const VERIFICATION_LABELS: Record<PayoutDestinationVerificationStatus, string> = {
+    unverified: "Unverified",
+    pending: "Sending micro-deposit",
+    transfer_sent: "Micro-deposit sent",
+    verified: "Verified",
+    failed: "Verification failed",
+  };
+
   const renderMethod = (info: PayoutInfo) => {
     const infoRows: [string, string | null | undefined][] = [
       ["Account Name", info.account_name],
       ["Bank", info.bank_name ?? info.bank_code],
       ["Account No.", info.account_number],
       ["Mobile", info.ewallet_number],
+      ["Verification", VERIFICATION_LABELS[info.verification_status] ?? info.verification_status],
     ];
     const gross = available?.gross_amount ?? 0;
     const fee = available?.transfer_fee ?? 0;
     const net = available?.net_amount ?? 0;
-    const canCashOut = !openBatch && !info.problem && gross - fee >= MIN_PAYOUT;
+    const isVerified = info.verification_status === "verified";
+    const awaitingAmount =
+      pennyDropSentLocally ||
+      info.verification_status === "pending" ||
+      info.verification_status === "transfer_sent";
+    const canCashOut = !openBatch && !info.problem && isVerified && gross - fee >= MIN_PAYOUT;
 
     return (
       <div>
@@ -388,6 +454,55 @@ export default function CashOutPanel({
           <p className={`${styles.payoutNotice} ${styles.payoutNoticeError} ${styles.spaceAbove}`}>
             Update your payout method before cashing out: {info.problem}
           </p>
+        )}
+
+        {!info.problem && !isVerified && (
+          <div className={`${styles.payoutDisclaimer} ${styles.spaceAbove}`}>
+            <strong>Verify your payout account before cashing out</strong>
+            {info.verification_error && (
+              <p className={styles.payoutFieldError}>{info.verification_error}</p>
+            )}
+            {awaitingAmount ? (
+              <form onSubmit={(e) => void handleConfirmVerification(e)} className={styles.spaceAbove}>
+                <label className={styles.formLabel}>
+                  Exact micro-deposit amount received (₱10.01–₱10.99)
+                  <input
+                    className={styles.formInput}
+                    type="number"
+                    step="0.01"
+                    min="10.01"
+                    max="10.99"
+                    value={pennyDropAmount}
+                    onChange={(e) => setPennyDropAmount(e.target.value)}
+                    placeholder="e.g. 10.47"
+                    required
+                  />
+                </label>
+                <div className={`${styles.formActions} ${styles.spaceAbove}`}>
+                  <button type="submit" className={styles.primaryBtn} disabled={verifying}>
+                    {verifying ? "Verifying…" : "Confirm Amount"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <p>
+                  We&apos;ll send a small transfer (₱10.01–₱10.99) to this account. Enter the exact amount
+                  received to confirm it belongs to you.
+                </p>
+                <div className={`${styles.formActions} ${styles.spaceAbove}`}>
+                  <button
+                    type="button"
+                    className={styles.primaryBtn}
+                    disabled={verifying}
+                    onClick={() => void handleStartVerification()}
+                  >
+                    {verifying ? "Sending…" : "Send Micro-Deposit to Verify"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {!openBatch && gross > 0 && (
