@@ -33,6 +33,7 @@ import { emitSessionExpired, sessionGone } from './sessionEvents';
 import { parseErrorBody } from './apiErrors';
 import { contentTypeFor, filePart, ONBOARDING_BODY_LIMIT_BYTES, type FilePart } from './uploads';
 import { API_BASE } from './config';
+import { withFileBytes } from './formFiles';
 import { UNREAD_COUNT_QUERY } from './polling';
 
 export { API_BASE, WEB_BASE } from './config';
@@ -126,6 +127,7 @@ async function send<T>(
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
+      body: await withFileBytes(options?.body),
       signal: controller.signal,
       headers: {
         Accept: as === 'text' ? 'text/csv' : 'application/json',

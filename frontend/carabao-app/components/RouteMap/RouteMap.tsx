@@ -210,9 +210,10 @@ export default function RouteMap({
     <div className={styles.root}>
       {/* Each map is a billed map load (Google or Mapbox): build one only when there are stops to show. */}
       {hasStops ? (
-        <div className={styles.mapCanvas} ref={containerRef} />
+        // Separate keys: a container that held a destroyed map is never reused.
+        <div key="map" className={styles.mapCanvas} ref={containerRef} />
       ) : (
-        <div className={`${styles.mapCanvas} ${styles.mapPlaceholder}`} aria-hidden="true" />
+        <div key="placeholder" className={`${styles.mapCanvas} ${styles.mapPlaceholder}`} aria-hidden="true" />
       )}
       {mapUnavailable && <FallbackRouteMap markers={markers} />}
       {children}

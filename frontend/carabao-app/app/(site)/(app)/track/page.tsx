@@ -130,14 +130,10 @@ function Track() {
     maximumFractionDigits: 0,
   }).format(selectedOrder?.deliveryFee ?? 0);
 
-  const activeStopNumber = tracking
-    ? Math.min(tracking.active_stop_index + 1, tracking.stops.length)
-    : 0;
   // The tracking response carries the order's current status; the order list
   // was only loaded once, so prefer this when we have it.
   const liveOrderStatus = tracking?.stops.find((stop) => stop.order_id === selectedOrder?.orderId)?.status ?? null;
   const etaMinutes = tracking?.eta_minutes ?? null;
-  const progressPercent = tracking ? Math.round(tracking.progress * 100) : 0;
   const estimatedArrival = etaMinutes !== null && currentTime
     ? new Date(currentTime + etaMinutes * 60_000).toLocaleString('en-PH', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })
     : selectedOrder?.shipped
@@ -200,7 +196,9 @@ function Track() {
       </aside>
 
       <section className={styles.mapSection}>
+        {/* Keyed by order: each order gets a new map, never the last order's map handle. */}
         <RouteMap
+          key={selectedOrder.orderId}
           tracking={tracking}
           highlightOrderId={selectedOrder.orderId}
           highlightLabel={t.trackOrder.yourStop}
@@ -250,46 +248,6 @@ function Track() {
             <p className={styles.detailValue}>{formattedDeliveryFee}</p>
           </div>
         </div>
-
-        {tracking && (
-          <div className={styles.shipmentPanel}>
-            <div className={styles.shipmentPanelHeader}>
-              <div>
-                <span className={styles.detailLabel}>Shipment route</span>
-                <h3 className={styles.shipmentTitle}>{tracking.merchant_name}</h3>
-              </div>
-              <span className={styles.shipmentStatus}>{tracking.status.replaceAll('_', ' ')}</span>
-            </div>
-
-            <div className={styles.shipmentSummaryRow}>
-              <div>
-                <span className={styles.shipmentSummaryLabel}>Shipment</span>
-                <strong>#{tracking.shipment_id}</strong>
-              </div>
-              <div>
-                <span className={styles.shipmentSummaryLabel}>Stop</span>
-                <strong>{activeStopNumber}/{tracking.stops.length || 1}</strong>
-              </div>
-              <div>
-                <span className={styles.shipmentSummaryLabel}>Estimated progress</span>
-                <strong>{etaMinutes !== null ? `${progressPercent}% · ${etaMinutes} min` : 'No estimate yet'}</strong>
-              </div>
-            </div>
-
-            <ol className={styles.shipmentStopList}>
-              {tracking.stops.map((stop, index) => (
-                <li key={`${stop.order_id}-${stop.sequence}`} className={`${styles.shipmentStopItem} ${index === tracking.active_stop_index ? styles.shipmentStopActive : ''}`}>
-                  <div className={styles.shipmentStopHeader}>
-                    <span className={styles.shipmentStopBadge}>Stop {stop.sequence}</span>
-                    <span className={styles.shipmentStopStatus}>{statusLabel(stop.status)}</span>
-                  </div>
-                  <p className={styles.shipmentStopName}>{stop.buyer_name ?? stop.label}</p>
-                  <p className={styles.shipmentStopAddress}>{stop.delivery_address ?? 'Delivery address unavailable'}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
 
         {trackingError && !tracking && (
           <p className={styles.shipmentError}>{trackingError}</p>
