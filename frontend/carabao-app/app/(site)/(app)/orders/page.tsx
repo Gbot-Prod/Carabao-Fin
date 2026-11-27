@@ -18,7 +18,6 @@ import {
 import {
   cancelMyOrder,
   cancelPaymentCheckout,
-  confirmOrderReceived,
   createPaymentCheckout,
   deleteOrderFromHistory,
   fetchOrderHistoryPage,
@@ -114,7 +113,7 @@ function OrderLines({ order }: { order: OrderHistoryItem }) {
 
 // ── Card ─────────────────────────────────────────────────────────────────────
 
-type Confirm = "received" | "cancel" | "remove" | null;
+type Confirm = "cancel" | "remove" | null;
 
 function OrderCard({
   order,
@@ -169,13 +168,6 @@ function OrderCard({
   };
 
   const confirmAction = () => {
-    if (confirm === "received") {
-      return run(async () => {
-        await confirmOrderReceived(order.order_id);
-        setConfirm(null);
-        onChanged();
-      }, "Could not confirm this order. Please try again.");
-    }
     if (confirm === "cancel") {
       return run(async () => {
         // An unpaid order releases its checkout; a paid one goes to the refund queue.
@@ -197,7 +189,6 @@ function OrderCard({
     }, "Couldn't add these items right now. Please try again.");
 
   const confirmText = {
-    received: ["Confirm you received this order? This releases payment to the farm.", "Yes, I received it"],
     cancel: [
       toPay ? "Cancel this order? Its items go back on sale." : "Cancel this order? Your payment will be refunded.",
       "Yes, cancel order",
@@ -276,10 +267,7 @@ function OrderCard({
               )}
               {toReceive && (
                 <>
-                  <button type="button" className={styles.primary} onClick={() => setConfirm("received")}>
-                    Order Received
-                  </button>
-                  <Link href="/track" className={styles.secondary}>Live Tracking</Link>
+                  <Link href="/track" className={styles.primary}>Live Tracking</Link>
                   <Link href={chatHref} className={styles.secondary}>Contact Farm</Link>
                 </>
               )}
@@ -315,7 +303,7 @@ function OrderCard({
             <div className={styles.actions}>
               <button
                 type="button"
-                className={confirm === "received" ? styles.primary : styles.danger}
+                className={styles.danger}
                 onClick={() => void confirmAction()}
                 disabled={busy}
               >

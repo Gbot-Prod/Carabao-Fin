@@ -8,7 +8,7 @@
 // with a key (app.config.ts passes EXPO_PUBLIC_GOOGLE_MAPS_KEY to the plugin); without one the
 // note and the stop list stand in. src/lib/mapProvider.ts has the switch.
 import React, { useEffect, useRef } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Polyline } from 'react-native-maps';
 import {
   CLOSED_STOP_COLOR,
@@ -16,7 +16,7 @@ import {
   type LatLng,
   type MapRegion,
 } from '../lib/routeMap';
-import { isMapAvailable, USE_GOOGLE_MAPS } from '../lib/mapProvider';
+import { MAP_AVAILABLE, USE_GOOGLE_MAPS } from '../lib/nativeMap';
 import { MAP_KEY_NOTE } from '../lib/route';
 import { Colors, FontSize, Radius } from '../lib/theme';
 import { MapUnavailable } from './MapUnavailable';
@@ -43,7 +43,6 @@ export type RouteMapViewProps = {
   markers: RouteMapMarker[];
 };
 
-const MAP_AVAILABLE = isMapAvailable(Platform.OS);
 
 export default function RouteMapView({ region, points, road, markers }: RouteMapViewProps) {
   const mapRef = useRef<MapView | null>(null);

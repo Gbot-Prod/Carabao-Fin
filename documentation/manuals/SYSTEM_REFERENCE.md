@@ -625,7 +625,7 @@ Proof photos (`documentation/plans/ORDER_PROOF_PHOTOS_PLAN.md`, `services/order_
   - merchant: `GET /merchants/me/orders/{id}/proof/{kind}` (own orders, all kinds);
   - buyer: `GET /orders/me/{id}/proof/{kind}` (own orders, `packing` and `dropoff` only);
   - admin: `GET /admin/orders/{id}/proof/{kind}` (all kinds). `GET /admin/orders/{id}` lists them with time, distance and flags.
-- **Buyer dispute** (`services/delivery_dispute.py`): in the `DELIVERY_DISPUTE_HOURS` after a merchant-set delivery, the buyer can tap "I did not get this" (`POST /orders/me/{id}/dispute-delivery`, web and buyer app). It sets `delivery_disputed_at`, freezes the payout, and notifies the admins and the merchant. After the window: 409, support chat. "Confirm received" during an open dispute: 409.
+- **Buyer dispute** (`services/delivery_dispute.py`): in the `DELIVERY_DISPUTE_HOURS` after a merchant-set delivery, the buyer can tap "I did not get this" (`POST /orders/me/{id}/dispute-delivery`, web and buyer app). It sets `delivery_disputed_at`, freezes the payout, and notifies the admins and the merchant. After the window: 409, support chat. "Confirm received" during an open dispute: 409. "Confirm received" before the farm marks the order delivered (shipped / out for delivery): 409; the buyer apps do not show the button then.
 - **Admin decision:** `POST /admin/orders/{id}/dispute` with `decision` `release` (the farm is paid) or `refund` (the paid transaction goes to `refund_pending`, so `/admin/refunds` lists it; the order stays `delivered`). Refused (409) if no dispute is open or the money is already in a payout batch. Audit log action `order.dispute_decision`. The buyer and the merchant are notified.
 - **Admin list filter:** `GET /admin/orders?delivery=flagged` (a drop-off or failed drop-off photo has a flag) or `delivery=disputed` (open dispute). Each row has `delivery_flagged` and `dispute_open`.
 - Rate limits: `proof_upload` 200/h, `proof_view` 300/h per user.
@@ -651,11 +651,9 @@ Payable orders (`payout_service.delivery_payable`):
 - `BUYER_DISPUTES_LIVE` (now `True`): set it to `False` to make every merchant-set delivery count as flagged (no 48 h early payout), for example if buyers cannot dispute.
 
 Routing and fees:
-- InstaPay is used up to ₱50,000; PESONet up to ₱10M.
-- GCash (`GXCHPHM2XXX`) always goes by PESONet.
+- All payouts (GCash too) go by InstaPay, up to ₱50,000 per transfer. `pesonet` stays as a provider value for older batches.
 - Each payout pays a transfer fee (`PAYOUT_TRANSFER_FEE`, default 10).
-
-**Known issue, unresolved:** PayMongo refuses GCash payouts (AC06 on InstaPay, RR04 on PESONet). Maya works.
+- The net amount after the fee must be at least ₱10 (`MIN_TRANSFER_PESOS`). GCash refuses smaller transfers with AC06 BlockedAccount.
 
 ### 7.8 Background loop (`main.py` lifespan, every 60 s, every worker)
 

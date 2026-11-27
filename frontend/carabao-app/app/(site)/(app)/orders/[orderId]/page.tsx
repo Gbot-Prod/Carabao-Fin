@@ -390,7 +390,6 @@ export default function OrderDetailPage() {
   const [state, setState] = useState<"loading" | "ready" | "missing">(
     Number.isInteger(orderId) ? "loading" : "missing",
   );
-  const [confirming, setConfirming] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -424,20 +423,6 @@ export default function OrderDetailPage() {
   const total = order.total_amount ?? subtotal;
   // The stored fee. Old rows without the field fall back to total − subtotal.
   const deliveryFee = order.delivery_fee ?? Math.max(total - subtotal, 0);
-
-  const handleConfirmReceived = async () => {
-    setSubmitting(true);
-    setConfirmError(null);
-    try {
-      await confirmOrderReceived(order.order_id);
-      setOrder(await fetchOrder(order.order_id));
-      setConfirming(false);
-    } catch {
-      setConfirmError("Could not confirm this order. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleCancelOrder = async () => {
     setSubmitting(true);
@@ -489,33 +474,13 @@ export default function OrderDetailPage() {
                 Cancel order
               </button>
             )}
-            {awaitingConfirmation && !confirming && (
-              <button type="button" className={styles.secondaryBtn} onClick={() => setConfirming(true)}>
-                Order received
-              </button>
-            )}
           </div>
         )}
-        {awaitingConfirmation && order.auto_confirm_at && !confirming && (
+        {awaitingConfirmation && order.auto_confirm_at && (
           <p className={styles.muted}>
-            Auto-confirms on {formatDate(order.auto_confirm_at)} if you don&apos;t confirm or contact support.
+            You can confirm when the farm marks this order delivered. Otherwise it auto-confirms on{" "}
+            {formatDate(order.auto_confirm_at)} if you don&apos;t contact support.
           </p>
-        )}
-        {confirming && (
-          <div className={styles.confirmRow}>
-            <span>Confirm you received this order? This releases payment to the seller.</span>
-            <button
-              type="button"
-              className={styles.primaryBtn}
-              onClick={() => void handleConfirmReceived()}
-              disabled={submitting}
-            >
-              {submitting ? "Confirming…" : "Yes, I received it"}
-            </button>
-            <button type="button" className={styles.secondaryBtn} onClick={() => setConfirming(false)} disabled={submitting}>
-              Cancel
-            </button>
-          </div>
         )}
         {cancelling && (
           <div className={styles.confirmRow}>

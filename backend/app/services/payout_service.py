@@ -1,7 +1,7 @@
 """Merchant payouts: who is owed what, where it goes, and sending it.
 
 A payout batch is created when a merchant cashes out. An admin sends it, which
-makes one PayMongo transfer (InstaPay, or PESONet for GCash) from the platform
+makes one PayMongo InstaPay transfer from the platform
 wallet to the merchant's bank or e-wallet. The transfer settles asynchronously:
 the batch stays ``processing`` until PayMongo's webhook (or a status refresh) says it
 succeeded (``released``) or failed (``failed``, which an admin can resend).
@@ -43,10 +43,11 @@ EWALLET_INSTITUTIONS = {
     "gcash": ("GXCHPHM2XXX", "GCash"),
     "maya": ("PAPHPHM1XXX", "Maya"),
 }
-# GCash refuses InstaPay transfers from PayMongo wallets (AC06 BlockedAccount)
-# but accepts PESONet, so it always goes by PESONet. Everything else uses
-# InstaPay, which settles in minutes instead of on banking-day cycles.
-PESONET_ONLY_BICS = frozenset({"GXCHPHM2XXX"})
+# Every destination (GCash too) goes by InstaPay, which settles in minutes.
+# PESONet stays as a provider value for batches sent before this change.
+# GCash refuses transfers below ₱10 (AC06 BlockedAccount), so no payout sends
+# less than MIN_TRANSFER_PESOS.
+MIN_TRANSFER_PESOS = 10
 PROVIDER_MAX_PESOS = {"instapay": 50_000, "pesonet": 10_000_000}
 PROVIDER_LABELS = {"instapay": "InstaPay", "pesonet": "PESONet"}
 
@@ -71,7 +72,7 @@ class Destination:
 
     @property
     def provider(self) -> str:
-        return "pesonet" if self.bic in PESONET_ONLY_BICS else "instapay"
+        return "instapay"
 
     def as_paymongo(self) -> dict[str, str]:
         return {"number": self.number, "name": self.name, "bic": self.bic}
@@ -345,9 +346,11 @@ def send_payout(db: Session, batch_id: int, notes: str | None = None) -> PayoutB
         )
     fee = transfer_fee()
     net = batch.gross_amount - fee
-    if net <= 0:
+    if net < MIN_TRANSFER_PESOS:
         raise PayoutError(
-            400, f"Payout of ₱{batch.gross_amount} does not cover the ₱{fee} fee"
+            400,
+            f"Payout of ₱{batch.gross_amount} less the ₱{fee} fee is below the "
+            f"₱{MIN_TRANSFER_PESOS} minimum transfer",
         )
     provider = destination.provider
     if net > PROVIDER_MAX_PESOS[provider]:

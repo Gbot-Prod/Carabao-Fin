@@ -277,7 +277,7 @@ function PayoutsContent() {
         eyebrow="Money"
         title="Payouts"
         count={summary ? total : undefined}
-        description="Merchants request cash outs; sending one transfers it from the PayMongo wallet (InstaPay, or PESONet for GCash)."
+        description="Merchants request cash outs; sending one transfers it from the PayMongo wallet by InstaPay."
       />
 
       <TablePanel

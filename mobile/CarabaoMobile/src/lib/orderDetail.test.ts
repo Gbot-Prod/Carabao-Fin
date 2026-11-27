@@ -6,11 +6,11 @@ import {
   chatTitle, deliveryProofState, isOrderRef, orderActions, orderRef, parseOrderId,
 } from './orderDetail.ts';
 
-test('cancel only while preparing, confirm only in transit (as the backend)', () => {
-  const none = { canCancel: false, canCancelUnpaid: false, canConfirm: false, canTrack: false };
+test('cancel only while preparing, no confirm while in transit (as the backend)', () => {
+  const none = { canCancel: false, canCancelUnpaid: false, canTrack: false };
   assert.deepEqual(orderActions('processing'), { ...none, canCancel: true, canTrack: true });
-  assert.deepEqual(orderActions('shipped'), { ...none, canConfirm: true, canTrack: true });
-  assert.deepEqual(orderActions('out_for_delivery'), { ...none, canConfirm: true, canTrack: true });
+  assert.deepEqual(orderActions('shipped'), { ...none, canTrack: true });
+  assert.deepEqual(orderActions('out_for_delivery'), { ...none, canTrack: true });
   assert.deepEqual(orderActions('pending'), { ...none, canCancelUnpaid: true }); // CF-0124
   for (const s of ['delivered', 'cancelled', 'payment_mismatch', 'something_new']) {
     assert.deepEqual(orderActions(s), none, s);

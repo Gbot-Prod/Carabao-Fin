@@ -423,7 +423,7 @@ export const uploadShopLogo = async (file: File): Promise<MyShopPage> => {
 
 export type PayoutType = 'bank' | 'gcash' | 'maya';
 
-/** InstaPay settles in minutes; PESONet (used for GCash) on banking-day cycles. */
+/** InstaPay settles in minutes; PESONet (older batches only) on banking-day cycles. */
 export type PayoutProvider = 'instapay' | 'pesonet';
 
 export const PAYOUT_PROVIDER_LABELS: Record<PayoutProvider, string> = {

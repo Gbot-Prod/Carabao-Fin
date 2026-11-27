@@ -17,7 +17,7 @@
 // module the app does not ship (expo-location). The map's own location button still shows the
 // person's dot, and a tap or a drag places the pin.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { ApiError, api, type PinCheckResult } from '../lib/api';
 import {
@@ -44,12 +44,11 @@ import {
   type Pin,
   type TypedAddress,
 } from '../lib/pinLocation';
-import { isMapAvailable, USE_GOOGLE_MAPS } from '../lib/mapProvider';
+import { MAP_AVAILABLE, USE_GOOGLE_MAPS } from '../lib/nativeMap';
 import { Colors, FontSize, Radius, Spacing } from '../lib/theme';
 import { MapUnavailable } from './MapUnavailable';
 
 /** Google Maps needs a key; Apple Maps does not (decision D3, src/lib/mapProvider.ts). */
-const MAP_AVAILABLE = isMapAvailable(Platform.OS);
 
 /** Close in on a pin the person placed by hand (about a street's length across). */
 const FOCUS_ZOOM = 16;

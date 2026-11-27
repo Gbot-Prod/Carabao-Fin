@@ -205,10 +205,12 @@ def test_cash_out_shows_and_records_the_transfer_fee(db, merchant, buyer):  # no
 def test_cash_out_must_cover_the_fee(db, merchant, buyer):  # noqa: F811
     client = _merchant_client(db, merchant)
     save_payout_info(client, GCASH)
-    _delivered_sale(db, merchant, buyer, merchant_amount=10)
+    # ₱19 less the ₱10 fee is ₱9: below the ₱10 minimum (GCash AC06).
+    _delivered_sale(db, merchant, buyer, merchant_amount=19)
 
     resp = client.post("/merchants/me/payouts/request")
     assert resp.status_code == 400
+    assert "minimum" in resp.json()["detail"]
 
 
 def test_admin_sees_destination_before_sending(db, merchant, buyer):  # noqa: F811
@@ -221,7 +223,7 @@ def test_admin_sees_destination_before_sending(db, merchant, buyer):  # noqa: F8
         "institution": "GCash",
         "name": "Juan dela Cruz",
         "number": "09171234567",
-        "provider": "pesonet",
+        "provider": "instapay",
         "problem": None,
     }
 
@@ -237,7 +239,7 @@ def test_send_makes_one_transfer_of_net_amount(db, merchant, buyer, transfers): 
     assert body["status"] == PayoutStatus.PROCESSING
     assert body["paymongo_transfer_id"] == "tr_1"
     assert body["net_amount"] == 480
-    assert body["transfer_provider"] == "pesonet"
+    assert body["transfer_provider"] == "instapay"
     assert transfers.calls == [
         {
             "amount_centavos": 48000,
@@ -246,8 +248,7 @@ def test_send_makes_one_transfer_of_net_amount(db, merchant, buyer, transfers): 
                 "name": "Juan dela Cruz",
                 "bic": "GXCHPHM2XXX",
             },
-            # GCash refuses InstaPay from PayMongo wallets (AC06).
-            "provider": "pesonet",
+            "provider": "instapay",
             "reference_number": ANY,
             "description": f"Carabao payout #{batch['id']}",
             "metadata": {"payout_batch_id": str(batch["id"])},

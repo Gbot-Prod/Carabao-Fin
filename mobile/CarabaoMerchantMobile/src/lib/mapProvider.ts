@@ -27,7 +27,18 @@ const HAS_KEY = !!process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
 
 export const MAP_PROVIDER: MobileMapProvider = chooseMapProvider(process.env.EXPO_PUBLIC_MAP_PROVIDER, HAS_KEY);
 
-/** True: pass PROVIDER_GOOGLE to MapView (iOS draws Google Maps, not Apple Maps). */
-export const USE_GOOGLE_MAPS = MAP_PROVIDER === 'google';
 
 export const isMapAvailable = (os: string): boolean => mapAvailable(MAP_PROVIDER, os, HAS_KEY);
+
+/**
+ * The provider the map really draws with. Expo Go on iOS has no Google Maps SDK, so a Google map
+ * there is blank: it draws Apple Maps (no key) in its place. A development or store build keeps
+ * the chosen provider.
+ */
+export function effectiveMapProvider(
+  provider: MobileMapProvider,
+  os: string,
+  inExpoGo: boolean,
+): MobileMapProvider {
+  return provider === 'google' && os === 'ios' && inExpoGo ? 'native' : provider;
+}

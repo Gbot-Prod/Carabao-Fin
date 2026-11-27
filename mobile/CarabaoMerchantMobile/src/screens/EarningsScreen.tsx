@@ -36,7 +36,7 @@ import {
   PAYOUT_STATUS_LABELS, PAYOUT_TYPES, SALES_DAYS, SALES_ERROR, TRANSACTION_STATUS_LABELS,
   availableSub, bankCodeHint, batchSub, cashOutConfirm, cashOutLabel, cashOutRequested,
   cashOutState, codeIsFor, codeSentLabel, destinationKey, destinationName, destinationProblem,
-  draftFrom, draftPayload, earningsSummary, failedBatchMessage, gcashPesonetNote,
+  draftFrom, draftPayload, earningsSummary, failedBatchMessage,
   maskAccountNumber, openBatchMessage, paidOrdersSub, payoutFeeLine, payoutRequestMessage,
   payoutSaveMessage, payoutSentTo, payoutTone, payoutUnderFeeLine, rangeLabel, resendLabel,
   resendSeconds, resendStart, salesCsvName, salesEmpty, salesOrdersSub, saveLabel,
@@ -677,8 +677,6 @@ export default function EarningsScreen() {
           />
         </>
       )}
-
-      {gcashPesonetNote(type) ? <Text style={styles.hint}>{gcashPesonetNote(type)}</Text> : null}
 
       {codeSentTo !== null ? (
         <>

@@ -234,7 +234,14 @@ def test_suspension_takes_the_shop_offline_but_orders_complete(
         i["id"] != produce.id for i in public.get("/produce/search").json()["items"]
     )
 
+    # The buyer cannot confirm before the farm marks it delivered.
+    res = _client(db, user).post(f"/orders/me/{order.id}/confirm-received")
+    assert res.status_code == 409, res.text
+
+    order.status = OrderStatus.DELIVERED
+    order.delivery_confirmed_by = "merchant"
+    db.commit()
     res = _client(db, user).post(f"/orders/me/{order.id}/confirm-received")
     assert res.status_code == 200, res.text
     db.refresh(order)
-    assert order.status == OrderStatus.DELIVERED
+    assert order.delivery_buyer_confirmed_at is not None

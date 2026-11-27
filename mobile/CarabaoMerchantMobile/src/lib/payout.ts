@@ -76,8 +76,6 @@ export const PAYOUT_CONFIRM_LABEL = 'Confirm and Save';
 export const PAYOUT_WAIT_LABEL = 'Please wait…';
 export const PAYOUT_CODE_HINT =
   'For your security, a change of payout account must be confirmed by SMS.';
-export const GCASH_PESONET_NOTE =
-  'GCash payouts go through PESONet, so they arrive on banking-day cycles instead of within minutes.';
 
 /** The form's text, one box per PayoutInfoUpdate field (CashOutPanel's PayoutDraft). */
 export type PayoutDraft = {
@@ -194,11 +192,6 @@ export function saveLabel(sending: boolean, codeSent: boolean): string {
 /** The bank's code under the picker, as the web shows it once a bank is chosen. */
 export function bankCodeHint(code: string): string | null {
   return code ? `Bank code: ${code}` : null;
-}
-
-/** The GCash transfer note, only for a GCash destination (web: `payout_type === "gcash"`). */
-export function gcashPesonetNote(payoutType: PayoutType): string | null {
-  return payoutType === 'gcash' ? GCASH_PESONET_NOTE : null;
 }
 
 /**
@@ -371,7 +364,7 @@ export type CashOutState = {
 };
 
 /**
- * The web's `canCashOut = !openBatch && !info.problem && gross > fee` (CashOutPanel renderMethod),
+ * The web's `canCashOut = !openBatch && !info.problem && gross - fee >= MIN_PAYOUT` (CashOutPanel renderMethod),
  * with the reason kept, so the screen can say what is missing instead of only greying out.
  */
 export function cashOutState(
@@ -391,7 +384,7 @@ export function cashOutState(
         ? 'method_problem'
         : gross <= 0
           ? 'no_balance'
-          : gross <= fee
+          : gross - fee < MIN_PAYOUT
             ? 'under_fee'
             : null;
   return {
@@ -409,9 +402,12 @@ export function payoutFeeLine(gross: number, fee: number, net: number): string {
   return `${formatPeso(gross)} earned − ${formatPeso(fee)} transfer fee = ${formatPeso(net)} to you`;
 }
 
-/** Under the button when the balance does not cover the fee (CashOutPanel renderMethod). */
+/** Pesos a payout must send after the fee: GCash refuses transfers below ₱10 (backend MIN_TRANSFER_PESOS). */
+export const MIN_PAYOUT = 10;
+
+/** Under the button when the balance does not cover the fee and the minimum (CashOutPanel renderMethod). */
 export function payoutUnderFeeLine(fee: number): string {
-  return `Earn more than ${formatPeso(fee)} to cover the transfer fee before cashing out.`;
+  return `Earn at least ${formatPeso(fee + MIN_PAYOUT)} before cashing out: the ${formatPeso(fee)} transfer fee plus the ${formatPeso(MIN_PAYOUT)} minimum payout.`;
 }
 
 /** The cash out button: the web's two states. */

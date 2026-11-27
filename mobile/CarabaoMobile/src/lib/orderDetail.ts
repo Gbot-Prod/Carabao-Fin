@@ -3,7 +3,7 @@
 
 /** What the buyer can do with an order in this status (same as web orders/[orderId]). */
 export function orderActions(status: string): {
-  canCancel: boolean; canCancelUnpaid: boolean; canConfirm: boolean; canTrack: boolean;
+  canCancel: boolean; canCancelUnpaid: boolean; canTrack: boolean;
 } {
   return {
     // CF-0124: an unpaid order (backend POST /payments/checkout/{id}/cancel; refused
@@ -11,8 +11,6 @@ export function orderActions(status: string): {
     canCancelUnpaid: status === 'pending',
     // backend cancel_my_order: only `processing` (paid, not shipped yet).
     canCancel: status === 'processing',
-    // backend confirm_order_received: IN_TRANSIT_STATUSES.
-    canConfirm: status === 'shipped' || status === 'out_for_delivery',
     // web: live tracking for open orders that are paid.
     canTrack: status === 'processing' || status === 'shipped' || status === 'out_for_delivery',
   };

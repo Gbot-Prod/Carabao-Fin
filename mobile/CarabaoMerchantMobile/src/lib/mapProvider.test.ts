@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chooseMapProvider, mapAvailable } from './mapProvider.ts';
+import { chooseMapProvider, effectiveMapProvider, mapAvailable } from './mapProvider.ts';
 
 test('the switch picks google with a key, native without one, and obeys an explicit value', () => {
   assert.equal(chooseMapProvider(undefined, true), 'google');
@@ -15,4 +15,10 @@ test('Google Maps needs the key on both platforms; Apple Maps does not', () => {
   assert.equal(mapAvailable('google', 'ios', true), true);
   assert.equal(mapAvailable('native', 'ios', false), true);
   assert.equal(mapAvailable('native', 'android', false), false);
+});
+
+test('Expo Go on iOS draws Apple Maps in place of Google Maps', () => {
+  assert.equal(effectiveMapProvider('google', 'ios', true), 'native');
+  assert.equal(effectiveMapProvider('google', 'ios', false), 'google');
+  assert.equal(effectiveMapProvider('google', 'android', true), 'google');
 });

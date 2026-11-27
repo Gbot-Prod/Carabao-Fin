@@ -13,7 +13,6 @@ import {
   ACCOUNT_NUMBER_PATTERN,
   ACCOUNT_NUMBER_PLACEHOLDER,
   EWALLET_PLACEHOLDER,
-  GCASH_PESONET_NOTE,
   PAYOUT_BANK_LIST_ERROR,
   PAYOUT_BANK_LOADING,
   PAYOUT_BANK_PLACEHOLDER,
@@ -45,7 +44,6 @@ import {
   draftFrom,
   draftPayload,
   formatCountdown,
-  gcashPesonetNote,
   maskAccountNumber,
   payoutSaveMessage,
   resendLabel,
@@ -360,13 +358,6 @@ test('the labels, the countdown and the GCash note are the web panel and the sha
   assert.equal(saveLabel(false, false), PAYOUT_SEND_CODE_LABEL);
   assert.ok(panel.includes('saving ? "Please wait…" : codeSentTo === null ? "Send Code to Save" : "Confirm and Save"'));
 
-  // The GCash note only for gcash, as the web renders it.
-  assert.match(panel, /\{draft\.payout_type === "gcash" && \(/);
-  assert.ok(panel.includes(GCASH_PESONET_NOTE));
-  assert.equal(gcashPesonetNote('gcash'), GCASH_PESONET_NOTE);
-  assert.equal(gcashPesonetNote('maya'), null);
-  assert.equal(gcashPesonetNote('bank'), null);
-
   // The picker's own words, and the bank's code under it.
   for (const text of [PAYOUT_BANK_PLACEHOLDER, PAYOUT_BANK_LOADING, PAYOUT_BANK_LIST_ERROR]) {
     assert.ok(panel.includes(text), text);
@@ -420,7 +411,6 @@ test('the screen texts a code for the destination before it saves, and an edit d
     'saveLabel(saving, codeSentTo !== null)',
     'draftPayload(draft)',
     'destinationKey(draftPayload(draft))',
-    'gcashPesonetNote(type)',
     'bankCodeHint(draft.bank_code)',
     'destinationProblem(draft)',
     'payoutSaveMessage(',
@@ -548,8 +538,8 @@ test('the cash out button is off while a payout is open, a method is missing or 
     cashOutState({ gross_amount: 0, transfer_fee: 50, net_amount: 0 }, { problem: null }, null).block,
     'no_balance',
   );
-  const under = cashOutState({ gross_amount: 50, transfer_fee: 50, net_amount: 0 }, { problem: null }, null);
-  assert.equal(under.block, 'under_fee', 'the fee would eat the whole balance');
+  const under = cashOutState({ gross_amount: 59, transfer_fee: 50, net_amount: 9 }, { problem: null }, null);
+  assert.equal(under.block, 'under_fee', 'less than the ₱10 minimum is left after the fee');
   assert.equal(under.enabled, false);
 
   // A second tap while the first request is in flight asks the server nothing.
@@ -570,7 +560,7 @@ test('the cash out button is off while a payout is open, a method is missing or 
 
 test('the fee line, the button, the dialog and the request messages are the web panel’s', () => {
   assert.equal(payoutFeeLine(1500, 50, 1450), '₱1,500 earned − ₱50 transfer fee = ₱1,450 to you');
-  assert.equal(payoutUnderFeeLine(50), 'Earn more than ₱50 to cover the transfer fee before cashing out.');
+  assert.equal(payoutUnderFeeLine(50), 'Earn at least ₱60 before cashing out: the ₱50 transfer fee plus the ₱10 minimum payout.');
   assert.equal(cashOutLabel(1450, false), 'Cash Out ₱1,450');
   assert.equal(cashOutLabel(1450, true), 'Submitting…');
   assert.equal(

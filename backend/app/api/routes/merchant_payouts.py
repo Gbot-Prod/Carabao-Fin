@@ -51,6 +51,7 @@ from app.services.merchant_verification import (
     merchant_can_request_payout,
 )
 from app.services.payout_service import (
+    MIN_TRANSFER_PESOS,
     PROVIDER_LABELS,
     PROVIDER_MAX_PESOS,
     claimable_transactions,
@@ -331,10 +332,13 @@ def request_my_payout(
         )
 
     total = sum(t.merchant_amount for t in unpaid_txns)
-    if total <= fee:
+    if total - fee < MIN_TRANSFER_PESOS:
         raise HTTPException(
             status_code=400,
-            detail=f"Earnings of ₱{total} don't cover the ₱{fee} transfer fee yet",
+            detail=(
+                f"Earnings of ₱{total} less the ₱{fee} transfer fee are below "
+                f"the ₱{MIN_TRANSFER_PESOS} minimum payout"
+            ),
         )
 
     batch = PayoutBatch(

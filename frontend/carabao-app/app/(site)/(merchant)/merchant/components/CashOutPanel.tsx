@@ -17,6 +17,9 @@ import { getApiErrorStatus } from "@/util/errorHelper";
 import { formatCountdown, useResendCooldown } from "@/hooks/useResendCooldown";
 import { formatDate, formatPeso, type StatusMessage } from "../lib/format";
 
+/** Pesos a payout must send after the fee: GCash refuses transfers below ₱10 (backend MIN_TRANSFER_PESOS). */
+const MIN_PAYOUT = 10;
+
 export const PAYOUT_METHOD_LABELS: Record<PayoutType, string> = {
   gcash: "GCash",
   maya: "Maya",
@@ -312,11 +315,6 @@ export default function CashOutPanel({
             />
           </label>
         )}
-        {draft.payout_type === "gcash" && (
-          <p className={`${styles.payoutFeeLine} ${styles.spaceAbove}`}>
-            GCash payouts go through PESONet, so they arrive on banking-day cycles instead of within minutes.
-          </p>
-        )}
         {codeSentTo !== null && (
           <label className={`${styles.formLabel} ${styles.spaceAboveLg}`}>
             Code sent to your number ending {codeSentTo}
@@ -367,7 +365,7 @@ export default function CashOutPanel({
     const gross = available?.gross_amount ?? 0;
     const fee = available?.transfer_fee ?? 0;
     const net = available?.net_amount ?? 0;
-    const canCashOut = !openBatch && !info.problem && gross > fee;
+    const canCashOut = !openBatch && !info.problem && gross - fee >= MIN_PAYOUT;
 
     return (
       <div>
@@ -412,9 +410,9 @@ export default function CashOutPanel({
             Edit Method
           </button>
         </div>
-        {!openBatch && gross > 0 && gross <= fee && (
+        {!openBatch && gross > 0 && gross - fee < MIN_PAYOUT && (
           <p className={`${styles.payoutFeeLine} ${styles.spaceAbove}`}>
-            Earn more than {formatPeso(fee)} to cover the transfer fee before cashing out.
+            Earn at least {formatPeso(fee + MIN_PAYOUT)} before cashing out: the {formatPeso(fee)} transfer fee plus the {formatPeso(MIN_PAYOUT)} minimum payout.
           </p>
         )}
       </div>

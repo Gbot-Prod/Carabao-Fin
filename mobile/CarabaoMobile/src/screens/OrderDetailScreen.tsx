@@ -361,26 +361,10 @@ function OrderDetailContent() {
         )}
 
         <View style={styles.actions}>
-          {actions.canConfirm && (
-            <TouchableOpacity
-              style={[styles.btn, styles.btnPrimary]}
-              disabled={busy}
-              onPress={() =>
-                runAction(
-                  'Order received',
-                  'Confirm you received this order? This releases payment to the farm.',
-                  'Yes, I received it',
-                  false,
-                  () => api.orders.confirmReceived(token, order.order_id),
-                )
-              }
-            >
-              <Text style={styles.btnPrimaryText}>Order received</Text>
-            </TouchableOpacity>
-          )}
-          {actions.canConfirm && order.auto_confirm_at && (
+          {(order.status === 'shipped' || order.status === 'out_for_delivery') && order.auto_confirm_at && (
             <Text style={styles.muted}>
-              Confirms by itself on {formatDate(order.auto_confirm_at)} if you don’t confirm or contact support.
+              You can confirm when the farm marks this order delivered. Otherwise it confirms by itself on{' '}
+              {formatDate(order.auto_confirm_at)} if you don’t contact support.
             </Text>
           )}
           {actions.canTrack && (

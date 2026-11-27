@@ -48,9 +48,7 @@ from app.services.order_reservations import (
 from app.services.order_status import (
     ACTIVE_ORDER_STATUSES,
     CLOSED_ORDER_STATUSES,
-    IN_TRANSIT_STATUSES,
     cancel_paid_order,
-    mark_delivered,
     money_received_clause,
 )
 from app.services.pinned_location import (
@@ -722,7 +720,11 @@ def confirm_order_received(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Buyer confirms delivery, which makes the order's earnings payable."""
+    """Buyer confirms delivery, which makes the order's earnings payable.
+
+    Only after the farm marks the order delivered (drop-off photo). Before
+    that, the buyer cannot confirm; the auto-confirm sweep still applies.
+    """
     order = (
         db.query(Order)
         .filter(Order.id == order_id, Order.user_id == current_user.id)
@@ -740,21 +742,15 @@ def confirm_order_received(
             status_code=409,
             detail="You reported this order as not received. Carabao is checking it.",
         )
-    if merchant_set:
-        # The farm marked it delivered with a photo; the buyer's confirm ends
-        # the payout hold at once (payout_service.delivery_payable).
-        if order.delivery_buyer_confirmed_at is None:
-            order.delivery_buyer_confirmed_at = datetime.now(UTC)
-        db.commit()
-        db.refresh(order)
-        return to_current_order_item(order)
-    if order.status not in IN_TRANSIT_STATUSES:
+    if not merchant_set:
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot confirm an order that is '{order.status}'",
+            status_code=409,
+            detail="The farm has not marked this order as delivered yet.",
         )
-
-    mark_delivered(order, confirmed_by="buyer")
+    # The farm marked it delivered with a photo; the buyer's confirm ends
+    # the payout hold at once (payout_service.delivery_payable).
+    if order.delivery_buyer_confirmed_at is None:
+        order.delivery_buyer_confirmed_at = datetime.now(UTC)
     db.commit()
     db.refresh(order)
     return to_current_order_item(order)
